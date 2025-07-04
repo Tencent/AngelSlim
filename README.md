@@ -181,89 +181,104 @@ Hunyuan-A13B-Instruct的`BF16`、`FP8`、`INT4-GPTQ`在`AIME 2024`、`GSM8K`、`
 
 Qwen3系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`、`INT8-Dynamic`、`INT4-GPTQ`、`INT4-AWQ`在`CEVAL`、`MMLU`、`GSM8K`、`HUMANEVAL`上的评测结果如下：
 
-| Model                         | Quantization | CEVAL | MMLU  | GSM8K | HUMANEVAL |
-|-------------------------------|--------------|-------|-------|-------|-----------|
-| Qwen3-0.6B                    | BF16         | 45.84 | 47.21 | 42.99 | 19.51     |
-|                               | FP8-Static   | 45.99 | 46.87 | 38.06 | 18.90     |
-|                               | FP8-Dynamic  | 45.99 | 46.93 | 38.29 | 20.73     |
-|                               | INT8-Dynamic | 45.17 | 46.95 | 41.17 | 21.34     |
-| Qwen3-8B                      | BF16         | 79.27 | 74.78 | 87.79 | 63.41     |
-|                               | FP8-Static   | 78.23 | 74.79 | 86.96 | 62.20     |
-|                               | FP8-Dynamic  | 78.45 | 74.75 | 87.64 | 62.80     |
-|                               | INT8-Dynamic | 78.01 | 74.84 | 86.96 | 67.07     |
-|                               | INT4-GPTQ    | 77.19 | 73.26 | 86.43 | 62.20     |
-|                               | INT4-AWQ     | 76.15 | 73.59 | 86.96 | 63.41     |
-| Qwen3-14B                     | BF16         | 83.06 | 78.90 | 88.40 | 55.49     |
-|                               | FP8-Static   | 82.62 | 78.57 | 89.46 | 57.32     |
-|                               | FP8-Dynamic  | 82.24 | 78.92 | 88.32 | 52.44     |
-|                               | INT8-Dynamic | 81.87 | 78.13 | 86.28 | 56.10     |
-|                               | INT4-GPTQ    | 81.05 | 78.02 | 87.34 | 57.93     |
-|                               | INT4-AWQ     | 82.02 | 77.68 | 84.23 | 61.59     |
-| Qwen3-32B                     | BF16         | 86.55 | 82.00 | 74.53 | 37.80     |
-|                               | FP8-Static   | 86.92 | 81.78 | 70.20 | 39.63     |
-|                               | FP8-Dynamic  | 86.55 | 81.89 | 70.43 | 38.41     |
-|                               | INT4-GPTQ    | 86.18 | 81.01 | -     | 43.29     |
-|                               | INT4-AWQ     | 86.18 | 81.54 | -     | 36.59     |
-| Qwen3-30B-A3B                 | BF16         | 83.66 | 79.36 | 89.99 | 31.71     |
-|                               | FP8-Static   | 83.95 | 79.47 | 89.01 | 31.10     |
-|                               | FP8-Dynamic  | 84.10 | 79.40 | 89.16 | 32.93     |
-|                               | INT8-Dynamic | 83.36 | 79.48 | 89.16 | 34.15     |
-| Qwen3-235B-A22B               | BF16         | 89.60 | 86.28 | 85.29 | 27.44     |
-|                               | FP8-Static   | 89.67 | 86.19 | 86.96 | 27.44     |
-|                               | FP8-Dynamic  | 89.67 | 86.18 | 85.22 | 28.05     |
-|                               | INT8-Dynamic | 88.93 | 86.20 | 86.20 | 23.78     |
-| QwQ-32B                       | BF16         | 85.74 | 82.03 | 73.31 | 42.68     |
-|                               | FP8-Static   | 85.44 | 81.91 | 75.36 | 42.68     |
-|                               | FP8-Dynamic  | 85.07 | 81.93 | 75.66 | 42.07     |
-|                               | INT4-GPTQ    | 84.03 | 81.26 | 68.23 | 45.73     |
-|                               | INT4-AWQ     | 83.58 | 81.01 | 68.69 | 43.29     |
+<table>
+  <thead>
+    <tr><th>Model</th><th>Quantization</th><th>CEVAL</th><th>MMLU</th><th>GSM8K</th><th>HUMANEVAL</th></tr>
+  </thead>
+  <tbody>
+    <tr><td rowspan="4">Qwen3-0.6B</td><td>BF16</td><td>45.84</td><td>47.21</td><td>42.99</td><td>19.51</td></tr>
+    <tr><td>FP8-Static</td><td>45.99</td><td>46.87</td><td>38.06</td><td>18.90</td></tr>
+    <tr><td>FP8-Dynamic</td><td>45.99</td><td>46.93</td><td>38.29</td><td>20.73</td></tr>
+    <tr><td>INT8-Dynamic</td><td>45.17</td><td>46.95</td><td>41.17</td><td>21.34</td></tr>
+    <tr><td rowspan="6">Qwen3-8B</td><td>BF16</td><td>79.27</td><td>74.78</td><td>87.79</td><td>63.41</td></tr>
+    <tr><td>FP8-Static</td><td>78.23</td><td>74.79</td><td>86.96</td><td>62.20</td></tr>
+    <tr><td>FP8-Dynamic</td><td>78.45</td><td>74.75</td><td>87.64</td><td>62.80</td></tr>
+    <tr><td>INT8-Dynamic</td><td>78.01</td><td>74.84</td><td>86.96</td><td>67.07</td></tr>
+    <tr><td>INT4-GPTQ</td><td>77.19</td><td>73.26</td><td>86.43</td><td>62.20</td></tr>
+    <tr><td>INT4-AWQ</td><td>76.15</td><td>73.59</td><td>86.96</td><td>63.41</td></tr>
+    <tr><td rowspan="6">Qwen3-14B</td><td>BF16</td><td>83.06</td><td>78.90</td><td>88.40</td><td>55.49</td></tr>
+    <tr><td>FP8-Static</td><td>82.62</td><td>78.57</td><td>89.46</td><td>57.32</td></tr>
+    <tr><td>FP8-Dynamic</td><td>82.24</td><td>78.92</td><td>88.32</td><td>52.44</td></tr>
+    <tr><td>INT8-Dynamic</td><td>81.87</td><td>78.13</td><td>86.28</td><td>56.10</td></tr>
+    <tr><td>INT4-GPTQ</td><td>81.05</td><td>78.02</td><td>87.34</td><td>57.93</td></tr>
+    <tr><td>INT4-AWQ</td><td>82.02</td><td>77.68</td><td>84.23</td><td>61.59</td></tr>
+    <tr><td rowspan="5">Qwen3-32B</td><td>BF16</td><td>86.55</td><td>82.00</td><td>74.53</td><td>37.80</td></tr>
+    <tr><td>FP8-Static</td><td>86.92</td><td>81.78</td><td>70.20</td><td>39.63</td></tr>
+    <tr><td>FP8-Dynamic</td><td>86.55</td><td>81.89</td><td>70.43</td><td>38.41</td></tr>
+    <tr><td>INT4-GPTQ</td><td>86.18</td><td>81.01</td><td>-</td><td>43.29</td></tr>
+    <tr><td>INT4-AWQ</td><td>86.18</td><td>81.54</td><td>-</td><td>36.59</td></tr>
+    <tr><td rowspan="4">Qwen3-30B-A3B</td><td>BF16</td><td>83.66</td><td>79.36</td><td>89.99</td><td>31.71</td></tr>
+    <tr><td>FP8-Static</td><td>83.95</td><td>79.47</td><td>89.01</td><td>31.10</td></tr>
+    <tr><td>FP8-Dynamic</td><td>84.10</td><td>79.40</td><td>89.16</td><td>32.93</td></tr>
+    <tr><td>INT8-Dynamic</td><td>83.36</td><td>79.48</td><td>89.16</td><td>34.15</td></tr>
+    <tr><td rowspan="4">Qwen3-235B-A22B</td><td>BF16</td><td>89.60</td><td>86.28</td><td>85.29</td><td>27.44</td></tr>
+    <tr><td>FP8-Static</td><td>89.67</td><td>86.19</td><td>86.96</td><td>27.44</td></tr>
+    <tr><td>FP8-Dynamic</td><td>89.67</td><td>86.18</td><td>85.22</td><td>28.05</td></tr>
+    <tr><td>INT8-Dynamic</td><td>88.93</td><td>86.20</td><td>86.20</td><td>23.78</td></tr>
+    <tr><td rowspan="5">QwQ-32B</td><td>BF16</td><td>85.74</td><td>82.03</td><td>73.31</td><td>42.68</td></tr>
+    <tr><td>FP8-Static</td><td>85.44</td><td>81.91</td><td>75.36</td><td>42.68</td></tr>
+    <tr><td>FP8-Dynamic</td><td>85.07</td><td>81.93</td><td>75.66</td><td>42.07</td></tr>
+    <tr><td>INT4-GPTQ</td><td>84.03</td><td>81.26</td><td>68.23</td><td>45.73</td></tr>
+    <tr><td>INT4-AWQ</td><td>83.58</td><td>81.01</td><td>68.69</td><td>43.29</td></tr>
+  </tbody>
+</table>
 
 #### 其他模型
 
 其他模型的`BF16`、`FP8-Static`、`FP8-Dynamic`、`INT4-GPTQ`、`INT4-AWQ`在`CEVAL`、`MMLU`、`GSM8K`上的评测结果如下：
 
-| Model                         | Quantization | CEVAL | MMLU  | GSM8K |
-|-------------------------------|--------------|-------|-------|-------|
-| Qwen2.5-1.5B-Instruct         | BF16         | 67.01 | 60.05 | 54.28 |
-|                               | FP8-Static   | 66.27 | 60.23 | -     |
-|                               | FP8-Dynamic  | 66.79 | 60.08 | 51.71 |
-| Qwen2.5-7B-Instruct           | BF16         | 81.20 | 74.55 | 79.98 |
-|                               | FP8-Static   | 81.13 | 74.03 | 79.30 |
-|                               | FP8-Dynamic  | 80.31 | 74.07 | 79.00 |
-|                               | INT4-GPTQ    | 79.05 | 73.05 | 74.75 |
-|                               | INT4-AWQ     | 79.35 | 73.22 | 79.38 |
-| Qwen2.5-32B-Instruct          | BF16         | 87.30 | 83.21 | 81.73 |
-|                               | FP8-Static   | 87.59 | 83.08 | 81.58 |
-|                               | FP8-Dynamic  | 87.30 | 83.04 | 81.58 |
-|                               | INT4-GPTQ    | 86.70 | 82.45 | 82.03 |
-|                               | INT4-AWQ     | 87.00 | 82.64 | -     |
-| DeepSeek-R1-Distill-Qwen-7B   | BF16         | 53.49 | 53.80 | 75.74 |
-|                               | FP8-Static   | 53.57 | 54.17 | 76.19 |
-|                               | FP8-Dynamic  | 52.97 | 54.13 | 74.15 |
-|                               | INT4-GPTQ    | 51.86 | 52.44 | 75.89 |
-|                               | INT4-AWQ     | 53.49 | 53.70 | -     |
-| DeepSeek-R1-Distill-Qwen-14B  | BF16         | 77.71 | 74.28 | 85.67 |
-|                               | FP8-Static   | 77.56 | 74.66 | 86.73 |
-|                               | FP8-Dynamic  | 76.82 | 74.63 | 87.11 |
-|                               | INT4-GPTQ    | 74.29 | 72.37 | 84.61 |
-|                               | INT4-AWQ     | 74.81 | 73.00 | 86.05 |
-| DeepSeek-R1-Distill-Qwen-32B  | BF16         | 84.18 | 80.89 | 87.41 |
-|                               | FP8-Static   | 83.43 | 80.90 | 87.57 |
-|                               | FP8-Dynamic  | 83.73 | 81.10 | 86.43 |
-|                               | INT4-GPTQ    | 84.10 | 79.80 | 86.73 |
-|                               | INT4-AWQ     | 82.84 | 80.15 | 87.19 |
+<table>
+  <thead>
+    <tr><th>Model</th><th>Quantization</th><th>CEVAL</th><th>MMLU</th><th>GSM8K</th></tr>
+  </thead>
+  <tbody>
+    <tr><td rowspan="3">Qwen2.5-1.5B-Instruct</td><td>BF16</td><td>67.01</td><td>60.05</td><td>54.28</td></tr>
+    <tr><td>FP8-Static</td><td>66.27</td><td>60.23</td><td>-</td></tr>
+    <tr><td>FP8-Dynamic</td><td>66.79</td><td>60.08</td><td>51.71</td></tr>
+    <tr><td rowspan="5">Qwen2.5-7B-Instruct</td><td>BF16</td><td>81.20</td><td>74.55</td><td>79.98</td></tr>
+    <tr><td>FP8-Static</td><td>81.13</td><td>74.03</td><td>79.30</td></tr>
+    <tr><td>FP8-Dynamic</td><td>80.31</td><td>74.07</td><td>79.00</td></tr>
+    <tr><td>INT4-GPTQ</td><td>79.05</td><td>73.05</td><td>74.75</td></tr>
+    <tr><td>INT4-AWQ</td><td>79.35</td><td>73.22</td><td>79.38</td></tr>
+    <tr><td rowspan="5">Qwen2.5-32B-Instruct</td><td>BF16</td><td>87.30</td><td>83.21</td><td>81.73</td></tr>
+    <tr><td>FP8-Static</td><td>87.59</td><td>83.08</td><td>81.58</td></tr>
+    <tr><td>FP8-Dynamic</td><td>87.30</td><td>83.04</td><td>81.58</td></tr>
+    <tr><td>INT4-GPTQ</td><td>86.70</td><td>82.45</td><td>82.03</td></tr>
+    <tr><td>INT4-AWQ</td><td>87.00</td><td>82.64</td><td>-</td></tr>
+    <tr><td rowspan="5">DeepSeek-R1-Distill-Qwen-7B</td><td>BF16</td><td>53.49</td><td>53.80</td><td>75.74</td></tr>
+    <tr><td>FP8-Static</td><td>53.57</td><td>54.17</td><td>76.19</td></tr>
+    <tr><td>FP8-Dynamic</td><td>52.97</td><td>54.13</td><td>74.15</td></tr>
+    <tr><td>INT4-GPTQ</td><td>51.86</td><td>52.44</td><td>75.89</td></tr>
+    <tr><td>INT4-AWQ</td><td>53.49</td><td>53.70</td><td>-</td></tr>
+    <tr><td rowspan="5">DeepSeek-R1-Distill-Qwen-14B</td><td>BF16</td><td>77.71</td><td>74.28</td><td>85.67</td></tr>
+    <tr><td>FP8-Static</td><td>77.56</td><td>74.66</td><td>86.73</td></tr>
+    <tr><td>FP8-Dynamic</td><td>76.82</td><td>74.63</td><td>87.11</td></tr>
+    <tr><td>INT4-GPTQ</td><td>74.29</td><td>72.37</td><td>84.61</td></tr>
+    <tr><td>INT4-AWQ</td><td>74.81</td><td>73.00</td><td>86.05</td></tr>
+    <tr><td rowspan="5">DeepSeek-R1-Distill-Qwen-32B</td><td>BF16</td><td>84.18</td><td>80.89</td><td>87.41</td></tr>
+    <tr><td>FP8-Static</td><td>83.43</td><td>80.90</td><td>87.57</td></tr>
+    <tr><td>FP8-Dynamic</td><td>83.73</td><td>81.10</td><td>86.43</td></tr>
+    <tr><td>INT4-GPTQ</td><td>84.10</td><td>79.80</td><td>86.73</td></tr>
+    <tr><td>INT4-AWQ</td><td>82.84</td><td>80.15</td><td>87.19</td></tr>
+  </tbody>
+</table>
 
 ### 投机采样
 Qwen3系列的Eagle3模型在MT-bench/HunmanEval/GSM8K/Alpaca上的加速结果如下：
+
 #### Qwen3-8B
 
-|             |        | Datasets |              |           |                |         |               |         |        | 
-| ----------- | ------ | -------- | ------       | --------- | ------         | ------- | ------        | ------- | ------ |
-|             |        | MT-bench |              | HumanEval |                | GSM8K   |               | Alpaca  |        |
-| Temperature | Method | Speedup  | Accept length| Speedup   | Accept length  | Speedup | Accept length | Speedup | Accept length |
-| T=0         | Eagle3 | 2.63x    | 3.65         | 2.76x     | 3.85            | 2.82x   | 3.90          | 2.62x   | 3.48   |
-| T=1         | Eagle3 | 1.98x    | 2.75         | 2.25x     | 3.11            | 2.31x   | 3.15          | 2.10x   | 2.76   |
-
+<table border="0">
+  <thead>
+    <tr><th rowspan="3">Temperature</th><th rowspan="3">Method</th><th colspan="8">Datasets</th></tr>
+    <tr><th colspan="2">MT-bench</th><th colspan="2">HumanEval</th><th colspan="2">GSM8K</th><th colspan="2">Alpaca</th></tr>
+    <tr><th>Speedup</th><th>Accept length</th><th>Speedup</th><th>Accept length</th><th>Speedup</th><th>Accept length</th><th>Speedup</th><th>Accept length</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>T=0</td><td>Eagle3</td><td>2.63x</td><td>3.65</td><td>2.76x</td><td>3.85</td><td>2.82x</td><td>3.90</td><td>2.62x</td><td>3.48</td></tr>
+    <tr><td>T=1</td><td>Eagle3</td><td>1.98x</td><td>2.75</td><td>2.25x</td><td>3.11</td><td>2.31x</td><td>3.15</td><td>2.10x</td><td>2.76</td></tr>
+  </tbody>
+</table>
 
 ## 📝许可协议
 本项目的代码依照 [License for AngelSlim](LICENSE) 协议开源。
