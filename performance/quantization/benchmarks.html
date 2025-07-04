@@ -1,0 +1,1075 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>量化benchmark &#8212; AngelSlim</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../_static/custom.css" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=a5fa425f"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../_static/togglebutton.js?v=4a39c7ea"></script>
+    <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'performance/quantization/benchmarks';</script>
+    <script src="../../_static/custom.js"></script>
+    <link rel="icon" href="../../_static/angelslim_icon.png"/>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="投机采样Benchmark" href="../speculative_decoding/benchmarks.html" />
+    <link rel="prev" title="压缩模型部署" href="../../deployment/deploy.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../_static/angelslim_logo.png" class="logo__image only-light" alt="AngelSlim - Home"/>
+    <script>document.write(`<img src="../../_static/angelslim_logo.png" class="logo__image only-dark" alt="AngelSlim - Home"/>`);</script>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">入门指南</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/installation.html">安装教程</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/quickstrat.html">快速开始</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">算法特性</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../features/quantization/index.html">量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../features/speculative_decoding/index.html">投机采样</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">模型支持</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../models/hunyuan/hunyuan_quant.html">混元A13B模型量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/deepseek/deepseek_quant.html">DeepSeek量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwen/qwen_quant.html">Qwen量化</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">部署文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../deployment/deploy.html">压缩模型部署</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">性能表现</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">量化benchmark</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../speculative_decoding/benchmarks.html">投机采样Benchmark</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">设计文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../design/index.html">设计文档</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim/edit/main/docs/source/performance/quantization/benchmarks.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../../_sources/performance/quantization/benchmarks.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>量化benchmark</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#hunyuan-a13b-instruct">Hunyuan-A13B-Instruct</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qwen3">Qwen3</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">其他模型</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="benchmark">
+<h1>量化benchmark<a class="headerlink" href="#benchmark" title="Link to this heading">#</a></h1>
+<section id="hunyuan-a13b-instruct">
+<h2>Hunyuan-A13B-Instruct<a class="headerlink" href="#hunyuan-a13b-instruct" title="Link to this heading">#</a></h2>
+<p>Hunyuan-A13B-Instruct的<code class="docutils literal notranslate"><span class="pre">BF16</span></code>、<code class="docutils literal notranslate"><span class="pre">FP8</span></code>、<code class="docutils literal notranslate"><span class="pre">INT4-GPTQ</span></code>在<code class="docutils literal notranslate"><span class="pre">AIME</span> <span class="pre">2024</span></code>、<code class="docutils literal notranslate"><span class="pre">GSM8K</span></code>、<code class="docutils literal notranslate"><span class="pre">BBH</span></code>、<code class="docutils literal notranslate"><span class="pre">DROP</span></code>上的评测结果如下：</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head text-center"><p>Bench</p></th>
+<th class="head text-center"><p>Hunyuan-A13B-Instruct</p></th>
+<th class="head text-center"><p>Hunyuan-A13B-Instruct-FP8</p></th>
+<th class="head text-center"><p>Hunyuan-A13B-Instruct-Int4-GPTQ</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td class="text-center"><p>AIME 2024</p></td>
+<td class="text-center"><p>87.3</p></td>
+<td class="text-center"><p>86.7</p></td>
+<td class="text-center"><p>86.7</p></td>
+</tr>
+<tr class="row-odd"><td class="text-center"><p>GSM8K</p></td>
+<td class="text-center"><p>94.39</p></td>
+<td class="text-center"><p>94.01</p></td>
+<td class="text-center"><p>94.24</p></td>
+</tr>
+<tr class="row-even"><td class="text-center"><p>BBH</p></td>
+<td class="text-center"><p>89.1</p></td>
+<td class="text-center"><p>88.34</p></td>
+<td class="text-center"><p>87.91</p></td>
+</tr>
+<tr class="row-odd"><td class="text-center"><p>DROP</p></td>
+<td class="text-center"><p>91.1</p></td>
+<td class="text-center"><p>91.1</p></td>
+<td class="text-center"><p>91.05</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="qwen3">
+<h2>Qwen3<a class="headerlink" href="#qwen3" title="Link to this heading">#</a></h2>
+<p>Qwen3系列模型的<code class="docutils literal notranslate"><span class="pre">BF16</span></code>、<code class="docutils literal notranslate"><span class="pre">FP8-Static</span></code>、<code class="docutils literal notranslate"><span class="pre">FP8-Dynamic</span></code>、<code class="docutils literal notranslate"><span class="pre">INT4-GPTQ</span></code>、<code class="docutils literal notranslate"><span class="pre">INT4-AWQ</span></code>在<code class="docutils literal notranslate"><span class="pre">CEVAL</span></code>、<code class="docutils literal notranslate"><span class="pre">MMLU</span></code>、<code class="docutils literal notranslate"><span class="pre">GSM8K</span></code>、<code class="docutils literal notranslate"><span class="pre">HUMANEVAL</span></code>上的评测结果如下：</p>
+<div class="pst-scrollable-table-container"><table class="table table-center" id="table-qwen3-performance">
+<thead>
+<tr class="row-odd"><th class="head"><p>Model</p></th>
+<th class="head"><p>Quantization</p></th>
+<th class="head"><p>CEVAL</p></th>
+<th class="head"><p>MMLU</p></th>
+<th class="head"><p>GSM8K</p></th>
+<th class="head"><p>HUMANEVAL</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td rowspan="4"><p>Qwen3-0.6B</p></td>
+<td><p>BF16</p></td>
+<td><p>45.84</p></td>
+<td><p>47.21</p></td>
+<td><p>42.99</p></td>
+<td><p>19.51</p></td>
+</tr>
+<tr class="row-odd"><td><p>FP8-Static</p></td>
+<td><p>45.99</p></td>
+<td><p>46.87</p></td>
+<td><p>38.06</p></td>
+<td><p>18.90</p></td>
+</tr>
+<tr class="row-even"><td><p>FP8-Dynamic</p></td>
+<td><p>45.99</p></td>
+<td><p>46.93</p></td>
+<td><p>38.29</p></td>
+<td><p>20.73</p></td>
+</tr>
+<tr class="row-odd"><td><p>INT8-Dynamic</p></td>
+<td><p>45.17</p></td>
+<td><p>46.95</p></td>
+<td><p>41.17</p></td>
+<td><p>21.34</p></td>
+</tr>
+<tr class="row-even"><td rowspan="6"><p>Qwen3-1.7B</p></td>
+<td><p>BF16</p></td>
+<td><p>60.33</p></td>
+<td><p>59.77</p></td>
+<td><p>68.69</p></td>
+<td><p>40.85</p></td>
+</tr>
+<tr class="row-odd"><td><p>FP8-Static</p></td>
+<td><p>61.07</p></td>
+<td><p>59.39</p></td>
+<td><p>68.01</p></td>
+<td><p>38.41</p></td>
+</tr>
+<tr class="row-even"><td><p>FP8-Dynamic</p></td>
+<td><p>60.77</p></td>
+<td><p>59.88</p></td>
+<td><p>67.10</p></td>
+<td><p>34.76</p></td>
+</tr>
+<tr class="row-odd"><td><p>INT8-Dynamic</p></td>
+<td><p>60.25</p></td>
+<td><p>59.80</p></td>
+<td><p>68.54</p></td>
+<td><p>41.46</p></td>
+</tr>
+<tr class="row-even"><td><p>INT4-GPTQ</p></td>
+<td><p>57.50</p></td>
+<td><p>56.93</p></td>
+<td><ul class="simple">
+<li></li>
+</ul>
+</td>
+<td><ul class="simple">
+<li></li>
+</ul>
+</td>
+</tr>
+<tr class="row-odd"><td><p>INT4-AWQ</p></td>
+<td><p>59.06</p></td>
+<td><p>56.86</p></td>
+<td><ul class="simple">
+<li></li>
+</ul>
+</td>
+<td><ul class="simple">
+<li></li>
+</ul>
+</td>
+</tr>
+<tr class="row-even"><td rowspan="6"><p>Qwen3-4B</p></td>
+<td><p>BF16</p></td>
+<td><p>72.66</p></td>
+<td><p>69.99</p></td>
+<td><p>85.37</p></td>
+<td><p>72.56</p></td>
+</tr>
+<tr class="row-odd"><td><p>FP8-Static</p></td>
+<td><p>72.14</p></td>
+<td><p>69.93</p></td>
+<td><p>83.70</p></td>
+<td><p>73.17</p></td>
+</tr>
+<tr class="row-even"><td><p>FP8-Dynamic</p></td>
+<td><p>70.80</p></td>
+<td><p>70.08</p></td>
+<td><p>83.40</p></td>
+<td><p>69.51</p></td>
+</tr>
+<tr class="row-odd"><td><p>INT8-Dynamic</p></td>
+<td><p>72.21</p></td>
+<td><p>69.47</p></td>
+<td><p>85.75</p></td>
+<td><p>66.46</p></td>
+</tr>
+<tr class="row-even"><td><p>INT4-GPTQ</p></td>
+<td><p>70.06</p></td>
+<td><p>68.59</p></td>
+<td><p>81.65</p></td>
+<td><ul class="simple">
+<li></li>
+</ul>
+</td>
+</tr>
+<tr class="row-odd"><td><p>INT4-AWQ</p></td>
+<td><p>70.36</p></td>
+<td><p>67.62</p></td>
+<td><p>80.59</p></td>
+<td><ul class="simple">
+<li></li>
+</ul>
+</td>
+</tr>
+<tr class="row-even"><td rowspan="6"><p>Qwen3-8B</p></td>
+<td><p>BF16</p></td>
+<td><p>79.27</p></td>
+<td><p>74.78</p></td>
+<td><p>87.79</p></td>
+<td><p>63.41</p></td>
+</tr>
+<tr class="row-odd"><td><p>FP8-Static</p></td>
+<td><p>78.23</p></td>
+<td><p>74.79</p></td>
+<td><p>86.96</p></td>
+<td><p>62.20</p></td>
+</tr>
+<tr class="row-even"><td><p>FP8-Dynamic</p></td>
+<td><p>78.45</p></td>
+<td><p>74.75</p></td>
+<td><p>87.64</p></td>
+<td><p>62.80</p></td>
+</tr>
+<tr class="row-odd"><td><p>INT8-Dynamic</p></td>
+<td><p>78.01</p></td>
+<td><p>74.84</p></td>
+<td><p>86.96</p></td>
+<td><p>67.07</p></td>
+</tr>
+<tr class="row-even"><td><p>INT4-GPTQ</p></td>
+<td><p>77.19</p></td>
+<td><p>73.26</p></td>
+<td><p>86.43</p></td>
+<td><p>62.20</p></td>
+</tr>
+<tr class="row-odd"><td><p>INT4-AWQ</p></td>
+<td><p>76.15</p></td>
+<td><p>73.59</p></td>
+<td><p>86.96</p></td>
+<td><p>63.41</p></td>
+</tr>
+<tr class="row-even"><td rowspan="6"><p>Qwen3-14B</p></td>
+<td><p>BF16</p></td>
+<td><p>83.06</p></td>
+<td><p>78.90</p></td>
+<td><p>88.40</p></td>
+<td><p>55.49</p></td>
+</tr>
+<tr class="row-odd"><td><p>FP8-Static</p></td>
+<td><p>82.62</p></td>
+<td><p>78.57</p></td>
+<td><p>89.46</p></td>
+<td><p>57.32</p></td>
+</tr>
+<tr class="row-even"><td><p>FP8-Dynamic</p></td>
+<td><p>82.24</p></td>
+<td><p>78.92</p></td>
+<td><p>88.32</p></td>
+<td><p>52.44</p></td>
+</tr>
+<tr class="row-odd"><td><p>INT8-Dynamic</p></td>
+<td><p>81.87</p></td>
+<td><p>78.13</p></td>
+<td><p>86.28</p></td>
+<td><p>56.10</p></td>
+</tr>
+<tr class="row-even"><td><p>INT4-GPTQ</p></td>
+<td><p>81.05</p></td>
+<td><p>78.02</p></td>
+<td><p>87.34</p></td>
+<td><p>57.93</p></td>
+</tr>
+<tr class="row-odd"><td><p>INT4-AWQ</p></td>
+<td><p>82.02</p></td>
+<td><p>77.68</p></td>
+<td><p>84.23</p></td>
+<td><p>61.59</p></td>
+</tr>
+<tr class="row-even"><td rowspan="4"><p>Qwen3-30B-A3B</p></td>
+<td><p>BF16</p></td>
+<td><p>83.66</p></td>
+<td><p>79.36</p></td>
+<td><p>89.99</p></td>
+<td><p>31.71</p></td>
+</tr>
+<tr class="row-odd"><td><p>FP8-Static</p></td>
+<td><p>83.95</p></td>
+<td><p>79.47</p></td>
+<td><p>89.01</p></td>
+<td><p>31.10</p></td>
+</tr>
+<tr class="row-even"><td><p>FP8-Dynamic</p></td>
+<td><p>84.10</p></td>
+<td><p>79.40</p></td>
+<td><p>89.16</p></td>
+<td><p>32.93</p></td>
+</tr>
+<tr class="row-odd"><td><p>INT8-Dynamic</p></td>
+<td><p>83.36</p></td>
+<td><p>79.48</p></td>
+<td><p>89.16</p></td>
+<td><p>34.15</p></td>
+</tr>
+<tr class="row-even"><td rowspan="5"><p>Qwen3-32B</p></td>
+<td><p>BF16</p></td>
+<td><p>86.55</p></td>
+<td><p>82.00</p></td>
+<td><p>74.53</p></td>
+<td><p>37.80</p></td>
+</tr>
+<tr class="row-odd"><td><p>FP8-Static</p></td>
+<td><p>86.92</p></td>
+<td><p>81.78</p></td>
+<td><p>70.20</p></td>
+<td><p>39.63</p></td>
+</tr>
+<tr class="row-even"><td><p>FP8-Dynamic</p></td>
+<td><p>86.55</p></td>
+<td><p>81.89</p></td>
+<td><p>70.43</p></td>
+<td><p>38.41</p></td>
+</tr>
+<tr class="row-odd"><td><p>INT4-GPTQ</p></td>
+<td><p>86.18</p></td>
+<td><p>81.01</p></td>
+<td><ul class="simple">
+<li></li>
+</ul>
+</td>
+<td><p>43.29</p></td>
+</tr>
+<tr class="row-even"><td><p>INT4-AWQ</p></td>
+<td><p>86.18</p></td>
+<td><p>81.54</p></td>
+<td><ul class="simple">
+<li></li>
+</ul>
+</td>
+<td><p>36.59</p></td>
+</tr>
+<tr class="row-odd"><td rowspan="4"><p>Qwen3-235B-A22B</p></td>
+<td><p>BF16</p></td>
+<td><p>89.60</p></td>
+<td><p>86.28</p></td>
+<td><p>85.29</p></td>
+<td><p>27.44</p></td>
+</tr>
+<tr class="row-even"><td><p>FP8-Static</p></td>
+<td><p>89.67</p></td>
+<td><p>86.19</p></td>
+<td><p>86.96</p></td>
+<td><p>27.44</p></td>
+</tr>
+<tr class="row-odd"><td><p>FP8-Dynamic</p></td>
+<td><p>89.67</p></td>
+<td><p>86.18</p></td>
+<td><p>85.22</p></td>
+<td><p>28.05</p></td>
+</tr>
+<tr class="row-even"><td><p>INT8-Dynamic</p></td>
+<td><p>88.93</p></td>
+<td><p>86.20</p></td>
+<td><p>86.20</p></td>
+<td><p>23.78</p></td>
+</tr>
+<tr class="row-odd"><td rowspan="6"><p>QwQ-32B</p></td>
+<td><p>BF16</p></td>
+<td><p>85.74</p></td>
+<td><p>82.03</p></td>
+<td><p>73.31</p></td>
+<td><p>42.68</p></td>
+</tr>
+<tr class="row-even"><td><p>FP8-Static</p></td>
+<td><p>85.44</p></td>
+<td><p>81.91</p></td>
+<td><p>75.36</p></td>
+<td><p>42.68</p></td>
+</tr>
+<tr class="row-odd"><td><p>FP8-Dynamic</p></td>
+<td><p>85.07</p></td>
+<td><p>81.93</p></td>
+<td><p>75.66</p></td>
+<td><p>42.07</p></td>
+</tr>
+<tr class="row-even"><td><p>INT8-Dynamic</p></td>
+<td><p>86.40</p></td>
+<td><p>81.97</p></td>
+<td><p>74.37</p></td>
+<td><p>45.73</p></td>
+</tr>
+<tr class="row-odd"><td><p>INT4-GPTQ</p></td>
+<td><p>84.03</p></td>
+<td><p>81.26</p></td>
+<td><p>68.23</p></td>
+<td><p>45.73</p></td>
+</tr>
+<tr class="row-even"><td><p>INT4-AWQ</p></td>
+<td><p>83.58</p></td>
+<td><p>81.01</p></td>
+<td><p>68.69</p></td>
+<td><p>43.29</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="id1">
+<h2>其他模型<a class="headerlink" href="#id1" title="Link to this heading">#</a></h2>
+<p>其他模型的<code class="docutils literal notranslate"><span class="pre">BF16</span></code>、<code class="docutils literal notranslate"><span class="pre">FP8-Static</span></code>、<code class="docutils literal notranslate"><span class="pre">FP8-Dynamic</span></code>、<code class="docutils literal notranslate"><span class="pre">INT4-GPTQ</span></code>、<code class="docutils literal notranslate"><span class="pre">INT4-AWQ</span></code>在<code class="docutils literal notranslate"><span class="pre">CEVAL</span></code>、<code class="docutils literal notranslate"><span class="pre">MMLU</span></code>、<code class="docutils literal notranslate"><span class="pre">GSM8K</span></code>上的评测结果如下：</p>
+<div class="pst-scrollable-table-container"><table class="table table-center" id="table-other-performance">
+<thead>
+<tr class="row-odd"><th class="head"><p>Model</p></th>
+<th class="head"><p>Quantization</p></th>
+<th class="head"><p>CEVAL</p></th>
+<th class="head"><p>MMLU</p></th>
+<th class="head"><p>GSM8K</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td rowspan="3"><p>Qwen2.5-1.5B-Instruct</p></td>
+<td><p>BF16</p></td>
+<td><p>67.01</p></td>
+<td><p>60.05</p></td>
+<td><p>54.28</p></td>
+</tr>
+<tr class="row-odd"><td><p>FP8-Static</p></td>
+<td><p>66.27</p></td>
+<td><p>60.23</p></td>
+<td><ul class="simple">
+<li></li>
+</ul>
+</td>
+</tr>
+<tr class="row-even"><td><p>FP8-Dynamic</p></td>
+<td><p>66.79</p></td>
+<td><p>60.08</p></td>
+<td><p>51.71</p></td>
+</tr>
+<tr class="row-odd"><td rowspan="5"><p>Qwen2.5-7B-Instruct</p></td>
+<td><p>BF16</p></td>
+<td><p>81.20</p></td>
+<td><p>74.55</p></td>
+<td><p>79.98</p></td>
+</tr>
+<tr class="row-even"><td><p>FP8-Static</p></td>
+<td><p>81.13</p></td>
+<td><p>74.03</p></td>
+<td><p>79.30</p></td>
+</tr>
+<tr class="row-odd"><td><p>FP8-Dynamic</p></td>
+<td><p>80.31</p></td>
+<td><p>74.07</p></td>
+<td><p>79.00</p></td>
+</tr>
+<tr class="row-even"><td><p>INT4-GPTQ</p></td>
+<td><p>79.05</p></td>
+<td><p>73.05</p></td>
+<td><p>74.75</p></td>
+</tr>
+<tr class="row-odd"><td><p>INT4-AWQ</p></td>
+<td><p>79.35</p></td>
+<td><p>73.22</p></td>
+<td><p>79.38</p></td>
+</tr>
+<tr class="row-even"><td rowspan="5"><p>Qwen2.5-32B-Instruct</p></td>
+<td><p>BF16</p></td>
+<td><p>87.30</p></td>
+<td><p>83.21</p></td>
+<td><p>81.73</p></td>
+</tr>
+<tr class="row-odd"><td><p>FP8-Static</p></td>
+<td><p>87.59</p></td>
+<td><p>83.08</p></td>
+<td><p>81.58</p></td>
+</tr>
+<tr class="row-even"><td><p>FP8-Dynamic</p></td>
+<td><p>87.30</p></td>
+<td><p>83.04</p></td>
+<td><p>81.58</p></td>
+</tr>
+<tr class="row-odd"><td><p>INT4-GPTQ</p></td>
+<td><p>86.70</p></td>
+<td><p>82.45</p></td>
+<td><p>82.03</p></td>
+</tr>
+<tr class="row-even"><td><p>INT4-AWQ</p></td>
+<td><p>87.00</p></td>
+<td><p>82.64</p></td>
+<td><ul class="simple">
+<li></li>
+</ul>
+</td>
+</tr>
+<tr class="row-odd"><td rowspan="3"><p>DeepSeek-R1-Distill-Qwen-1.5B</p></td>
+<td><p>BF16</p></td>
+<td><p>37.22</p></td>
+<td><p>36.63</p></td>
+<td><p>67.02</p></td>
+</tr>
+<tr class="row-even"><td><p>FP8-Static</p></td>
+<td><p>35.44</p></td>
+<td><p>37.41</p></td>
+<td><ul class="simple">
+<li></li>
+</ul>
+</td>
+</tr>
+<tr class="row-odd"><td><p>FP8-Dynamic</p></td>
+<td><p>35.96</p></td>
+<td><p>36.12</p></td>
+<td><p>64.75</p></td>
+</tr>
+<tr class="row-even"><td rowspan="5"><p>DeepSeek-R1-Distill-Qwen-7B</p></td>
+<td><p>BF16</p></td>
+<td><p>53.49</p></td>
+<td><p>53.80</p></td>
+<td><p>75.74</p></td>
+</tr>
+<tr class="row-odd"><td><p>FP8-Static</p></td>
+<td><p>53.57</p></td>
+<td><p>54.17</p></td>
+<td><p>76.19</p></td>
+</tr>
+<tr class="row-even"><td><p>FP8-Dynamic</p></td>
+<td><p>52.97</p></td>
+<td><p>54.13</p></td>
+<td><p>74.15</p></td>
+</tr>
+<tr class="row-odd"><td><p>INT4-GPTQ</p></td>
+<td><p>51.86</p></td>
+<td><p>52.44</p></td>
+<td><p>75.89</p></td>
+</tr>
+<tr class="row-even"><td><p>INT4-AWQ</p></td>
+<td><p>53.49</p></td>
+<td><p>53.70</p></td>
+<td><ul class="simple">
+<li></li>
+</ul>
+</td>
+</tr>
+<tr class="row-odd"><td rowspan="5"><p>DeepSeek-R1-Distill-Qwen-14B</p></td>
+<td><p>BF16</p></td>
+<td><p>77.71</p></td>
+<td><p>74.28</p></td>
+<td><p>85.67</p></td>
+</tr>
+<tr class="row-even"><td><p>FP8-Static</p></td>
+<td><p>77.56</p></td>
+<td><p>74.66</p></td>
+<td><p>86.73</p></td>
+</tr>
+<tr class="row-odd"><td><p>FP8-Dynamic</p></td>
+<td><p>76.82</p></td>
+<td><p>74.63</p></td>
+<td><p>87.11</p></td>
+</tr>
+<tr class="row-even"><td><p>INT4-GPTQ</p></td>
+<td><p>74.29</p></td>
+<td><p>72.37</p></td>
+<td><p>84.61</p></td>
+</tr>
+<tr class="row-odd"><td><p>INT4-AWQ</p></td>
+<td><p>74.81</p></td>
+<td><p>73.00</p></td>
+<td><p>86.05</p></td>
+</tr>
+<tr class="row-even"><td rowspan="5"><p>DeepSeek-R1-Distill-Qwen-32B</p></td>
+<td><p>BF16</p></td>
+<td><p>84.18</p></td>
+<td><p>80.89</p></td>
+<td><p>87.41</p></td>
+</tr>
+<tr class="row-odd"><td><p>FP8-Static</p></td>
+<td><p>83.43</p></td>
+<td><p>80.90</p></td>
+<td><p>87.57</p></td>
+</tr>
+<tr class="row-even"><td><p>FP8-Dynamic</p></td>
+<td><p>83.73</p></td>
+<td><p>81.10</p></td>
+<td><p>86.43</p></td>
+</tr>
+<tr class="row-odd"><td><p>INT4-GPTQ</p></td>
+<td><p>84.10</p></td>
+<td><p>79.80</p></td>
+<td><p>86.73</p></td>
+</tr>
+<tr class="row-even"><td><p>INT4-AWQ</p></td>
+<td><p>82.84</p></td>
+<td><p>80.15</p></td>
+<td><p>87.19</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="../../deployment/deploy.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">压缩模型部署</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../speculative_decoding/benchmarks.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">投机采样Benchmark</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#hunyuan-a13b-instruct">Hunyuan-A13B-Instruct</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qwen3">Qwen3</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">其他模型</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By the AngelSlim Team
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2025, AngelSlim Team.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>
