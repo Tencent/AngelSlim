@@ -12,7 +12,7 @@ Dedicated to building a more intuitive, comprehensive, and efficient LLMs compre
 </h3>
 
 <p align="center">
-          📖 <a href="https://angelslim.readthedocs.io/">Documentation</a>&nbsp&nbsp | &nbsp&nbsp🤗 <a href="https://huggingface.co/AngelSlim">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="https://modelscope.cn/organization/AngelSlim">ModelScope</a>&nbsp&nbsp | &nbsp&nbsp💬 <a href="./docs/source/assets/angel_slim_wechat.png">WeChat</a>
+          📖 <a href="https://angelslim.readthedocs.io/">Documentation</a>&nbsp&nbsp | &nbsp&nbsp🤗 <a href="https://huggingface.co/AngelSlim">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="https://modelscope.cn/organization/AngelSlim">ModelScope</a>&nbsp&nbsp | &nbsp&nbsp💬 <a href="./docs/source/assets/angel_slim_wechat.png">WeChat</a> | &nbsp&nbsp🫨 <a href="https://discord.com/invite/dHVNeuNdFt">Discord</a>
 <br>
 </p>
 
@@ -63,13 +63,16 @@ Currently supports the following LLMs, including Hunyuan-Dense, Hunyuan-MoE, Qwe
 | [QwQ](https://huggingface.co/collections/AngelSlim/qwen3-quant-68652e26da31740739d154f8)                                    | ✅           | ✅          | ✅            | ✅         | ✅        |
 
 ### Speculative Decoding
-The Eagle3 weights for the Qwen3-8B model are now available, with Eagle3 weights for other models in the Qwen3 series to be released soon.
+The Eagle3 weights for the Qwen3 series model are now available.
 
 | Model     |      Eagle3       | 
 | ----------| ----------------- | 
-| [Qwen3-8B](https://huggingface.co/AngelSlim/Qwen3-8B_eagle3/tree/main) |      ✅           | 
-| Qwen3-14B | coming soon |
-| Qwen3-32B | coming soon |
+| [Qwen3-1.7B](https://huggingface.co/AngelSlim/Qwen3-1.7B_eagle3)    |      ✅           |
+| [Qwen3-4B](https://huggingface.co/AngelSlim/Qwen3-4B_eagle3)        |      ✅           |
+| [Qwen3-8B](https://huggingface.co/AngelSlim/Qwen3-8B_eagle3)        |      ✅           |
+| [Qwen3-14B](https://huggingface.co/AngelSlim/Qwen3-14B_eagle3)      |      ✅           |
+| [Qwen3-32B](https://huggingface.co/AngelSlim/Qwen3-32B_eagle3)      |      ✅           |
+| [Qwen3-30B-A3B](https://huggingface.co/AngelSlim/Qwen3-a3B_eagle3)  |      ✅           |
 
 ## 🛎️How to Use
 

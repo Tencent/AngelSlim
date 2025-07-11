@@ -12,7 +12,7 @@
 </h3>
 
 <p align="center">
-          📖 <a href="https://angelslim.readthedocs.io/">Documentation</a>&nbsp&nbsp | &nbsp&nbsp🤗 <a href="https://huggingface.co/AngelSlim">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="https://modelscope.cn/organization/AngelSlim">ModelScope</a>&nbsp&nbsp | &nbsp&nbsp💬 <a href="./docs/source/assets/angel_slim_wechat.png">WeChat (微信)</a>
+          📖 <a href="https://angelslim.readthedocs.io/">Documentation</a>&nbsp&nbsp | &nbsp&nbsp🤗 <a href="https://huggingface.co/AngelSlim">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="https://modelscope.cn/organization/AngelSlim">ModelScope</a>&nbsp&nbsp | &nbsp&nbsp💬 <a href="./docs/source/assets/angel_slim_wechat.png">WeChat (微信)</a> | &nbsp&nbsp🫨 <a href="https://discord.com/invite/dHVNeuNdFt">Discord</a>
 <br>
 </p>
 
@@ -62,13 +62,16 @@ Coming soon：
 | [QwQ](https://huggingface.co/collections/AngelSlim/qwen3-quant-68652e26da31740739d154f8) |      ✅           |         ✅           |       ✅             | ✅           |       ✅            |
 
 ### 投机采样
-目前已开源Qwen3-8B模型的Eagle3权重，Qwen3系列其他模型的Eagle3权重也即将开放。
+目前已开源Qwen3系列模型的Eagle3权重。
 
-| 模型名     |      Eagle3       | 
-| ----------| ----------------- | 
-| [Qwen3-8B](https://huggingface.co/AngelSlim/Qwen3-8B_eagle3/tree/main) |      ✅           | 
-| Qwen3-14B | coming soon |
-| Qwen3-32B | coming soon |
+| 模型名     |      Eagle3       |
+| ----------| ----------------- |
+| [Qwen3-1.7B](https://huggingface.co/AngelSlim/Qwen3-1.7B_eagle3)    |      ✅           |
+| [Qwen3-4B](https://huggingface.co/AngelSlim/Qwen3-4B_eagle3)        |      ✅           |
+| [Qwen3-8B](https://huggingface.co/AngelSlim/Qwen3-8B_eagle3)        |      ✅           |
+| [Qwen3-14B](https://huggingface.co/AngelSlim/Qwen3-14B_eagle3)      |      ✅           |
+| [Qwen3-32B](https://huggingface.co/AngelSlim/Qwen3-32B_eagle3)      |      ✅           |
+| [Qwen3-30B-A3B](https://huggingface.co/AngelSlim/Qwen3-a3B_eagle3)  |      ✅           |
 
 ## 🛎️如何使用
 
