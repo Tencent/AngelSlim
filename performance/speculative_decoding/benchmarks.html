@@ -392,13 +392,7 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#eagle3">Eagle3</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qwen3-8b">Qwen3-8B</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qwen3-14b">Qwen3-14B</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qwen3-32b">Qwen3-32B</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qwen3-30b-a3b">Qwen3-30B-A3B</a></li>
-</ul>
-</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#eagle3">Eagle3</a></li>
 </ul>
             </nav>
         </div>
@@ -414,36 +408,64 @@ document.write(`
 <h1>投机采样Benchmark<a class="headerlink" href="#benchmark" title="Link to this heading">#</a></h1>
 <section id="eagle3">
 <h2>Eagle3<a class="headerlink" href="#eagle3" title="Link to this heading">#</a></h2>
-<section id="qwen3-8b">
-<h3>Qwen3-8B<a class="headerlink" href="#qwen3-8b" title="Link to this heading">#</a></h3>
-<div class="pst-scrollable-table-container"><table class="table table-center" id="table-eagle3-speedup-comparison">
+<div class="pst-scrollable-table-container"><table class="table">
 <thead>
-<tr class="row-odd"><th class="head" rowspan="3"><p>Temperature</p></th>
-<th class="head" rowspan="3"><p>Method</p></th>
-<th class="head" colspan="8"><p>Datasets</p></th>
-</tr>
-<tr class="row-even"><th class="head" colspan="2"><p>MT-bench</p></th>
-<th class="head" colspan="2"><p>HumanEval</p></th>
-<th class="head" colspan="2"><p>GSM8K</p></th>
-<th class="head" colspan="2"><p>Alpaca</p></th>
-</tr>
-<tr class="row-odd"><th class="head"><p>Speedup</p></th>
-<th class="head"><p>Accept
-length</p></th>
-<th class="head"><p>Speedup</p></th>
-<th class="head"><p>Accept
-length</p></th>
-<th class="head"><p>Speedup</p></th>
-<th class="head"><p>Accept
-length</p></th>
-<th class="head"><p>Speedup</p></th>
-<th class="head"><p>Accept
-length</p></th>
+<tr class="row-odd"><th class="head"><p></p></th>
+<th class="head"><p></p></th>
+<th class="head"><p>MT-bench</p></th>
+<th class="head"><p></p></th>
+<th class="head"><p>HumanEval</p></th>
+<th class="head"><p></p></th>
+<th class="head"><p>GSM8K</p></th>
+<th class="head"><p></p></th>
+<th class="head"><p>Alpaca</p></th>
+<th class="head"><p></p></th>
+<th class="head"><p>Mean</p></th>
+<th class="head"><p></p></th>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p>T=0</p></td>
-<td><p>Eagle3</p></td>
+<tr class="row-even"><td><p></p></td>
+<td><p>Model</p></td>
+<td><p>Speedup</p></td>
+<td><p>τ</p></td>
+<td><p>Speedup</p></td>
+<td><p>τ</p></td>
+<td><p>Speedup</p></td>
+<td><p>τ</p></td>
+<td><p>Speedup</p></td>
+<td><p>τ</p></td>
+<td><p>Speedup</p></td>
+<td><p>τ</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p>Qwen3-1.7B</p></td>
+<td><p>2.05x</p></td>
+<td><p>2.81</p></td>
+<td><p>2.07x</p></td>
+<td><p>2.93</p></td>
+<td><p>2.11x</p></td>
+<td><p>2.98</p></td>
+<td><p>1.93x</p></td>
+<td><p>2.69</p></td>
+<td><p>2.04x</p></td>
+<td><p>2.85</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p>Qwen3-4B</p></td>
+<td><p>2.21x</p></td>
+<td><p>3.01</p></td>
+<td><p>2.36x</p></td>
+<td><p>3.24</p></td>
+<td><p>2.42x</p></td>
+<td><p>3.13</p></td>
+<td><p>2.32x</p></td>
+<td><p>2.75</p></td>
+<td><p>2.33x</p></td>
+<td><p>3.03</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Temperature=0</strong></p></td>
+<td><p>Qwen3-8B</p></td>
 <td><p>2.63x</p></td>
 <td><p>3.65</p></td>
 <td><p>2.76x</p></td>
@@ -452,9 +474,89 @@ length</p></th>
 <td><p>3.90</p></td>
 <td><p>2.62x</p></td>
 <td><p>3.48</p></td>
+<td><p>2.70x</p></td>
+<td><p>3.72</p></td>
 </tr>
-<tr class="row-odd"><td><p>T=1</p></td>
-<td><p>Eagle3</p></td>
+<tr class="row-even"><td><p></p></td>
+<td><p>Qwen3-14B</p></td>
+<td><p>2.23x</p></td>
+<td><p>3.30</p></td>
+<td><p>2.53x</p></td>
+<td><p>3.74</p></td>
+<td><p>2.56x</p></td>
+<td><p>3.79</p></td>
+<td><p>2.16x</p></td>
+<td><p>3.13</p></td>
+<td><p>2.37x</p></td>
+<td><p>3.49</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p>Qwen3-32B</p></td>
+<td><p>2.39x</p></td>
+<td><p>2.78</p></td>
+<td><p>2.37x</p></td>
+<td><p>2.81</p></td>
+<td><p>2.47x</p></td>
+<td><p>2.92</p></td>
+<td><p>2.42x</p></td>
+<td><p>2.53</p></td>
+<td><p>2.41x</p></td>
+<td><p>2.76</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p>Qwen3-30B-A3B</p></td>
+<td><p>2.84x</p></td>
+<td><p>3.63</p></td>
+<td><p>2.27x</p></td>
+<td><p>3.09</p></td>
+<td><p>2.64x</p></td>
+<td><p>3.42</p></td>
+<td><p>2.83x</p></td>
+<td><p>3.56</p></td>
+<td><p>2.64x</p></td>
+<td><p>3.42</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p>Qwen3-1.7B</p></td>
+<td><p>1.74x</p></td>
+<td><p>2.53</p></td>
+<td><p>1.86x</p></td>
+<td><p>2.70</p></td>
+<td><p>1.82x</p></td>
+<td><p>2.69</p></td>
+<td><p>1.93x</p></td>
+<td><p>2.46</p></td>
+<td><p>1.75x</p></td>
+<td><p>2.60</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p>Qwen3-4B</p></td>
+<td><p>1.93x</p></td>
+<td><p>2.60</p></td>
+<td><p>2.00x</p></td>
+<td><p>2.84</p></td>
+<td><p>2.11x</p></td>
+<td><p>2.82</p></td>
+<td><p>2.34x</p></td>
+<td><p>2.50</p></td>
+<td><p>1.75x</p></td>
+<td><p>2.69</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Temperature=1</strong></p></td>
+<td><p>Qwen3-8B</p></td>
 <td><p>1.98x</p></td>
 <td><p>2.75</p></td>
 <td><p>2.25x</p></td>
@@ -463,23 +565,51 @@ length</p></th>
 <td><p>3.15</p></td>
 <td><p>2.10x</p></td>
 <td><p>2.76</p></td>
+<td><p>2.90x</p></td>
+<td><p>2.94</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p>Qwen3-14B</p></td>
+<td><p>1.71x</p></td>
+<td><p>2.61</p></td>
+<td><p>1.95x</p></td>
+<td><p>2.87</p></td>
+<td><p>2.04x</p></td>
+<td><p>3.08</p></td>
+<td><p>1.68x</p></td>
+<td><p>2.55</p></td>
+<td><p>2.90x</p></td>
+<td><p>2.78</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p>Qwen3-32B</p></td>
+<td><p>1.62x</p></td>
+<td><p>1.91</p></td>
+<td><p>1.71x</p></td>
+<td><p>2.05</p></td>
+<td><p>1.78x</p></td>
+<td><p>2.10</p></td>
+<td><p>1.80x</p></td>
+<td><p>1.95</p></td>
+<td><p>1.62x</p></td>
+<td><p>2.00</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p>Qwen3-30B-A3B</p></td>
+<td><p>1.91x</p></td>
+<td><p>2.46</p></td>
+<td><p>2.00x</p></td>
+<td><p>2.64</p></td>
+<td><p>1.90x</p></td>
+<td><p>2.53</p></td>
+<td><p>1.80x</p></td>
+<td><p>2.32</p></td>
+<td><p>1.90x</p></td>
+<td><p>2.48</p></td>
 </tr>
 </tbody>
 </table>
 </div>
-</section>
-<section id="qwen3-14b">
-<h3>Qwen3-14B<a class="headerlink" href="#qwen3-14b" title="Link to this heading">#</a></h3>
-<p>Coming soon..</p>
-</section>
-<section id="qwen3-32b">
-<h3>Qwen3-32B<a class="headerlink" href="#qwen3-32b" title="Link to this heading">#</a></h3>
-<p>Coming soon..</p>
-</section>
-<section id="qwen3-30b-a3b">
-<h3>Qwen3-30B-A3B<a class="headerlink" href="#qwen3-30b-a3b" title="Link to this heading">#</a></h3>
-<p>Coming soon..</p>
-</section>
 </section>
 </section>
 
@@ -528,13 +658,7 @@ length</p></th>
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#eagle3">Eagle3</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qwen3-8b">Qwen3-8B</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qwen3-14b">Qwen3-14B</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qwen3-32b">Qwen3-32B</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qwen3-30b-a3b">Qwen3-30B-A3B</a></li>
-</ul>
-</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#eagle3">Eagle3</a></li>
 </ul>
   </nav></div>
 
