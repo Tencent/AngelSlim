@@ -12,7 +12,7 @@ Dedicated to building a more intuitive, comprehensive, and efficient LLMs compre
 </h3>
 
 <p align="center">
-          📖 <a href="https://angelslim.readthedocs.io/">Documentation</a>&nbsp&nbsp | &nbsp&nbsp🤗 <a href="https://huggingface.co/AngelSlim">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="https://modelscope.cn/organization/AngelSlim">ModelScope</a>&nbsp&nbsp | &nbsp&nbsp💬 <a href="./docs/source/assets/angel_slim_wechat.png">WeChat</a>
+          📖 <a href="https://angelslim.readthedocs.io/">Documentation</a>&nbsp&nbsp | &nbsp&nbsp🤗 <a href="https://huggingface.co/AngelSlim">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="https://modelscope.cn/organization/AngelSlim">ModelScope</a>&nbsp&nbsp | &nbsp&nbsp💬 <a href="./docs/source/assets/angel_slim_wechat.png">WeChat</a> | &nbsp&nbsp🫨 <a href="https://discord.com/invite/dHVNeuNdFt">Discord</a>
 <br>
 </p>
 
@@ -63,13 +63,16 @@ Currently supports the following LLMs, including Hunyuan-Dense, Hunyuan-MoE, Qwe
 | [QwQ](https://huggingface.co/collections/AngelSlim/qwen3-quant-68652e26da31740739d154f8)                                    | ✅           | ✅          | ✅            | ✅         | ✅        |
 
 ### Speculative Decoding
-The Eagle3 weights for the Qwen3-8B model are now available, with Eagle3 weights for other models in the Qwen3 series to be released soon.
+The Eagle3 weights for the Qwen3 series model are now available.
 
 | Model     |      Eagle3       | 
 | ----------| ----------------- | 
-| [Qwen3-8B](https://huggingface.co/AngelSlim/Qwen3-8B_eagle3/tree/main) |      ✅           | 
-| Qwen3-14B | coming soon |
-| Qwen3-32B | coming soon |
+| [Qwen3-1.7B](https://huggingface.co/AngelSlim/Qwen3-1.7B_eagle3)    |      ✅           |
+| [Qwen3-4B](https://huggingface.co/AngelSlim/Qwen3-4B_eagle3)        |      ✅           |
+| [Qwen3-8B](https://huggingface.co/AngelSlim/Qwen3-8B_eagle3)        |      ✅           |
+| [Qwen3-14B](https://huggingface.co/AngelSlim/Qwen3-14B_eagle3)      |      ✅           |
+| [Qwen3-32B](https://huggingface.co/AngelSlim/Qwen3-32B_eagle3)      |      ✅           |
+| [Qwen3-30B-A3B](https://huggingface.co/AngelSlim/Qwen3-a3B_eagle3)  |      ✅           |
 
 ## 🛎️How to Use
 
@@ -270,17 +273,34 @@ Benchmark results for other models with `FP8-Static`, `FP8-Dynamic`, `INT4-GPTQ`
 ### Speculative Decoding
 Benchmark results for Qwen3 series models with `Eagle3` speculative decoding algorithm on datasets including `MT-bench`, `HunmanEval`, `GSM8K`, and `Alpaca`:
 
-#### Qwen3-8B
-
-<table border="0">
+<table>
   <thead>
-    <tr><th rowspan="3">Temperature</th><th rowspan="3">Method</th><th colspan="8">Datasets</th></tr>
-    <tr><th colspan="2">MT-bench</th><th colspan="2">HumanEval</th><th colspan="2">GSM8K</th><th colspan="2">Alpaca</th></tr>
-    <tr><th>Speedup</th><th>Accept length</th><th>Speedup</th><th>Accept length</th><th>Speedup</th><th>Accept length</th><th>Speedup</th><th>Accept length</th></tr>
+    <tr>
+        <th>&nbsp</th><th>&nbsp</th>
+        <th colspan="2" style="text-align: center; vertical-align: middle;">MT-bench</th>
+        <th colspan="2" style="text-align: center; vertical-align: middle;">HumanEval</th>
+        <th colspan="2" style="text-align: center; vertical-align: middle;">GSM8K</th>
+        <th colspan="2" style="text-align: center; vertical-align: middle;">Alpaca</th>
+        <th colspan="2" style="text-align: center; vertical-align: middle;">Mean</th></tr>
+    <tr><th>Temperature</th><th>Model</th><th>Speedup</th><th>τ</th><th>Speedup</th><th>τ</th><th>Speedup</th><th>τ</th><th>Speedup</th><th>τ</th><th>Speedup</th><th>τ</th></tr>
   </thead>
   <tbody>
-    <tr><td>T=0</td><td>Eagle3</td><td>2.63x</td><td>3.65</td><td>2.76x</td><td>3.85</td><td>2.82x</td><td>3.90</td><td>2.62x</td><td>3.48</td></tr>
-    <tr><td>T=1</td><td>Eagle3</td><td>1.98x</td><td>2.75</td><td>2.25x</td><td>3.11</td><td>2.31x</td><td>3.15</td><td>2.10x</td><td>2.76</td></tr>
+    <!-- <tr><td colspan="12" style="text-align: center; vertical-align: middle;"><strong>Temperature=0</strong></td></tr> -->
+    <tr><td rowspan="6"><strong>T=0</strong></td>
+    <td>Qwen3-1.7B</td><td>2.05x</td><td>2.81</td><td>2.07x</td><td>2.93</td><td>2.11x</td><td>2.98</td><td>1.93x</td><td>2.69</td><td>2.04x</td><td>2.85</td></tr>
+    <tr> <td>Qwen3-4B</td><td>2.21x</td><td>3.01</td><td>2.36x</td><td>3.24</td><td>2.42x</td><td>3.13</td><td>2.32x</td><td>2.75</td><td>2.33x</td><td>3.03</td></tr>
+    <tr><td>Qwen3-8B</td><td>2.63x</td><td>3.65</td><td>2.76x</td><td>3.85</td><td>2.82x</td><td>3.90</td><td>2.62x</td><td>3.48</td><td>2.70x</td><td>3.72</td></tr>
+    <tr><td>Qwen3-14B</td><td>2.23x</td><td>3.30</td><td>2.53x</td><td>3.74</td><td>2.56x</td><td>3.79</td><td>2.16x</td><td>3.13</td><td>2.37x</td><td>3.49</td></tr>
+    <tr><td>Qwen3-32B</td><td>2.39x</td><td>2.78</td><td>2.37x</td><td>2.81</td><td>2.47x</td><td>2.92</td><td>2.42x</td><td>2.53</td><td>2.41x</td><td>2.76</td></tr>
+    <tr><td>Qwen3-30B-A3B</td><td>2.84x</td><td>3.63</td><td>2.27x</td><td>3.09</td><td>2.64x</td><td>3.42</td><td>2.83x</td><td>3.56</td><td>2.64x</td><td>3.42</td></tr>
+    <!-- <tr><td colspan="12" style="text-align: center; vertical-align: middle;"><strong>Temperature=1</strong></td></tr> -->
+    <tr><td rowspan="6"><strong>T=0</strong></td>
+    <td>Qwen3-1.7B</td><td>1.74x</td><td>2.53</td><td>1.86x</td><td>2.70</td><td>1.82x</td><td>2.69</td><td>1.72x</td><td>2.46</td><td>1.93x</td><td>2.60</td></tr>
+    <tr><td>Qwen3-4B</td><td>1.93x</td><td>2.60</td><td>2.00x</td><td>2.84</td><td>2.11x</td><td>2.82</td><td>2.34x</td><td>2.50</td><td>1.75x</td><td>2.69</td></tr>
+    <tr><td>Qwen3-8B</td><td>1.98x</td><td>2.75</td><td>2.25x</td><td>3.11</td><td>2.31x</td><td>3.15</td><td>2.10x</td><td>2.76</td><td>2.90x</td><td>2.94</td></tr>
+    <tr><td>Qwen3-14B</td><td>1.71x</td><td>2.61</td><td>1.95x</td><td>2.87</td><td>2.04x</td><td>3.08</td><td>1.68x</td><td>2.55</td><td>2.90x</td><td>2.78</td></tr>
+    <tr><td>Qwen3-32B</td><td>1.62x</td><td>1.91</td><td>1.71x</td><td>2.05</td><td>1.78x</td><td>2.10</td><td>1.80x</td><td>1.95</td><td>1.62x</td><td>2.00</td></tr>
+    <tr><td>Qwen3-30B-A3B</td><td>1.91x</td><td>2.46</td><td>2.00x</td><td>2.64</td><td>1.90x</td><td>2.53</td><td>1.80x</td><td>2.32</td><td>1.90x</td><td>2.48</td></tr>
   </tbody>
 </table>
 
