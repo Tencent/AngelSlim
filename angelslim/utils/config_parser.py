@@ -106,8 +106,8 @@ class QuantizationConfig:
     bits: int = field(default=8)
     quant_method: Dict[str, Any] = field(
         default_factory=lambda: {
-            "weight": "per_tensor",
-            "activation": "per_tensor",
+            "weight": "per-tensor",
+            "activation": "per-tensor",
             "group_size": -1,
         }
     )
