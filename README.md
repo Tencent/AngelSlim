@@ -33,7 +33,7 @@
 ## 📣最新进展
 
 - [25/07/04] 我们支持了`Hunyuan/Qwen2.5/Qwen3/DeepSeek-R1-Distill-Qwen`等模型的量化，包含INT8、FP8、INT4等算法。
-我们还开源了`Qwen3-8B`模型的Eagle3权重。
+我们还开源了`Qwen3`系列模型的Eagle3权重。
 
 Coming soon：
 - [ ] DeepSeek-R1的W4A8量化支持
@@ -89,7 +89,7 @@ pip install angelslim
 cd AngelSlim && python setup.py install
 ```
 
-更详细的安装说明可参考[安装文档](./docs/source/getting_started/installation.md)。
+更详细的安装说明可参考[安装文档](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/installation.html)。
 
 ### 快速开始
 
@@ -121,7 +121,7 @@ cd AngelSlim && python setup.py install
   slim_engine.save("./output")
   ```
 
-详情请参考[快速开始文档](./docs/source/getting_started/quickstrat.md)。
+详情请参考[快速开始文档](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html)。
 
 ### 部署与测试
 
@@ -161,13 +161,13 @@ bash deploy/openai.sh $MODEL_PATH
 bash deploy/lm_eval.sh $MODEL_PATH
 ```
 
-详细操作指南请参阅[部署文档](./docs/source/deployment/deploy.md)。
+详细操作指南请参阅[部署文档](https://angelslim.readthedocs.io/zh-cn/latest/deployment/deploy.html)。
 
 ## 📈Benchmark
 
-### 量化
+### （1）量化
 
-下面只展示了部分模型的效果测试情况，完整Benchmark可以参考[Benchmark文档](./docs/source/performance/quantization/benchmarks.md)
+下面只展示了部分模型的效果测试情况，完整Benchmark可以参考[Benchmark文档](https://angelslim.readthedocs.io/zh-cn/latest/performance/quantization/benchmarks.html)
 
 #### Hunyuan系列模型
 
@@ -266,7 +266,7 @@ Qwen3系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`、`INT8-Dynamic`、`IN
   </tbody>
 </table>
 
-### 投机采样
+### （2）投机采样
 Qwen3系列的Eagle3模型在MT-bench/HunmanEval/GSM8K/Alpaca上的加速结果如下：
 
 <table>
@@ -290,7 +290,7 @@ Qwen3系列的Eagle3模型在MT-bench/HunmanEval/GSM8K/Alpaca上的加速结果�
     <tr><td>Qwen3-32B</td><td>2.39x</td><td>2.78</td><td>2.37x</td><td>2.81</td><td>2.47x</td><td>2.92</td><td>2.42x</td><td>2.53</td><td>2.41x</td><td>2.76</td></tr>
     <tr><td>Qwen3-30B-A3B</td><td>2.84x</td><td>3.63</td><td>2.27x</td><td>3.09</td><td>2.64x</td><td>3.42</td><td>2.83x</td><td>3.56</td><td>2.64x</td><td>3.42</td></tr>
     <!-- <tr><td colspan="12" style="text-align: center; vertical-align: middle;"><strong>Temperature=1</strong></td></tr> -->
-    <tr><td rowspan="6"><strong>T=0</strong></td>
+    <tr><td rowspan="6"><strong>T=1</strong></td>
     <td>Qwen3-1.7B</td><td>1.74x</td><td>2.53</td><td>1.86x</td><td>2.70</td><td>1.82x</td><td>2.69</td><td>1.72x</td><td>2.46</td><td>1.93x</td><td>2.60</td></tr>
     <tr><td>Qwen3-4B</td><td>1.93x</td><td>2.60</td><td>2.00x</td><td>2.84</td><td>2.11x</td><td>2.82</td><td>2.34x</td><td>2.50</td><td>1.75x</td><td>2.69</td></tr>
     <tr><td>Qwen3-8B</td><td>1.98x</td><td>2.75</td><td>2.25x</td><td>3.11</td><td>2.31x</td><td>3.15</td><td>2.10x</td><td>2.76</td><td>2.90x</td><td>2.94</td></tr>
@@ -317,4 +317,4 @@ Qwen3系列的Eagle3模型在MT-bench/HunmanEval/GSM8K/Alpaca上的加速结果�
 
 ## 💬技术交流
 
-- AngelSlim正在快速迭代更新中，后续会推出更多的功能，有问题或建议欢迎通过GitHub Issues给我们提issue，或者加入[微信技术交流群](./docs/source/assets/angel_slim_wechat.png)。
+- AngelSlim正在快速迭代更新中，后续会推出更多的功能，有问题或建议欢迎通过[GitHub Issues](https://github.com/Tencent/AngelSlim/issues)给我们提issue，或者加入[微信技术交流群](./docs/source/assets/angel_slim_wechat.png)。

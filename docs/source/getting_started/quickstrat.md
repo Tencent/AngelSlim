@@ -4,7 +4,7 @@
 
 推荐使用pip直接安装最新版本的`AngelSlim`：
 ```shell
-pip install AngelSlim
+pip install angelslim
 ```
 
 如果需要编译或者自定义安装，具体可参考[安装文档](./installation.md)
@@ -20,6 +20,8 @@ python3 tools/run.py -c configs/qwen3/fp8_static/qwen3-1_7b_fp8_static.yaml
 ```
 
 - 更多的模型、压缩策略具体请在`configs`文件夹中查看，工具中每类模型，不同压缩策略都有一个单独的yaml文件，开发者可以直接找到对应的yaml文件进行执行。
+
+- 如果在量化时显存资源不足，可采取`low_memory`的模式，可以使用最少的显存进行模型量化过程，请参考[](../features/quantization/fp8.html#fp8-low-memory)
 
 - 如果想要修改yaml配置文件中的内容，请参考[准备配置文件](../design/prepare_config)的详细教程文档。
 
