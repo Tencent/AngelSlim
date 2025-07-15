@@ -19,7 +19,7 @@ pip install angelslim
 如果已经安装`AngelSlim`，通过下面的指令强制获取最新更新：
 
 ```shell
-pip install --upgrade --force-reinstall --no-cache-dir AngelSlim
+pip install --upgrade --force-reinstall --no-cache-dir angelslim
 ```
 
 :::{note}

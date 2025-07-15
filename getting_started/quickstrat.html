@@ -414,7 +414,7 @@ document.write(`
 <section id="id2">
 <h2>环境准备<a class="headerlink" href="#id2" title="Link to this heading">#</a></h2>
 <p>推荐使用pip直接安装最新版本的<code class="docutils literal notranslate"><span class="pre">AngelSlim</span></code>：</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>AngelSlim
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>angelslim
 </pre></div>
 </div>
 <p>如果需要编译或者自定义安装，具体可参考<a class="reference internal" href="installation.html"><span class="std std-doc">安装文档</span></a></p>
@@ -429,6 +429,7 @@ document.write(`
 </div>
 <ul class="simple">
 <li><p>更多的模型、压缩策略具体请在<code class="docutils literal notranslate"><span class="pre">configs</span></code>文件夹中查看，工具中每类模型，不同压缩策略都有一个单独的yaml文件，开发者可以直接找到对应的yaml文件进行执行。</p></li>
+<li><p>如果在量化时显存资源不足，可采取<code class="docutils literal notranslate"><span class="pre">low_memory</span></code>的模式，可以使用最少的显存进行模型量化过程，请参考<a class="reference internal" href="#../features/quantization/fp8.html#fp8-low-memory"><code class="xref myst docutils literal notranslate"><span class="pre">../features/quantization/fp8.html#fp8-low-memory</span></code></a></p></li>
 <li><p>如果想要修改yaml配置文件中的内容，请参考<a class="reference internal" href="../design/prepare_config.html"><span class="doc std std-doc">准备配置文件</span></a>的详细教程文档。</p></li>
 </ul>
 <div class="admonition note">
