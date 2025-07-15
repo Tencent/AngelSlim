@@ -32,8 +32,7 @@ Dedicated to building a more intuitive, comprehensive, and efficient LLMs compre
 
 ## 📣Latest Updates
 
-- [25/07/04] We now support quantization for Hunyuan/Qwen2.5/Qwen3/DeepSeek-R1-Distill-Qwen and other models, including INT8/FP8/INT4 algorithms.
-              We also opensource Qwen3-8B`s Eagle3 model weight.
+- [25/07/04] We now support quantization for `Hunyuan/Qwen2.5/Qwen3/DeepSeek-R1-Distill-Qwen` and other models, including `INT8/FP8/INT4` algorithms. We also opensource `Qwen3` series Eagle3 model weight.
 
 Coming soon:
 
@@ -90,7 +89,7 @@ Alternatively, you can clone the repository and install from source in editable 
 cd AngelSlim && python setup.py install
 ```
 
-For more detailed installation instructions, please refer to the [Installation Documentation](./docs/source/getting_started/installation.md).
+For more detailed installation instructions, please refer to the [Installation Documentation](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/installation.html).
 
 ### Quick Start
 
@@ -122,9 +121,9 @@ After installing `AngelSlim`, you can quickly start by running the following scr
   slim_engine.save("./output")
   ```
 
-For more details, please refer to the [Quick Start Documentation](./docs/source/getting_started/quickstart.md).
+For more details, please refer to the [Quick Start Documentation](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html).
 
-### 🖥️ Deployment and Testing
+### Deployment and Testing
 
 #### 1. API Service Deployment
 
@@ -164,14 +163,14 @@ Evaluate the performance of quantized model using [lm-evaluation-harness](https:
 bash deploy/lm_eval.sh $MODEL_PATH
 ```
 
-For more detaileds, please refer to the [Deployment Documentation](./docs/source/deployment/deploy.md).
+For more detaileds, please refer to the [Deployment Documentation](https://angelslim.readthedocs.io/zh-cn/latest/deployment/deploy.html).
 
 
 ## 📈 Benchmark
 
-### Quantization
+### (1) Quantization
 
-The performance test results for selected models are shown below. For the complete benchmark, refer to the [Benchmark documentation](./docs/source/performance/quantization/benchmarks.md)
+The performance test results for selected models are shown below. For the complete benchmark, refer to the [Benchmark documentation](https://angelslim.readthedocs.io/zh-cn/latest/performance/quantization/benchmarks.html)
 
 #### Hunyuan Series Models
 
@@ -270,7 +269,7 @@ Benchmark results for other models with `FP8-Static`, `FP8-Dynamic`, `INT4-GPTQ`
   </tbody>
 </table>
 
-### Speculative Decoding
+### (2) Speculative Decoding
 Benchmark results for Qwen3 series models with `Eagle3` speculative decoding algorithm on datasets including `MT-bench`, `HunmanEval`, `GSM8K`, and `Alpaca`:
 
 <table>
@@ -294,7 +293,7 @@ Benchmark results for Qwen3 series models with `Eagle3` speculative decoding alg
     <tr><td>Qwen3-32B</td><td>2.39x</td><td>2.78</td><td>2.37x</td><td>2.81</td><td>2.47x</td><td>2.92</td><td>2.42x</td><td>2.53</td><td>2.41x</td><td>2.76</td></tr>
     <tr><td>Qwen3-30B-A3B</td><td>2.84x</td><td>3.63</td><td>2.27x</td><td>3.09</td><td>2.64x</td><td>3.42</td><td>2.83x</td><td>3.56</td><td>2.64x</td><td>3.42</td></tr>
     <!-- <tr><td colspan="12" style="text-align: center; vertical-align: middle;"><strong>Temperature=1</strong></td></tr> -->
-    <tr><td rowspan="6"><strong>T=0</strong></td>
+    <tr><td rowspan="6"><strong>T=1</strong></td>
     <td>Qwen3-1.7B</td><td>1.74x</td><td>2.53</td><td>1.86x</td><td>2.70</td><td>1.82x</td><td>2.69</td><td>1.72x</td><td>2.46</td><td>1.93x</td><td>2.60</td></tr>
     <tr><td>Qwen3-4B</td><td>1.93x</td><td>2.60</td><td>2.00x</td><td>2.84</td><td>2.11x</td><td>2.82</td><td>2.34x</td><td>2.50</td><td>1.75x</td><td>2.69</td></tr>
     <tr><td>Qwen3-8B</td><td>1.98x</td><td>2.75</td><td>2.25x</td><td>3.11</td><td>2.31x</td><td>3.15</td><td>2.10x</td><td>2.76</td><td>2.90x</td><td>2.94</td></tr>
@@ -323,4 +322,4 @@ The code for this project is open-sourced under the [License for AngelSlim](LICE
 
 ## 💬 Technical Discussion
 
-* AngelSlim is continuously iterating and new features will be released soon. If you have any questions or suggestions, please open an issue on GitHub or join our [WeChat technical discussion group](./docs/source/assets/angel_slim_wechat.png).
+* AngelSlim is continuously iterating and new features will be released soon. If you have any questions or suggestions, please open an issue on [GitHub Issues](https://github.com/Tencent/AngelSlim/issues) or join our [WeChat technical discussion group](./docs/source/assets/angel_slim_wechat.png).
