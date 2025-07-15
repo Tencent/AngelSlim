@@ -153,6 +153,10 @@ class TextDataset(BaseDataset):
 
         # Normalize role names
         for item in messages:
+            if "role" not in item and "from" in item:
+                item["role"] = item["from"]
+            if "content" not in item and "value" in item:
+                item["content"] = item["value"]
             role = item["role"]
             if "human" in role:
                 item["role"] = "user"

@@ -51,10 +51,10 @@ jsonl格式为一行一条data，每行data为json格式。支持如下格式
 ```
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from slim.data.dataloader import DataLoaderFactory
+from angelslim.data.dataloader import DataLoaderFactory
 
-model_path = "CKPT/PATH"
-
+model_path = "/CKPT/PATH"
+data_path = "/DATASET/PATH"
 tokenizer = AutoTokenizer.from_pretrained(
     model_path, trust_remote_code=True
 )
@@ -64,10 +64,7 @@ dataloader = DataLoaderFactory.create_data_loader(
     device='cpu',
     max_length=2048,
     batch_size=1,
-    num_samples=1,
-    data_source=model_path,
+    num_samples=256,
+    data_source=data_path,
 )
-
-for data in dataloader:
-    print(data)
 ```
