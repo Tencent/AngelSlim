@@ -31,3 +31,9 @@ class Catcher(torch.nn.Module):
             self.cache["i"] += 1
         self.layer_kwargs.update(kwargs)
         raise ValueError
+
+    def __getattr__(self, name):
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            return getattr(self.module, name)
