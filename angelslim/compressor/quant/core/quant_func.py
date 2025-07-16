@@ -120,7 +120,7 @@ def gemm_fp8(act, act_scale, weight, weight_scale, bias, out_dtype):
             )
     else:
         output = torch.nn.functional.linear(
-            act.to(out_dtype) * act_scale,
+            act.to(out_dtype) * act_scale.to(out_dtype),
             weight.to(out_dtype) * weight_scale.to(out_dtype),
             bias=bias,
         )
