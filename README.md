@@ -125,9 +125,19 @@ cd AngelSlim && python setup.py install
 
 ### 部署与测试
 
-#### 1. 服务部署
+#### 1. 离线推理
 
-指定量化模型路径 `MODEL_PATH` 后，支持通过以下推理框架部署 OpenAI 兼容的 API 服务：
+可以通过`transformers`加载量化模型，测试离线推理：
+
+```shell
+python deploy/offline.py $MODEL_PATH
+```
+
+其中 `MODEL_PATH` 为量化产出模型路径。
+
+#### 2. 服务部署
+
+支持通过以下推理框架部署 OpenAI 兼容的 API 服务：
 
 **vLLM**
 
@@ -145,7 +155,7 @@ bash deploy/run_vllm.sh $MODEL_PATH
 bash deploy/run_sglang.sh $MODEL_PATH
 ```
 
-#### 2. 服务调用
+#### 3. 服务调用
 
 通过 [OpenAI 格式](https://platform.openai.com/docs/api-reference/introduction) 接口发起请求：
 
@@ -153,7 +163,7 @@ bash deploy/run_sglang.sh $MODEL_PATH
 bash deploy/openai.sh $MODEL_PATH
 ```
 
-#### 3. 效果验证
+#### 4. 效果验证
 
 使用 [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness) 评估量化模型精度，建议版本`lm-eval>=0.4.8`：
 

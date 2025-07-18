@@ -9,14 +9,50 @@
 以`fp8`静态量化为例，量化配置如下：
 
 ```
-  "quantization_config": {
-    "activation_scheme": "static",
-    "ignored_layers": [
-      "lm_head"
-    ],
-    "quant_method": "fp8"
+"quantization_config": {
+  "config_groups": {
+    "group_0": {
+      "targets": ["Linear"],
+      "input_activations": {
+        "num_bits": 8,
+        "strategy": "tensor",
+        "dynamic": false,
+        "type": "float"
+      },
+      "weights": {
+        "num_bits": 8,
+        "strategy": "tensor",
+        "dynamic": false,
+        "type": "float"
+      }
+    }
   },
+  "format": "naive-quantized",
+  "ignore": [
+    "lm_head",
+    "model.embed_tokens"
+  ],
+  "quant_method": "compressed-tensors",
+  "quantization_status": "compressed"
+},
 ```
+
+可以通过transformers加载量化模型，测试离线推理：
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+model = AutoModelForCausalLM.from_pretrained(
+    model_path,
+    device_map="auto",
+    trust_remote_code=True,
+    torch_dtype='auto',
+    low_cpu_mem_usage=True,
+)
+tokenizer = AutoTokenizer.from_pretrained(model_path)
+inputs = tokenizer("Hello, my name is", return_tensors="pt").to(model.device)
+outputs = model.generate(**inputs)
+print(tokenizer.decode(outputs[0]))
+```
+
 
 ## 2. 启动服务
 

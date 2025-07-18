@@ -67,16 +67,37 @@ dataset:
 支持数据格式详见[数据准备文档](../design/prepare_dataset.md)。
 
 
-- 产出模型
+## 产出模型
 
-在HuggingFace配置文件`config.json`：
+在HuggingFace配置文件`config.json`中添加量化配置：
 
 ```json
 "quantization_config": {
-    "activation_scheme": "dynamic",
-    "ignored_layers": ["lm_head"],
-    "quant_method": "fp8"
-}
+  "config_groups": {
+    "group_0": {
+      "targets": ["Linear"],
+      "input_activations": {
+        "num_bits": 8,
+        "strategy": "tensor",
+        "dynamic": false, //或者true
+        "type": "float"
+      },
+      "weights": {
+        "num_bits": 8,
+        "strategy": "tensor",
+        "dynamic": false,
+        "type": "float"
+      }
+    }
+  },
+  "format": "naive-quantized",
+  "ignore": [
+    "lm_head",
+    "model.embed_tokens"
+  ],
+  "quant_method": "compressed-tensors",
+  "quantization_status": "compressed"
+},
 ```
 
 可参阅[vLLM FP8文档](https://docs.vllm.ai/en/stable/features/quantization/fp8.html)加载FP8量化模型配置要求。
