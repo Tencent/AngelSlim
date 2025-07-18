@@ -116,3 +116,57 @@ compression:
       - "lm_head"
       - "model.embed_tokens"
 ```
+
+## 开启FP8量化分析
+
+运行FP8动态、静态量化过程中可以通过开启`quantization.quant_analyse`来分析量化scale是否存在离群值。
+
+示例：
+```shell
+python3 tools/run.py -c configs/qwen3/fp8_static/qwen3-0_6b_fp8_static_analyse.yaml
+```
+
+```yaml
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    name: fp8_static
+    bits: 8
+    quant_method:
+      weight: "per-tensor"
+      activation: "per-tensor"
+    ignore_layers:         # Skip quantization for these layers
+      - "lm_head"
+      - "model.embed_tokens"
+    quant_analyse: true
+```
+
+## FP8量化文件后处理分析工具
+
+FP8量化分析工具可以分析您FP8的量化结果文件的scale分布情况以及对比bf16的权重分布情况，以便针对FP8难以拟合的权重分布进行单独处理。
+
+运行示例如下：
+
+## Scale分析
+
+运行脚本将会产出折线图与log分析。
+```shell
+cd angelslim/compressor/quant/core/quant_analyse
+python3 fp8_scale_analyse.py --model-path ${FP8_PATH} --save-path ${SAVE_PATH}
+```
+
+相关参数如下：
+- `model-path`：FP8模型路径。
+- `save-path`：结果保存路径。
+
+![fp8_scale_analyse.png](../../assets/fp8_scale_analyse.png)
+
+## Weight分布对比
+运行脚本将会产出bf16精度与fp8精度权重直方图对比。
+```shell
+cd angelslim/compressor/quant/core/quant_analyse
+python3 fp8_weight_analyse.py --bf16-path ${BF16_PATH} --fp8-path ${FP8_PATH} --layer-index 3
+```
+
+![fp8_weight_analyse.png](../../assets/fp8_weight_analyse.png)

@@ -401,6 +401,10 @@ document.write(`
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#w8a8-fp8-dynamic">W8A8-FP8 Dynamic量化</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#w8a8-fp8-static">W8A8-FP8 Static量化</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#fp8-low-memory">FP8 low_memory量化</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">开启FP8量化分析</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">FP8量化文件后处理分析工具</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#scale">Scale分析</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#weight">Weight分布对比</a></li>
 </ul>
             </nav>
         </div>
@@ -522,6 +526,57 @@ document.write(`
 </pre></div>
 </div>
 </section>
+<section id="id2">
+<h2>开启FP8量化分析<a class="headerlink" href="#id2" title="Link to this heading">#</a></h2>
+<p>运行FP8动态、静态量化过程中可以通过开启<code class="docutils literal notranslate"><span class="pre">quantization.quant_analyse</span></code>来分析量化scale是否存在离群值。</p>
+<p>示例：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/qwen3/fp8_static/qwen3-0_6b_fp8_static_analyse.yaml
+</pre></div>
+</div>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># Compression configuration</span>
+<span class="nt">compression</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PTQ</span>
+<span class="w">  </span><span class="nt">quantization</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">fp8_static</span>
+<span class="w">    </span><span class="nt">bits</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span>
+<span class="w">    </span><span class="nt">quant_method</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">weight</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;per-tensor&quot;</span>
+<span class="w">      </span><span class="nt">activation</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;per-tensor&quot;</span>
+<span class="w">    </span><span class="nt">ignore_layers</span><span class="p">:</span><span class="w">         </span><span class="c1"># Skip quantization for these layers</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;lm_head&quot;</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;model.embed_tokens&quot;</span>
+<span class="w">    </span><span class="nt">quant_analyse</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</pre></div>
+</div>
+</section>
+<section id="id3">
+<h2>FP8量化文件后处理分析工具<a class="headerlink" href="#id3" title="Link to this heading">#</a></h2>
+<p>FP8量化分析工具可以分析您FP8的量化结果文件的scale分布情况以及对比bf16的权重分布情况，以便针对FP8难以拟合的权重分布进行单独处理。</p>
+<p>运行示例如下：</p>
+</section>
+<section id="scale">
+<h2>Scale分析<a class="headerlink" href="#scale" title="Link to this heading">#</a></h2>
+<p>运行脚本将会产出折线图与log分析。</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>angelslim/compressor/quant/core/quant_analyse
+python3<span class="w"> </span>fp8_scale_analyse.py<span class="w"> </span>--model-path<span class="w"> </span><span class="si">${</span><span class="nv">FP8_PATH</span><span class="si">}</span><span class="w"> </span>--save-path<span class="w"> </span><span class="si">${</span><span class="nv">SAVE_PATH</span><span class="si">}</span>
+</pre></div>
+</div>
+<p>相关参数如下：</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">model-path</span></code>：FP8模型路径。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">save-path</span></code>：结果保存路径。</p></li>
+</ul>
+<p><img alt="fp8_scale_analyse.png" src="../../_images/fp8_scale_analyse.png" /></p>
+</section>
+<section id="weight">
+<h2>Weight分布对比<a class="headerlink" href="#weight" title="Link to this heading">#</a></h2>
+<p>运行脚本将会产出bf16精度与fp8精度权重直方图对比。</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>angelslim/compressor/quant/core/quant_analyse
+python3<span class="w"> </span>fp8_weight_analyse.py<span class="w"> </span>--bf16-path<span class="w"> </span><span class="si">${</span><span class="nv">BF16_PATH</span><span class="si">}</span><span class="w"> </span>--fp8-path<span class="w"> </span><span class="si">${</span><span class="nv">FP8_PATH</span><span class="si">}</span><span class="w"> </span>--layer-index<span class="w"> </span><span class="m">3</span>
+</pre></div>
+</div>
+<p><img alt="fp8_weight_analyse.png" src="../../_images/fp8_weight_analyse.png" /></p>
+</section>
 </section>
 
 
@@ -572,6 +627,10 @@ document.write(`
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#w8a8-fp8-dynamic">W8A8-FP8 Dynamic量化</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#w8a8-fp8-static">W8A8-FP8 Static量化</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#fp8-low-memory">FP8 low_memory量化</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">开启FP8量化分析</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">FP8量化文件后处理分析工具</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#scale">Scale分析</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#weight">Weight分布对比</a></li>
 </ul>
   </nav></div>
 
