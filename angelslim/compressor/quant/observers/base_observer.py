@@ -106,10 +106,13 @@ class BaseObserver(nn.Module, metaclass=abc.ABCMeta):
 class ParentObserver:
     min = None
     max = None
+    step = 0
 
-    def update(self, min, max):
+    def update(self, min, max, step=None):
         if min is not None and max is not None:
             if self.min is None or min < self.min:
                 self.min = min
             if self.max is None or max > self.max:
                 self.max = max
+        if step is not None:
+            self.step = step
