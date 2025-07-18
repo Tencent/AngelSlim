@@ -40,42 +40,36 @@ compression:
 - `weight`：8位INT数，形状为`[input_dim, output_dim]`
 - `weight_scale`：用于反量化的scales，形状为`[input_dim, 1]`
 
-配置文件`config.json`：
+配置文件`config.json`中量化相关配置：
 
 ```json
 "quantization_config": {
-    "config_groups": {
-        "group_0": {
-            "input_activations": {
-                "block_structure": null,
-                "dynamic": true,
-                "group_size": null,
-                "num_bits": 8,
-                "observer": "memoryless",
-                "observer_kwargs": {},
-                "strategy": "token",
-                "symmetric": true,
-                "type": "int",
-            },
-            "output_activations": null,
-            "targets": ["Linear"],
-            "weights": {
-                "block_structure": null,
-                "dynamic": false,
-                "group_size": null,
-                "num_bits": 8,
-                "observer": "minmax",
-                "observer_kwargs": {},
-                "strategy": "channel",
-                "symmetric": true,
-                "type": "int",
-            },
-        }
-    },
-    "format": "int-quantized",
-    "ignored_layers": ["lm_head", "model.embed_tokens"],
-    "kv_cache_scheme": null,
-    "quant_method": "compressed-tensors",
+  "config_groups": {
+    "group_0": {
+      "targets": ["Linear"],
+      "input_activations": {
+        "dynamic": true,
+        "num_bits": 8,
+        "strategy": "token",
+        "type": "int"
+      },
+      "output_activations": null,
+      "weights": {
+        "dynamic": false,
+        "num_bits": 8,
+        "strategy": "channel",
+        "type": "int"
+      }
+    }
+  },
+  "format": "int-quantized",
+  "ignore": [
+    "lm_head",
+    "model.embed_tokens"
+  ],
+  "kv_cache_scheme": null,
+  "quant_method": "compressed-tensors",
+  "quantization_status": "compressed"
 }
 ```
 

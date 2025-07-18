@@ -400,9 +400,10 @@ document.write(`
                 <ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#w8a8-fp8-dynamic">W8A8-FP8 Dynamic量化</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#w8a8-fp8-static">W8A8-FP8 Static量化</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">产出模型</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#fp8-low-memory">FP8 low_memory量化</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">开启FP8量化分析</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">FP8量化文件后处理分析工具</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">开启FP8量化分析</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">FP8量化文件后处理分析工具</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#scale">Scale分析</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#weight">Weight分布对比</a></li>
 </ul>
@@ -473,15 +474,36 @@ document.write(`
 <li><p><code class="docutils literal notranslate"><span class="pre">batch_size</span></code>：校准批量大小。</p></li>
 </ul>
 <p>支持数据格式详见<a class="reference internal" href="#../design/prepare_dataset.md"><span class="xref myst">数据准备文档</span></a>。</p>
-<ul class="simple">
-<li><p>产出模型</p></li>
-</ul>
-<p>在HuggingFace配置文件<code class="docutils literal notranslate"><span class="pre">config.json</span></code>：</p>
+</section>
+<section id="id2">
+<h2>产出模型<a class="headerlink" href="#id2" title="Link to this heading">#</a></h2>
+<p>在HuggingFace配置文件<code class="docutils literal notranslate"><span class="pre">config.json</span></code>中添加量化配置：</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="nt">&quot;quantization_config&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;activation_scheme&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;dynamic&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;ignored_layers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;lm_head&quot;</span><span class="p">],</span>
-<span class="w">    </span><span class="nt">&quot;quant_method&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;fp8&quot;</span>
-<span class="p">}</span>
+<span class="w">  </span><span class="nt">&quot;config_groups&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;group_0&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;targets&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;Linear&quot;</span><span class="p">],</span>
+<span class="w">      </span><span class="nt">&quot;input_activations&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;num_bits&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">8</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;strategy&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;tensor&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;dynamic&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w"> </span><span class="c1">//或者true</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;float&quot;</span>
+<span class="w">      </span><span class="p">},</span>
+<span class="w">      </span><span class="nt">&quot;weights&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;num_bits&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">8</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;strategy&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;tensor&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;dynamic&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;float&quot;</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;format&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;naive-quantized&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;ignore&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="s2">&quot;lm_head&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="s2">&quot;model.embed_tokens&quot;</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;quant_method&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;compressed-tensors&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;quantization_status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;compressed&quot;</span>
+<span class="p">},</span>
 </pre></div>
 </div>
 <p>可参阅<a class="reference external" href="https://docs.vllm.ai/en/stable/features/quantization/fp8.html">vLLM FP8文档</a>加载FP8量化模型配置要求。</p>
@@ -526,8 +548,8 @@ document.write(`
 </pre></div>
 </div>
 </section>
-<section id="id2">
-<h2>开启FP8量化分析<a class="headerlink" href="#id2" title="Link to this heading">#</a></h2>
+<section id="id3">
+<h2>开启FP8量化分析<a class="headerlink" href="#id3" title="Link to this heading">#</a></h2>
 <p>运行FP8动态、静态量化过程中可以通过开启<code class="docutils literal notranslate"><span class="pre">quantization.quant_analyse</span></code>来分析量化scale是否存在离群值。</p>
 <p>示例：</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/qwen3/fp8_static/qwen3-0_6b_fp8_static_analyse.yaml
@@ -549,8 +571,8 @@ document.write(`
 </pre></div>
 </div>
 </section>
-<section id="id3">
-<h2>FP8量化文件后处理分析工具<a class="headerlink" href="#id3" title="Link to this heading">#</a></h2>
+<section id="id4">
+<h2>FP8量化文件后处理分析工具<a class="headerlink" href="#id4" title="Link to this heading">#</a></h2>
 <p>FP8量化分析工具可以分析您FP8的量化结果文件的scale分布情况以及对比bf16的权重分布情况，以便针对FP8难以拟合的权重分布进行单独处理。</p>
 <p>运行示例如下：</p>
 </section>
@@ -626,9 +648,10 @@ python3<span class="w"> </span>fp8_weight_analyse.py<span class="w"> </span>--bf
     <ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#w8a8-fp8-dynamic">W8A8-FP8 Dynamic量化</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#w8a8-fp8-static">W8A8-FP8 Static量化</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">产出模型</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#fp8-low-memory">FP8 low_memory量化</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">开启FP8量化分析</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">FP8量化文件后处理分析工具</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">开启FP8量化分析</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">FP8量化文件后处理分析工具</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#scale">Scale分析</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#weight">Weight分布对比</a></li>
 </ul>

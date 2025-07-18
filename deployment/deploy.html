@@ -419,13 +419,47 @@ document.write(`
 <p>首先根据<a class="reference internal" href="../getting_started/quickstrat.html"><span class="std std-doc">快速开始文档</span></a>指引，完成量化并保存模型。量化相关配置会自动存入模型保存路径下的<code class="docutils literal notranslate"><span class="pre">config.json</span></code>文件，用于部署时正确加载量化模型。</p>
 <p>根据快速开始文档中的指引，存储的压缩模型路径下config.json文件中，增加以下配置，在部署过程中用于正确加载量化模型。</p>
 <p>以<code class="docutils literal notranslate"><span class="pre">fp8</span></code>静态量化为例，量化配置如下：</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>  <span class="s2">&quot;quantization_config&quot;</span><span class="p">:</span> <span class="p">{</span>
-    <span class="s2">&quot;activation_scheme&quot;</span><span class="p">:</span> <span class="s2">&quot;static&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;ignored_layers&quot;</span><span class="p">:</span> <span class="p">[</span>
-      <span class="s2">&quot;lm_head&quot;</span>
-    <span class="p">],</span>
-    <span class="s2">&quot;quant_method&quot;</span><span class="p">:</span> <span class="s2">&quot;fp8&quot;</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="s2">&quot;quantization_config&quot;</span><span class="p">:</span> <span class="p">{</span>
+  <span class="s2">&quot;config_groups&quot;</span><span class="p">:</span> <span class="p">{</span>
+    <span class="s2">&quot;group_0&quot;</span><span class="p">:</span> <span class="p">{</span>
+      <span class="s2">&quot;targets&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;Linear&quot;</span><span class="p">],</span>
+      <span class="s2">&quot;input_activations&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;num_bits&quot;</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span>
+        <span class="s2">&quot;strategy&quot;</span><span class="p">:</span> <span class="s2">&quot;tensor&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;dynamic&quot;</span><span class="p">:</span> <span class="n">false</span><span class="p">,</span>
+        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;float&quot;</span>
+      <span class="p">},</span>
+      <span class="s2">&quot;weights&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;num_bits&quot;</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span>
+        <span class="s2">&quot;strategy&quot;</span><span class="p">:</span> <span class="s2">&quot;tensor&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;dynamic&quot;</span><span class="p">:</span> <span class="n">false</span><span class="p">,</span>
+        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;float&quot;</span>
+      <span class="p">}</span>
+    <span class="p">}</span>
   <span class="p">},</span>
+  <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;naive-quantized&quot;</span><span class="p">,</span>
+  <span class="s2">&quot;ignore&quot;</span><span class="p">:</span> <span class="p">[</span>
+    <span class="s2">&quot;lm_head&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;model.embed_tokens&quot;</span>
+  <span class="p">],</span>
+  <span class="s2">&quot;quant_method&quot;</span><span class="p">:</span> <span class="s2">&quot;compressed-tensors&quot;</span><span class="p">,</span>
+  <span class="s2">&quot;quantization_status&quot;</span><span class="p">:</span> <span class="s2">&quot;compressed&quot;</span>
+<span class="p">},</span>
+</pre></div>
+</div>
+<p>可以通过transformers加载量化模型，测试离线推理：</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForCausalLM</span><span class="p">,</span> <span class="n">AutoTokenizer</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span>
+    <span class="n">model_path</span><span class="p">,</span>
+    <span class="n">device_map</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+    <span class="n">trust_remote_code</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">torch_dtype</span><span class="o">=</span><span class="s1">&#39;auto&#39;</span><span class="p">,</span>
+    <span class="n">low_cpu_mem_usage</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_path</span><span class="p">)</span>
+<span class="n">inputs</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="s2">&quot;Hello, my name is&quot;</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+<span class="n">outputs</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="o">**</span><span class="n">inputs</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">outputs</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
 </pre></div>
 </div>
 </section>
