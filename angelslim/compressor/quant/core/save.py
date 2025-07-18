@@ -103,11 +103,16 @@ class PTQSaveVllmHF(PTQSaveBase):
         w_quant_algo = self.quant_model.quant_config.quant_algo_info["w"]
         a_quant_algo = self.quant_model.quant_config.quant_algo_info["a"]
         ignore_layers = self.quant_model.skip_layer_names()
-        trt_config = {"quantization": {"exclude_modules": ignore_layers}}
+        trtllm_config = {
+            "quantization": {
+                "exclude_modules": ignore_layers,
+                "kv_cache_quant_algo": None,
+            }
+        }
 
         if "fp8" in self.quant_model.quant_config.quant_algo:
             quant_format = "naive-quantized"
-            trt_config["quantization"]["quant_algo"] = "FP8"
+            trtllm_config["quantization"]["quant_algo"] = "FP8"
             act_config = {
                 "num_bits": 8,
                 "strategy": re.search(r"per-([a-zA-Z]+)", a_quant_algo).group(1),
@@ -122,7 +127,7 @@ class PTQSaveVllmHF(PTQSaveBase):
             }
         elif "int8" in self.quant_model.quant_config.quant_algo:
             quant_format = "int-quantized"
-            trt_config["quantization"]["quant_algo"] = "INT8"
+            trtllm_config["quantization"]["quant_algo"] = "INT8"
             act_config = {
                 "num_bits": 8,
                 "strategy": re.search(r"per-([a-zA-Z]+)", a_quant_algo).group(1),
@@ -164,7 +169,7 @@ class PTQSaveVllmHF(PTQSaveBase):
         self.quant_model.get_model().save_pretrained(save_path)
 
         with open(os.path.join(save_path, "hf_quant_config.json"), "w") as f:
-            json.dump(trt_config, f, indent=4)
+            json.dump(trtllm_config, f, indent=4)
 
 
 class PTQTorchSave(PTQSaveBase):
