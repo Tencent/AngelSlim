@@ -118,6 +118,7 @@ class QuantizationConfig:
     zero_point: bool = field(default=True)
     mse_range: bool = field(default=False)
     ignore_layers: List[str] = field(default_factory=list)
+    quant_analyse: bool = field(default=False)
 
 
 @dataclass
