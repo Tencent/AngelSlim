@@ -595,11 +595,11 @@ class QDQModule(torch.nn.Module):
             )
 
     def forward(self, x):
-        if self.input_scale is None:
+        if self.input_scale:
             if "fp8" in self.quant_algo:
-                x = quantize_activation_per_tensor_fp8(x, self.input_scale)
+                qinput = quantize_activation_per_tensor_fp8(x, self.input_scale)
             elif "int8" in self.quant_algo:
-                x = tensor_quant_dequant_int(x, self.input_scale, bits=8)
+                qinput = tensor_quant_dequant_int(x, self.input_scale, bits=8)
             else:
                 raise ValueError(
                     f"Unsupported quantization algorithm: {self.quant_algo}"
@@ -607,7 +607,7 @@ class QDQModule(torch.nn.Module):
 
         if "fp8" in self.quant_algo:
             output = gemm_fp8(
-                act=x,
+                act=qinput,
                 act_scale=self.input_scale,
                 weight=self.weight,
                 weight_scale=self.weight_scale,

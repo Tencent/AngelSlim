@@ -83,6 +83,7 @@ class QuantConfig:
             self.hidden_size = global_config.hidden_size
             self.model_arch_type = global_config.model_arch_type
             self.low_memory = config.quantization.low_memory
+            self.quant_analyse = config.quantization.quant_analyse
         elif "int8" in self.quant_algo:
             is_dynamic = "dynamic" if "dynamic" in self.quant_algo else "static"
             assert (
