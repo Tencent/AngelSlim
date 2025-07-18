@@ -47,12 +47,17 @@ class Qwen(BaseModel):
             "down_proj",
         ]
         obs_layers = [nn.Linear]
-        observer_layers_dict = self.find_layers(self.model, layers=obs_layers)
-        observer_layers_dict = {
-            k: v
-            for k, v in observer_layers_dict.items()
-            if k.startswith(self.block_name) and k.split(".")[-1] in names
-        }
+        observer_layers_dict = {}
+        layers_dict = self.find_layers(self.model, layers=obs_layers)
+
+        ignore_layers = self.skip_layer_names()
+        for name, module in layers_dict.items():
+            if name.startswith(self.block_name) and name.split(".")[-1] in names:
+                observer_layers_dict[name] = module
+            else:
+                ignore_layers.append(name)
+        self.quant_config.quant_algo_info["ignore_layers"] = ignore_layers
+
         if self.quant_config.custom_observe_layers_names != "default":
             for custom_observe_name in self.quant_config.custom_observe_layers_names:
                 for default_name in observer_layers_dict.keys():

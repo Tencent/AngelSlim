@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 import os
+import re
 from abc import ABCMeta, abstractmethod
 
 import torch
@@ -100,65 +102,69 @@ class PTQSaveVllmHF(PTQSaveBase):
     def save(self, save_path):
         w_quant_algo = self.quant_model.quant_config.quant_algo_info["w"]
         a_quant_algo = self.quant_model.quant_config.quant_algo_info["a"]
-        ignore_layers = self.quant_model.quant_config.quant_algo_info["ignore_layers"]
+        ignore_layers = self.quant_model.skip_layer_names()
+        trt_config = {"quantization": {"exclude_modules": ignore_layers}}
+
         if "fp8" in self.quant_model.quant_config.quant_algo:
-            static_q_dict = {
-                "quantization_config": {
-                    "quant_method": "fp8",
-                    "activation_scheme": (
-                        "dynamic" if "dynamic" in a_quant_algo else "static"
-                    ),
-                    "ignored_layers": ignore_layers,
-                }
+            quant_format = "naive-quantized"
+            trt_config["quantization"]["quant_algo"] = "FP8"
+            act_config = {
+                "num_bits": 8,
+                "strategy": re.search(r"per-([a-zA-Z]+)", a_quant_algo).group(1),
+                "dynamic": "dynamic" in a_quant_algo,
+                "type": "float",
+            }
+            weight_config = {
+                "num_bits": 8,
+                "strategy": re.search(r"per-([a-zA-Z]+)", w_quant_algo).group(1),
+                "dynamic": False,
+                "type": "float",
             }
         elif "int8" in self.quant_model.quant_config.quant_algo:
-            assert "per-channel" in w_quant_algo
-            assert "per-token" in a_quant_algo
-            static_q_dict = {
-                "quantization_config": {
-                    "config_groups": {
-                        "group_0": {
-                            "input_activations": {
-                                "block_structure": None,
-                                "dynamic": "dynamic" in a_quant_algo,
-                                "group_size": None,
-                                "num_bits": 8,
-                                "observer": "memoryless",
-                                "observer_kwargs": {},
-                                "strategy": "token",
-                                "symmetric": True,
-                                "type": "int",
-                            },
-                            "output_activations": None,
-                            "targets": ["Linear"],
-                            "weights": {
-                                "block_structure": None,
-                                "dynamic": False,
-                                "group_size": None,
-                                "num_bits": 8,
-                                "observer": "minmax",
-                                "observer_kwargs": {},
-                                "strategy": "channel",
-                                "symmetric": True,
-                                "type": "int",
-                            },
-                        }
-                    },
-                    "format": "int-quantized",
-                    "ignored_layers": ignore_layers,
-                    "kv_cache_scheme": None,
-                    "quant_method": "compressed-tensors",
-                },
+            quant_format = "int-quantized"
+            trt_config["quantization"]["quant_algo"] = "INT8"
+            act_config = {
+                "num_bits": 8,
+                "strategy": re.search(r"per-([a-zA-Z]+)", a_quant_algo).group(1),
+                "dynamic": "dynamic" in a_quant_algo,
+                "type": "int",
+            }
+            weight_config = {
+                "num_bits": 8,
+                "strategy": re.search(r"per-([a-zA-Z]+)", w_quant_algo).group(1),
+                "dynamic": False,
+                "type": "int",
             }
         else:
             raise ValueError(
                 f"{self.quant_model.quant_config.quant_algo} not supported"
             )
-        self.quant_model.get_model().config.update(static_q_dict)
-        print_info("Save quantization_config: {}".format(static_q_dict))
+
+        quant_dict = {
+            "quantization_config": {
+                "config_groups": {
+                    "group_0": {
+                        "weights": weight_config,
+                        "input_activations": act_config,
+                        "output_activations": None,
+                        "targets": ["Linear"],
+                    }
+                },
+                "kv_cache_scheme": None,
+                "format": quant_format,
+                "ignore": ignore_layers,
+                "quantization_status": "compressed",
+                "quant_method": "compressed-tensors",
+            }
+        }
+        self.quant_model.get_model().config.update(quant_dict)
+        print_info("Save quantization_config: {}".format(quant_dict))
 
         os.makedirs(save_path, exist_ok=True)
         self.quant_model.get_model().save_pretrained(save_path)
+
+        with open(os.path.join(save_path, "hf_quant_config.json"), "w") as f:
+            json.dump(trt_config, f, indent=4)
 
 
 class PTQTorchSave(PTQSaveBase):

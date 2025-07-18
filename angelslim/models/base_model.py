@@ -89,7 +89,7 @@ class BaseModel(metaclass=ABCMeta):
         pass
 
     def skip_layer_names(self):
-        return []
+        return self.quant_config.quant_algo_info.get("ignore_layers", [])
 
     def get_model(self):
         return self.model
@@ -202,7 +202,7 @@ class BaseModel(metaclass=ABCMeta):
         return model
 
     def find_layers(self, module, layers=None, name=""):
-        if type(module) in layers:
+        if type(module) in layers and name not in self.skip_layer_names():
             return {name: module}
         res = {}
         for name1, child in module.named_children():

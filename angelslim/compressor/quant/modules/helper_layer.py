@@ -583,12 +583,15 @@ class QDQModule(torch.nn.Module):
             raise ValueError(f"Unsupported quantization algorithm: {self.quant_algo}")
 
         self.weight = torch.nn.Parameter(quant_weight, requires_grad=False)
+        weight_scale = weight_scale.view(-1) if weight_scale.ndim == 0 else weight_scale
         self.weight_scale = torch.nn.Parameter(weight_scale, requires_grad=False)
         self.bias = bias
-        self.input_scale = input_scale
         self.output_scale = output_scale
-        if self.input_scale:
-            self.input_scale = torch.nn.Parameter(self.input_scale, requires_grad=False)
+        if input_scale is not None:
+            input_scale = input_scale.view(-1) if input_scale.ndim == 0 else input_scale
+            self.input_scale = torch.nn.Parameter(input_scale, requires_grad=False)
+        else:
+            self.input_scale = None
         if self.output_scale:
             self.output_scale = torch.nn.Parameter(
                 self.output_scale, requires_grad=False
