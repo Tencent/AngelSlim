@@ -131,7 +131,6 @@ python3 tools/run.py -c configs/qwen3/fp8_static/qwen3-0_6b_fp8_static_analyse.y
 compression:
   name: PTQ
   quantization:
-    quant_analyse: true
     name: fp8_static
     bits: 8
     quant_method:
@@ -140,6 +139,7 @@ compression:
     ignore_layers:         # Skip quantization for these layers
       - "lm_head"
       - "model.embed_tokens"
+    quant_analyse: true
 ```
 
 ## FP8量化文件后处理分析工具
