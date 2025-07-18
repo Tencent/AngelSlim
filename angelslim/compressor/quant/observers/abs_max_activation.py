@@ -43,16 +43,16 @@ class AbsmaxPertensorObserver(BaseObserver):
     def forward(self, inputs):
         """Calculate forward pass."""
 
+        self.step += 1
         if not self.dtype:
             self.dtype = inputs.dtype
         if inputs.numel() > 0:
             self._min, self._max = self._cal_min_max(inputs)
             if self.parent_observer is not None:
-                self.parent_observer.update(self._min, self._max)
+                self.parent_observer.update(self._min, self._max, self.step)
         else:
             assert self.parent_observer is not None
             self._update_min_max(self.parent_observer.min, self.parent_observer.max)
-        self.step += 1
         return inputs
 
     def _cal_min_max(self, inputs):
@@ -82,6 +82,9 @@ class AbsmaxPertensorObserver(BaseObserver):
 
     def scales(self):
         """Return output scales."""
+        if self.step == 0 and self.parent_observer is not None:
+            self._update_min_max(self.parent_observer.min, self.parent_observer.max)
+            self.step = self.parent_observer.step
         if self.step == 0:
             raise ValueError(
                 "AbsmaxPertensorObserver scales must calibrate data first!"
