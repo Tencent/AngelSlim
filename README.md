@@ -127,7 +127,9 @@ cd AngelSlim && python setup.py install
 
 #### 1. 离线推理
 
-可以通过`transformers`加载量化模型，测试离线推理：
+如果需要通过`transformers`加载量化模型，请在量化模型配置中为`model`设置`deploy_backend: huggingface`，或者直接手动将量化产出模型路径下`config.json`配置中的`ignored_layers`字段改为`ignore`。
+
+测试`transformers`加载量化模型离线推理：
 
 ```shell
 python deploy/offline.py $MODEL_PATH
@@ -141,7 +143,7 @@ python deploy/offline.py $MODEL_PATH
 
 **vLLM**
 
-[vLLM](https://github.com/vllm-project/vllm) 服务启动脚本，建议版本`vllm>=0.8.5.post1`，部署MOE INT8量化模型需要`vllm>=0.9.0`。
+[vLLM](https://github.com/vllm-project/vllm) 服务启动脚本，建议版本`vllm>=0.8.5.post1`，部署MOE INT8量化模型需要`vllm>=0.9.2`。
 
 ```shell
 bash deploy/run_vllm.sh $MODEL_PATH

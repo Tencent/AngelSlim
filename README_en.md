@@ -125,7 +125,19 @@ For more details, please refer to the [Quick Start Documentation](https://angels
 
 ### Deployment and Testing
 
-#### 1. API Service Deployment
+### 1. Offline Inference
+
+If you need to load a quantized model via `transformers`, set the `deploy_backend: huggingface` in the `model` configuration before quantizing the model, or manually modify the `ignored_layers` field in the `config.json` file located in the quantized model output directory to `ignore`.
+
+To test offline inference with a quantized model loaded via `transformers`, run the following command:
+
+```shell
+python deploy/offline.py $MODEL_PATH
+```
+
+Where `MODEL_PATH` is the path to the quantized model output.
+
+#### 2. API Service Deployment
 
 After specifying the quantized model path `MODEL_PATH`, you can deploy an OpenAI-compatible API service using the following LLMs inference frameworks:
 
@@ -147,7 +159,7 @@ Use the following script to launch a [SGLang](https://github.com/sgl-project/sgl
 bash deploy/run_sglang.sh $MODEL_PATH
 ```
 
-#### 2. Service Invocation
+#### 3. Service Invocation
 
 Invoke requests via [OpenAI's API format](https://platform.openai.com/docs/api-reference/introduction):
 
@@ -155,7 +167,7 @@ Invoke requests via [OpenAI's API format](https://platform.openai.com/docs/api-r
 bash deploy/openai.sh $MODEL_PATH
 ```
 
-#### 3. Performance Evaluation
+#### 4. Performance Evaluation
 
 Evaluate the performance of quantized model using [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness), recommended version`lm-eval>=0.4.8`:
 
