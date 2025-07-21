@@ -19,6 +19,7 @@ from .utils import find_parent_layer_and_sub_name  # noqa: F401
 from .utils import get_best_device  # noqa: F401
 from .utils import get_op_by_name  # noqa: F401
 from .utils import get_op_name  # noqa: F401
+from .utils import get_package_info  # noqa: F401
 from .utils import get_tensor_item  # noqa: F401
 from .utils import get_yaml_prefix_simple  # noqa: F401
 from .utils import print_info  # noqa: F401

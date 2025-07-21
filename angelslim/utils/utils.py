@@ -13,9 +13,12 @@
 # limitations under the License.
 
 import datetime
+import importlib.metadata
 import json
 import os
+import subprocess
 from itertools import takewhile
+from pathlib import Path
 from typing import Optional
 
 import torch
@@ -132,3 +135,23 @@ def common_prefix(str1, str2):
     return "".join(
         x[0] for x in takewhile(lambda x: x[0] == x[1], zip(str1, str2))
     ).rpartition(".")[0]
+
+
+def get_package_info(package_name: str) -> dict:
+    info = {"name": package_name, "version": "N/A", "source": "Unknown"}
+    try:
+        version = importlib.metadata.version(package_name)
+        info["version"] = version
+        info["source"] = "pip"
+    except Exception:
+        try:
+            package = __import__(package_name)
+            path = Path(package.__path__[0]).parent
+            commit_hash = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=path, text=True
+            ).strip()
+            info["version"] = commit_hash
+            info["source"] = "git"
+        except Exception:
+            pass
+    return info

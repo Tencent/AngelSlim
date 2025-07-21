@@ -105,6 +105,7 @@ class QuantConfig:
             self.hidden_size = global_config.hidden_size
             self.model_arch_type = global_config.model_arch_type
             self.low_memory = config.quantization.low_memory
+            self.quant_analyse = config.quantization.quant_analyse
         elif "int4_awq" in self.quant_algo:
             self.act_observer = None
             self.weight_observer = None

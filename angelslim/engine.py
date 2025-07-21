@@ -12,14 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
+import os
+import sys
+from dataclasses import asdict, dataclass
 from typing import Any, Optional
 
+import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from .compressor import CompressorFactory
 from .data.dataloader import DataLoaderFactory
 from .models import SlimModelFactory
-from .utils import default_compress_config, print_info
+from .utils import default_compress_config, get_package_info, print_info
 
 DEFAULT_COMPRESSION_CONFIG = {
     "fp8_static": default_compress_config.default_fp8_static_config(),
@@ -60,6 +65,10 @@ class Engine:
         """Load pretrained model and tokenizer"""
         assert model_name, "model_name must be specified."
         assert model_path, "model_path must be specified."
+        assert deploy_backend in [
+            "vllm",
+            "huggingface",
+        ], "deploy_backend must be vllm or huggingface"
 
         # Load model
         self.model = AutoModelForCausalLM.from_pretrained(
@@ -165,7 +174,9 @@ class Engine:
                 f"Compression type {self.compress_type} is not implemented"
             )
 
-    def save(self, save_path: Optional[str] = None) -> None:
+    def save(
+        self, save_path: Optional[str] = None, config: Optional[dataclass] = None
+    ) -> None:
         """Save compressed model and tokenizer
         Args:
             save_path (str, optional): Path to save the compressed model and tokenizer.
@@ -180,4 +191,20 @@ class Engine:
 
         # Save tokenizer
         self.tokenizer.save_pretrained(save_path)
+
+        # Save all config
+        if config is not None:
+            config_dict = asdict(config)
+            config_dict["debug_info"] = {
+                "python": sys.version,
+                "angelslim": get_package_info("angelslim"),
+                "torch": get_package_info("torch"),
+                "transformers": get_package_info("transformers"),
+                "torch_cuda_version": (
+                    torch.version.cuda if torch.cuda.is_available() else None
+                ),
+            }
+            with open(os.path.join(save_path, "angelslim_config.json"), "w") as f:
+                json.dump(config_dict, f, indent=4)
+
         print_info(f"Compressed model saved to {save_path}")

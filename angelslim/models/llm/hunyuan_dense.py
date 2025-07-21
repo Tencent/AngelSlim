@@ -63,7 +63,7 @@ class HunyuanDense(BaseModel):
         return observer_layers_dict
 
     def get_save_func(self):
-        if self.deploy_backend == "vllm":
+        if self.deploy_backend in ["vllm", "huggingface"]:
             return PTQSaveVllmHF
         else:
             raise NotImplementedError(

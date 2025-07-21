@@ -73,6 +73,7 @@ def run(config):
         trust_remote_code=model_config.trust_remote_code,
         low_cpu_mem_usage=model_config.low_cpu_mem_usage,
         use_cache=model_config.use_cache,
+        deploy_backend=model_config.deploy_backend,
     )
 
     # Step 4: Prepare data (optional custom dataloader)
@@ -98,7 +99,7 @@ def run(config):
     slim_engine.run()
 
     # Step 7: Save compressed model
-    slim_engine.save(global_config.save_path)
+    slim_engine.save(global_config.save_path, config)
 
 
 if __name__ == "__main__":

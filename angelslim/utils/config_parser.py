@@ -54,7 +54,8 @@ class ModelConfig:
         model_path: Path to model weights/directory
         trust_remote_code: Trust remote code for HuggingFace
         torch_dtype: PyTorch dtype for loading (e.g., "bfloat16")
-        device_map: Strategy for device placement
+        device_map: Strategy for device placement (e.g., "auto", "cpu", "cuda")
+        deploy_backend: Backend for deployment (e.g., "vllm", "huggingface")
     """
 
     name: str
@@ -64,6 +65,7 @@ class ModelConfig:
     device_map: str = field(default="auto")
     low_cpu_mem_usage: bool = field(default=True)
     use_cache: bool = field(default=False)
+    deploy_backend: str = field(default="vllm")
 
 
 @dataclass

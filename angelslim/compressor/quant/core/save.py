@@ -100,12 +100,14 @@ class PTQSaveVllmHF(PTQSaveBase):
         super().__init__(quant_model=quant_model)
 
     def save(self, save_path):
+        deploy_backend = self.quant_model.deploy_backend
+        ignore_field = "ignored_layers" if deploy_backend == "vllm" else "ignore"
         w_quant_algo = self.quant_model.quant_config.quant_algo_info["w"]
         a_quant_algo = self.quant_model.quant_config.quant_algo_info["a"]
-        ignore_layers = self.quant_model.skip_layer_names()
+        ignored_layers = self.quant_model.skip_layer_names()
         trtllm_config = {
             "quantization": {
-                "exclude_modules": ignore_layers,
+                "exclude_modules": ignored_layers,
                 "kv_cache_quant_algo": None,
             }
         }
@@ -157,7 +159,7 @@ class PTQSaveVllmHF(PTQSaveBase):
                 },
                 "kv_cache_scheme": None,
                 "format": quant_format,
-                "ignore": ignore_layers,
+                ignore_field: ignored_layers,
                 "quantization_status": "compressed",
                 "quant_method": "compressed-tensors",
             }
