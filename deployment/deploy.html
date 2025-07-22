@@ -438,7 +438,7 @@ document.write(`
     <span class="p">}</span>
   <span class="p">},</span>
   <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;naive-quantized&quot;</span><span class="p">,</span>
-  <span class="s2">&quot;ignore&quot;</span><span class="p">:</span> <span class="p">[</span>
+  <span class="s2">&quot;ignored_layers&quot;</span><span class="p">:</span> <span class="p">[</span>
     <span class="s2">&quot;lm_head&quot;</span><span class="p">,</span>
     <span class="s2">&quot;model.embed_tokens&quot;</span>
   <span class="p">],</span>
@@ -447,7 +447,8 @@ document.write(`
 <span class="p">},</span>
 </pre></div>
 </div>
-<p>可以通过transformers加载量化模型，测试离线推理：</p>
+<p>如果需要通过<code class="docutils literal notranslate"><span class="pre">transformers</span></code>加载量化模型，请在量化模型配置的<code class="docutils literal notranslate"><span class="pre">global</span></code>中设置<code class="docutils literal notranslate"><span class="pre">deploy_backend:</span> <span class="pre">huggingface</span></code>，或者直接手动将量化产出模型路径下<code class="docutils literal notranslate"><span class="pre">config.json</span></code>配置中的<code class="docutils literal notranslate"><span class="pre">ignored_layers</span></code>字段改为<code class="docutils literal notranslate"><span class="pre">ignore</span></code>。</p>
+<p>测试transformers加载量化模型：</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForCausalLM</span><span class="p">,</span> <span class="n">AutoTokenizer</span>
 <span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span>
     <span class="n">model_path</span><span class="p">,</span>
@@ -475,7 +476,7 @@ document.write(`
 </div>
 </li>
 <li><p>启动兼容OpenAI格式的API服务</p>
-<p>以下指令将启动兼容OpenAI API格式的服务，默认在 http://0.0.0.0:8080 地址进行访问：</p>
+<p>以下指令将启动兼容OpenAI API格式的服务，默认在 http://localhost:8080 地址进行访问：</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>-m<span class="w"> </span>vllm.entrypoints.openai.api_server<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--host<span class="w"> </span><span class="m">0</span>.0.0.0<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--port<span class="w"> </span><span class="m">8080</span><span class="w"> </span><span class="se">\</span>
@@ -522,9 +523,16 @@ document.write(`
 <span class="k">fi</span>
 </pre></div>
 </div>
-<p>在两节点都执行上述指令后，可以在主节点的 http://0.0.0.0:8080 访问服务。</p>
+<p>在两节点都执行上述指令后，可以在主节点的 http://localhost:8080 访问服务。</p>
 </li>
 </ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>如果在部署Qwen3 MOE量化模型时遇到报错 <code class="docutils literal notranslate"><span class="pre">RuntimeError:</span> <span class="pre">CUDA</span> <span class="pre">error:</span> <span class="pre">no</span> <span class="pre">kernel</span> <span class="pre">image</span> <span class="pre">is</span> <span class="pre">available</span> <span class="pre">for</span> <span class="pre">execution</span> <span class="pre">on</span> <span class="pre">the</span> <span class="pre">device</span></code>，尝试将 <code class="docutils literal notranslate"><span class="pre">vllm</span></code> 版本升级到 <code class="docutils literal notranslate"><span class="pre">0.9.2</span></code></p></li>
+<li><p>相关参考Issue：<a class="reference external" href="https://github.com/vllm-project/vllm/issues/19690">链接</a></p></li>
+</ul>
+</div>
 </section>
 <section id="sglang">
 <h3>SGLang<a class="headerlink" href="#sglang" title="Link to this heading">#</a></h3>
@@ -535,7 +543,7 @@ document.write(`
 </div>
 </li>
 <li><p>启动兼容OpenAI格式的API服务</p>
-<p>下面的指令会在本地 http://0.0.0.0:8080 启动服务：</p>
+<p>下面的指令会在本地 http://localhost:8080 启动服务：</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>sglang.launch_server<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--host<span class="w"> </span><span class="m">0</span>.0.0.0<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--port<span class="w"> </span><span class="m">8080</span><span class="w"> </span><span class="se">\</span>
