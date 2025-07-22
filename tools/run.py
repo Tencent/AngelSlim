@@ -73,7 +73,7 @@ def run(config):
         trust_remote_code=model_config.trust_remote_code,
         low_cpu_mem_usage=model_config.low_cpu_mem_usage,
         use_cache=model_config.use_cache,
-        deploy_backend=model_config.deploy_backend,
+        deploy_backend=global_config.deploy_backend,
     )
 
     # Step 4: Prepare data (optional custom dataloader)

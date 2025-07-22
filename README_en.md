@@ -127,7 +127,7 @@ For more details, please refer to the [Quick Start Documentation](https://angels
 
 ### 1. Offline Inference
 
-If you need to load a quantized model via `transformers`, set the `deploy_backend: huggingface` in the `model` configuration before quantizing the model, or manually modify the `ignored_layers` field in the `config.json` file located in the quantized model output directory to `ignore`.
+If you need to load a quantized model via `transformers`, please set the `deploy_backend: huggingface` in the `global` configuration before quantizing the model, or manually modify the `ignored_layers` field in the `config.json` file located in the quantized model output directory to `ignore`.
 
 To test offline inference with a quantized model loaded via `transformers`, run the following command:
 
