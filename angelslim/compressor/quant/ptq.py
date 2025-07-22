@@ -130,20 +130,27 @@ class PTQ:
         """
         Save PTQ scales or ckpt.
         """
-        if self.quant_model.quant_config.quant_analyse:
+        if (
+            hasattr(self.quant_model.quant_config, "quant_analyse")
+            and self.quant_model.quant_config.quant_analyse
+        ):
             # scale analyse
             for k in self.quant_model.act_scales_dict.keys():
-                if self.quant_model.act_scales_dict[k].data > 1.5:
+                act_scales_data = self.quant_model.act_scales_dict[k].data
+                if act_scales_data > 1.5:
                     print(
                         f"[AngelSlim Warning] Act_scales {k}: "
-                        f"The weight is too high:{self.quant_model.act_scales_dict[k].data}. "
-                        f"It is recommended to clip it to 1.5 ")
+                        f"The weight is too high:{act_scales_data}. "
+                        f"It is recommended to clip it to 1.5 "
+                    )
             for k in self.quant_model.weight_scales_dict.keys():
-                if self.quant_model.weight_scales_dict[k].data > 1.5:
+                weight_scales_data = self.quant_model.weight_scales_dict[k].data
+                if weight_scales_data > 1.5:
                     print(
                         f"[AngelSlim Warning] Weight_scales {k}: "
-                        f"The weight is too high:{self.quant_model.weight_scales_dict[k].data}. "
-                        f"It is recommended to clip it to 1.5 ")
+                        f"The weight is too high:{weight_scales_data}. "
+                        f"It is recommended to clip it to 1.5 "
+                    )
 
         print_info("Start save PTQ ckpt to: {}".format(save_path))
         if "gptq" in self.quant_algo:
