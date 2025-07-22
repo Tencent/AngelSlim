@@ -48,7 +48,7 @@ class BaseModel(metaclass=ABCMeta):
     ):
         assert modal_type in ["LLM", "AIGC", "TTS"]
         self.modal_type = modal_type
-        assert deploy_backend in ["vllm"]
+        assert deploy_backend in ["vllm", "huggingface"]
         self.deploy_backend = deploy_backend
         self.model = None
         assert (
@@ -100,7 +100,7 @@ class BaseModel(metaclass=ABCMeta):
             act_scale = self.act_scales_dict[name]
         if name in self.weight_scales_dict:
             weight_scale = self.weight_scales_dict[name]
-        if self.deploy_backend == "vllm":
+        if self.deploy_backend in ["vllm", "huggingface"]:
             q_linear = QDQModule(
                 quant_algo=self.quant_config.quant_algo,
                 weight=sub_layer.weight,

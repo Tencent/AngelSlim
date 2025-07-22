@@ -28,7 +28,7 @@
     }
   },
   "format": "naive-quantized",
-  "ignore": [
+  "ignored_layers": [
     "lm_head",
     "model.embed_tokens"
   ],
@@ -37,7 +37,10 @@
 },
 ```
 
-可以通过transformers加载量化模型，测试离线推理：
+如果需要通过`transformers`加载量化模型，请在量化模型配置的`global`中设置`deploy_backend: huggingface`，或者直接手动将量化产出模型路径下`config.json`配置中的`ignored_layers`字段改为`ignore`。
+
+测试transformers加载量化模型：
+
 ```python
 from transformers import AutoModelForCausalLM, AutoTokenizer
 model = AutoModelForCausalLM.from_pretrained(
@@ -53,7 +56,6 @@ outputs = model.generate(**inputs)
 print(tokenizer.decode(outputs[0]))
 ```
 
-
 ## 2. 启动服务
 
 ### vLLM
@@ -68,7 +70,7 @@ print(tokenizer.decode(outputs[0]))
 
 - 启动兼容OpenAI格式的API服务
     
-    以下指令将启动兼容OpenAI API格式的服务，默认在 http://0.0.0.0:8080 地址进行访问：
+    以下指令将启动兼容OpenAI API格式的服务，默认在 http://localhost:8080 地址进行访问：
 
     ```shell
     python3 -m vllm.entrypoints.openai.api_server \
@@ -119,8 +121,13 @@ print(tokenizer.decode(outputs[0]))
   fi
   ```
 
-  在两节点都执行上述指令后，可以在主节点的 http://0.0.0.0:8080 访问服务。
+  在两节点都执行上述指令后，可以在主节点的 http://localhost:8080 访问服务。
   
+:::{note}
+- 如果在部署Qwen3 MOE量化模型时遇到报错 `RuntimeError: CUDA error: no kernel image is available for execution on the device`，尝试将 `vllm` 版本升级到 `0.9.2`
+- 相关参考Issue：[链接](https://github.com/vllm-project/vllm/issues/19690)
+:::
+
 
 ### SGLang
 
@@ -132,7 +139,7 @@ print(tokenizer.decode(outputs[0]))
 
 - 启动兼容OpenAI格式的API服务
     
-    下面的指令会在本地 http://0.0.0.0:8080 启动服务：
+    下面的指令会在本地 http://localhost:8080 启动服务：
 
     ```shell
     python -m sglang.launch_server \

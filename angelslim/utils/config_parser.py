@@ -22,11 +22,22 @@ from .utils import get_hf_config
 
 @dataclass
 class GlobalConfig:
+    """
+    Global configuration for LLM compression.
+    Attributes:
+        save_path: Directory to save compressed models
+        max_seq_length: Maximum sequence length for calibration data
+        hidden_size: Hidden size of the model
+        model_arch_type: Model architecture type
+        deploy_backend: Backend for deployment (e.g., "vllm", "huggingface")
+    """
+
     save_path: str = field(default="./output")
     # Shared max_seq_length configuration
     max_seq_length: int = field(default=2048)
     hidden_size: int = field(default=2048)
     model_arch_type: str = field(default=None)
+    deploy_backend: str = field(default="vllm")
 
     def set_max_seq_length(self, value: int):
         self.max_seq_length = value
@@ -54,7 +65,7 @@ class ModelConfig:
         model_path: Path to model weights/directory
         trust_remote_code: Trust remote code for HuggingFace
         torch_dtype: PyTorch dtype for loading (e.g., "bfloat16")
-        device_map: Strategy for device placement
+        device_map: Strategy for device placement (e.g., "auto", "cpu", "cuda")
     """
 
     name: str
