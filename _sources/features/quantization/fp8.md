@@ -173,21 +173,25 @@ FP8量化分析工具可以分析您FP8的量化结果文件的scale分布情况
 
 运行脚本将会产出折线图与log分析。
 ```shell
-cd angelslim/compressor/quant/core/quant_analyse
-python3 fp8_scale_analyse.py --model-path ${FP8_PATH} --save-path ${SAVE_PATH}
+python3 tools/fp8_quant_analyse.py --analyse-type act --model-path $FP8_PATH
 ```
 
 相关参数如下：
-- `model-path`：FP8模型路径。
-- `save-path`：结果保存路径。
+- `model-path`：[必填]FP8模型路径。
+- `save-path`：[选填]结果保存路径。
 
 ![fp8_scale_analyse.png](../../assets/fp8_scale_analyse.png)
 
 ## Weight分布对比
 运行脚本将会产出bf16精度与fp8精度权重直方图对比。
 ```shell
-cd angelslim/compressor/quant/core/quant_analyse
-python3 fp8_weight_analyse.py --bf16-path ${BF16_PATH} --fp8-path ${FP8_PATH} --layer-index 3
+python3 tools/fp8_quant_analyse.py --analyse-type weight --bf16-path $BF16_PATH --fp8-path $FP8_PATH --layer-index 0
 ```
+
+相关参数如下：
+- `bf16-path`：[必填]原精度模型路径。
+- `fp8-path`：[必填]FP8模型路径。
+- `layer-index`：[必填]需要分析的层index。
+- `save-path`：[选填]结果保存路径。
 
 ![fp8_weight_analyse.png](../../assets/fp8_weight_analyse.png)

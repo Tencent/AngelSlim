@@ -579,24 +579,29 @@ document.write(`
 <section id="scale">
 <h2>Scale分析<a class="headerlink" href="#scale" title="Link to this heading">#</a></h2>
 <p>运行脚本将会产出折线图与log分析。</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>angelslim/compressor/quant/core/quant_analyse
-python3<span class="w"> </span>fp8_scale_analyse.py<span class="w"> </span>--model-path<span class="w"> </span><span class="si">${</span><span class="nv">FP8_PATH</span><span class="si">}</span><span class="w"> </span>--save-path<span class="w"> </span><span class="si">${</span><span class="nv">SAVE_PATH</span><span class="si">}</span>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/fp8_quant_analyse.py<span class="w"> </span>--analyse-type<span class="w"> </span>act<span class="w"> </span>--model-path<span class="w"> </span><span class="nv">$FP8_PATH</span>
 </pre></div>
 </div>
 <p>相关参数如下：</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">model-path</span></code>：FP8模型路径。</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">save-path</span></code>：结果保存路径。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">model-path</span></code>：[必填]FP8模型路径。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">save-path</span></code>：[选填]结果保存路径。</p></li>
 </ul>
 <p><img alt="fp8_scale_analyse.png" src="../../_images/fp8_scale_analyse.png" /></p>
 </section>
 <section id="weight">
 <h2>Weight分布对比<a class="headerlink" href="#weight" title="Link to this heading">#</a></h2>
 <p>运行脚本将会产出bf16精度与fp8精度权重直方图对比。</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>angelslim/compressor/quant/core/quant_analyse
-python3<span class="w"> </span>fp8_weight_analyse.py<span class="w"> </span>--bf16-path<span class="w"> </span><span class="si">${</span><span class="nv">BF16_PATH</span><span class="si">}</span><span class="w"> </span>--fp8-path<span class="w"> </span><span class="si">${</span><span class="nv">FP8_PATH</span><span class="si">}</span><span class="w"> </span>--layer-index<span class="w"> </span><span class="m">3</span>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/fp8_quant_analyse.py<span class="w"> </span>--analyse-type<span class="w"> </span>weight<span class="w"> </span>--bf16-path<span class="w"> </span><span class="nv">$BF16_PATH</span><span class="w"> </span>--fp8-path<span class="w"> </span><span class="nv">$FP8_PATH</span><span class="w"> </span>--layer-index<span class="w"> </span><span class="m">0</span>
 </pre></div>
 </div>
+<p>相关参数如下：</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">bf16-path</span></code>：[必填]原精度模型路径。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">fp8-path</span></code>：[必填]FP8模型路径。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">layer-index</span></code>：[必填]需要分析的层index。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">save-path</span></code>：[选填]结果保存路径。</p></li>
+</ul>
 <p><img alt="fp8_weight_analyse.png" src="../../_images/fp8_weight_analyse.png" /></p>
 </section>
 </section>
