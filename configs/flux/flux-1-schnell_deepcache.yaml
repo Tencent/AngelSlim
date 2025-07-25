@@ -1,0 +1,28 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output
+  deploy_backend: torch
+
+# Simplified Configuration for LLM compression
+model:
+  name: FLUX
+  model_path: black-forest-labs/FLUX.1-schnell
+  cache_dir: NULL
+  torch_dtype: bfloat16
+
+# Compression configuration
+compression:
+  name: Cache
+  cache:
+    name: DeepCache
+    use_cache_helper: True
+    no_cache_steps: [0, 1, 2, 3, 4, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41, 44, 47, 48, 49]
+    no_cache_block_id:  {"single": [35,36,37,38]}
+
+inference:
+  height: 1024
+  width: 1024
+  guidance_scale: 3.5
+  num_inference_steps: 50
+  max_sequence_length: 512
+  seed: 42

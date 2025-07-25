@@ -73,9 +73,8 @@ class GPTQ:
         # get modle input in dataloader
         self.model.model_forward(dataloader)
         layer_kwargs = layers[0].layer_kwargs
-        print_info("layer_kwargs = :{}".format(layer_kwargs))
 
-        print_info("[SLIM] cache['i']:{}".format(cache["i"]))
+        print_info("cache['i']:{}".format(cache["i"]))
 
         layers[0] = layers[0].module
         self.model.model.model.embed_tokens.cpu()
@@ -84,7 +83,7 @@ class GPTQ:
 
         outs = torch.zeros_like(inps)
         # begin the gptq process
-        print_info("[SLIM] Ready.")
+        print_info("Ready.")
 
         layers = layers.cpu()
 
@@ -93,7 +92,7 @@ class GPTQ:
             subset = self._find_layers(layer)
             print_info("subset:{}".format(subset))
             self.gptq = {}
-            print_info("[SLIM] GPTQMoe start layer {}".format(i))
+            print_info("GPTQMoe start layer {}".format(i))
             for name in subset:
                 if name in self.ignore_layers:
                     continue
@@ -116,14 +115,14 @@ class GPTQ:
                         hidden_states=inps[j, :, :].unsqueeze(0), **layer_kwargs
                     )[0].squeeze(1)
 
-            print_info("[SLIM] HOOK Step{}".format(j))
+            print_info("HOOK Step{}".format(j))
             for h in handles:
                 h.remove()
 
             for name in subset:
                 if name in self.ignore_layers:
                     continue
-                print_info("[SLIM] Quant {} ...".format(name))
+                print_info("Quant {} ...".format(name))
                 scale, zero, g_idx = self.gptq[name].fasterquant(
                     percdamp=self.percdamp,
                     group_size=self.group_size,
@@ -151,13 +150,13 @@ class GPTQ:
             # del gptq
             torch.cuda.empty_cache()
             inps, outs = outs, inps
-            print_info("[SLIM] GPTQ end layer {}\n".format(i))
+            print_info("GPTQ end layer {}\n".format(i))
 
         # inps = inps.cpu()
         # outs = outs.cpu()
         del inps, outs
         torch.cuda.empty_cache()
-        print_info("[SLIM] GPTQ done.")
+        print_info("GPTQ done.")
 
     def _make_quant(
         self,

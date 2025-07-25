@@ -66,7 +66,7 @@ class QuantConfig:
             is_dynamic = "dynamic" if "dynamic" in self.quant_algo else "static"
             assert (
                 is_dynamic or act_quant_method is not None
-            ), "[OpenSlim][Error] fp8_static need act_quant_method"
+            ), "[Error] fp8_static need act_quant_method"
             self.act_observer = (
                 ACT_OBSERVERS_CLASS[act_quant_method]
                 if "static" in is_dynamic
@@ -88,7 +88,7 @@ class QuantConfig:
             is_dynamic = "dynamic" if "dynamic" in self.quant_algo else "static"
             assert (
                 is_dynamic or act_quant_method is not None
-            ), "[OpenSlim][Error] int8_static need act_quant_method"
+            ), "[Error] int8_static need act_quant_method"
             self.act_observer = (
                 ACT_OBSERVERS_CLASS[act_quant_method]
                 if "static" in is_dynamic

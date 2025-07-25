@@ -13,5 +13,6 @@
 # limitations under the License.
 
 from .cache import Cache  # noqa: F401
-from .compressor_factory import CompressorFactory  # noqa: F401
-from .quant import PTQ  # noqa: F401
+from .cachepipeline import FluxCachePipeline  # noqa: F401
+from .deepcache import FluxDeepCacheHelper  # noqa: F401
+from .teacache import TeaCache  # noqa: F401

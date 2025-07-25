@@ -17,23 +17,22 @@ import torch.nn as nn
 from tqdm import tqdm
 
 from ...compressor.quant.core import PTQVLMSaveVllmHF
-from ..base_model import BaseModel
+from ..base_model import BaseLLMModel
 from ..model_factory import SlimModelFactory
 
 
 @SlimModelFactory.register
-class QwenVL(BaseModel):
+class QwenVL(BaseLLMModel):
     def __init__(
         self,
         model=None,
-        model_path=None,
         deploy_backend="vllm",
     ):
         super().__init__(
             model=model,
-            model_path=model_path,
             deploy_backend=deploy_backend,
         )
+        self.modal_type = "VLM"
         self.block_name = "model.layers"
 
     def get_observer_layers(self):
@@ -70,7 +69,7 @@ class QwenVL(BaseModel):
                 self.model(**inp)
 
     def get_save_func(self):
-        if self.deploy_backend == "vllm":
+        if self.deploy_backend in ["vllm", "huggingface"]:
             return PTQVLMSaveVllmHF
         else:
             raise NotImplementedError(

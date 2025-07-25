@@ -40,7 +40,7 @@ class PTQ:
         self.layers = self.quant_model.get_model()
         self.quant_algo = self.quant_model.quant_config.quant_algo
         self.quant_helpers = self.quant_model.quant_config.quant_helpers
-        if self.modal_type in ["LLM", "TTS"]:
+        if self.modal_type in ["LLM", "VLM"]:
             # Add ptq observer hook
             self.ptq_hook = PTQHook(self.quant_model)
             self.ptq_hook.apply_hook()
@@ -117,7 +117,7 @@ class PTQ:
         elif "awq" in self.quant_algo:
             self.awq.convert()
         else:
-            if self.modal_type in ["LLM", "TTS"]:
+            if self.modal_type in ["LLM", "VLM"]:
                 if "smooth" in self.quant_helpers:
                     self.smooth.convert()
                 self._convert_llm()

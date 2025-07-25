@@ -13,10 +13,11 @@
 # limitations under the License.
 
 import os
-from safetensors.torch import load_file
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+from safetensors.torch import load_file
 
 
 def draw_sub_lines(weight_dict, ax, opname):
@@ -131,7 +132,7 @@ def get_weight_dict(model_path):
     g = os.walk(model_path)
     st_file_list = []
 
-    for path, dir_list, file_list in g:
+    for path, _, file_list in g:
         if model_path != path:
             break
         for file_name in file_list:
@@ -175,11 +176,13 @@ def draw_bf16_fp8_weight_fig(bf16_path, fp8_path, save_path, layer_index):
 
         bf16w = np.array(tensor_data)
 
-        draw_hist(bf16w, ax1, f'BF16_{op_name}')
+        draw_hist(bf16w, ax1, f"BF16_{op_name}")
 
         fp8w = fp8_weight_dict[str(layer_index)][op_name].float().view(-1)
 
         uniform_data = np.array(fp8w)
-        draw_hist(uniform_data, ax2, f'FP8_{op_name}')
+        draw_hist(uniform_data, ax2, f"FP8_{op_name}")
 
-        plt.savefig(os.path.join(save_path, f"./layer_{layer_index}_op_{op_name}_histogram.jpg"))
+        plt.savefig(
+            os.path.join(save_path, f"./layer_{layer_index}_op_{op_name}_histogram.jpg")
+        )
