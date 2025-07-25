@@ -1,5 +1,8 @@
 name: Pre-Commit Checks
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [ main ]
@@ -22,6 +25,9 @@ jobs:
 
       - name: Install pre-commit
         run: pip install pre-commit
+      
+      - name: Install pre-commit
+        run: pre-commit install
 
       - name: Run pre-commit
         run: pre-commit run --all-files --show-diff-on-failure
