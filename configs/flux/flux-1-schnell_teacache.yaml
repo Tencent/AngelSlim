@@ -1,0 +1,29 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output
+  deploy_backend: torch
+
+# Simplified Configuration for LLM compression
+model:
+  name: FLUX
+  model_path: black-forest-labs/FLUX.1-schnell
+  cache_dir: NULL
+  torch_dtype: bfloat16
+
+# Compression configuration
+compression:
+  name: Cache
+  cache:
+    name: TeaCache
+    cnt: 0
+    num_steps: 50
+    rel_l1_thresh: 0.6
+    accumulated_rel_l1_distance: 0.0
+
+inference:
+  height: 1024
+  width: 1024
+  guidance_scale: 3.5
+  num_inference_steps: 50
+  max_sequence_length: 512
+  seed: 42

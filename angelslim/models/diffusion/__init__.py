@@ -12,6 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .cache import Cache  # noqa: F401
-from .compressor_factory import CompressorFactory  # noqa: F401
-from .quant import PTQ  # noqa: F401
+
+from .flux import FLUX  # noqa: F401

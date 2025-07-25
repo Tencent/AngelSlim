@@ -76,7 +76,7 @@ def get_tensor_item(x):
 
 def print_info(info):
     time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    prefix = "[OpenSlim]"
+    prefix = "[AngelSlim]"
     try:
         _index = torch.distributed.get_rank()
     except ValueError:

@@ -15,21 +15,19 @@
 import torch.nn as nn
 
 from ...compressor.quant.core import PTQSaveVllmHF
-from ..base_model import BaseModel
+from ..base_model import BaseLLMModel
 from ..model_factory import SlimModelFactory
 
 
 @SlimModelFactory.register
-class HunyuanDense(BaseModel):
+class HunyuanDense(BaseLLMModel):
     def __init__(
         self,
         model=None,
-        model_path=None,
         deploy_backend="vllm",
     ):
         super().__init__(
             model=model,
-            model_path=model_path,
             deploy_backend=deploy_backend,
         )
         self.block_name = "model.layers"

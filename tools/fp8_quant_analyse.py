@@ -13,18 +13,21 @@
 # limitations under the License.
 
 import argparse
-from argparse import ArgumentParser
-from angelslim.compressor.quant.core.fp8_analyse_tools import draw_bf16_fp8_weight_fig, draw_fp8_scale_fig
 import os
+
+from angelslim.compressor.quant.core.fp8_analyse_tools import (
+    draw_bf16_fp8_weight_fig,
+    draw_fp8_scale_fig,
+)
 
 
 def quant_analyse(args):
-    if args.analyse_type == 'act':
+    if args.analyse_type == "act":
         os.makedirs(args.save_path, exist_ok=True)
         assert os.path.exists(args.model_path), f"File {args.model_path} not exist"
         print(f"[AngelSlim] Save all quant scale graph to {args.save_path}")
         draw_fp8_scale_fig(args.model_path, args.save_path)
-    elif args.analyse_type == 'weight':
+    elif args.analyse_type == "weight":
         print(f"[AngelSlim] Save weight analyse graph to {args.save_path}")
         os.makedirs(args.save_path, exist_ok=True)
         assert os.path.exists(args.bf16_path), f"File {args.bf16_path} not exist"
@@ -32,21 +35,33 @@ def quant_analyse(args):
         bf16_path = args.bf16_path
         fp8_path = args.fp8_path
         layer_index = args.layer_index
-        draw_bf16_fp8_weight_fig(bf16_path=bf16_path, fp8_path=fp8_path, save_path=args.save_path, layer_index=layer_index)
+        draw_bf16_fp8_weight_fig(
+            bf16_path=bf16_path,
+            fp8_path=fp8_path,
+            save_path=args.save_path,
+            layer_index=layer_index,
+        )
 
 
 if __name__ == "__main__":
 
     global_parser = argparse.ArgumentParser(description="全局参数", add_help=True)
-    global_parser.add_argument("--analyse-type", type=str, required=True,
-                        choices=['act', 'weight'], help="选择 'activation', 'weight'")
+    global_parser.add_argument(
+        "--analyse-type",
+        type=str,
+        required=True,
+        choices=["act", "weight"],
+        help="选择 'activation', 'weight'",
+    )
     global_args, remaining_args = global_parser.parse_known_args()
 
-    parser = argparse.ArgumentParser(description=f"分支 {global_args.analyse_type} 的参数")
-    if global_args.analyse_type == 'act':
+    parser = argparse.ArgumentParser(
+        description=f"分支 {global_args.analyse_type} 的参数"
+    )
+    if global_args.analyse_type == "act":
         parser.add_argument("--model-path", type=str, help="Fp8 path", required=True)
         parser.add_argument("--save-path", type=str, default="./Quant_Scale_SavePath")
-    elif global_args.analyse_type == 'weight':
+    elif global_args.analyse_type == "weight":
         parser.add_argument("--bf16-path", type=str, help="Bf16 path", required=True)
         parser.add_argument("--fp8-path", type=str, help="Fp8 path", required=True)
         parser.add_argument("--save-path", type=str, default="./Weight_analyse")
@@ -56,4 +71,3 @@ if __name__ == "__main__":
     args.analyse_type = global_args.analyse_type
     print(f"Args:{args}")
     quant_analyse(args)
-

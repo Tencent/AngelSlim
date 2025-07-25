@@ -20,6 +20,9 @@ class SlimModelFactory:
 
     # Registry to store mapping of class names to model classes
     registry: Dict[str, Type] = {}
+    series_registry: Dict[str, str] = {}
+
+    ALLOWED_SERIES = ("LLM", "VLM", "Diffusion")
 
     @classmethod
     def register(cls, model_class: Type) -> Type:
@@ -28,6 +31,21 @@ class SlimModelFactory:
         if class_name in cls.registry:
             raise ValueError(f"Model class '{class_name}' is already registered")
         cls.registry[class_name] = model_class
+
+        module_path = model_class.__module__.lower()
+        if "llm" in module_path:
+            series = "LLM"
+        elif "vlm" in module_path:
+            series = "VLM"
+        elif "diffusion" in module_path:
+            series = "Diffusion"
+        else:
+            raise ValueError(
+                f"model_class '{class_name}' is not in a valid series: {cls.ALLOWED_SERIES}"  # noqa: E501
+            )
+
+        cls.series_registry[class_name] = series
+
         return model_class
 
     @classmethod
@@ -35,7 +53,6 @@ class SlimModelFactory:
         cls,
         model_name: str,
         model: Optional[Any] = None,
-        model_path: Optional[str] = None,
         deploy_backend: str = "vllm",
         **kwargs,
     ) -> Any:
@@ -48,7 +65,6 @@ class SlimModelFactory:
 
         return cls.registry[model_name](
             model=model,
-            model_path=model_path,
             deploy_backend=deploy_backend,
             **kwargs,
         )
@@ -67,3 +83,13 @@ class SlimModelFactory:
     def get_registered_models(cls) -> Dict[str, Type]:
         """Get all registered model classes"""
         return cls.registry.copy()
+
+    @classmethod
+    def get_series_by_models(cls, model_name: str) -> str:
+        """Get all model classes for a specific series"""
+        if model_name not in cls.registry:
+            available = ", ".join(cls.registry.keys())
+            raise ValueError(
+                f"Unknown model: '{model_name}'. Available models: {available}"
+            )
+        return cls.series_registry.get(model_name, [])

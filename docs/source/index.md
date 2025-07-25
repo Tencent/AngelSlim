@@ -56,6 +56,7 @@ getting_started/quickstrat
 
 features/quantization/index
 features/speculative_decoding/index
+features/cache/index
 :::
 
 % Additional capabilities
@@ -67,6 +68,7 @@ features/speculative_decoding/index
 models/hunyuan/hunyuan_quant
 models/deepseek/deepseek_quant
 models/qwen/qwen_quant
+models/flux/flux_cache
 :::
 
 

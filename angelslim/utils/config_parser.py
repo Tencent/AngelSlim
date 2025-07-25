@@ -39,6 +39,23 @@ class GlobalConfig:
     model_arch_type: str = field(default=None)
     deploy_backend: str = field(default="vllm")
 
+    def update(self, model_path: str = None, max_seq_length: int = None):
+        """
+        Update global configuration with model and dataset properties.
+
+        Args:
+            model_path: Path to the model for extracting hidden size and architecture
+            max_seq_length: Maximum sequence length for the model
+
+        Returns:
+            Updated GlobalConfig object
+        """
+        if model_path:
+            self.set_model_hidden_size(model_path)
+            self.set_model_arch_type(model_path)
+        if max_seq_length:
+            self.set_max_seq_length(max_seq_length)
+
     def set_max_seq_length(self, value: int):
         self.max_seq_length = value
 
@@ -60,12 +77,14 @@ class ModelConfig:
     Configuration for the LLM model to be compressed.
 
     Attributes:
-        name: Model name (e.g., "Qwen-7B")
-        type: Model family/type (e.g., "qwen", "llama", "mistral")
+        name: Model name (e.g., "Qwen3-8B")
         model_path: Path to model weights/directory
         trust_remote_code: Trust remote code for HuggingFace
         torch_dtype: PyTorch dtype for loading (e.g., "bfloat16")
         device_map: Strategy for device placement (e.g., "auto", "cpu", "cuda")
+        low_cpu_mem_usage: Use low memory loading for large models
+        use_cache: Whether to use cache during model loading
+        cache_dir: Directory for caching model files
     """
 
     name: str
@@ -75,6 +94,7 @@ class ModelConfig:
     device_map: str = field(default="auto")
     low_cpu_mem_usage: bool = field(default=True)
     use_cache: bool = field(default=False)
+    cache_dir: Optional[str] = field(default=None)
 
 
 @dataclass
@@ -133,6 +153,32 @@ class QuantizationConfig:
 
 
 @dataclass
+class CacheConfig:
+    """
+    Configuration for caching in LLM compression.
+
+    Attributes:
+        name: Cache method (e.g., "DeepCache")
+        no_cache_steps: List of steps where caching is disabled
+    """
+
+    name: str = field(default="DeepCache")
+    use_cache_helper: bool = field(default=False)
+    no_cache_steps: List[int] = field(default_factory=list)
+    no_cache_block_id: Dict[str, List[int]] = field(
+        default_factory=lambda: {
+            "single": [],
+            "multi": [],
+        }
+    )
+    cnt: int = field(default=0)
+    num_steps: int = field(default=50)
+    rel_l1_thresh: float = field(default=0.6)  # Threshold for relative L1 distance
+    # Accumulated distance for caching decisions
+    accumulated_rel_l1_distance: float = field(default=0.0)
+
+
+@dataclass
 class CompressionConfig:
     """
     Compression configurations container for LLM.
@@ -145,6 +191,7 @@ class CompressionConfig:
 
     name: str
     quantization: Optional[QuantizationConfig] = None
+    cache: Optional[CacheConfig] = None
     # speculative_decoding: Optional[SpeculativeDecodingConfig] = None
 
     @property
@@ -153,6 +200,26 @@ class CompressionConfig:
             "dynamic" not in self.quantization.name
             or "smooth" in self.quantization.quant_helpers
         )
+
+
+@dataclass
+class InferenceConfig:
+    """Configuration for inference parameters.
+    Attributes:
+        height: Height of the generated image
+        width: Width of the generated image
+        guidance_scale: Guidance scale for inference
+        num_inference_steps: Number of inference steps
+        max_sequence_length: Maximum sequence length for the model
+        seed: Random seed for reproducibility
+    """
+
+    height: Optional[int]
+    width: Optional[int]
+    guidance_scale: Optional[float]
+    num_inference_steps: Optional[int]
+    max_sequence_length: Optional[float]
+    seed: Optional[int]
 
 
 @dataclass
@@ -170,6 +237,7 @@ class FullConfig:
     compression_config: CompressionConfig
     dataset_config: DatasetConfig
     global_config: GlobalConfig
+    infer_config: InferenceConfig
 
 
 class SlimConfigParser:
@@ -182,7 +250,7 @@ class SlimConfigParser:
 
     def __init__(self):
         # Supported compression methods
-        self.supported_methods = ["PTQ", "QAT", "speculative_decoding"]
+        self.supported_methods = ["PTQ", "QAT", "Cache", "speculative_decoding"]
         # Supported quantization methods
         self.supported_quant_methods = [
             "fp8_static",
@@ -258,15 +326,31 @@ class SlimConfigParser:
 
             # Parse quantization config
             compression_conf.quantization = QuantizationConfig(**quant_dict)
+        elif compress_name == "Cache":
+            # Parse cache configuration
+            cache_dict = compression_dict.get("cache", {})
+            compression_conf.cache = CacheConfig(**cache_dict)
+        else:
+            raise ValueError(
+                f"Unsupported compression method: {compress_name}. "
+                f"Supported methods: {self.supported_methods}"
+            )
 
         # Global properties
         global_config = self._get_global_config(config_dict, model_conf, dataset_conf)
+
+        # Inference configuration
+        inference_conf = None
+        if "inference" in config_dict:
+            inference_dict = config_dict["inference"]
+            inference_conf = InferenceConfig(**inference_dict)
 
         return FullConfig(
             model_config=model_conf,
             compression_config=compression_conf,
             dataset_config=dataset_conf,
             global_config=global_config,
+            infer_config=inference_conf,
         )
 
     def _get_global_config(
@@ -283,12 +367,6 @@ class SlimConfigParser:
         """
         global_dict = config_dict.get("global", {})
         global_config = GlobalConfig(**global_dict)
-        if "hidden_size" not in global_dict:
-            global_config.set_model_hidden_size(model_conf.model_path)
-        if "model_type" not in global_dict:
-            global_config.set_model_arch_type(model_conf.model_path)
-        if dataset_conf:
-            global_config.set_max_seq_length(dataset_conf.max_seq_length)
         return global_config
 
     @staticmethod
@@ -334,6 +412,8 @@ def print_config(config, indent=0):
         hasattr(config, "model_config")
         and hasattr(config, "compression_config")
         and hasattr(config, "dataset_config")
+        and hasattr(config, "global_config")
+        and hasattr(config, "infer_config")
     ):
         print(f"{prefix}model:")
         print_config(config.model_config, next_indent)
@@ -344,6 +424,18 @@ def print_config(config, indent=0):
         print(f"{prefix}dataset:")
         if config.dataset_config:
             print_config(config.dataset_config, next_indent)
+        else:
+            print(f"{prefix}None")
+
+        print(f"{prefix}Global:")
+        if config.global_config:
+            print_config(config.global_config, next_indent)
+        else:
+            print(f"{prefix}None")
+
+        print(f"{prefix}Inference:")
+        if config.infer_config:
+            print_config(config.infer_config, next_indent)
         else:
             print(f"{prefix}None")
         return

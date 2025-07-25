@@ -19,22 +19,22 @@ from typing import Optional
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-from transformers import AutoModelForCausalLM
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from ..compressor.quant.core import QuantConfig
 from ..compressor.quant.modules import QDQModule
 from ..utils import common_prefix, print_info
 
+__all__ = ["BaseLLMModel", "BaseDiffusionModel"]
 
-class BaseModel(metaclass=ABCMeta):
+
+class BaseLLMModel(metaclass=ABCMeta):
     """
     Base class for model compression, providing common functionalities
     such as initialization, quantization configuration, and model handling.
     Args:
         model (torch.nn.Module, optional): the model to be compressed.
             If not provided, the model will be built from `model_path`.
-        modal_type (str, optional): type of the model, can be "LLM", "AIGC", or "TTS".
-        model_path (str, optional): path to the model to be loaded.
         deploy_backend (str, optional): deploy_backend for model compression,
             currently only supports "vllm".
     """
@@ -42,22 +42,39 @@ class BaseModel(metaclass=ABCMeta):
     def __init__(
         self,
         model: Optional[torch.nn.Module] = None,
-        modal_type: Optional[str] = "LLM",
-        model_path: Optional[str] = None,
         deploy_backend: Optional[str] = "vllm",
     ):
-        assert modal_type in ["LLM", "AIGC", "TTS"]
-        self.modal_type = modal_type
-        assert deploy_backend in ["vllm", "huggingface"]
+        assert deploy_backend in [
+            "vllm",
+            "huggingface",
+        ], f"Unsupported deploy backend {deploy_backend}"
         self.deploy_backend = deploy_backend
-        self.model = None
-        assert (
-            model_path is not None or model is not None
-        ), "Either model_path or model must be provided."
-        if model is None:
-            self.model = self.build_hf_model(model_path)
-        else:
-            self.model = model
+        self.model = model
+        self.tokenizer = None
+        self.modal_type = "LLM"
+
+    def from_pretrained(
+        self,
+        model_path,
+        torch_dtype="auto",
+        device_map="auto",
+        trust_remote_code=True,
+        low_cpu_mem_usage=True,
+        use_cache=False,
+    ):
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            torch_dtype=torch_dtype,
+            device_map=device_map,
+            trust_remote_code=trust_remote_code,
+            low_cpu_mem_usage=low_cpu_mem_usage,
+            use_cache=use_cache,
+        )
+
+        # Load tokenizer
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            model_path, trust_remote_code=trust_remote_code
+        )
 
     def init_ptq(self, slim_config):
         """
@@ -307,3 +324,44 @@ class BaseModel(metaclass=ABCMeta):
 
     def __getattr__(self, item):
         return super().__getattr__(item)
+
+
+class BaseDiffusionModel(metaclass=ABCMeta):
+    """
+    Base class for diffusion model compression, providing common functionalities
+    such as initialization, quantization configuration, and model handling.
+    Args:
+        model (torch.nn.Module, optional): the model to be compressed.
+            If not provided, the model will be built from `model_path`.
+        deploy_backend (str, optional): deploy_backend for model compression.
+    """
+
+    def __init__(
+        self,
+        model: Optional[torch.nn.Module] = None,
+        deploy_backend: Optional[str] = "torch",
+    ):
+        assert deploy_backend in [
+            "torch",
+            "tensorrt",
+        ], f"Unsupported deploy backend {deploy_backend}"
+        self.deploy_backend = deploy_backend
+        self.model = model
+        self.modal_type = "Diffusion"
+
+    @staticmethod
+    def from_pretrained(self, model_path, **kwargs):
+        """
+        Load a pretrained diffusion model.
+        Args:
+            model_path (str): Path to the pretrained model.
+        """
+        raise NotImplementedError("This method should be implemented in subclasses.")
+
+    @abstractmethod
+    def get_observer_layers(self):
+        pass
+
+    @abstractmethod
+    def get_save_func(self):
+        pass
