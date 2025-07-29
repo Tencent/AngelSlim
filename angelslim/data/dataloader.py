@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 from typing import Dict, Union
 
 from torch.utils.data import DataLoader
@@ -79,7 +80,7 @@ class DataLoaderFactory:
                 max_length=max_length,
                 num_samples=num_samples,
                 data_source=data_source,
-                is_hf_dataset=not isinstance(data_source, str),
+                is_hf_dataset=not os.path.isfile(data_source),
             )
         else:
             raise ValueError(f"Unsupported data type: {data_type}")

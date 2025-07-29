@@ -19,6 +19,8 @@ from typing import Dict, List, Union
 from PIL import Image
 from tqdm import tqdm
 from transformers import ProcessorMixin
+from datasets import load_dataset
+from qwen_vl_utils import process_vision_info
 
 from .base_dataset import BaseDataset
 
@@ -40,7 +42,7 @@ class MultiModalDataset(BaseDataset):
 
         if is_hf_dataset:
             self._load_hf_dataset(data_source, num_samples)
-        elif isinstance(data_source, str):
+        else:
             self._load_file_based_dataset(data_source, num_samples)
 
     def _load_file_based_dataset(self, data_path: str, num_samples: int):
@@ -74,8 +76,9 @@ class MultiModalDataset(BaseDataset):
                 self._process_and_append(messages)
                 line_count += 1
 
-    def _load_hf_dataset(self, dataset: Dict, num_samples: int):
+    def _load_hf_dataset(self, dataset: str, num_samples: int):
         """Load dataset from Hugging Face format"""
+        dataset = load_dataset(dataset, split = "test")
         total_samples = (
             min(num_samples, len(dataset["query"]))
             if num_samples > 0
@@ -105,22 +108,20 @@ class MultiModalDataset(BaseDataset):
         )
 
         # Extract vision info
-        image_paths, video_paths = self._extract_vision_info(messages)
+        image_inputs, video_inputs = process_vision_info(messages)
 
         # Process inputs
         inputs = self.processor(
             text=[text],
-            images=image_paths,
-            videos=video_paths,
+            images=image_inputs,
+            videos=video_inputs,
             padding="max_length",
             truncation=True,
             return_tensors="pt",
             max_length=self.max_length,
         )
 
-        # Move to device
-        inputs = {k: v.to(self.device) for k, v in inputs.items()}
-        inputs["labels"] = inputs["input_ids"].to(self.device)
+        inputs["labels"] = inputs["input_ids"]
 
         self.data.append(inputs)
 

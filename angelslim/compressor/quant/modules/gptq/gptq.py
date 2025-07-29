@@ -35,8 +35,11 @@ class GPTQ:
         super(GPTQ, self).__init__()
         self.model = model
         self.modal_type = self.model.modal_type
-        self.layers = self.model.model.model.layers
-        self.layers_block_name = "model.layers"
+        if self.modal_type == "VLM":
+            self.layers = self.model.model.model.language_model.layers
+        else:
+            self.layers = self.model.model.model.layers
+        self.layers_block_name = self.model.block_name
         self.quant_bits = self.model.quant_config.quant_bit
         self.group_size = self.model.quant_config.quant_algo_info["group_size"]
         self.ignore_layers = self.model.quant_config.quant_algo_info["ignore_layers"]
@@ -65,9 +68,9 @@ class GPTQ:
         )
         cache = {"i": 0}
 
-        self.model.model.model.embed_tokens = self.model.model.model.embed_tokens.to(
-            dev
-        )
+        pre_transformer_modules_dict = self.model.get_pre_transformer_modules()
+        for _, module in pre_transformer_modules_dict.items():
+            module.to(dev)
         layers[0] = layers[0].to(dev)
         layers[0] = Catcher(layers[0], inps, cache)
         # get modle input in dataloader
@@ -77,7 +80,8 @@ class GPTQ:
         print_info("cache['i']:{}".format(cache["i"]))
 
         layers[0] = layers[0].module
-        self.model.model.model.embed_tokens.cpu()
+        for _, module in pre_transformer_modules_dict.items():
+            module.cpu()
         layers[0].cpu()
         torch.cuda.empty_cache()
 
@@ -218,7 +222,6 @@ class GPTQ:
                 )
                 qlayers[name].pack(layers[name], scale, zero, g_idx)
                 qlayers[name].to(layer_device)
-
         print_info("Model packed.")
 
     def _convert_llm(self):
@@ -235,7 +238,7 @@ class GPTQ:
         Saves scales and inserts QDQ modules.
         """
         print_info("Start convert model...")
-        if self.modal_type in ["LLM", "TTS"]:
+        if self.modal_type in ["LLM", "VLM"]:
             self._convert_llm()
         elif self.modal_type == "AIGC":
             pass

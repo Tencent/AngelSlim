@@ -52,6 +52,7 @@ class BaseLLMModel(metaclass=ABCMeta):
         self.model = model
         self.tokenizer = None
         self.modal_type = "LLM"
+        self.pre_transformer_module_names = ["model.embed_tokens"]
 
     def from_pretrained(
         self,
@@ -231,6 +232,20 @@ class BaseLLMModel(metaclass=ABCMeta):
                 )
             )
         return res
+    
+    def get_pre_transformer_modules(self):
+        pre_transformer_modules_dict = {}
+        for full_name in self.pre_transformer_module_names:
+            current_module = self.model
+            parts = full_name.split('.')
+            for part in parts:
+                if not hasattr(current_module, part):
+                    current_module = None
+                    break
+                current_module = getattr(current_module, part)
+            if current_module is not None:
+                pre_transformer_modules_dict[full_name] = current_module
+        return pre_transformer_modules_dict
 
     def model_forward(self, dataloader, **kwargs):
         self.model.use_cache = False

@@ -14,12 +14,14 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from tqdm import tqdm
+from transformers import Qwen2_5_VLForConditionalGeneration, AutoTokenizer, AutoProcessor
 
 from ...compressor.quant.core import PTQVLMSaveVllmHF
 from ..base_model import BaseLLMModel
 from ..model_factory import SlimModelFactory
-
+from ...utils import print_info
 
 @SlimModelFactory.register
 class QwenVL(BaseLLMModel):
@@ -33,7 +35,41 @@ class QwenVL(BaseLLMModel):
             deploy_backend=deploy_backend,
         )
         self.modal_type = "VLM"
-        self.block_name = "model.layers"
+        self.block_name = "model.language_model.layers"
+        self.pre_transformer_module_names = [
+            "visual",
+            "language_model.embed_tokens", 
+            "language_model.norm",
+            "language_model.rotary_emb"
+        ]
+    
+    def from_pretrained(
+        self,
+        model_path,
+        torch_dtype="auto",
+        device_map="auto",
+        trust_remote_code=True,
+        low_cpu_mem_usage=True,
+        use_cache=False,
+    ):
+        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+            model_path,
+            torch_dtype=torch_dtype,
+            device_map=device_map,
+            trust_remote_code=trust_remote_code,
+            low_cpu_mem_usage=low_cpu_mem_usage,
+            use_cache=use_cache,
+        )
+
+        # Load tokenizer
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            model_path, trust_remote_code=trust_remote_code
+        )
+        
+        # Load processor
+        self.processor = AutoProcessor.from_pretrained(
+            model_path, trust_remote_code=trust_remote_code
+        )
 
     def get_observer_layers(self):
         names = [
@@ -60,13 +96,56 @@ class QwenVL(BaseLLMModel):
                         observer_layers_dict.pop(default_name)
         return observer_layers_dict
 
-    def model_forward(self, dataloader, nsamples=-1, **kwargs):
+    def model_forward(self, dataloader, **kwargs):
         self.model.use_cache = False
-        nsamples = len(dataloader) if nsamples == -1 else nsamples
-        for i in tqdm(range(len(dataloader[:nsamples])), desc="calibrating..."):
-            inp = dataloader[i]
+
+        calibrated_cnt = 0
+        if (
+            "gptq" in self.quant_config.quant_algo
+            or "awq" in self.quant_config.quant_algo
+        ):
+            device = "cuda:0"
+        else:
+            device = self.model.device
+        print_info(f"device is {device}")
+        if dataloader is not None:
             with torch.no_grad():
-                self.model(**inp)
+                for batch in tqdm(
+                    dataloader, desc="calibrating...", total=len(dataloader)
+                ):
+                    inputs = {
+                        "input_ids": batch["input_ids"].to(device),
+                        "attention_mask": batch["attention_mask"].to(device),
+                        "pixel_values": batch["pixel_values"].to(device),
+                        "image_grid_thw": batch["image_grid_thw"].to(device),
+                    }
+                    inputs = {k: v.to(device) for k, v in inputs.items()}
+                    inputs["use_cache"] = False
+                    labels = batch["labels"].to(device)
+                    attention_mask = batch["attention_mask"].to(device)
+                    try:
+                        outputs = self.model(**inputs)
+                        logits = outputs.logits.float()
+
+                        loss = F.cross_entropy(
+                            logits.view(-1, logits.size(-1)),
+                            labels.view(-1),
+                            reduction="none",
+                        )
+
+                        attention_mask = (
+                            attention_mask.view(-1).to(logits.device).float()
+                        )
+                        loss = loss * attention_mask
+                        avg_loss = loss.mean()
+                        ppl = torch.exp(avg_loss)
+
+                        print_info(f"ppl is : {ppl:.4f}")
+
+                        calibrated_cnt += 1
+                    except ValueError:
+                        calibrated_cnt += 1
+                        pass
 
     def get_save_func(self):
         if self.deploy_backend in ["vllm", "huggingface"]:
