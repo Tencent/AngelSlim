@@ -242,7 +242,7 @@ class AWQ:
             "group_size": self.group_size,
             "bits": self.quant_bits,
             "version": "gemm",
-            "modules_to_not_convert": ["visual"] if self.modal_type == "VLM" else None
+            "modules_to_not_convert": ["visual"] if self.modal_type == "VLM" else None,
         }
         self.model.model.config.save_pretrained(
             save_dir, state_dict=EmptyModule().state_dict()

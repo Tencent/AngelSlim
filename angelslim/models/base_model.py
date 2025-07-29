@@ -232,12 +232,12 @@ class BaseLLMModel(metaclass=ABCMeta):
                 )
             )
         return res
-    
+
     def get_pre_transformer_modules(self):
         pre_transformer_modules_dict = {}
         for full_name in self.pre_transformer_module_names:
             current_module = self.model
-            parts = full_name.split('.')
+            parts = full_name.split(".")
             for part in parts:
                 if not hasattr(current_module, part):
                     current_module = None

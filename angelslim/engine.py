@@ -137,7 +137,11 @@ class Engine:
         # Dynamically create dataloader by DataLoaderFactory
         self.dataloader = DataLoaderFactory.create_data_loader(
             data_type=data_type,
-            processor=self.slim_model.processor if self.series == "VLM" else self.slim_model.tokenizer,
+            processor=(
+                self.slim_model.processor
+                if self.series == "VLM"
+                else self.slim_model.tokenizer
+            ),
             device=self.slim_model.model.device,
             max_length=max_length,
             batch_size=batch_size,
@@ -218,7 +222,7 @@ class Engine:
 
         # Save quantized model
         self.compressor.save(save_path)
-        
+
         if self.series == "VLM":
             self.slim_model.processor.save_pretrained(save_path)
 

@@ -16,12 +16,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
-from transformers import Qwen2_5_VLForConditionalGeneration, AutoTokenizer, AutoProcessor
+from transformers import (
+    AutoProcessor,
+    AutoTokenizer,
+    Qwen2_5_VLForConditionalGeneration,
+)
 
 from ...compressor.quant.core import PTQVLMSaveVllmHF
+from ...utils import print_info
 from ..base_model import BaseLLMModel
 from ..model_factory import SlimModelFactory
-from ...utils import print_info
+
 
 @SlimModelFactory.register
 class QwenVL(BaseLLMModel):
@@ -38,11 +43,11 @@ class QwenVL(BaseLLMModel):
         self.block_name = "model.language_model.layers"
         self.pre_transformer_module_names = [
             "visual",
-            "language_model.embed_tokens", 
+            "language_model.embed_tokens",
             "language_model.norm",
-            "language_model.rotary_emb"
+            "language_model.rotary_emb",
         ]
-    
+
     def from_pretrained(
         self,
         model_path,
@@ -65,7 +70,7 @@ class QwenVL(BaseLLMModel):
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_path, trust_remote_code=trust_remote_code
         )
-        
+
         # Load processor
         self.processor = AutoProcessor.from_pretrained(
             model_path, trust_remote_code=trust_remote_code

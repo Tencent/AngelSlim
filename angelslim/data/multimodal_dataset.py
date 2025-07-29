@@ -16,11 +16,11 @@ import json
 import os
 from typing import Dict, List, Union
 
+from datasets import load_dataset
 from PIL import Image
+from qwen_vl_utils import process_vision_info
 from tqdm import tqdm
 from transformers import ProcessorMixin
-from datasets import load_dataset
-from qwen_vl_utils import process_vision_info
 
 from .base_dataset import BaseDataset
 
@@ -78,7 +78,7 @@ class MultiModalDataset(BaseDataset):
 
     def _load_hf_dataset(self, dataset: str, num_samples: int):
         """Load dataset from Hugging Face format"""
-        dataset = load_dataset(dataset, split = "test")
+        dataset = load_dataset(dataset, split="test")
         total_samples = (
             min(num_samples, len(dataset["query"]))
             if num_samples > 0
