@@ -5,7 +5,7 @@ global:
 # Simplified Configuration for LLM compression
 model:
   name: HunyuanMoE
-  model_path: Your/model/path
+  model_path: tencent/Hunyuan-A13B-Instruct
   trust_remote_code: true
   low_cpu_mem_usage: true
   use_cache: false
