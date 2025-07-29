@@ -1,9 +1,10 @@
 torch>=2.6.0
 torchvision>=0.21.0
-transformers>=4.51.3
+transformers>=4.52.0
 safetensors>=0.5.3
 diffusers
 numpy
 tqdm
 pyarrow
 threadpoolctl
+qwen_vl_utils
