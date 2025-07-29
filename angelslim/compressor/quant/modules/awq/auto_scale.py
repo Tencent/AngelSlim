@@ -169,31 +169,81 @@ class AutoLayerScale:
 
         if hasattr(module.mlp, "gate"):
             print_info("auto scale -> MoeAWQ")
-            # fc1
-            scales_list.append(
-                _auto_get_scale(
-                    layer_name="expert.gate_proj",
-                    prev_op=module.post_attention_layernorm,
-                    layers=[
-                        w
-                        for expert in module.mlp.experts
-                        for w in [expert.gate_proj, expert.up_proj]
-                    ],
-                    inp=input_feat["mlp"],
-                    module2inspect=module.mlp,
-                    cache=cache,
-                )
-            )
-            # fc2
-            for i, expert in enumerate(module.mlp.experts):
+            if self.model_type == "hunyuan_v1_moe":
+                # share_mlp fc1
                 scales_list.append(
                     _auto_get_scale(
-                        layer_name="mlp.down_proj",
-                        prev_op=expert.up_proj,
-                        layers=[expert.down_proj],
-                        inp=input_feat[f"mlp.experts.{i}.down_proj"].unsqueeze(0),
+                        layer_name="shared_mlp.gate_proj",
+                        prev_op=module.post_attention_layernorm,
+                        layers=[
+                            module.mlp.shared_mlp.gate_proj,
+                            module.mlp.shared_mlp.up_proj,
+                        ],
+                        inp=input_feat["mlp"],
+                        module2inspect=module.mlp,
+                        cache=cache,
                     )
                 )
+                # share_mlp fc2
+                scales_list.append(
+                    _auto_get_scale(
+                        layer_name="shared_mlp.down_proj",
+                        prev_op=module.mlp.shared_mlp.up_proj,
+                        layers=[module.mlp.shared_mlp.down_proj],
+                        inp=input_feat["mlp.shared_mlp.down_proj"],
+                    )
+                )
+                # fc1
+                scales_list.append(
+                    _auto_get_scale(
+                        layer_name="expert.gate_proj",
+                        prev_op=module.post_attention_layernorm,
+                        layers=[
+                            w
+                            for expert in module.mlp.experts
+                            for w in [expert.gate_proj, expert.up_proj]
+                        ],
+                        inp=input_feat["mlp"],
+                        module2inspect=module.mlp,
+                        cache=cache,
+                    )
+                )
+                # fc2
+                for i, expert in enumerate(module.mlp.experts):
+                    scales_list.append(
+                        _auto_get_scale(
+                            layer_name="mlp.down_proj",
+                            prev_op=expert.up_proj,
+                            layers=[expert.down_proj],
+                            inp=input_feat[f"mlp.experts.{i}.down_proj"],
+                        )
+                    )
+            else:
+                # fc1
+                scales_list.append(
+                    _auto_get_scale(
+                        layer_name="expert.gate_proj",
+                        prev_op=module.post_attention_layernorm,
+                        layers=[
+                            w
+                            for expert in module.mlp.experts
+                            for w in [expert.gate_proj, expert.up_proj]
+                        ],
+                        inp=input_feat["mlp"],
+                        module2inspect=module.mlp,
+                        cache=cache,
+                    )
+                )
+                # fc2
+                for i, expert in enumerate(module.mlp.experts):
+                    scales_list.append(
+                        _auto_get_scale(
+                            layer_name="mlp.down_proj",
+                            prev_op=expert.up_proj,
+                            layers=[expert.down_proj],
+                            inp=input_feat[f"mlp.experts.{i}.down_proj"].unsqueeze(0),
+                        )
+                    )
         else:
             print_info("auto scale -> DenseAWQ")
             # fc1

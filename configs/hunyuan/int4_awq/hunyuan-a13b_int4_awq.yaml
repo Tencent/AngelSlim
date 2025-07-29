@@ -1,6 +1,6 @@
 # Global configuration of pipeline
 global:
-  save_path: ./output_low
+  save_path: ./output
 
 # Simplified Configuration for LLM compression
 model:
@@ -16,12 +16,13 @@ model:
 compression:
   name: PTQ
   quantization:
-    name: fp8_static     # Supported: fp8_static, fp8_dynamic, int4_awq, int4_gptq
-    bits: 8                # Quantization bits (4/8)
-    low_memory: True  # Use less gpu/cpu memory
+    name: int4_awq     # Supported: fp8_static, fp8_dynamic, int4_awq, int4_gptq, int8_dynamic
+    bits: 4                # Quantization bits (4/8)
     quant_method:
-      weight: "per-tensor"
-      activation: "per-tensor"
+      weight: "per-group"
+      group_size: 128
+      zero_point: true
+      mse_range: false
     ignore_layers:         # Skip quantization for these layers
       - "lm_head"
       - "model.embed_tokens"
@@ -31,5 +32,5 @@ dataset:
   name: TextDataset
   data_path: ./dataset/sharegpt_gpt4/sharegpt_gpt4_256.jsonl
   max_seq_length: 8192
-  num_samples: 256
+  num_samples: 128
   batch_size: 1
