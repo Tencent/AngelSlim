@@ -1,0 +1,36 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output
+
+# Simplified Configuration for LLM compression
+model:
+  name: HunyuanMoE
+  model_path: Your/model/path
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: cpu
+
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    name: int4_awq     # Supported: fp8_static, fp8_dynamic, int4_awq, int4_gptq, int8_dynamic
+    bits: 4                # Quantization bits (4/8)
+    quant_method:
+      weight: "per-group"
+      group_size: 128
+      zero_point: true
+      mse_range: false
+    ignore_layers:         # Skip quantization for these layers
+      - "lm_head"
+      - "model.embed_tokens"
+
+# Dataset for calibration
+dataset:
+  name: TextDataset
+  data_path: ./dataset/sharegpt_gpt4/sharegpt_gpt4_256.jsonl
+  max_seq_length: 8192
+  num_samples: 128
+  batch_size: 1

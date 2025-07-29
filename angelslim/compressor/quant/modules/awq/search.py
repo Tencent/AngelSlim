@@ -46,11 +46,7 @@ class AWQSearch:
 
     def _get_out(self, layer_name, act, block, cache):
         if "qkv" in layer_name:
-            return block(
-                act,
-                attention_mask=cache["attention_mask"],
-                position_embeddings=cache["position_embeddings"],
-            )[0].squeeze(1)
+            return block(act, **cache)[0].squeeze(1)
         else:
             return block(act)[0].squeeze(1)
 
