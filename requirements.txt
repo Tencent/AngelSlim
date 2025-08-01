@@ -7,3 +7,5 @@ numpy
 tqdm
 pyarrow
 threadpoolctl
+tiktoken
+triton

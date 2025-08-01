@@ -15,10 +15,12 @@
 from .config import *  # noqa: F401 F403
 from .hook import DiTHook, PTQHook  # noqa: F401
 from .metrics import mse_loss, snr_loss  # noqa: F401
-from .packing_utils import dequantize_gemm  # noqa: F401
+from .packing_utils import dequantize_gemm, pack_weight_to_int8  # noqa: F401
 from .quant_func import *  # noqa: F401 F403
 from .sample_func import EMASampler, MultiStepSampler  # noqa: F401
+from .save import Deepseekv3HfPTQSave  # noqa: F401
 from .save import PTQPTMSave  # noqa: F401
+from .save import PTQSaveTRTLLM  # noqa: F401
 from .save import PTQSaveVllmHF  # noqa: F401
 from .save import PTQTorchSave  # noqa: F401
 from .save import PTQvLLMSaveHF  # noqa: F401

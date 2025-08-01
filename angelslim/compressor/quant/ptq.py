@@ -64,7 +64,7 @@ class PTQ:
                 mse_range=self.quant_model.quant_config.quant_algo_info["mse_range"],
                 observer_layer_classes=[nn.Linear],
             )
-        if "fp8" in self.quant_algo:
+        if "fp8" in self.quant_algo or "w4a8" in self.quant_algo:
             max_seq_length = self.quant_model.quant_config.max_seq_length
             hidden_size = self.quant_model.quant_config.hidden_size
             model_arch_type = self.quant_model.quant_config.model_arch_type
@@ -98,7 +98,7 @@ class PTQ:
             self.gptq.run(dataloader)
         elif "awq" in self.quant_algo:
             self.awq.run(dataloader)
-        elif "fp8" in self.quant_algo:
+        elif "fp8" in self.quant_algo or "w4a8" in self.quant_algo:
             self.fp8.run(dataloader)
         elif "int8" in self.quant_algo:
             self.int8.run(dataloader)

@@ -23,6 +23,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from ..compressor.quant.core import QuantConfig
 from ..compressor.quant.modules import QDQModule
+from ..tokenizer import TikTokenTokenizer
 from ..utils import common_prefix, print_info
 
 __all__ = ["BaseLLMModel", "BaseDiffusionModel"]
@@ -47,6 +48,7 @@ class BaseLLMModel(metaclass=ABCMeta):
         assert deploy_backend in [
             "vllm",
             "huggingface",
+            "trtllm",
         ], f"Unsupported deploy backend {deploy_backend}"
         self.deploy_backend = deploy_backend
         self.model = model
@@ -56,25 +58,58 @@ class BaseLLMModel(metaclass=ABCMeta):
     def from_pretrained(
         self,
         model_path,
+        model_name="Qwen",
+        load_type="bf16",
         torch_dtype="auto",
         device_map="auto",
         trust_remote_code=True,
         low_cpu_mem_usage=True,
         use_cache=False,
+        using_multi_nodes=False,
     ):
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_path,
-            torch_dtype=torch_dtype,
-            device_map=device_map,
-            trust_remote_code=trust_remote_code,
-            low_cpu_mem_usage=low_cpu_mem_usage,
-            use_cache=use_cache,
-        )
+        if model_name == "DeepSeek" and load_type == "fp8":
+            print_info("[Slim] Loading DeepSeek with fp8")
+            from transformers.models.deepseek_v3 import DeepseekV3Config
 
-        # Load tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            model_path, trust_remote_code=trust_remote_code
-        )
+            from .llm.modeling_deepseek import DeepseekV3ForCausalLM
+
+            config = DeepseekV3Config.from_pretrained(model_path)
+            if hasattr(config, "quantization_config"):
+                delattr(config, "quantization_config")
+            if hasattr(config, "use_cache"):
+                config.use_cache = False
+
+            self.model = DeepseekV3ForCausalLM.from_pretrained(
+                model_path,
+                config=config,
+                torch_dtype=torch_dtype,
+                device_map=device_map,
+                trust_remote_code=trust_remote_code,
+                low_cpu_mem_usage=low_cpu_mem_usage,
+                using_multi_nodes=using_multi_nodes,
+            )
+
+            # Load tokenizer
+            if config.model_type == "kimi_k2":
+                self.tokenizer = TikTokenTokenizer.from_pretrained(model_path)
+            elif config.model_type == "deepseek_v3":
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    model_path, trust_remote_code=trust_remote_code
+                )
+        else:
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_path,
+                torch_dtype=torch_dtype,
+                device_map=device_map,
+                trust_remote_code=trust_remote_code,
+                low_cpu_mem_usage=low_cpu_mem_usage,
+                use_cache=use_cache,
+            )
+
+            # Load tokenizer
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                model_path, trust_remote_code=trust_remote_code
+            )
 
     def init_ptq(self, slim_config):
         """

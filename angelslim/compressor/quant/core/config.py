@@ -136,6 +136,33 @@ class QuantConfig:
                 "ignore_layers": quantization_args.ignore_layers,
             }
             self.hidden_size = global_config.hidden_size
+        elif "w4a8" in self.quant_algo:
+            is_dynamic = "dynamic" if "dynamic" in self.quant_algo else "static"
+            assert (
+                is_dynamic or act_quant_method is not None
+            ), "[OpenSlim][Error] fp8_static need act_quant_method"
+            self.act_observer = (
+                ACT_OBSERVERS_CLASS[act_quant_method]
+                if "static" in is_dynamic
+                else None
+            )
+            self.weight_observer = WEIGHT_OBSERVERS_CLASS[weight_quant_method]
+            self.kv_cache_observer = None
+            group_size = (
+                128
+                if quantization_args.quant_method["group_size"] == -1
+                else quantization_args.quant_method["group_size"]
+            )
+            self.quant_algo_info = {
+                "w": f"int4_{weight_quant_method}",
+                "w_group_size": group_size,
+                "ignore_layers": quantization_args.ignore_layers,
+            }
+            if act_quant_method is not None:
+                self.quant_algo_info["a"] = f"fp8_{act_quant_method}-{is_dynamic}"
+            self.hidden_size = global_config.hidden_size
+            self.model_arch_type = global_config.model_arch_type
+            self.low_memory = config.quantization.low_memory
 
         if "smooth" in self.quant_helpers:
             self.smooth_alpha = quantization_args.smooth_alpha

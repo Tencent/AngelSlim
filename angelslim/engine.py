@@ -31,6 +31,7 @@ DEFAULT_COMPRESSION_CONFIG = {
     "int8_dynamic": default_compress_config.default_int8_dynamic_config(),
     "int4_awq": default_compress_config.default_int4_awq_config(),
     "int4_gptq": default_compress_config.default_int4_gptq_config(),
+    "w4a8": default_compress_config.default_w4a8_static_config(),
 }
 
 
@@ -57,6 +58,7 @@ class Engine:
         model=None,
         tokenizer=None,
         model_path=None,
+        load_type="bf16",
         torch_dtype="auto",
         device_map="auto",
         trust_remote_code=True,
@@ -64,6 +66,7 @@ class Engine:
         use_cache=False,
         cache_dir=None,
         deploy_backend="vllm",
+        using_multi_nodes=False,
     ) -> Any:
         """Load pretrained model and tokenizer
         Args:
@@ -73,6 +76,7 @@ class Engine:
             tokenizer (Any, optional): Preloaded tokenizer instance.
                 If model is set, tokenizer must be also set in LLM and VLM.
             model_path (str, optional): Path to the pretrained model.
+            load_type (str): Load type for the model.
             torch_dtype (str): Data type for the model weights.
             device_map (str): Device map for the model.
             trust_remote_code (bool): Whether to trust remote code.
@@ -80,6 +84,7 @@ class Engine:
             use_cache (bool): Whether to use cache during loading.
             cache_dir (str, optional): Directory to cache the model.
             deploy_backend (str): Backend for deployment, e.g., "torch", "vllm".
+            using_multi_nodes (bool): Whether to use multi-nodes for calibration.
         """
         assert model_name, "model_name must be specified."
         assert model_path, "model_path must be specified."
@@ -98,11 +103,14 @@ class Engine:
             else:
                 self.slim_model.from_pretrained(
                     model_path,
+                    model_name=model_name,
+                    load_type=load_type,
                     torch_dtype=torch_dtype,
                     device_map=device_map,
                     trust_remote_code=trust_remote_code,
                     low_cpu_mem_usage=low_cpu_mem_usage,
                     use_cache=use_cache,
+                    using_multi_nodes=using_multi_nodes,
                 )
                 self.model_path = model_path
         elif self.series == "Diffusion":

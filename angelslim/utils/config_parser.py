@@ -95,6 +95,7 @@ class ModelConfig:
     low_cpu_mem_usage: bool = field(default=True)
     use_cache: bool = field(default=False)
     cache_dir: Optional[str] = field(default=None)
+    load_type: str = field(default="bf16")
 
 
 @dataclass
@@ -258,6 +259,7 @@ class SlimConfigParser:
             "int4_awq",
             "int4_gptq",
             "int8_dynamic",
+            "w4a8",
         ]
         # Supported speculative decoding methods
         self.supported_speculative_decoding_methods = ["EAGLE", "EAGLE2", "EAGLE3"]
