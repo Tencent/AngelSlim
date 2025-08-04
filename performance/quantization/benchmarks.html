@@ -412,39 +412,47 @@ document.write(`
 <h1>量化benchmark<a class="headerlink" href="#benchmark" title="Link to this heading">#</a></h1>
 <section id="hunyuan-a13b-instruct">
 <h2>Hunyuan-A13B-Instruct<a class="headerlink" href="#hunyuan-a13b-instruct" title="Link to this heading">#</a></h2>
-<p>Hunyuan-A13B-Instruct的<code class="docutils literal notranslate"><span class="pre">BF16</span></code>、<code class="docutils literal notranslate"><span class="pre">FP8</span></code>、<code class="docutils literal notranslate"><span class="pre">INT4-GPTQ</span></code>在<code class="docutils literal notranslate"><span class="pre">AIME</span> <span class="pre">2024</span></code>、<code class="docutils literal notranslate"><span class="pre">GSM8K</span></code>、<code class="docutils literal notranslate"><span class="pre">BBH</span></code>、<code class="docutils literal notranslate"><span class="pre">DROP</span></code>上的评测结果如下：</p>
-<div class="pst-scrollable-table-container"><table class="table">
-<thead>
-<tr class="row-odd"><th class="head text-center"><p>Bench</p></th>
-<th class="head text-center"><p>Hunyuan-A13B-Instruct</p></th>
-<th class="head text-center"><p>Hunyuan-A13B-Instruct-FP8</p></th>
-<th class="head text-center"><p>Hunyuan-A13B-Instruct-Int4-GPTQ</p></th>
-</tr>
-</thead>
-<tbody>
-<tr class="row-even"><td class="text-center"><p>AIME 2024</p></td>
-<td class="text-center"><p>87.3</p></td>
-<td class="text-center"><p>86.7</p></td>
-<td class="text-center"><p>86.7</p></td>
-</tr>
-<tr class="row-odd"><td class="text-center"><p>GSM8K</p></td>
-<td class="text-center"><p>94.39</p></td>
-<td class="text-center"><p>94.01</p></td>
-<td class="text-center"><p>94.24</p></td>
-</tr>
-<tr class="row-even"><td class="text-center"><p>BBH</p></td>
-<td class="text-center"><p>89.1</p></td>
-<td class="text-center"><p>88.34</p></td>
-<td class="text-center"><p>87.91</p></td>
-</tr>
-<tr class="row-odd"><td class="text-center"><p>DROP</p></td>
-<td class="text-center"><p>91.1</p></td>
-<td class="text-center"><p>91.1</p></td>
-<td class="text-center"><p>91.05</p></td>
-</tr>
-</tbody>
+<p>Hunyuan-Instruct的<code class="docutils literal notranslate"><span class="pre">BF16</span></code>、<code class="docutils literal notranslate"><span class="pre">FP8</span></code>、<code class="docutils literal notranslate"><span class="pre">INT4-GPTQ</span></code>、<code class="docutils literal notranslate"><span class="pre">INT4-AWQ</span></code>在<code class="docutils literal notranslate"><span class="pre">OlympiadBench</span></code>、<code class="docutils literal notranslate"><span class="pre">AIME</span> <span class="pre">2024</span></code>、<code class="docutils literal notranslate"><span class="pre">DROP</span></code>、<code class="docutils literal notranslate"><span class="pre">GPQA-Diamond</span></code>上的评测结果如下：</p>
+<table>
+  <thead>
+    <tr><th>Model</th><th>Quantization</th><th>OlympiadBench</th><th>AIME 2024</th><th>DROP</th><th>GPQA-Diamond</th></tr>
+  </thead>
+  <tbody>
+    <tr><td rowspan="4">Hunyuan-A13B-Instruct</td>
+    <td>BF16</td><td>82.7</td><td>87.30</td><td>91.1</td><td>71.2</td></tr>
+    <tr><td>FP8-Static</td><td>83.0</td><td>86.7</td><td>91.1</td><td>-</td></tr>
+    <tr><td>Int4-GPTQ</td><td>82.7</td><td>86.7</td><td>91.1</td><td>-</td></tr>
+    <tr><td>Int4-AWQ</td><td>82.6</td><td>85.6</td><td>91.0</td><td>-</td></tr>
+  </tbody>
+  <tbody>
+    <tr><td rowspan="4">Hunyuan-7B-Instruct</td>
+    <td>BF16</td>          <td>76.5</td><td>81.1</td><td>85.9</td><td>60.1</td></tr>
+    <tr><td>FP8-Static</td><td>76.6</td><td>80.9</td><td>86.0</td><td>60.1</td></tr>
+    <tr><td>Int4-GPTQ</td><td>76.2</td><td>81.0</td><td>85.7</td><td>60.0</td></tr>
+    <tr><td>Int4-AWQ</td><td>76.4</td><td>80.9</td><td>85.9</td><td>60.1</td></tr>
+  </tbody>
+  <tbody>
+    <tr><td rowspan="4">Hunyuan-4B-Instruct</td>
+    <td>BF16</td>          <td>73.1</td><td>78.3</td><td>78.2</td><td>61.1</td></tr>
+    <tr><td>FP8-Static</td><td>73.1</td><td>76.6</td><td>78.3</td><td>60.2</td></tr>
+    <tr><td>Int4-GPTQ</td><td>72.9</td><td>-</td><td>78.1</td><td>58.1</td></tr>
+    <tr><td>Int4-AWQ</td><td>72.8</td><td>-</td><td>78.2</td><td>-</td></tr>
+  </tbody>
+  <tbody>
+    <tr><td rowspan="4">Hunyuan-1.8B-Instruct</td>
+    <td>BF16</td>          <td>63.4</td><td>56.7</td><td>76.7</td><td>47.2</td></tr>
+    <tr><td>FP8-Static</td><td>62.5</td><td>55.2</td><td>75.1</td><td>47.7</td></tr>
+    <tr><td>Int4-GPTQ</td><td>60.9</td><td>-</td><td>73.0</td><td>44.4</td></tr>
+    <tr><td>Int4-AWQ</td><td>61.7</td><td>-</td><td>71.7</td><td>43.6</td></tr>
+  </tbody>
+  <tbody>
+    <tr><td rowspan="4">Hunyuan-0.5B-Instruct</td>
+    <td>BF16</td>          <td>29.6</td><td>17.2</td><td>52.8</td><td>23.3</td></tr>
+    <tr><td>FP8-Static</td><td>29.6</td><td>17.2</td><td>51.6</td><td>22.5</td></tr>
+    <tr><td>Int4-GPTQ</td><td>26.8</td><td>-</td><td>50.9</td><td>23.3</td></tr>
+    <tr><td>Int4-AWQ</td><td>26.3</td><td>-</td><td>48.9</td><td>23.3</td></tr>
+  </tbody>
 </table>
-</div>
 </section>
 <section id="qwen3">
 <h2>Qwen3<a class="headerlink" href="#qwen3" title="Link to this heading">#</a></h2>
