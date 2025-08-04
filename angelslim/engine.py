@@ -223,13 +223,6 @@ class Engine:
         # Save quantized model
         self.compressor.save(save_path)
 
-        if self.series == "VLM":
-            self.slim_model.processor.save_pretrained(save_path)
-
-        if self.series in ["LLM", "VLM"]:
-            # Save tokenizer
-            self.slim_model.tokenizer.save_pretrained(save_path)
-
         # Save all config
         if config is not None:
             config_dict = asdict(config)

@@ -150,7 +150,7 @@ class QuantizationConfig:
     mse_range: bool = field(default=False)
     ignore_layers: List[str] = field(default_factory=list)
     quant_analyse: bool = field(default=False)
-
+    quant_vit: bool = field(default=False)
 
 @dataclass
 class CacheConfig:

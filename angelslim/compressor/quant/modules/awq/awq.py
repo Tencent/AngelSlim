@@ -43,6 +43,7 @@ class AWQ:
         observer_layer_classes=None,
         smooth_all_linears=False,
         merge_samples=False,
+        low_memory=False,
     ):
         """
         Args:
@@ -73,6 +74,7 @@ class AWQ:
         self.observer_layer_classes = observer_layer_classes
         self.smooth_all_linears = smooth_all_linears
         self.merge_samples = merge_samples
+        self.low_memory = low_memory
         self._init_linear_list_and_model_type()
         self.scale_function = AutoLayerScale(
             weight_bits=self.quant_bits,
@@ -81,6 +83,7 @@ class AWQ:
             merge_samples=merge_samples,
             model_type=self.model_arch_type,
             observer_layer_classes=observer_layer_classes,
+            low_memory=low_memory,
         )
         self.clip_function = AutoLayerClip(
             weight_bits=self.quant_bits,
@@ -155,8 +158,9 @@ class AWQ:
                 )
 
             layer = layers[i].to(dev)
-            outs = outs.to(dev)
-            self.inps = self.inps.to(dev)
+            if not self.low_memory:
+                outs = outs.to(dev)
+                self.inps = self.inps.to(dev)
             subset = self._find_layers(layer)
 
             if self.model_arch_type in ["qwen3_moe", "hunyuan_v1_moe"]:
@@ -188,8 +192,8 @@ class AWQ:
             for j in range(min(self.inps.shape[0], nsamples)):
                 with torch.no_grad():
                     outs[j, :, :] = layer(
-                        hidden_states=self.inps[j, :, :].unsqueeze(0), **layer_kwargs
-                    )[0].squeeze(1)
+                        hidden_states=self.inps[j, :, :].unsqueeze(0).to(dev), **layer_kwargs
+                    )[0].squeeze(1).to(self.inps.device)
 
             # remove duplicate
             def deduplicate_tensors(tensor_list):
@@ -267,10 +271,6 @@ class AWQ:
             save_dir, state_dict=EmptyModule().state_dict()
         )
 
-        # # Vision transformers have a processor
-        # if self.processor is not None:
-        #     self.processor.save_pretrained(save_dir)
-
         # Remove empty state dict
         default_paths = [
             f"{save_dir}/model.safetensors",
@@ -290,6 +290,12 @@ class AWQ:
         )
         self.model.model.config.torch_dtype = "float16"
         self.model.model.config.to_json_file(os.path.join(save_dir, "config.json"))
+       
+        # save processor and tokenizer
+        if self.modal_type == "VLM" and self.model.processor is not None:
+            self.model.processor.save_pretrained(save_dir)
+        if self.modal_type in ["LLM", "VLM"]:
+            self.model.tokenizer.save_pretrained(save_dir)
 
     def _find_layers(self, module, layers=None, name=""):
         if not layers:
@@ -309,7 +315,7 @@ class AWQ:
 
     def _apply_quant(self, module, named_linears: Dict[str, nn.Linear]):
         for name, linear_layer in named_linears.items():
-            if "mlp.gate" in name:
+            if "mlp.gate." in name:
                 continue
             # NOTE: small regression in perplexity if linear layer uses .cpu().float()
             linear_layer = linear_layer.to(get_best_device()).half()

@@ -238,6 +238,38 @@ Qwen3系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`、`INT8-Dynamic`、`IN
   </tbody>
 </table>
 
+#### Qwen2.5VL系列模型
+
+Qwen2.5VL系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`、`INT4-GPTQ`、`INT4-AWQ`在`MMMU_VAL`、`DocVQA_VAL`、`ChartQA_TEST`上的评测结果如下：
+
+<table>
+  <thead>
+    <tr><th>Model</th><th>Quantization</th><th>MMMU_VAL</th><th>MMLDocVQA_VALU</th><th>ChartQA_TEST</th></tr>
+  </thead>
+  <tbody>
+    <tr><td rowspan="5">Qwen2.5VL-3B</td><td>BF16</td><td>47.11</td><td>78.57</td><td>80.32</td></tr>
+    <tr><td>FP8-Static</td><td>47.33</td><td>79.34</td><td>79.68</td></tr>
+    <tr><td>FP8-Dynamic</td><td>45.99</td><td>46.93</td><td>38.29</td></tr>
+    <tr><td>INT4-GPTQ</td><td>46.56</td><td>77.20</td><td>78.96</td></tr>
+    <tr><td>INT4-AWQ</td><td>45.78</td><td>-</td><td>79.60</td></tr>
+   <tr><td rowspan="5">Qwen2.5VL-7B</td><td>BF16</td><td>45.44</td><td>89.71</td><td>84.64</td></tr>
+    <tr><td>FP8-Static</td><td>47.00</td><td>89.83</td><td>85.92</td></tr>
+    <tr><td>FP8-Dynamic</td><td>47.22</td><td>89.80</td><td>88.64</td></tr>
+    <tr><td>INT4-GPTQ</td><td>46.67</td><td>90.45</td><td>-</td></tr>
+    <tr><td>INT4-AWQ</td><td>45.67</td><td>89.28</td><td>-</td></tr>
+    <tr><td rowspan="5">Qwen2.5VL-32B</td><td>BF16</td><td>57.00</td><td>90.03</td><td>-</td></tr>
+    <tr><td>FP8-Static</td><td>57.00</td><td>89.88</td><td>-</td></tr>
+    <tr><td>FP8-Dynamic</td><td>56.44</td><td>89.88</td><td>-</td></tr>
+    <tr><td>INT4-GPTQ</td><td>55.22</td><td>89.80 </td><td>-</td></tr>
+    <tr><td>INT4-AWQ</td><td>55.22</td><td>90.30</td><td>-</td></tr>
+    <tr><td rowspan="5">Qwen2.5VL-72B</td><td>BF16</td><td>58.78</td><td>94.39</td><td>85.60</td></tr>
+    <tr><td>FP8-Static</td><td>57.89</td><td>94.41</td><td>85.84</td></tr>
+    <tr><td>FP8-Dynamic</td><td>58.67</td><td>94.38</td><td>85.60</td></tr>
+    <tr><td>INT4-GPTQ</td><td>57.56</td><td>94.46</td><td>86.48</td></tr>
+    <tr><td>INT4-AWQ</td><td>58.78</td><td>94.19</td><td>87.28</td></tr>
+  </tbody>
+</table>
+
 #### 其他模型
 
 其他模型的`BF16`、`FP8-Static`、`FP8-Dynamic`、`INT4-GPTQ`、`INT4-AWQ`在`CEVAL`、`MMLU`、`GSM8K`上的评测结果如下：

@@ -295,6 +295,12 @@ class GPTQ:
         )
         # self.model.model.config.torch_dtype = "float16"
         self.model.model.config.to_json_file(os.path.join(save_dir, "config.json"))
+        
+        # save processor and tokenizer
+        if self.modal_type == "VLM" and self.model.processor is not None:
+            self.model.processor.save_pretrained(save_dir)
+        if self.modal_type in ["LLM", "VLM"]:
+            self.model.tokenizer.save_pretrained(save_dir)
 
     def _recurse_setattr(self, module, name, value):
         """A function to recursively set attributes to a module."""

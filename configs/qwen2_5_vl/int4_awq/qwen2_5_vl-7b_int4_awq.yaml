@@ -24,7 +24,8 @@ compression:
       zero_point: true
       mse_range: false
     ignore_layers:         # Skip quantization for these layers
-      - "lm_head"
+      - "model.visual.patch_embed.proj"
+      - "model.lm_head"
       - "model.language_model.embed_tokens"
 
 # Dataset for calibration

@@ -15,7 +15,7 @@
 import torch
 from torch.nn import Linear
 
-from .....utils import print_info
+from .....utils import print_info, get_best_device
 from ...core import mse_loss, pseudo_quantize_tensor
 
 print_func = print_info
@@ -31,6 +31,7 @@ class AWQSearch:
         loss_function=mse_loss,
         merge_samples=True,
         observer_layer_classes=None,
+        low_memory=False
     ):
         """
         The implementation of AutoScale from AWQ(https://arxiv.org/pdf/2306.00978.pdf).
@@ -43,7 +44,8 @@ class AWQSearch:
         self.loss_function = loss_function
         self.merge_samples = merge_samples
         self.observer_layer_classes = observer_layer_classes
-
+        self.low_memory = low_memory
+        
     def _get_out(self, layer_name, act, block, cache):
         if "qkv" in layer_name:
             return block(act, **cache)[0].squeeze(1)
@@ -56,10 +58,12 @@ class AWQSearch:
         self, layer_name, act_input, act_abs_max, layers, block, cache, layer_count
     ):
         act = act_input
+        print_func("[awq search] act device: %s" % act.device)
         print_func("[awq search] search input of %s" % layer_name)
         best_error = float("inf")
         best_ratio = -1
         best_scales = None
+        dev = get_best_device()
         with torch.no_grad():
             if cache is not None:
                 origin_out = torch.ones_like(act)
@@ -78,8 +82,8 @@ class AWQSearch:
 
             for j in range(act.shape[0]):
                 origin_out[j, :, :] = self._get_out(
-                    layer_name, act[j, :, :].unsqueeze(0), block, cache
-                )
+                    layer_name, act[j, :, :].unsqueeze(0).to(dev), block, cache
+                ).to(act.device)
 
             org_w = []
             for layer in layers:
@@ -87,7 +91,7 @@ class AWQSearch:
 
             for ratio in range(self.n_grid):
                 ratio = ratio * 1 / self.n_grid
-                act_abs_max_tmp = act_abs_max.detach().clone()
+                act_abs_max_tmp = act_abs_max.detach().clone().to(dev)
                 scales = act_abs_max_tmp.pow(ratio).clamp(min=1e-4).view(-1)
                 scales = scales / (scales.max() * scales.min()).sqrt()
                 for layer in layers:
@@ -101,8 +105,8 @@ class AWQSearch:
                         layer.weight.data.copy_(quant_dequant_weight)
 
                 for j in range(act.shape[0]):
-                    new_act = act[j, :, :].unsqueeze(0) / scales
-                    new_out[j, :, :] = self._get_out(layer_name, new_act, block, cache)
+                    new_act = act[j, :, :].unsqueeze(0).to(dev) / scales
+                    new_out[j, :, :] = self._get_out(layer_name, new_act, block, cache).to(act.device)
 
                 loss = self.loss_function(origin_out, new_out).to(torch.float32)
 

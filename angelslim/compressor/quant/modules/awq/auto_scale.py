@@ -32,6 +32,7 @@ class AutoLayerScale:
         merge_samples=True,
         model_type="dense",
         observer_layer_classes=None,
+        low_memory=False,
     ):
         """
         The implementation from AWQ(https://arxiv.org/pdf/2306.00978.pdf).
@@ -46,6 +47,7 @@ class AutoLayerScale:
         self.model_type = model_type
         self.layer_count = 0
         self.observer_layer_classes = observer_layer_classes
+        self.low_memory = low_memory
         self.search_function = AWQSearch(
             n_grid=n_grid,
             bits_length=weight_bits,
@@ -53,6 +55,7 @@ class AutoLayerScale:
             group_size=group_size,
             merge_samples=merge_samples,
             observer_layer_classes=observer_layer_classes,
+            low_memory=low_memory,
         )
 
     def apply_scale(self, module, scales_list, input_feat_dict=None):
@@ -104,8 +107,8 @@ class AutoLayerScale:
             if module2inspect is None:
                 assert len(layers) == 1
                 module2inspect = layers[0]
-
-            inp = inp.to(prev_op.weight.device)
+            if not self.low_memory:
+                inp = inp.to(prev_op.weight.device)
             if self.merge_samples:
                 act_abs_max = (
                     inp.abs().reshape(-1, inp.shape[-1]).mean(0).reshape(1, -1)

@@ -42,7 +42,10 @@ class FP8:
         super(FP8, self).__init__()
         self.model = model
         self.modal_type = self.model.modal_type
-        self.layers = self.model.model.model.layers
+        if self.modal_type == "VLM":
+            self.layers = self.model.model.model.language_model.layers
+        else:
+            self.layers = self.model.model.model.layers
         self.quant_bits = self.model.quant_config.quant_bit
         self.seq_length = seq_length
         self.hidden_size = hidden_size

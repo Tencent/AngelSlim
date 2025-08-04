@@ -41,6 +41,7 @@ class QwenVL(BaseLLMModel):
         )
         self.modal_type = "VLM"
         self.block_name = "model.language_model.layers"
+        self.vit_block_name = "model.visual.blocks"
         self.pre_transformer_module_names = [
             "visual",
             "language_model.embed_tokens",
@@ -78,22 +79,32 @@ class QwenVL(BaseLLMModel):
 
     def get_observer_layers(self):
         names = [
-            "self_attn.k_proj",
-            "self_attn.v_proj",
-            "self_attn.q_proj",
-            "self_attn.o_proj",
-            "mlp.up_proj",
-            "mlp.gate_proj",
-            "mlp.down_proj",
+            "k_proj",
+            "v_proj",
+            "q_proj",
+            "o_proj",
+            "up_proj",
+            "gate_proj",
+            "down_proj",
         ]
+
+        if hasattr(self.quant_config, "quant_vit") and self.quant_config.quant_vit:
+            vit_names = ["qkv", "proj"]
+            names.extend(vit_names)
+
         obs_layers = [nn.Linear]
-        observer_layers_dict = self.find_layers(self.model, layers=obs_layers)
-        observer_layers_dict = {
-            k: v
-            for k, v in observer_layers_dict.items()
-            if k.startswith(self.block_name)
-            and k.split(".")[-2] + "." + k.split(".")[-1] in names
-        }
+        observer_layers_dict = {}
+        layers_dict = self.find_layers(self.model, layers=obs_layers)
+
+        ignore_layers = self.skip_layer_names()
+        for name, module in layers_dict.items():
+            block_condition = name.startswith(self.block_name) or (hasattr(self.quant_config, "quant_vit") and self.quant_config.quant_vit and name.startswith(self.vit_block_name))
+            if block_condition and name.split(".")[-1] in names:
+                observer_layers_dict[name] = module
+            else:
+                ignore_layers.append(name)
+        self.quant_config.quant_algo_info["ignore_layers"] = ignore_layers
+
         if self.quant_config.custom_observe_layers_names != "default":
             for custom_observe_name in self.quant_config.custom_observe_layers_names:
                 for default_name in observer_layers_dict.keys():
