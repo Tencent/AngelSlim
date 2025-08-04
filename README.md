@@ -31,14 +31,12 @@
 - [技术交流](#技术交流)
 
 ## 📣最新进展
-
-- [25/08/04] 我们支持了`Hunyuan 0.5B/1.8B/4B/7B`模型的FP8、INT4量化权重。我们还开源了`Hunyuan 1.8B/4B/7B`系列模型的Eagle3权重。
+- [25/08/04] 我们支持了`Hunyuan 0.5B/1.8B/4B/7B`模型和多模态模型`Qwen2.5VL 3B/7B/32B/72B`的FP8、INT4量化。我们还开源了`Hunyuan 1.8B/4B/7B`系列模型的Eagle3权重。
 - [25/07/04] 我们支持了`Hunyuan/Qwen2.5/Qwen3/DeepSeek-R1-Distill-Qwen`等模型的量化，包含INT8、FP8、INT4等算法。
 我们还开源了`Qwen3`系列模型的Eagle3权重。
 
 Coming soon：
 - [ ] DeepSeek-R1的W4A8量化支持
-- [ ] 多模态Qwen-VL模型的量化支持
 - [ ] 投机采样新算法发布
 
 ## 🌟主要特性
