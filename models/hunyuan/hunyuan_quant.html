@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>混元A13B模型量化 &#8212; AngelSlim</title>
+    <title>混元模型量化 &#8212; AngelSlim</title>
   
   
   
@@ -182,7 +182,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">模型支持</span></p>
 <ul class="current nav bd-sidenav">
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">混元A13B模型量化</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">混元模型量化</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../deepseek/deepseek_quant.html">DeepSeek量化</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../qwen/qwen_quant.html">Qwen量化</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../flux/flux_cache.html">FLUX Cache加速</a></li>
@@ -384,7 +384,7 @@ document.write(`
               
 
 <div id="jb-print-docs-body" class="onlyprint">
-    <h1>混元A13B模型量化</h1>
+    <h1>混元模型量化</h1>
     <!-- Table of contents -->
     <div id="print-main-content">
         <div id="jb-print-toc">
@@ -395,15 +395,21 @@ document.write(`
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#fp8">FP8量化</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">配置</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">FP8量化</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">部署</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">配置</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">FP8量化</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">部署</a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#gptq">GPTQ量化</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">配置</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">配置</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#int4-gptq">INT4-GPTQ量化</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">部署</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">部署</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#awq">AWQ量化</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">配置</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#int4-awq">INT4-AWQ量化</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id8">部署</a></li>
 </ul>
 </li>
 </ul>
@@ -417,15 +423,15 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="a13b">
-<span id="hunyuan"></span><h1>混元A13B模型量化<a class="headerlink" href="#a13b" title="Link to this heading">#</a></h1>
-<p>混元A13B模型主要采用FP8-Static和Int4-GPTQ两种方案进行模型压缩</p>
+  <section id="hunyuan">
+<span id="id1"></span><h1>混元模型量化<a class="headerlink" href="#hunyuan" title="Link to this heading">#</a></h1>
+<p>混元模型主要采用 FP8、Int4-GPTQ、Int4-AWQ 三种方案进行模型压缩</p>
 <section id="fp8">
 <h2>FP8量化<a class="headerlink" href="#fp8" title="Link to this heading">#</a></h2>
-<p>FP8量化采用8位浮点格式，通过少量校准数据（无需训练）预先确定全局缩放因子，将模型权重与激活值永久转换为FP8格式，提升推理效率并降低部署门槛。</p>
-<p>您可以量化<code class="docutils literal notranslate"><span class="pre">AngelSlim/configs/hunyuan</span></code>下面带有fp8_static字段的模型类型，你也可以直接下载我们量化完成的开源模型使用：#TODO [hflink]</p>
-<section id="id1">
-<h3>配置<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
+<p>FP8 量化采用 8 位浮点格式，通过少量校准数据（无需训练）预先确定全局缩放因子，将模型权重与激活值永久转换为FP8格式，提升推理效率并降低部署门槛。</p>
+<p>您可以量化<code class="docutils literal notranslate"><span class="pre">AngelSlim/configs/hunyuan</span></code>下面带有fp8字段的模型类型，你也可以直接下载我们量化完成的开源模型使用：<a class="reference external" href="https://huggingface.co/collections/tencent/hunyuan-dense-model-6890632cda26b19119c9c5e7">Hunyuan</a></p>
+<section id="id2">
+<h3>配置<a class="headerlink" href="#id2" title="Link to this heading">#</a></h3>
 <p>FP8 <code class="docutils literal notranslate"><span class="pre">confg.yaml</span></code>文件参数配置，您可以参考<code class="docutils literal notranslate"><span class="pre">config/hunyuan/fp8_static</span></code>路径下的文件，下面是参数信息介绍。</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">name</span></code>：压缩策略，选填量化<code class="docutils literal notranslate"><span class="pre">quantization</span></code>。</p></li>
@@ -435,15 +441,15 @@ document.write(`
 <li><p><code class="docutils literal notranslate"><span class="pre">quantization.ignore_layers</span></code>：指定模型中不需要量化的层。</p></li>
 </ul>
 </section>
-<section id="id2">
-<h3>FP8量化<a class="headerlink" href="#id2" title="Link to this heading">#</a></h3>
-<p>您可以通过下面代码启动FP8量化流程</p>
+<section id="id3">
+<h3>FP8量化<a class="headerlink" href="#id3" title="Link to this heading">#</a></h3>
+<p>您可以通过下面代码启动 FP8 量化流程</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/hunyuan/fp8_static/hunyuan_a13b_fp8_static.yaml
 </pre></div>
 </div>
 </section>
-<section id="id3">
-<h3>部署<a class="headerlink" href="#id3" title="Link to this heading">#</a></h3>
+<section id="id4">
+<h3>部署<a class="headerlink" href="#id4" title="Link to this heading">#</a></h3>
 <p>要使用 vLLM 运行 FP8 模型，您可以修改<code class="docutils literal notranslate"><span class="pre">AngelSlim/deploy/run_vllm.sh</span></code>中的<code class="docutils literal notranslate"><span class="pre">MODEL_PATH</span></code>字段后通过以下命令使用：</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>AngelSlim/deploy
 sh<span class="w"> </span>run_vllm.sh
@@ -453,10 +459,10 @@ sh<span class="w"> </span>run_vllm.sh
 </section>
 <section id="gptq">
 <h2>GPTQ量化<a class="headerlink" href="#gptq" title="Link to this heading">#</a></h2>
-<p>Int4-GPTQ算法实现Int4-weight-only量化，该算法逐层处理模型权重，利用少量校准数据最小化量化后的权重重构误差，通过近似Hessian逆矩阵的优化过程逐层调整权重。流程无需重新训练模型，仅需少量校准数据即可量化权重，提升推理效率并降低部署门槛。</p>
-<p>您可以量化<code class="docutils literal notranslate"><span class="pre">AngelSlim/configs/hunyuan</span></code>下面带有gptq字段的模型类型，你也可以直接下载我们量化完成的开源模型使用：#TODO [hflink]</p>
-<section id="id4">
-<h3>配置<a class="headerlink" href="#id4" title="Link to this heading">#</a></h3>
+<p>Int4-GPTQ 算法实现 Int4-weight-only 量化，该算法逐层处理模型权重，利用少量校准数据最小化量化后的权重重构误差，通过近似Hessian逆矩阵的优化过程逐层调整权重。流程无需重新训练模型，仅需少量校准数据即可量化权重，提升推理效率并降低部署门槛。</p>
+<p>您可以量化<code class="docutils literal notranslate"><span class="pre">AngelSlim/configs/hunyuan</span></code>下面带有gptq字段的模型类型，你也可以直接下载我们量化完成的开源模型使用：<a class="reference external" href="https://huggingface.co/collections/tencent/hunyuan-dense-model-6890632cda26b19119c9c5e7">Hunyuan</a></p>
+<section id="id5">
+<h3>配置<a class="headerlink" href="#id5" title="Link to this heading">#</a></h3>
 <p>GPTQ <code class="docutils literal notranslate"><span class="pre">confg.yaml</span></code>文件参数配置，您可以参考<code class="docutils literal notranslate"><span class="pre">config/hunyuan/int4_gptq</span></code>路径下的文件，下面是参数信息介绍。</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">name</span></code>：压缩策略，选填量化<code class="docutils literal notranslate"><span class="pre">quantization</span></code>。</p></li>
@@ -469,14 +475,47 @@ sh<span class="w"> </span>run_vllm.sh
 </section>
 <section id="int4-gptq">
 <h3>INT4-GPTQ量化<a class="headerlink" href="#int4-gptq" title="Link to this heading">#</a></h3>
-<p>您可以通过下面代码启动GPTQ量化流程</p>
+<p>您可以通过下面代码启动 GPTQ 量化流程</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/hunyuan/int4_gptq/hunyuan_a13b_int4_gptq.yaml
 </pre></div>
 </div>
 </section>
-<section id="id5">
-<h3>部署<a class="headerlink" href="#id5" title="Link to this heading">#</a></h3>
+<section id="id6">
+<h3>部署<a class="headerlink" href="#id6" title="Link to this heading">#</a></h3>
 <p>要使用 vLLM 运行 GPTQ 模型，您可以修改<code class="docutils literal notranslate"><span class="pre">AngelSlim/deploy/run_vllm.sh</span></code>中的<code class="docutils literal notranslate"><span class="pre">MODEL_PATH</span></code>字段后通过以下命令使用：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>AngelSlim/deploy
+sh<span class="w"> </span>run_vllm.sh
+</pre></div>
+</div>
+</section>
+</section>
+<section id="awq">
+<h2>AWQ量化<a class="headerlink" href="#awq" title="Link to this heading">#</a></h2>
+<p>Int4-AWQ 算法实现 Int4-weight-only 量化，算法通过少量校准数据（无需训练）统计激活值的幅度，对每个权重通道计算一个缩放系数s，放大重要权重的数值范围，使其在量化时保留更多信息。流程无需重新训练模型，仅需少量校准数据即可确定缩放系数，适合快速部署。</p>
+<p>您可以量化<code class="docutils literal notranslate"><span class="pre">AngelSlim/configs</span></code>下面带有awq字段的模型类型，你也可以直接下载我们量化完成的开源模型使用：<a class="reference external" href="https://huggingface.co/collections/tencent/hunyuan-dense-model-6890632cda26b19119c9c5e7">Hunyuan</a></p>
+<section id="id7">
+<h3>配置<a class="headerlink" href="#id7" title="Link to this heading">#</a></h3>
+<p>AWQ <code class="docutils literal notranslate"><span class="pre">confg.yaml</span></code>文件参数配置，您可以参考<code class="docutils literal notranslate"><span class="pre">config/hunyuan/int4_awq</span></code>路径下的文件，下面是参数信息介绍。</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">name</span></code>：压缩策略，选填量化<code class="docutils literal notranslate"><span class="pre">quantization</span></code>。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.name</span></code>：压缩算法选填<code class="docutils literal notranslate"><span class="pre">int4_awq</span></code>。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.bits</span></code>：量化比特数，目前支持4bit和8bit。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.quant_method</span></code>：主要指定权重和激活的量化粒度，AWQ为<code class="docutils literal notranslate"><span class="pre">per-group</span></code>等。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.quant_method.group_size</span></code>：对整个权重矩阵量化时的每一组的channel的大小，通常为128和64。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.quant_method.zero_point</span></code>：是否使用非对称量化，推荐设置<code class="docutils literal notranslate"><span class="pre">true</span></code>开启。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.quant_method.mse_range</span></code>：是否开启AWQ中的自动clip权重功能，推荐设置<code class="docutils literal notranslate"><span class="pre">false</span></code>。</p></li>
+</ul>
+</section>
+<section id="int4-awq">
+<h3>INT4-AWQ量化<a class="headerlink" href="#int4-awq" title="Link to this heading">#</a></h3>
+<p>您可以通过下面代码启动 AWQ 量化流程</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/hunyuan/int4_awq/hunyuan_a13b_int4_awq.yaml
+</pre></div>
+</div>
+</section>
+<section id="id8">
+<h3>部署<a class="headerlink" href="#id8" title="Link to this heading">#</a></h3>
+<p>要使用 vLLM 运行 AWQ 模型，您可以修改<code class="docutils literal notranslate"><span class="pre">AngelSlim/deploy/run_vllm.sh</span></code>中的<code class="docutils literal notranslate"><span class="pre">MODEL_PATH</span></code>字段后通过以下命令使用：</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>AngelSlim/deploy
 sh<span class="w"> </span>run_vllm.sh
 </pre></div>
@@ -531,15 +570,21 @@ sh<span class="w"> </span>run_vllm.sh
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#fp8">FP8量化</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">配置</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">FP8量化</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">部署</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">配置</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">FP8量化</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">部署</a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#gptq">GPTQ量化</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">配置</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">配置</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#int4-gptq">INT4-GPTQ量化</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">部署</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">部署</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#awq">AWQ量化</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">配置</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#int4-awq">INT4-AWQ量化</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id8">部署</a></li>
 </ul>
 </li>
 </ul>
