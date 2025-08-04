@@ -304,7 +304,7 @@ class AWQ:
 
     def _apply_quant(self, module, named_linears: Dict[str, nn.Linear]):
         for name, linear_layer in named_linears.items():
-            if "mlp.gate" in name:
+            if "mlp.gate." in name:
                 continue
             # NOTE: small regression in perplexity if linear layer uses .cpu().float()
             linear_layer = linear_layer.to(get_best_device()).half()
