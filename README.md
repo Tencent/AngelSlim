@@ -54,7 +54,7 @@ Coming soon：
 
 | 模型名      | FP8-Dynamic       | FP8-Static        | INT8-Dynamic | INT4-GPTQ         | INT4-AWQ          |
 | ---------- | ----------------- | ----------------- | ----------------- | ----------------- | ----------------- |
-| [Hunyuan-Dense](https://huggingface.co/tencent/Hunyuan-7B-Instruct)   |      ✅           |         ✅           | ✅           |    ✅               |         ✅           |
+| [Hunyuan-Dense](https://huggingface.co/collections/tencent/hunyuan-dense-model-6890632cda26b19119c9c5e7)   |      ✅           |         ✅           | ✅           |    ✅               |         ✅           |
 | [Hunyuan-MoE](https://huggingface.co/collections/tencent/hunyuan-a13b-685ec38e5b46321e3ea7c4be)   |      ✅           |         ✅           | ✅           |    ✅               |         ✅           |
 | [Qwen3-Dense](https://huggingface.co/collections/AngelSlim/qwen3-quant-68652e26da31740739d154f8)               |      ✅           |         ✅           | ✅           |    ✅               |         ✅           |
 | [Qwen3-MoE](https://huggingface.co/collections/AngelSlim/qwen3-quant-68652e26da31740739d154f8)            |      ✅           |         ✅           | ✅           |     ✅             |        ✅            |
