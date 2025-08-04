@@ -66,14 +66,14 @@ Currently supports the following LLMs, including Hunyuan-Dense, Hunyuan-MoE, Qwe
 #### Eagle3
 The Eagle3 weights for the Qwen3 series model are now available.
 
-| Qwen3     |          | Hunyuan     |         |
-| ----------| -------- |----------|-------- |
-| [Qwen3-1.7B](https://huggingface.co/AngelSlim/Qwen3-1.7B_eagle3)    |      ✅  |[Hunyuan-1.8B-Instruct](https://huggingface.co/AngelSlim/Hunyuan-1.8B-Instruct_eagle3)    |      ✅  |
-| [Qwen3-4B](https://huggingface.co/AngelSlim/Qwen3-4B_eagle3)        |      ✅           |[Hunyuan-4B-Instruct](https://huggingface.co/AngelSlim/Hunyuan-4B-Instruct_eagle3)        |      ✅  |
-| [Qwen3-8B](https://huggingface.co/AngelSlim/Qwen3-8B_eagle3)        |      ✅           |[Hunyuan-7B-Instruct](https://huggingface.co/AngelSlim/Hunyuan-7B-Instruct_eagle3)        |       ✅  |
-| [Qwen3-14B](https://huggingface.co/AngelSlim/Qwen3-14B_eagle3)      |      ✅           |
-| [Qwen3-32B](https://huggingface.co/AngelSlim/Qwen3-32B_eagle3)      |      ✅           |
-| [Qwen3-30B-A3B](https://huggingface.co/AngelSlim/Qwen3-a3B_eagle3)  |      ✅           |
+| Qwen3  Models   | Hunyuan Models     |
+| ----------|----------|
+| ✅ [Qwen3-1.7B](https://huggingface.co/AngelSlim/Qwen3-1.7B_eagle3)    |✅ [Hunyuan-1.8B-Instruct](https://huggingface.co/AngelSlim/Hunyuan-1.8B-Instruct_eagle3)    |
+| ✅ [Qwen3-4B](https://huggingface.co/AngelSlim/Qwen3-4B_eagle3)        |✅ [Hunyuan-4B-Instruct](https://huggingface.co/AngelSlim/Hunyuan-4B-Instruct_eagle3)        |
+| ✅ [Qwen3-8B](https://huggingface.co/AngelSlim/Qwen3-8B_eagle3)        |✅ [Hunyuan-7B-Instruct](https://huggingface.co/AngelSlim/Hunyuan-7B-Instruct_eagle3)        |
+| ✅ [Qwen3-14B](https://huggingface.co/AngelSlim/Qwen3-14B_eagle3)      |
+| ✅ [Qwen3-32B](https://huggingface.co/AngelSlim/Qwen3-32B_eagle3)      |
+| ✅ [Qwen3-30B-A3B](https://huggingface.co/AngelSlim/Qwen3-a3B_eagle3)  |
 
 ## 🛎️How to Use
 
