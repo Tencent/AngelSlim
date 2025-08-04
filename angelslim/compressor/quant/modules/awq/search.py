@@ -15,7 +15,7 @@
 import torch
 from torch.nn import Linear
 
-from .....utils import print_info, get_best_device
+from .....utils import get_best_device, print_info
 from ...core import mse_loss, pseudo_quantize_tensor
 
 print_func = print_info
@@ -31,7 +31,7 @@ class AWQSearch:
         loss_function=mse_loss,
         merge_samples=True,
         observer_layer_classes=None,
-        low_memory=False
+        low_memory=False,
     ):
         """
         The implementation of AutoScale from AWQ(https://arxiv.org/pdf/2306.00978.pdf).
@@ -45,7 +45,7 @@ class AWQSearch:
         self.merge_samples = merge_samples
         self.observer_layer_classes = observer_layer_classes
         self.low_memory = low_memory
-        
+
     def _get_out(self, layer_name, act, block, cache):
         if "qkv" in layer_name:
             return block(act, **cache)[0].squeeze(1)
@@ -106,7 +106,9 @@ class AWQSearch:
 
                 for j in range(act.shape[0]):
                     new_act = act[j, :, :].unsqueeze(0).to(dev) / scales
-                    new_out[j, :, :] = self._get_out(layer_name, new_act, block, cache).to(act.device)
+                    new_out[j, :, :] = self._get_out(
+                        layer_name, new_act, block, cache
+                    ).to(act.device)
 
                 loss = self.loss_function(origin_out, new_out).to(torch.float32)
 

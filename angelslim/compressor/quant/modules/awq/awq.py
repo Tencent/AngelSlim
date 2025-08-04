@@ -191,9 +191,14 @@ class AWQ:
             # being hook
             for j in range(min(self.inps.shape[0], nsamples)):
                 with torch.no_grad():
-                    outs[j, :, :] = layer(
-                        hidden_states=self.inps[j, :, :].unsqueeze(0).to(dev), **layer_kwargs
-                    )[0].squeeze(1).to(self.inps.device)
+                    outs[j, :, :] = (
+                        layer(
+                            hidden_states=self.inps[j, :, :].unsqueeze(0).to(dev),
+                            **layer_kwargs,
+                        )[0]
+                        .squeeze(1)
+                        .to(self.inps.device)
+                    )
 
             # remove duplicate
             def deduplicate_tensors(tensor_list):
@@ -290,7 +295,7 @@ class AWQ:
         )
         self.model.model.config.torch_dtype = "float16"
         self.model.model.config.to_json_file(os.path.join(save_dir, "config.json"))
-       
+
         # save processor and tokenizer
         if self.modal_type == "VLM" and self.model.processor is not None:
             self.model.processor.save_pretrained(save_dir)

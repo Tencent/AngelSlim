@@ -98,7 +98,11 @@ class QwenVL(BaseLLMModel):
 
         ignore_layers = self.skip_layer_names()
         for name, module in layers_dict.items():
-            block_condition = name.startswith(self.block_name) or (hasattr(self.quant_config, "quant_vit") and self.quant_config.quant_vit and name.startswith(self.vit_block_name))
+            block_condition = name.startswith(self.block_name) or (
+                hasattr(self.quant_config, "quant_vit")
+                and self.quant_config.quant_vit
+                and name.startswith(self.vit_block_name)
+            )
             if block_condition and name.split(".")[-1] in names:
                 observer_layers_dict[name] = module
             else:

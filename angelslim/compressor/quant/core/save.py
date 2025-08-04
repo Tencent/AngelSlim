@@ -72,7 +72,7 @@ class PTQVLMSaveVllmHF(PTQSaveBase):
     def save(self, save_path):
         a_quant_algo = self.quant_model.quant_config.quant_algo_info["a"]
         ignored_layers = self.quant_model.skip_layer_names()
-        
+
         static_q_dict = {
             "quantization_config": {
                 "quant_method": "fp8",
@@ -177,6 +177,7 @@ class PTQSaveVllmHF(PTQSaveBase):
             json.dump(trtllm_config, f, indent=4)
 
         self.quant_model.tokenizer.save_pretrained(save_path)
+
 
 class PTQTorchSave(PTQSaveBase):
     def __init__(self, quant_model):

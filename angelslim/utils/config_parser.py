@@ -152,6 +152,7 @@ class QuantizationConfig:
     quant_analyse: bool = field(default=False)
     quant_vit: bool = field(default=False)
 
+
 @dataclass
 class CacheConfig:
     """
