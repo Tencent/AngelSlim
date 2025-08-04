@@ -7,6 +7,8 @@
 其中全部数据都是在单张H20上使用pytorch推理获得。
 
 ## 快速测试
+
+### SGLang
 目前sglang已经支持Qwen3-8B/14B/30B-A3B模型的eagle3部署，你可以选择使用sglang作为推理后端快速验证Eagle3模型的加速效果。
 在已经安装sglang的环境中使用以下命令可以快速启动一个兼容Openai的服务，然后即可以通过本地端口进行请求了。
 - 启动兼容OpenAI格式的API服务
@@ -29,6 +31,7 @@
     - `EAGLE3_MODEL_PATH`为Eagle3模型路径或在huggingface上的名字;
 
 
+### vLLM
 目前vllm已经支持Hunyuan-1.8B-Instruct/4B-Instruct/7B-Instruct模型的eagle3部署，你可以选择使用vllm作为推理后端快速验证Eagle3模型的加速效果。
 在已经安装正确的[vllm commit](https://github.com/vllm-project/vllm/pull/22080) 的环境中使用以下命令可以快速启动一个兼容Openai的服务，然后即可以通过本地端口进行请求了。
 - 启动兼容OpenAI格式的API服务

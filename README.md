@@ -62,7 +62,7 @@ Coming soon：
 | [QwQ](https://huggingface.co/collections/AngelSlim/qwen3-quant-68652e26da31740739d154f8) |      ✅           |         ✅           |       ✅             | ✅           |       ✅            |
 
 ### 投机采样
-目前已开源Qwen3系列模型的Eagle3权重。
+目前已开源Qwen3和Hunyuan系列模型的Eagle3权重。
 
 | 模型名     |      Eagle3       |
 | ----------| ----------------- |
@@ -72,6 +72,15 @@ Coming soon：
 | [Qwen3-14B](https://huggingface.co/AngelSlim/Qwen3-14B_eagle3)      |      ✅           |
 | [Qwen3-32B](https://huggingface.co/AngelSlim/Qwen3-32B_eagle3)      |      ✅           |
 | [Qwen3-30B-A3B](https://huggingface.co/AngelSlim/Qwen3-a3B_eagle3)  |      ✅           |
+
+| 模型名     |      Eagle3       |
+| ----------| ----------------- |
+| [Hunyuan-1.8B-Instruct](https://huggingface.co/AngelSlim/Hunyuan-1.8B-Instruct_eagle3)    |      ✅           |
+| [Hunyuan-4B-Instruct](https://huggingface.co/AngelSlim/Hunyuan-4B-Instruct_eagle3)        |      ✅           |
+| [Hunyuan-7B-Instruct](https://huggingface.co/AngelSlim/Hunyuan-7B-Instruct_eagle3)        |      ✅           |
+
+
+
 
 ## 🛎️如何使用
 
