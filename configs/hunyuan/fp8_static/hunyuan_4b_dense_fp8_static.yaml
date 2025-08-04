@@ -5,7 +5,7 @@ global:
 # Simplified Configuration for LLM compression
 model:
   name: HunyuanDense
-  model_path: tencent/Hunyuan-7B-Instruct
+  model_path: tencent/Hunyuan-4B-Instruct
   trust_remote_code: true
   low_cpu_mem_usage: true
   use_cache: false
@@ -16,7 +16,7 @@ model:
 compression:
   name: PTQ
   quantization:
-    name: fp8_dynamic     # Supported: fp8_static, fp8_dynamic, int4_awq, int4_gptq
+    name: fp8_static     # Supported: fp8_static, fp8_dynamic, int4_awq, int4_gptq
     bits: 8                # Quantization bits (4/8)
     quant_method:
       weight: "per-tensor"
@@ -24,3 +24,11 @@ compression:
     ignore_layers:         # Skip quantization for these layers
       - "lm_head"
       - "model.embed_tokens"
+
+# Dataset for calibration
+dataset:
+  name: TextDataset
+  data_path: ./dataset/sharegpt_gpt4/sharegpt_gpt4_256.jsonl
+  max_seq_length: 4096
+  num_samples: 256
+  batch_size: 1

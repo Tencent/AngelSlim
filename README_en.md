@@ -32,7 +32,7 @@ Dedicated to building a more intuitive, comprehensive, and efficient LLMs compre
 
 ## 📣Latest Updates
 
-- [25/08/04] We now support quantization for `Hunyuan 0.5B/1.8B/4B/7B` , including `INT8/FP8/INT4` algorithms. We also opensource `Hunyuan 0.5B/1.8B/4B/7B` series Eagle3 model weight.
+- [25/08/04] We now support quantization for `Hunyuan 0.5B/1.8B/4B/7B` , including `INT8/FP8/INT4` algorithms. We also opensource `Hunyuan 1.8B/4B/7B` series Eagle3 model weight.
 - [25/07/04] We now support quantization for `Hunyuan/Qwen2.5/Qwen3/DeepSeek-R1-Distill-Qwen` and other models, including `INT8/FP8/INT4` algorithms. We also opensource `Qwen3` series Eagle3 model weight.
 
 Coming soon:
