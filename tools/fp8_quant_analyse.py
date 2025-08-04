@@ -51,12 +51,12 @@ if __name__ == "__main__":
         type=str,
         required=True,
         choices=["act", "weight"],
-        help="选择 'activation', 'weight'",
+        help="choice 'activation', 'weight'",
     )
     global_args, remaining_args = global_parser.parse_known_args()
 
     parser = argparse.ArgumentParser(
-        description=f"分支 {global_args.analyse_type} 的参数"
+        description=f"branch {global_args.analyse_type} args"
     )
     if global_args.analyse_type == "act":
         parser.add_argument("--model-path", type=str, help="Fp8 path", required=True)
