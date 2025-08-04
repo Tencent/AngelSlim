@@ -28,5 +28,18 @@
     - `TARGET_MODEL_PATH_OR_NAME`为本地路径或模型在huggingface上的名字;
     - `EAGLE3_MODEL_PATH`为Eagle3模型路径或在huggingface上的名字;
 
+
+目前vllm已经支持Hunyuan-1.8B-Instruct/4B-Instruct/7B-Instruct模型的eagle3部署，你可以选择使用vllm作为推理后端快速验证Eagle3模型的加速效果。
+在已经安装正确的[vllm commit](https://github.com/vllm-project/vllm/pull/22080) 的环境中使用以下命令可以快速启动一个兼容Openai的服务，然后即可以通过本地端口进行请求了。
+- 启动兼容OpenAI格式的API服务
+
+    ```shell
+    python3 -m vllm.entrypoints.openai.api_server --tensor-parallel-size 1 \
+        --port 8000 \
+        --speculative_config '{"model": "AngelSlim/Hunyuan-1.8B-Instruct_eagle3", "method" : "eagle3", "draft_tensor_parallel_size" : 1,  "num_speculative_tokens": 2}' --trust-remote-code \
+        --model  tencent/Hunyuan-1.8B-Instruct 
+    ```
+但是由于vllm最新版本Eagle3并不支持tree attention, 因此推理验证时为chain-base推理模式。
+
 ## 训练及创新
 Comming soon.
