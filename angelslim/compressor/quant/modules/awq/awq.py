@@ -159,7 +159,7 @@ class AWQ:
             self.inps = self.inps.to(dev)
             subset = self._find_layers(layer)
 
-            if self.model_arch_type == "qwen3_moe":
+            if self.model_arch_type in ["qwen3_moe", "hunyuan_v1_moe"]:
                 subset = {
                     **subset,
                     "mlp": layer.mlp,
@@ -190,6 +190,25 @@ class AWQ:
                     outs[j, :, :] = layer(
                         hidden_states=self.inps[j, :, :].unsqueeze(0), **layer_kwargs
                     )[0].squeeze(1)
+
+            # remove duplicate
+            def deduplicate_tensors(tensor_list):
+                unique_tensors = []
+                assert len(tensor_list) % 2 == 0
+                for i in range(int(len(tensor_list) / 2)):
+                    if torch.equal(tensor_list[i * 2], tensor_list[i * 2 + 1]):
+                        unique_tensors.append(tensor_list[i * 2])
+                    else:
+                        raise ValueError
+                for tensor in tensor_list:
+                    if not any(torch.equal(tensor, t) for t in unique_tensors):
+                        unique_tensors.append(tensor)
+                return unique_tensors
+
+            for k, v in input_feat.items():
+                if len(v) > nsamples:
+                    print_info(f"Warning: repetition hook {k}")
+                    input_feat[k] = deduplicate_tensors(v)
 
             print_info("HOOK Step{}".format(j))
             for h in handles:
@@ -290,6 +309,8 @@ class AWQ:
 
     def _apply_quant(self, module, named_linears: Dict[str, nn.Linear]):
         for name, linear_layer in named_linears.items():
+            if "mlp.gate" in name:
+                continue
             # NOTE: small regression in perplexity if linear layer uses .cpu().float()
             linear_layer = linear_layer.to(get_best_device()).half()
 
