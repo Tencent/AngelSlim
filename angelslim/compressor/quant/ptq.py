@@ -63,6 +63,7 @@ class PTQ:
                 model_arch_type=model_arch_type,
                 mse_range=self.quant_model.quant_config.quant_algo_info["mse_range"],
                 observer_layer_classes=[nn.Linear],
+                low_memory=self.quant_model.quant_config.low_memory,
             )
         if "fp8" in self.quant_algo:
             max_seq_length = self.quant_model.quant_config.max_seq_length

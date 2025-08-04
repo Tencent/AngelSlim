@@ -71,6 +71,7 @@ class PTQVLMSaveVllmHF(PTQSaveBase):
 
     def save(self, save_path):
         a_quant_algo = self.quant_model.quant_config.quant_algo_info["a"]
+        ignored_layers = self.quant_model.skip_layer_names()
 
         static_q_dict = {
             "quantization_config": {
@@ -78,7 +79,7 @@ class PTQVLMSaveVllmHF(PTQSaveBase):
                 "activation_scheme": (
                     "dynamic" if "dynamic" in a_quant_algo else "static"
                 ),
-                "ignored_layers": ["visual.patch_embed.proj", "lm_head"],
+                "ignored_layers": ignored_layers,
             }
         }
         self.quant_model.get_model().config.update(static_q_dict)
@@ -93,6 +94,8 @@ class PTQVLMSaveVllmHF(PTQSaveBase):
                     )
 
         self.quant_model.get_model().save_pretrained(save_path)
+        self.quant_model.processor.save_pretrained(save_path)
+        self.quant_model.tokenizer.save_pretrained(save_path)
 
 
 class PTQSaveVllmHF(PTQSaveBase):
@@ -172,6 +175,8 @@ class PTQSaveVllmHF(PTQSaveBase):
 
         with open(os.path.join(save_path, "hf_quant_config.json"), "w") as f:
             json.dump(trtllm_config, f, indent=4)
+
+        self.quant_model.tokenizer.save_pretrained(save_path)
 
 
 class PTQTorchSave(PTQSaveBase):

@@ -1,0 +1,37 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output
+
+# Simplified Configuration for LLM compression
+model:
+  name: QwenVL
+  model_path: Qwen/Qwen2.5-VL-72B-Instruct
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: cpu
+
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    name: int4_awq     # Supported: fp8_static, fp8_dynamic, int4_awq, int4_gptq
+    bits: 4                # Quantization bits (4/8)
+    low_memory: True
+    quant_method:
+      weight: "per-group"
+      group_size: 128
+      zero_point: true
+      mse_range: false
+    ignore_layers:         # Skip quantization for these layers
+      - "lm_head"
+      - "model.language_model.embed_tokens"
+
+# Dataset for calibration
+dataset:
+  name: MultiModalDataset
+  data_path: HuggingFaceM4/ChartQA
+  max_seq_length: 4096
+  num_samples: 128
+  batch_size: 1

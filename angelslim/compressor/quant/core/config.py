@@ -84,6 +84,7 @@ class QuantConfig:
             self.model_arch_type = global_config.model_arch_type
             self.low_memory = config.quantization.low_memory
             self.quant_analyse = config.quantization.quant_analyse
+            self.quant_vit = config.quantization.quant_vit
         elif "int8" in self.quant_algo:
             is_dynamic = "dynamic" if "dynamic" in self.quant_algo else "static"
             assert (
@@ -122,6 +123,7 @@ class QuantConfig:
             }
             self.hidden_size = global_config.hidden_size
             self.model_arch_type = global_config.model_arch_type
+            self.low_memory = config.quantization.low_memory
         elif "int4_gptq" in self.quant_algo:
             self.act_observer = None
             self.weight_observer = None
