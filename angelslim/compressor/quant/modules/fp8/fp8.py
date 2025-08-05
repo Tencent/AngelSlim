@@ -13,6 +13,8 @@
 # limitations under the License.
 
 
+import gc
+
 import torch
 import torch.nn as nn
 
@@ -52,6 +54,7 @@ class FP8:
         self.model_arch_type = model_arch_type
         self.low_memory = low_memory
         self.dtype = torch.bfloat16
+        torch.set_default_dtype(self.dtype)
         self.scales_dict = {}
         self.inps = None
 
@@ -77,8 +80,8 @@ class FP8:
             model_module.eval()
         layers = self.layers
         dev = "cpu"
-        nsamples = len(dataloader)
-        print(f"nsamples:{nsamples}")
+        nsamples = len(dataloader) * dataloader.batch_size
+        print_info(f"nsamples:{nsamples}")
         self.inps = torch.zeros(
             (int(nsamples), self.seq_length, self.hidden_size),
             device=dev,
@@ -104,42 +107,41 @@ class FP8:
                     )
                     for item in v
                 )
+            if isinstance(v, torch.Tensor):
+                layer_kwargs[k] = v.to(dev)
 
         print_info("cache['i']:{}".format(cache["i"]))
         print_info(len(layers))
         layers[0] = layers[0].module
         print_info(self.inps.shape)
-        outs = torch.zeros_like(self.inps)
         # begin the FP8 process
         print_info("Ready.")
         layers = layers.cpu()
-        torch.cuda.empty_cache()
-
-        outs = outs.to("cpu")
         self.inps = self.inps.to("cpu")
-        for i in range(len(layers)):
-            if torch.cuda.is_available():
-                print_info(
-                    f"GPU Memory: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB"
-                )
+        bs = dataloader.batch_size
 
-            layer = layers[i].to(dev)
-            outs = outs.to(dev)
-            self.inps = self.inps.to(dev)
-            # being hook
-            for j in range(min(self.inps.shape[0], nsamples)):
+        for i in range(0, nsamples, bs):
+            inps = self.inps[i : i + bs, :, :].to(dev)
+            outs = torch.zeros_like(inps).to(dev)
+            for j in range(len(layers)):
+                layer = layers[j].to(dev)
                 with torch.no_grad():
-                    outs[j, :, :] = layer(
-                        hidden_states=self.inps[j, :, :].unsqueeze(0), **layer_kwargs
-                    )[0].squeeze(1)
+                    outs = layer(hidden_states=inps, **layer_kwargs)
+                    if isinstance(outs, tuple):
+                        outs = outs[0].squeeze(1)
 
-            print_info("HOOK Step{}".format(j))
+                if torch.cuda.is_available():
+                    print_info(
+                        f"GPU Memory: {torch.cuda.memory_reserved() / 1024 ** 2:.2f} MB"
+                    )
+                # Clear GPU memory
+                torch.cuda.empty_cache()
 
-            # Clear GPU memory
-            torch.cuda.empty_cache()
-
-            layers[i] = layers[i].cpu()
-            layer = layer.cpu()
-            torch.cuda.empty_cache()
-            self.inps, outs = outs, self.inps
-            print_info("FP8 end layer {}\n".format(i))
+                layers[j] = layers[j].cpu()
+                inps, outs = outs, inps
+                print_info("FP8 end layer {}\n".format(j))
+            print_info("FP8 end batch {}\n".format(i // bs))
+        del inps, outs
+        self.inps = None
+        gc.collect()
+        torch.cuda.empty_cache()

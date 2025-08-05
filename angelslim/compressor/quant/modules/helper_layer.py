@@ -25,7 +25,9 @@ from ....utils import get_best_device
 from ..core import (
     QuantConfig,
     dequantize_gemm,
+    fake_quant_dequant,
     gemm_fp8,
+    pack_weight_to_int8,
     quantize_activation_per_tensor_fp8,
     quantize_weight_int,
     quantize_weight_per_tensor_fp8,
@@ -566,15 +568,33 @@ class QDQModule(torch.nn.Module):
         weight: torch.nn.Parameter,
         weight_scale: torch.nn.Parameter,
         bias: torch.nn.Parameter,
+        group_size: int = 128,
         input_scale: Optional[torch.nn.Parameter] = None,
         output_scale: Optional[torch.nn.Parameter] = None,
     ):
         super().__init__()
         self.quant_algo = quant_algo
         if "fp8" in quant_algo:
-            quant_weight, weight_scale = quantize_weight_per_tensor_fp8(
-                weight, weight_scale
-            )
+            if "w4a8" in self.quant_algo:
+                tensor_max_value = weight_scale.clone()
+                tensor_wise_scale = tensor_max_value.max() / 448.0
+                quant_weight, _ = quantize_weight_per_tensor_fp8(
+                    weight, tensor_wise_scale
+                )
+                new_weight_bf16 = quant_weight.to(torch.bfloat16) * tensor_wise_scale
+
+                new_weight_bf16_qdq = fake_quant_dequant(
+                    new_weight_bf16, method="groupwise", bits=4, group_size=group_size
+                )
+                quant_weight, _ = quantize_weight_int(
+                    new_weight_bf16_qdq, tensor_max_value, bits=4
+                )
+                quant_weight = pack_weight_to_int8(quant_weight)
+                del new_weight_bf16_qdq, new_weight_bf16
+            else:
+                quant_weight, weight_scale = quantize_weight_per_tensor_fp8(
+                    weight, weight_scale
+                )
         elif "int8" in self.quant_algo:
             quant_weight, weight_scale = quantize_weight_int(
                 weight, weight_scale, bits=8
@@ -582,7 +602,10 @@ class QDQModule(torch.nn.Module):
         else:
             raise ValueError(f"Unsupported quantization algorithm: {self.quant_algo}")
 
-        self.weight = torch.nn.Parameter(quant_weight, requires_grad=False)
+        if "w4a8" in self.quant_algo:
+            self.qweight = torch.nn.Parameter(quant_weight, requires_grad=False)
+        else:
+            self.weight = torch.nn.Parameter(quant_weight, requires_grad=False)
         weight_scale = weight_scale.view(-1) if weight_scale.ndim == 0 else weight_scale
         self.weight_scale = torch.nn.Parameter(weight_scale, requires_grad=False)
         self.bias = bias

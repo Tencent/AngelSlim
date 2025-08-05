@@ -31,6 +31,7 @@ DEFAULT_COMPRESSION_CONFIG = {
     "int8_dynamic": default_compress_config.default_int8_dynamic_config(),
     "int4_awq": default_compress_config.default_int4_awq_config(),
     "int4_gptq": default_compress_config.default_int4_gptq_config(),
+    "w4a8_fp8": default_compress_config.default_w4a8_fp8_static_config(),
 }
 
 
@@ -64,6 +65,7 @@ class Engine:
         use_cache=False,
         cache_dir=None,
         deploy_backend="vllm",
+        using_multi_nodes=False,
     ) -> Any:
         """Load pretrained model and tokenizer
         Args:
@@ -80,6 +82,7 @@ class Engine:
             use_cache (bool): Whether to use cache during loading.
             cache_dir (str, optional): Directory to cache the model.
             deploy_backend (str): Backend for deployment, e.g., "torch", "vllm".
+            using_multi_nodes (bool): Whether to use multi-nodes for calibration.
         """
         assert model_name, "model_name must be specified."
         assert model_path, "model_path must be specified."
@@ -103,6 +106,7 @@ class Engine:
                     trust_remote_code=trust_remote_code,
                     low_cpu_mem_usage=low_cpu_mem_usage,
                     use_cache=use_cache,
+                    using_multi_nodes=using_multi_nodes,
                 )
                 self.model_path = model_path
         elif self.series == "Diffusion":

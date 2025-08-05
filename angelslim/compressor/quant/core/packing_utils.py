@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy as np
 import torch
 
 AWQ_ORDER = [0, 2, 4, 6, 1, 3, 5, 7]
@@ -115,3 +116,21 @@ def dequantize_gemm(qweight, qzeros, scales, bits, group_size):
     iweight = (iweight - izeros) * scales
 
     return iweight
+
+
+def pack_weight_to_int8(weight):
+    weight = weight.t().contiguous().cpu()
+    weight = weight.to(torch.float32).numpy().astype(np.int8)
+
+    i = 0
+    row = 0
+    packed_weight = np.zeros((weight.shape[0] // 2, weight.shape[1]), dtype=np.int8)
+    while row < packed_weight.shape[0]:
+        for j in range(i, i + (8 // 4)):
+            packed_weight[row] |= (weight[j] & 0x0F) << (4 * (j - i))
+        i += 8 // 4
+        row += 1
+
+    packed_weight = packed_weight.astype(np.int8)
+    packed_weight = torch.from_numpy(packed_weight).t().contiguous()
+    return packed_weight

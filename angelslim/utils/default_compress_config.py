@@ -126,3 +126,27 @@ def default_int4_awq_config() -> dict:
             ),
         ),
     }
+
+
+def default_w4a8_fp8_static_config() -> dict:
+    """
+    Returns a default configuration dictionary for model compression.
+
+    This configuration includes global settings and specific compression parameters.
+    """
+    return {
+        "global_config": GlobalConfig(),
+        "compress_config": CompressionConfig(
+            name="PTQ",
+            quantization=QuantizationConfig(
+                name="w4a8_fp8",
+                bits=4,
+                quant_method={
+                    "weight": "per-group",
+                    "group_size": 128,
+                    "activation": "per-tensor",
+                },
+                ignore_layers=["lm_head", "model.embed_tokens"],
+            ),
+        ),
+    }
