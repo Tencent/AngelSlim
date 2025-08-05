@@ -31,12 +31,12 @@
 - [技术交流](#技术交流)
 
 ## 📣最新进展
+- [25/08/06] 我们支持了`DeepSeek-R1-0528`和`Kimi-K2`模型的`FP8-Static`、`W4A8-FP8`量化。我们开源了`DeepSeek-R1-0528`模型的`W4A8-FP8`权重。
 - [25/08/04] 我们支持了`Hunyuan 0.5B/1.8B/4B/7B`模型和多模态模型`Qwen2.5VL 3B/7B/32B/72B`的FP8、INT4量化。我们还开源了`Hunyuan 1.8B/4B/7B`系列模型的Eagle3权重。
 - [25/07/04] 我们支持了`Hunyuan/Qwen2.5/Qwen3/DeepSeek-R1-Distill-Qwen`等模型的量化，包含INT8、FP8、INT4等算法。
 我们还开源了`Qwen3`系列模型的Eagle3权重。
 
 Coming soon：
-- [ ] DeepSeek-R1的W4A8量化支持
 - [ ] 投机采样新算法发布
 
 ## 🌟主要特性
@@ -309,6 +309,34 @@ Qwen2.5VL系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`、`INT4-GPTQ`、`I
     <tr><td>INT4-AWQ</td><td>58.78</td><td>94.19</td><td>87.28</td></tr>
   </tbody>
 </table>
+
+#### DeepSeek系列模型
+
+DeepSeek-R1-0528模型的`FP8-Block-Wise`、`W4A8-FP8`在`GPQA Diamond`、`AIME 2024`、`SimpleQA`、`LiveCodeBench`上的评测结果如下：
+
+<table>
+  <thead>
+    <tr><th>Model</th><th>Quantization</th><th>GPQA Diamond</th><th>AIME 2024</th><th>SimpleQA</th><th>LiveCodeBench</th></tr>
+  </thead>
+  <tbody>
+    <tr><td rowspan="6">DeepSeek-R1-0528</td><td>FP8-Block-Wise</td><td>78.28</td><td>88.67</td><td>27.8</td><td>77.1</td></tr>
+    <tr><td>W4A8-FP8</td><td>77.37</td><td>88.67</td><td>26.83</td><td>78.86</td></tr>
+  </tbody>
+</table>
+
+> **备注**：
+> - 以上评测结果使用TRT-LLM框架部署测试5次求平均
+> - 评测时使用的超参如下:
+> ```json
+>{
+>  "top_k": 20,
+>  "top_p": 0.6,
+>  "temperature": 0.7,
+>  "output_seq_len": 32768,
+>  "max_input_seq_len": 16384
+>}
+>```
+
 
 #### 其他模型
 

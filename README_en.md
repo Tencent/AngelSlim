@@ -32,12 +32,11 @@ Dedicated to building a more intuitive, comprehensive, and efficient LLMs compre
 
 ## 📣Latest Updates
 
+- [25/08/06] We now support quantization for `DeepSeek-R1-0528` and `Kimi-K2`, including `FP8-Static` and `W4A8-FP8` algorithms. We opensource `W4A8-FP8` weight of `DeepSeek-R1-0528`.
 - [25/08/04] We now support quantization for `Hunyuan 0.5B/1.8B/4B/7B` and multimodal model `Qwen2.5VL 3B/7B/32B/72B`, including `FP8/INT4` algorithms. We also opensource `Hunyuan 1.8B/4B/7B` series Eagle3 model weight.
 - [25/07/04] We now support quantization for `Hunyuan/Qwen2.5/Qwen3/DeepSeek-R1-Distill-Qwen` and other models, including `INT8/FP8/INT4` algorithms. We also opensource `Qwen3` series Eagle3 model weight.
 
 Coming soon:
-
-- [ ] Support W4A8 quantization for DeepSeek-R1.
 - [ ] Release of new algorithm for speculative sampling.
 
 ## 🌟Key Features
@@ -308,6 +307,33 @@ Benchmark results for Qwen2.5VL series models with `BF16`、`FP8-Static`、`FP8-
     <tr><td>INT4-AWQ</td><td>58.78</td><td>94.19</td><td>87.28</td></tr>
   </tbody>
 </table>
+
+#### DeepSeek Series Models
+
+Benchmark results for DeepSeek-R1-0528 series models with `FP8-Block-Wise` and `W4A8-FP8` quantization algorithms on datasets including `GPQA Diamond`、`AIME 2024`、`SimpleQA` and `LiveCodeBench`：
+
+<table>
+  <thead>
+    <tr><th>Model</th><th>Quantization</th><th>GPQA Diamond</th><th>AIME 2024</th><th>SimpleQA</th><th>LiveCodeBench</th></tr>
+  </thead>
+  <tbody>
+    <tr><td rowspan="6">DeepSeek-R1-0528</td><td>FP8-Block-Wise</td><td>78.28</td><td>88.67</td><td>27.8</td><td>77.1</td></tr>
+    <tr><td>W4A8-FP8</td><td>77.37</td><td>88.67</td><td>26.83</td><td>78.86</td></tr>
+  </tbody>
+</table>
+
+> **Note**：
+> - The above results are based on the average of 5 test runs deployed with TRT-LLM
+> - The hyperparameters used during evaluation are as follows:
+> ```json
+>{
+>  "top_k": 20,
+>  "top_p": 0.6,
+>  "temperature": 0.7,
+>  "output_seq_len": 32768,
+>  "max_input_seq_len": 16384
+>}
+>```
 
 #### Other Models
 
