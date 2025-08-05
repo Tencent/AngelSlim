@@ -397,7 +397,11 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">快速测试</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">快速测试</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#sglang">SGLang</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#vllm">vLLM</a></li>
+</ul>
+</li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">训练及创新</a></li>
 </ul>
             </nav>
@@ -420,6 +424,8 @@ document.write(`
 其中全部数据都是在单张H20上使用pytorch推理获得。</p>
 <section id="id1">
 <h2>快速测试<a class="headerlink" href="#id1" title="Link to this heading">#</a></h2>
+<section id="sglang">
+<h3>SGLang<a class="headerlink" href="#sglang" title="Link to this heading">#</a></h3>
 <p>目前sglang已经支持Qwen3-8B/14B/30B-A3B模型的eagle3部署，你可以选择使用sglang作为推理后端快速验证Eagle3模型的加速效果。
 在已经安装sglang的环境中使用以下命令可以快速启动一个兼容Openai的服务，然后即可以通过本地端口进行请求了。</p>
 <ul>
@@ -443,6 +449,23 @@ document.write(`
 </ul>
 </li>
 </ul>
+</section>
+<section id="vllm">
+<h3>vLLM<a class="headerlink" href="#vllm" title="Link to this heading">#</a></h3>
+<p>目前vllm已经支持Hunyuan-1.8B-Instruct/4B-Instruct/7B-Instruct模型的eagle3部署，你可以选择使用vllm作为推理后端快速验证Eagle3模型的加速效果。
+在已经安装正确的<a class="reference external" href="https://github.com/vllm-project/vllm/pull/22080">vllm commit</a> 的环境中使用以下命令可以快速启动一个兼容Openai的服务，然后即可以通过本地端口进行请求了。</p>
+<ul>
+<li><p>启动兼容OpenAI格式的API服务</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>-m<span class="w"> </span>vllm.entrypoints.openai.api_server<span class="w"> </span>--tensor-parallel-size<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--port<span class="w"> </span><span class="m">8000</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--speculative_config<span class="w"> </span><span class="s1">&#39;{&quot;model&quot;: &quot;AngelSlim/Hunyuan-1.8B-Instruct_eagle3&quot;, &quot;method&quot; : &quot;eagle3&quot;, &quot;draft_tensor_parallel_size&quot; : 1,  &quot;num_speculative_tokens&quot;: 2}&#39;</span><span class="w"> </span>--trust-remote-code<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--model<span class="w">  </span>tencent/Hunyuan-1.8B-Instruct<span class="w"> </span>
+</pre></div>
+</div>
+</li>
+</ul>
+<p>但是由于vllm最新版本Eagle3并不支持tree attention, 因此推理验证时为chain-base推理模式。</p>
+</section>
 </section>
 <section id="id2">
 <h2>训练及创新<a class="headerlink" href="#id2" title="Link to this heading">#</a></h2>
@@ -495,7 +518,11 @@ document.write(`
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">快速测试</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">快速测试</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#sglang">SGLang</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#vllm">vLLM</a></li>
+</ul>
+</li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">训练及创新</a></li>
 </ul>
   </nav></div>
