@@ -35,6 +35,7 @@ Dedicated to building a more intuitive, comprehensive, and efficient LLMs compre
 - [25/07/04] We now support quantization for `Hunyuan/Qwen2.5/Qwen3/DeepSeek-R1-Distill-Qwen` and other models, including `INT8/FP8/INT4` algorithms. We also opensource `Qwen3` series Eagle3 model weight.
 
 Coming soon:
+- [ ] Diffusion model compression support.
 - [ ] Release of new algorithm for speculative sampling.
 
 ## 🌟Key Features

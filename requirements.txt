@@ -10,3 +10,4 @@ threadpoolctl
 qwen_vl_utils
 tiktoken
 triton
+datasets

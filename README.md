@@ -36,6 +36,7 @@
 我们还开源了`Qwen3`系列模型的Eagle3权重。
 
 Coming soon：
+- [ ] Diffusion模型压缩支持
 - [ ] 投机采样新算法发布
 
 ## 🌟主要特性

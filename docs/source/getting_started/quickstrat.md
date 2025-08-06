@@ -32,7 +32,7 @@ python3 tools/run.py -c configs/qwen3/fp8_static/qwen3-1_7b_fp8_static.yaml
 - 如果想要获取AngelSlim中支持的压缩策略列表，可以执行下面代码：
 
 ```python
-from angelSlim import engine
+from angelslim import engine
 engine.get_supported_compress_method()
 ```
 
