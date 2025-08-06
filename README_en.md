@@ -31,9 +31,7 @@ Dedicated to building a more intuitive, comprehensive, and efficient LLMs compre
 - [Technical Discussion](#technical-discussion)
 
 ## 📣Latest Updates
-
-- [25/08/06] We now support quantization for `DeepSeek-R1-0528` and `Kimi-K2`, including `FP8-Static` and `W4A8-FP8` algorithms. We opensource `W4A8-FP8` weight of `DeepSeek-R1-0528`.
-- [25/08/04] We now support quantization for `Hunyuan 0.5B/1.8B/4B/7B` and multimodal model `Qwen2.5VL 3B/7B/32B/72B`, including `FP8/INT4` algorithms. We also opensource `Hunyuan 1.8B/4B/7B` series Eagle3 model weight.
+- [25/08/06] We now support quantization for `Hunyuan 0.5B/1.8B/4B/7B` and multimodal model `Qwen2.5VL 3B/7B/32B/72B`, including `FP8/INT4` algorithms, and quantization for `DeepSeek-R1/V3` and `Kimi-K2`, including `FP8-Static` and `W4A8-FP8` algorithms. We also opensource `Hunyuan 1.8B/4B/7B` series Eagle3 model weight.
 - [25/07/04] We now support quantization for `Hunyuan/Qwen2.5/Qwen3/DeepSeek-R1-Distill-Qwen` and other models, including `INT8/FP8/INT4` algorithms. We also opensource `Qwen3` series Eagle3 model weight.
 
 Coming soon:
