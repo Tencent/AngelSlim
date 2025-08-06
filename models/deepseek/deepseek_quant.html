@@ -371,7 +371,9 @@ document.write(`
   </button>
 `);
 </script>
-
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
 </div></div>
       
     </div>
@@ -387,6 +389,40 @@ document.write(`
     <div id="print-main-content">
         <div id="jb-print-toc">
             
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#fp8">FP8量化</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">配置</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#model">model配置</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#compression">Compression配置</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">FP8量化</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">多卡</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">单卡</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">部署</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#w4a8-fp8">W4A8-FP8量化</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">配置</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">model配置</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id8">Compression配置</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id9">W4A8-FP8量化</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id10">多机多卡</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id11">单卡</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+            </nav>
         </div>
     </div>
 </div>
@@ -398,6 +434,133 @@ document.write(`
                   
   <section id="deepseek">
 <h1>DeepSeek量化<a class="headerlink" href="#deepseek" title="Link to this heading">#</a></h1>
+<p>DeepSeekR1模型主要采用FP8-Static和W4A8两种方案进行模型压缩</p>
+<section id="fp8">
+<h2>FP8量化<a class="headerlink" href="#fp8" title="Link to this heading">#</a></h2>
+<p>DeepSeekR1的FP8量化为per-tensor粒度。</p>
+<p>您可以量化<code class="docutils literal notranslate"><span class="pre">AngelSlim/configs/deepseek_r1</span></code>下面带有fp8_static字段的模型类型。</p>
+<section id="id1">
+<h3>配置<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
+<p>FP8 <code class="docutils literal notranslate"><span class="pre">confg.yaml</span></code>文件参数配置，您可以参考<code class="docutils literal notranslate"><span class="pre">config/deepseek_r1/fp8_static</span></code>路径下的文件，下面是参数信息介绍。</p>
+<section id="model">
+<h4>model配置<a class="headerlink" href="#model" title="Link to this heading">#</a></h4>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">name</span></code>：填写<code class="docutils literal notranslate"><span class="pre">DeepSeek</span></code>。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">torch_dtype</span></code>：权重加载时使用的数据类型。设置为<code class="docutils literal notranslate"><span class="pre">fp8</span></code>时可直接加载HF上的deepseek-ai/DeepSeek-R1-0528模型。设置为<code class="docutils literal notranslate"><span class="pre">bf16</span></code>时需要将fp8权重进行转换。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">low_cpu_mem_usage</span></code>：设置为True时表示使用单卡运行，权重存放在CPU上，同时<code class="docutils literal notranslate"><span class="pre">quantization.low_memory</span></code>也要设置为<code class="docutils literal notranslate"><span class="pre">true</span></code>,并且<code class="docutils literal notranslate"><span class="pre">model.device_map</span></code>填写<code class="docutils literal notranslate"><span class="pre">cpu</span></code>。</p></li>
+</ul>
+</section>
+<section id="compression">
+<h4>Compression配置<a class="headerlink" href="#compression" title="Link to this heading">#</a></h4>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">name</span></code>：压缩策略，选填量化<code class="docutils literal notranslate"><span class="pre">quantization</span></code>。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.name</span></code>：压缩算法选填<code class="docutils literal notranslate"><span class="pre">fp8_static</span></code>。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.bits</span></code>：量化比特数，目前支持8bit。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.low_memory</span></code>: 设置为<code class="docutils literal notranslate"><span class="pre">true</span></code>表示使用单卡运行。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.quant_method</span></code>：主要指定权重的量化粒度，FP8为<code class="docutils literal notranslate"><span class="pre">per-tensor</span></code>。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.ignore_layers</span></code>：指定模型中不需要量化的层。</p></li>
+</ul>
+</section>
+</section>
+<section id="id2">
+<h3>FP8量化<a class="headerlink" href="#id2" title="Link to this heading">#</a></h3>
+<p>您可以通过下面代码启动FP8量化流程。支持多机多卡以及单卡校准。</p>
+<section id="id3">
+<h4>多卡<a class="headerlink" href="#id3" title="Link to this heading">#</a></h4>
+<p>多卡模式需要–multi-nodes参数指定。单机8卡H20可实现DeepSeek权重以<code class="docutils literal notranslate"><span class="pre">fp8</span></code>类型加载的量化。</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nv">NNODES</span><span class="o">={</span>运行的节点数<span class="o">}</span>
+<span class="nv">NPROC_PER_NODE</span><span class="o">={</span>每个节点的卡数<span class="o">}</span>
+<span class="nv">MASTER_ADDR</span><span class="o">={</span>主节点ip地址<span class="o">}</span>
+<span class="nv">CONFIG</span><span class="o">=</span>configs/deepseek_r1/fp8_static/deepseek_r1_fp8_static.yaml
+
+torchrun<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--nnodes<span class="w"> </span><span class="nv">$NNODES</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--nproc-per-node<span class="w"> </span><span class="nv">$NPROC_PER_NODE</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--node-rank<span class="w"> </span><span class="o">{</span>节点序号<span class="o">}</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--master-addr<span class="w"> </span><span class="nv">$MASTER_ADDR</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>tools/run.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--config<span class="w"> </span><span class="nv">$CONFIG</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--multi-nodes
+</pre></div>
+</div>
+<p>双机16卡运行时，则每台机器上都执行以上脚本。</p>
+</section>
+<section id="id4">
+<h4>单卡<a class="headerlink" href="#id4" title="Link to this heading">#</a></h4>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/deepseek_r1/fp8_static/deepseek_r1_fp8_static_low_memmory.yaml
+</pre></div>
+</div>
+</section>
+</section>
+<section id="id5">
+<h3>部署<a class="headerlink" href="#id5" title="Link to this heading">#</a></h3>
+<p>vLLM支持DeepSeek的per-tensor量化，已验证vllm==0.8.5可部署。</p>
+<p>若使用单机8卡141GB H20，您可以修改<code class="docutils literal notranslate"><span class="pre">AngelSlim/deploy/run_vllm.sh</span></code>中的<code class="docutils literal notranslate"><span class="pre">MODEL_PATH</span></code>字段后通过以下命令使用：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>AngelSlim/deploy
+sh<span class="w"> </span>run_vllm.sh
+</pre></div>
+</div>
+<p>若使用96GB H20，需要双机部署</p>
+</section>
+</section>
+<section id="w4a8-fp8">
+<h2>W4A8-FP8量化<a class="headerlink" href="#w4a8-fp8" title="Link to this heading">#</a></h2>
+<p>DeepSeekR1的W4A8-FP8量化，其中权重为per-group的粒度，group-size为128，激活为per-tensor的粒度。</p>
+<p>您可以量化<code class="docutils literal notranslate"><span class="pre">AngelSlim/configs/deepseek_r1</span></code>下面带有w4a8_fp8字段的模型类型。</p>
+<section id="id6">
+<h3>配置<a class="headerlink" href="#id6" title="Link to this heading">#</a></h3>
+<p>W4A8-FP8 <code class="docutils literal notranslate"><span class="pre">confg.yaml</span></code>文件参数配置，您可以参考<code class="docutils literal notranslate"><span class="pre">config/deepseek_r1/w4a8_fp8</span></code>路径下的文件，下面是参数信息介绍。</p>
+<section id="id7">
+<h4>model配置<a class="headerlink" href="#id7" title="Link to this heading">#</a></h4>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">name</span></code>：填写<code class="docutils literal notranslate"><span class="pre">DeepSeek</span></code>。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">torch_dtype</span></code>：权重加载时使用的数据类型。设置为<code class="docutils literal notranslate"><span class="pre">fp8</span></code>时可直接加载HF上的deepseek-ai/DeepSeek-R1-0528模型。设置为<code class="docutils literal notranslate"><span class="pre">bf16</span></code>时需要将fp8权重进行转换后再进行量化。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">low_cpu_mem_usage</span></code>：设置为True时表示使用单卡运行，权重存放在CPU上，同时<code class="docutils literal notranslate"><span class="pre">quantization.low_memory</span></code>也要设置为<code class="docutils literal notranslate"><span class="pre">true</span></code>,并且<code class="docutils literal notranslate"><span class="pre">model.device_map</span></code>填写<code class="docutils literal notranslate"><span class="pre">cpu</span></code>。</p></li>
+</ul>
+</section>
+<section id="id8">
+<h4>Compression配置<a class="headerlink" href="#id8" title="Link to this heading">#</a></h4>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">name</span></code>：压缩策略，选填量化<code class="docutils literal notranslate"><span class="pre">quantization</span></code>。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.name</span></code>：压缩算法选填<code class="docutils literal notranslate"><span class="pre">w4a8_fp8</span></code>。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.bits</span></code>：量化比特数，W4A8-FP8下不起作用。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.low_memory</span></code>: 设置为<code class="docutils literal notranslate"><span class="pre">true</span></code>表示使用单卡运行。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.quant_method</span></code>：主要指定权重的量化粒度，W4A8-FP8为<code class="docutils literal notranslate"><span class="pre">per-group</span></code>。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.group_size</span></code>：权重量化分组数。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.ignore_layers</span></code>：指定模型中不需要量化的层。</p></li>
+</ul>
+</section>
+</section>
+<section id="id9">
+<h3>W4A8-FP8量化<a class="headerlink" href="#id9" title="Link to this heading">#</a></h3>
+<p>您可以通过下面代码启动W4A8-FP8量化流程。支持多机多卡以及单卡校准。</p>
+<section id="id10">
+<h4>多机多卡<a class="headerlink" href="#id10" title="Link to this heading">#</a></h4>
+<p>多机多卡模式需要–multi-nodes参数指定</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nv">NNODES</span><span class="o">={</span>运行的节点数<span class="o">}</span>
+<span class="nv">NPROC_PER_NODE</span><span class="o">={</span>每个节点的卡数<span class="o">}</span>
+<span class="nv">MASTER_ADDR</span><span class="o">={</span>主节点ip地址<span class="o">}</span>
+<span class="nv">CONFIG</span><span class="o">=</span>configs/deepseek_r1/w4a8_fp8/deepseek_r1_w4a8_fp8.yaml
+
+torchrun<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--nnodes<span class="w"> </span><span class="nv">$NNODES</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--nproc-per-node<span class="w"> </span><span class="nv">$NPROC_PER_NODE</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--node-rank<span class="w"> </span><span class="o">{</span>节点序号<span class="o">}</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--master-addr<span class="w"> </span><span class="nv">$MASTER_ADDR</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>tools/run.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--config<span class="w"> </span><span class="nv">$CONFIG</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--multi-nodes
+</pre></div>
+</div>
+</section>
+<section id="id11">
+<h4>单卡<a class="headerlink" href="#id11" title="Link to this heading">#</a></h4>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/deepseek_r1/w4a8_fp8/deepseek_r1_w4a8_fp8_low_memmory.yaml
+</pre></div>
+</div>
+</section>
+</section>
+</section>
 </section>
 
 
@@ -435,6 +598,47 @@ document.write(`
             </div>
             
             
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#fp8">FP8量化</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">配置</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#model">model配置</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#compression">Compression配置</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">FP8量化</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">多卡</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">单卡</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">部署</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#w4a8-fp8">W4A8-FP8量化</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">配置</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">model配置</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id8">Compression配置</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id9">W4A8-FP8量化</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id10">多机多卡</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id11">单卡</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+</div></div>
               
             
           </div>

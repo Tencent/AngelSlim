@@ -397,6 +397,7 @@ document.write(`
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#hunyuan-instruct">Hunyuan-Instruct</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qwen3">Qwen3</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qwen2-5vl">Qwen2.5VL</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#deepseek-r1-0528">DeepSeek-R1-0528</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">其他模型</a></li>
 </ul>
             </nav>
@@ -921,6 +922,37 @@ document.write(`
 <h2>Qwen2.5VL<a class="headerlink" href="#qwen2-5vl" title="Link to this heading">#</a></h2>
 <p>Qwen2.5VL系列模型的<code class="docutils literal notranslate"><span class="pre">BF16</span></code>、<code class="docutils literal notranslate"><span class="pre">FP8-Static</span></code>、<code class="docutils literal notranslate"><span class="pre">FP8-Dynamic</span></code>、<code class="docutils literal notranslate"><span class="pre">FP8-Static-ViT</span></code>、<code class="docutils literal notranslate"><span class="pre">FP8-Dynamic-ViT</span></code>、<code class="docutils literal notranslate"><span class="pre">INT4-GPTQ</span></code>、<code class="docutils literal notranslate"><span class="pre">INT4-AWQ</span></code>在<code class="docutils literal notranslate"><span class="pre">MMMU_VAL</span></code>、<code class="docutils literal notranslate"><span class="pre">DocVQA_VAL</span></code>、<code class="docutils literal notranslate"><span class="pre">ChartQA_TEST</span></code>上的评测结果如下：</p>
 </section>
+<section id="deepseek-r1-0528">
+<h2>DeepSeek-R1-0528<a class="headerlink" href="#deepseek-r1-0528" title="Link to this heading">#</a></h2>
+<p>DeepSeek-R1-0528模型的<code class="docutils literal notranslate"><span class="pre">FP8-Block-Wise</span></code>、<code class="docutils literal notranslate"><span class="pre">W4A8-FP8</span></code>在<code class="docutils literal notranslate"><span class="pre">GPQA</span> <span class="pre">Diamond</span></code>、<code class="docutils literal notranslate"><span class="pre">AIME</span> <span class="pre">2024</span></code>、<code class="docutils literal notranslate"><span class="pre">SimpleQA</span></code>、<code class="docutils literal notranslate"><span class="pre">LiveCodeBench</span></code>上的评测结果如下：</p>
+<div class="pst-scrollable-table-container"><table class="table table-center" id="table-deepseek-r1-0528-performance">
+<thead>
+<tr class="row-odd"><th class="head"><p>Model</p></th>
+<th class="head"><p>Quantization</p></th>
+<th class="head"><p>GPQA Diamond</p></th>
+<th class="head"><p>AIME 2024</p></th>
+<th class="head"><p>SimpleQA</p></th>
+<th class="head"><p>LiveCodeBench</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td rowspan="2"><p>DeepSeek-R1-0528</p></td>
+<td><p>FP8-Block-Wise</p></td>
+<td><p>78.28</p></td>
+<td><p>88.67</p></td>
+<td><p>27.80</p></td>
+<td><p>77.1</p></td>
+</tr>
+<tr class="row-odd"><td><p>W4A8-FP8</p></td>
+<td><p>77.37</p></td>
+<td><p>88.67</p></td>
+<td><p>26.83</p></td>
+<td><p>78.86</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
 <section id="id1">
 <h2>其他模型<a class="headerlink" href="#id1" title="Link to this heading">#</a></h2>
 <p>其他模型的<code class="docutils literal notranslate"><span class="pre">BF16</span></code>、<code class="docutils literal notranslate"><span class="pre">FP8-Static</span></code>、<code class="docutils literal notranslate"><span class="pre">FP8-Dynamic</span></code>、<code class="docutils literal notranslate"><span class="pre">INT4-GPTQ</span></code>、<code class="docutils literal notranslate"><span class="pre">INT4-AWQ</span></code>在<code class="docutils literal notranslate"><span class="pre">CEVAL</span></code>、<code class="docutils literal notranslate"><span class="pre">MMLU</span></code>、<code class="docutils literal notranslate"><span class="pre">GSM8K</span></code>上的评测结果如下：</p>
@@ -1162,6 +1194,7 @@ document.write(`
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#hunyuan-instruct">Hunyuan-Instruct</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qwen3">Qwen3</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qwen2-5vl">Qwen2.5VL</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#deepseek-r1-0528">DeepSeek-R1-0528</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">其他模型</a></li>
 </ul>
   </nav></div>
