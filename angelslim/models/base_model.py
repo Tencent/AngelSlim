@@ -47,6 +47,7 @@ class BaseLLMModel(metaclass=ABCMeta):
         assert deploy_backend in [
             "vllm",
             "huggingface",
+            "trtllm",
         ], f"Unsupported deploy backend {deploy_backend}"
         self.deploy_backend = deploy_backend
         self.model = model
@@ -62,6 +63,7 @@ class BaseLLMModel(metaclass=ABCMeta):
         trust_remote_code=True,
         low_cpu_mem_usage=True,
         use_cache=False,
+        using_multi_nodes=False,
     ):
         self.model = AutoModelForCausalLM.from_pretrained(
             model_path,

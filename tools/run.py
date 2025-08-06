@@ -14,6 +14,10 @@
 
 import argparse
 import os
+from datetime import timedelta
+
+import torch
+import torch.distributed as dist
 
 from angelslim.engine import Engine
 from angelslim.utils import get_yaml_prefix_simple
@@ -26,6 +30,7 @@ def get_args():
     parser.add_argument("--model-path", type=str, default=None)
     parser.add_argument("--save-path", type=str, default=None)
     parser.add_argument("--input-prompt", type=str, default=None)
+    parser.add_argument("--multi-nodes", action="store_true")
     args = parser.parse_args()
     return args
 
@@ -46,6 +51,73 @@ def merge_config(config, args):
         config.global_config.save_path,
         get_yaml_prefix_simple(args.config),
     )
+
+
+def multi_nodes_run(config):
+    """
+    Run the LLM compression process based on the provided configuration
+    using multiple nodes.
+
+    Args:
+        config (dict): Configuration dictionary containing
+                       parameters for LLM compression.
+    """
+    # Step 1: Initialize distributed environment
+    world_size = int(os.getenv("WORLD_SIZE", "1"))
+    local_rank = int(os.getenv("LOCAL_RANK", "0"))
+    if world_size > 1:
+        dist.init_process_group("nccl", timeout=timedelta(minutes=60))
+    torch.cuda.set_device(local_rank)
+    torch.set_default_dtype(torch.bfloat16)
+    torch.set_num_threads(8)
+    torch.manual_seed(965)
+
+    # Step 2: Initialize configurations
+    model_config = config.model_config
+    dataset_config = config.dataset_config
+    compress_config = config.compression_config
+    global_config = config.global_config
+
+    # Step 3: Execute complete pipeline
+    slim_engine = Engine()
+
+    # Step 4: Prepare model
+    slim_engine.prepare_model(
+        model_name=model_config.name,
+        model_path=model_config.model_path,
+        torch_dtype=model_config.torch_dtype,
+        device_map=model_config.device_map,
+        trust_remote_code=model_config.trust_remote_code,
+        low_cpu_mem_usage=model_config.low_cpu_mem_usage,
+        use_cache=model_config.use_cache,
+        deploy_backend=global_config.deploy_backend,
+        using_multi_nodes=True,
+    )
+
+    # Step 5: Prepare data (optional custom dataloader)
+    if compress_config.need_dataset:
+        slim_engine.prepare_data(
+            data_path=dataset_config.data_path,
+            data_type=dataset_config.name,
+            custom_dataloader=None,
+            max_length=dataset_config.max_seq_length,
+            batch_size=dataset_config.batch_size,
+            num_samples=dataset_config.num_samples,
+            shuffle=dataset_config.shuffle,
+        )
+
+    # Step 6: Initialize compressor
+    slim_engine.prepare_compressor(
+        compress_name=compress_config.name,
+        compress_config=compress_config,
+        global_config=global_config,
+    )
+
+    # Step 7: Compress model
+    slim_engine.run()
+
+    # Step 8: Save compressed model
+    slim_engine.save(global_config.save_path, config)
 
 
 def run(config):
@@ -160,5 +232,7 @@ if __name__ == "__main__":
     print_config(config)
     if args.input_prompt:
         infer(config, args.input_prompt)
+    elif args.multi_nodes:
+        multi_nodes_run(config)
     else:
         run(config)

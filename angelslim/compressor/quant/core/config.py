@@ -74,10 +74,24 @@ class QuantConfig:
             )
             self.weight_observer = WEIGHT_OBSERVERS_CLASS[weight_quant_method]
             self.kv_cache_observer = None
-            self.quant_algo_info = {
-                "w": f"fp8_{weight_quant_method}",
-                "ignore_layers": quantization_args.ignore_layers,
-            }
+
+            if "w4a8" in self.quant_algo:
+                group_size = (
+                    128
+                    if quantization_args.quant_method["group_size"] == -1
+                    else quantization_args.quant_method["group_size"]
+                )
+                self.quant_algo_info = {
+                    "w": f"int4_{weight_quant_method}",
+                    "w_group_size": group_size,
+                    "ignore_layers": quantization_args.ignore_layers,
+                }
+            else:
+                self.quant_algo_info = {
+                    "w": f"fp8_{weight_quant_method}",
+                    "ignore_layers": quantization_args.ignore_layers,
+                }
+
             if act_quant_method is not None:
                 self.quant_algo_info["a"] = f"fp8_{act_quant_method}-{is_dynamic}"
             self.hidden_size = global_config.hidden_size

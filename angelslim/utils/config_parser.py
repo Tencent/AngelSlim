@@ -259,6 +259,7 @@ class SlimConfigParser:
             "int4_awq",
             "int4_gptq",
             "int8_dynamic",
+            "w4a8_fp8",
         ]
         # Supported speculative decoding methods
         self.supported_speculative_decoding_methods = ["EAGLE", "EAGLE2", "EAGLE3"]

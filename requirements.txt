@@ -8,3 +8,5 @@ tqdm
 pyarrow
 threadpoolctl
 qwen_vl_utils
+tiktoken
+triton
