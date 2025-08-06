@@ -19,7 +19,7 @@ from setuptools import find_packages, setup
 
 TOOLS_VERSION = None
 
-if "master" in subprocess.getoutput("git branch"):
+if "main" in subprocess.getoutput("git branch"):
     TOOLS_VERSION = "0.0.0_dev"
 else:
     tag_list = subprocess.getoutput("git tag").split("\n")
