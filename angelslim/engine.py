@@ -130,6 +130,7 @@ class Engine:
         batch_size=1,
         num_samples=128,
         shuffle=True,
+        inference_settings=None,
     ) -> Optional[Any]:
         """Prepare compression dataset"""
         if custom_dataloader is not None:
@@ -152,6 +153,7 @@ class Engine:
             shuffle=shuffle,
             num_samples=num_samples,
             data_source=data_path,
+            inference_settings=inference_settings,
         )
         self.max_seq_length = max_length
 

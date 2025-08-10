@@ -13,8 +13,11 @@
 # limitations under the License.
 
 import torch
+import torch.nn as nn
 from diffusers import FluxPipeline
+from tqdm import tqdm
 
+from ...compressor.quant.core import PTQDiffusionSave
 from ..base_model import BaseDiffusionModel
 from ..model_factory import SlimModelFactory
 
@@ -24,13 +27,14 @@ class FLUX(BaseDiffusionModel):
     def __init__(
         self,
         model=None,
-        deploy_backend="torch",
+        deploy_backend="huggingface",
     ):
         super().__init__(
             model=model,
             deploy_backend=deploy_backend,
         )
         self.model_type = "flux"
+        self.block_name = "transformer_blocks"
         self.cache_helper = None
 
     def from_pretrained(
@@ -90,7 +94,66 @@ class FLUX(BaseDiffusionModel):
         ).images[0]
 
     def get_observer_layers(self):
-        pass
+        names = [
+            "attn.to_q",
+            "attn.to_k",
+            "attn.to_v",
+            "norm.linear",
+            "proj_mlp",
+            "proj_out",
+            "attn.add_k_proj",
+            "attn.add_q_proj",
+            "attn.add_v_proj",
+            "attn.to_add_out",
+            "attn.to_out",
+            "ff.net.0.proj",
+            "ff.net.2",
+            "ff_context.net.0",
+            "ff_context.net.2",
+            "norm1.linear",
+            "norm1_context.linear",
+        ]
+        self.quant_module = self.model.transformer
+        obs_layers = [nn.Linear]
+        observer_layers_dict = {}
+        layers_dict = self.find_layers(self.quant_module, layers=obs_layers)
+
+        ignore_layers = self.skip_layer_names()
+        for name, module in layers_dict.items():
+            if self.block_name in name and name.split(".")[-1] in names:
+                observer_layers_dict[name] = module
+            else:
+                ignore_layers.append(name)
+        self.quant_config.quant_algo_info["ignore_layers"] = ignore_layers
+
+        return observer_layers_dict
+
+    def get_quant_module(self):
+        """
+        Returns the module that will be quantized.
+        This is typically the main transformer module of the model.
+        """
+        return self.model.transformer
 
     def get_save_func(self):
-        pass
+        if self.deploy_backend in ["huggingface"]:
+            return PTQDiffusionSave
+        else:
+            raise NotImplementedError(
+                f"deploy_backend {self.deploy_backend} is not supported for saving."
+            )
+
+    def model_forward(self, dataloader, **kwargs):
+        assert dataloader is not None, "Dataloader must be provided for model forward."
+        with torch.no_grad():
+            for batch in tqdm(dataloader, desc="calibrating...", total=len(dataloader)):
+                generator = torch.Generator().manual_seed(batch["seed"].item())
+                self.model(
+                    prompt=batch["input"],
+                    height=batch["height"].item(),
+                    width=batch["width"].item(),
+                    guidance_scale=batch["guidance_scale"].item(),
+                    num_inference_steps=batch["num_inference_steps"].item(),
+                    max_sequence_length=batch["max_sequence_length"].item(),
+                    generator=generator,
+                ).images[0]

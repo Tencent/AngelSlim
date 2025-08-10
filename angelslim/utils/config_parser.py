@@ -117,6 +117,7 @@ class DatasetConfig:
     num_samples: int = field(default=256)
     batch_size: int = field(default=1)
     shuffle: bool = field(default=False)
+    inference_settings: Optional[Dict[str, Any]] = field(default=None)
 
 
 @dataclass

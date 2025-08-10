@@ -1,0 +1,37 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output
+  deploy_backend: huggingface
+
+# Simplified Configuration for LLM compression
+model:
+  name: FLUX
+  model_path: black-forest-labs/FLUX.1-schnell
+  cache_dir: NULL
+  torch_dtype: bfloat16
+
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    name: fp8_static
+    bits: 8
+    quant_method:
+      weight: "per-tensor"
+      activation: "per-tensor"
+    ignore_layers:         # Skip quantization for these layers
+      - "time_text_embed"
+
+# Dataset for calibration
+dataset:
+  name: Text2ImageDataset
+  data_path: ./dataset/text2image_data/text2image_example_data.jsonl
+  num_samples: 2
+  batch_size: 1
+  inference_settings:
+    height: 1024
+    width: 1024
+    guidance_scale: 3.5
+    num_inference_steps: 50
+    max_sequence_length: 512
+    seed: 42

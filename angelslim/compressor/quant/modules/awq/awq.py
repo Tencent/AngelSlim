@@ -60,10 +60,7 @@ class AWQ:
         super(AWQ, self).__init__()
         self.model = model
         self.modal_type = self.model.modal_type
-        if self.modal_type == "VLM":
-            self.layers = self.model.model.model.language_model.layers
-        else:
-            self.layers = self.model.model.model.layers
+        self.layers = self.model.get_quant_module()
         self.quant_bits = self.model.quant_config.quant_bit
         self.group_size = self.model.quant_config.quant_algo_info["group_size"]
         self.zero_point = self.model.quant_config.quant_algo_info["zero_point"]
@@ -361,11 +358,5 @@ class AWQ:
         Saves scales and inserts QDQ modules.
         """
         print_info("Start convert model...")
-        if self.modal_type in ["LLM", "VLM"]:
-            self._convert_llm()
-        elif self.modal_type == "AIGC":
-            pass
-        else:
-            print_info("current {} modal type not support".format(self.modal_type))
-            raise NotImplementedError
+        self._convert_llm()
         print_info("convert model done.")

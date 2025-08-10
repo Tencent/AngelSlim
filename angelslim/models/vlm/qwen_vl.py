@@ -168,6 +168,13 @@ class QwenVL(BaseLLMModel):
                         calibrated_cnt += 1
                         pass
 
+    def get_quant_module(self):
+        """
+        Returns the module that will be quantized.
+        This is typically the main transformer module of the model.
+        """
+        return self.model.model.language_model.layers
+
     def get_save_func(self):
         if self.deploy_backend in ["vllm", "huggingface"]:
             return PTQVLMSaveVllmHF
