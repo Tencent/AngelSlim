@@ -21,7 +21,7 @@ python3 tools/run.py -c configs/qwen3/int8_dynamic/qwen3-0_6b_int8_dynamic.yaml
 
 ```yaml
 compression:
-  name: quantization
+  name: PTQ
   quantization:
     name: int8_dynamic     # Supported: fp8_static, fp8_dynamic, int4_awq, int4_gptq, int8_dynamic
     bits: 8                # Quantization bits
