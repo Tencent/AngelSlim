@@ -14,7 +14,7 @@ model:
 
 # Compression configuration
 compression:
-  name: quantization
+  name: PTQ
   quantization:
     name: fp8_static
     bits: 8

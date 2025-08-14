@@ -11,7 +11,7 @@ model:
 
 # Compression configuration
 compression:
-  name: quantization
+  name: PTQ
   quantization:
     name: fp8_dynamic     # Supported: fp8_static, fp8_dynamic, int4_awq, int4_gptq
     bits: 8                # Quantization bits (4/8)
