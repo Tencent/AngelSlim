@@ -17,7 +17,7 @@ model:
   ...
 
 compression:
-  name: quantization
+  name: PTQ
   quantization:
     name: fp8_static
   ...

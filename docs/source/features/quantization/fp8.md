@@ -21,7 +21,7 @@ python3 tools/run.py -c configs/qwen2_5/fp8_dynamic/qwen2_5-7b_instruct_fp8_dyna
 
 ```yaml
 compression:
-  name: quantization
+  name: PTQ
   quantization:
     name: fp8_dynamic
     bits: 8
