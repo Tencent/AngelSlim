@@ -90,6 +90,7 @@ def multi_nodes_run(config):
         trust_remote_code=model_config.trust_remote_code,
         low_cpu_mem_usage=model_config.low_cpu_mem_usage,
         use_cache=model_config.use_cache,
+        cache_dir=model_config.cache_dir,
         deploy_backend=global_config.deploy_backend,
         using_multi_nodes=True,
     )
@@ -104,6 +105,7 @@ def multi_nodes_run(config):
             batch_size=dataset_config.batch_size,
             num_samples=dataset_config.num_samples,
             shuffle=dataset_config.shuffle,
+            inference_settings=dataset_config.inference_settings,
         )
 
     # Step 6: Initialize compressor
@@ -146,6 +148,7 @@ def run(config):
         trust_remote_code=model_config.trust_remote_code,
         low_cpu_mem_usage=model_config.low_cpu_mem_usage,
         use_cache=model_config.use_cache,
+        cache_dir=model_config.cache_dir,
         deploy_backend=global_config.deploy_backend,
     )
 
@@ -159,6 +162,7 @@ def run(config):
             batch_size=dataset_config.batch_size,
             num_samples=dataset_config.num_samples,
             shuffle=dataset_config.shuffle,
+            inference_settings=dataset_config.inference_settings,
         )
 
     # Step 5: Initialize compressor
