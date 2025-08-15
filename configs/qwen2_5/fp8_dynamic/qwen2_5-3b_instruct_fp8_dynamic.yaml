@@ -1,35 +1,26 @@
 # Global configuration of pipeline
 global:
-  save_path: ./output_low
+  save_path: ./output
 
 # Simplified Configuration for LLM compression
 model:
   name: Qwen
-  model_path: Qwen/Qwen2.5-7B-Instruct
+  model_path: Qwen/Qwen2.5-3B-Instruct
   trust_remote_code: true
   low_cpu_mem_usage: true
   use_cache: false
   torch_dtype: auto
-  device_map: cpu
+  device_map: auto
 
 # Compression configuration
 compression:
   name: PTQ
   quantization:
-    name: fp8_static     # Supported: fp8_static, fp8_dynamic, int4_awq, int4_gptq
+    name: fp8_dynamic     # Supported: fp8_static, fp8_dynamic, int4_awq, int4_gptq
     bits: 8                # Quantization bits (4/8)
-    low_memory: True  # Use less gpu/cpu memory
     quant_method:
       weight: "per-tensor"
       activation: "per-tensor"
     ignore_layers:         # Skip quantization for these layers
       - "lm_head"
       - "model.embed_tokens"
-
-# Dataset for calibration
-dataset:
-  name: TextDataset
-  data_path: ./dataset/sharegpt_gpt4_qwen/sharegpt_gpt4-qwen3_a22B_output.jsonl
-  max_seq_length: 4096
-  num_samples: 256
-  batch_size: 1
