@@ -1,16 +1,16 @@
 # Global configuration of pipeline
 global:
-  save_path: ./output_low
+  save_path: ./output
 
 # Simplified Configuration for LLM compression
 model:
   name: Qwen
-  model_path: Qwen/Qwen2.5-7B-Instruct
+  model_path: Qwen/Qwen2.5-0.5B-Instruct
   trust_remote_code: true
   low_cpu_mem_usage: true
   use_cache: false
   torch_dtype: auto
-  device_map: cpu
+  device_map: auto
 
 # Compression configuration
 compression:
@@ -18,7 +18,6 @@ compression:
   quantization:
     name: fp8_static     # Supported: fp8_static, fp8_dynamic, int4_awq, int4_gptq
     bits: 8                # Quantization bits (4/8)
-    low_memory: True  # Use less gpu/cpu memory
     quant_method:
       weight: "per-tensor"
       activation: "per-tensor"
