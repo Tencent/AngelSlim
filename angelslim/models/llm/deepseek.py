@@ -27,7 +27,7 @@ from ...compressor.quant.core import (
     weight_dequant,
 )
 from ...compressor.quant.modules import QDQModule
-from ...utils import print_info
+from ...utils import find_layers, print_info
 from ..base_model import BaseLLMModel
 from ..model_factory import SlimModelFactory
 from .modeling_deepseek import (
@@ -98,7 +98,7 @@ class DeepSeek(BaseLLMModel):
     def get_observer_layers(self):
         names = self.quant_config.quant_algo_info["ignore_layers"]
         obs_layers = [nn.Linear, Linear]
-        observer_layers_dict = self.find_layers(self.model, layers=obs_layers)
+        observer_layers_dict = find_layers(self.model, layers=obs_layers)
         observer_layers_dict = {
             k: v
             for k, v in observer_layers_dict.items()

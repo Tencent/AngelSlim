@@ -185,6 +185,10 @@ class PTQSaveVllmHF(PTQSaveBase):
         with open(os.path.join(save_path, "hf_quant_config.json"), "w") as f:
             json.dump(trtllm_config, f, indent=4)
 
+        for name, param in self.quant_model.get_model().named_parameters():
+            print("name:", name)
+            print("param:", param.shape, param.dtype)
+
         self.quant_model.tokenizer.save_pretrained(save_path)
 
 
@@ -205,7 +209,14 @@ class PTQDiffusionSave(PTQSaveBase):
                 "ignored_layers": ignored_layers,
             }
         }
-        self.quant_model.get_model().config.update(static_q_dict)
+
+        with open(os.path.join(save_path, "hf_quant_config.json"), "w") as f:
+            json.dump(static_q_dict, f, indent=4)
+
+        print(self.quant_model.get_model().transformer)
+        for name, param in self.quant_model.get_model().transformer.named_parameters():
+            print("name:", name)
+            print("param:", param.shape, param.dtype)
 
         os.makedirs(save_path, exist_ok=True)
 

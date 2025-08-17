@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .config_parser import SlimConfigParser  # noqa: F401
+from .config_parser import SlimConfigParser, parse_json_full_config  # noqa: F401
 from .default_compress_config import *  # noqa: F401 F403
 from .utils import common_prefix  # noqa: F401
+from .utils import find_layers  # noqa: F401
 from .utils import find_parent_layer_and_sub_name  # noqa: F401
 from .utils import get_best_device  # noqa: F401
 from .utils import get_op_by_name  # noqa: F401

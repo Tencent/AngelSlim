@@ -15,6 +15,7 @@
 import torch.nn as nn
 
 from ...compressor.quant.core import PTQSaveVllmHF
+from ...utils.utils import find_layers
 from ..base_model import BaseLLMModel
 from ..model_factory import SlimModelFactory
 
@@ -45,7 +46,7 @@ class HunyuanDense(BaseLLMModel):
             "mlp.gate_and_up_proj",
         ]
         obs_layers = [nn.Linear]
-        observer_layers_dict = self.find_layers(self.model, layers=obs_layers)
+        observer_layers_dict = find_layers(self.model, layers=obs_layers)
 
         observer_layers_dict = {
             k: v
