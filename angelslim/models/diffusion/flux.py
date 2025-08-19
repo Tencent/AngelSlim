@@ -12,17 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 import torch
 import torch.nn as nn
 from diffusers import FluxPipeline
+from safetensors.torch import load_file
 from tqdm import tqdm
 
 from ...compressor.quant.core import PTQDiffusionSave, QuantConfig
-from ...utils.utils import find_layers
+from ...compressor.quant.modules import QLinear
+from ...utils.utils import find_layers, find_parent_layer_and_sub_name
 from ..base_model import BaseDiffusionModel
 from ..model_factory import SlimModelFactory
 
-COMPRESS_CONFIG = None
+# COMPRESS_CONFIG = None
 
 
 @SlimModelFactory.register
@@ -59,14 +63,18 @@ class FLUX(BaseDiffusionModel):
             compress_config (dict): Compression configuration.
         """
         # load the model from the specified path
-        if compress_config.name == "PTQ":
-            global COMPRESS_CONFIG
-            COMPRESS_CONFIG = compress_config
+        if compress_config and compress_config.name == "PTQ":
+            # global COMPRESS_CONFIG
+            # COMPRESS_CONFIG = compress_config
             self.model = FluxQuantPipeline.from_pretrained(
                 model_path,
                 torch_dtype=torch_dtype,
                 cache_dir=cache_dir,
             )
+            scales_dicts = load_file(
+                os.path.join(model_path, "model-scales.safetensors")
+            )
+            self.model.quantize(compress_config, scales_dicts)
         else:
             self.model = FluxPipeline.from_pretrained(
                 model_path,
@@ -203,29 +211,24 @@ class FluxQuantPipeline(FluxPipeline):
             image_encoder=image_encoder,
             feature_extractor=feature_extractor,
         )
-        quant_config = QuantConfig(COMPRESS_CONFIG)
+
+    def quantize(self, compress_config, scales_dicts):
+        """
+        Quantize the transformer layers of the FLUX model.
+        This method replaces the linear in the transformer with quant.
+        """
+        quant_config = QuantConfig(compress_config)
         layers_dict = find_layers(self.transformer, layers=[nn.Linear])
-        from ...compressor.quant.modules import QDQModule
-        from ...utils import find_parent_layer_and_sub_name
 
         for name, sub_layer in layers_dict.items():
             if name in quant_config.quant_algo_info["ignore_layers"]:
                 continue
-            print(name, sub_layer, quant_config.quant_algo)
             parent_layer, sub_name = find_parent_layer_and_sub_name(
                 self.transformer, name
             )
-
-            act_method = quant_config.quant_algo_info.get("a", None)
-            weight_method = quant_config.quant_algo_info.get("w", None)
-            act_scale, weight_scale = None, None
-            if "per-tensor" in act_method:
-                act_scale = torch.tensor(1.0)
-            # else:
-            #     act_scale = quant_config.act_observer.get_scale(sub_layer)
-            if "per-tensor" in weight_method:
-                weight_scale = torch.tensor(1.0)
-            qdq_module = QDQModule(
+            act_scale = scales_dicts[name + ".input_scale"]
+            weight_scale = scales_dicts[name + ".weight_scale"]
+            qdq_module = QLinear(
                 quant_algo=quant_config.quant_algo,
                 weight=sub_layer.weight,
                 weight_scale=weight_scale,

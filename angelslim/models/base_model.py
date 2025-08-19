@@ -216,20 +216,6 @@ class BaseLLMModel(metaclass=ABCMeta):
     def is_all_reduce(self):
         return False
 
-    def find_layers(self, module, layers=None, name=""):
-        if type(module) in layers and name not in self.skip_layer_names():
-            return {name: module}
-        res = {}
-        for name1, child in module.named_children():
-            res.update(
-                self.find_layers(
-                    child,
-                    layers=layers,
-                    name=name + "." + name1 if name != "" else name1,
-                )
-            )
-        return res
-
     def get_pre_transformer_modules(self):
         pre_transformer_modules_dict = {}
         for full_name in self.pre_transformer_module_names:

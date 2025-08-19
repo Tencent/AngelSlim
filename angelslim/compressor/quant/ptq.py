@@ -36,7 +36,7 @@ class PTQ:
         self.quant_model = model
         # init ptq config of model
         self.quant_model.init_ptq(slim_config)
-        self.layers = self.quant_model.get_model()
+        self.layers = self.quant_model.get_quant_module()
         self.quant_algo = self.quant_model.quant_config.quant_algo
         self.quant_helpers = self.quant_model.quant_config.quant_helpers
         if "gptq" not in self.quant_algo or "awq" not in self.quant_algo:

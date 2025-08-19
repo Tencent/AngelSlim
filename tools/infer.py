@@ -57,18 +57,30 @@ def infer(config, args):
     slim_engine = InferEngine()
 
     if config:
+        # Step 1: Initialize configurations
         model_config = config.model_config
-        # compress_config = config.compression_config
+        compress_config = config.compression_config
         global_config = config.global_config
         infer_config = config.infer_config
 
-        slim_engine.from_pretrained(
+        # Step 2: Prepare model
+        slim_engine.prepare_model(
+            model_name=model_config.name,
             model_path=model_config.model_path,
             torch_dtype=model_config.torch_dtype,
             device_map=model_config.device_map,
             trust_remote_code=model_config.trust_remote_code,
             low_cpu_mem_usage=model_config.low_cpu_mem_usage,
             use_cache=model_config.use_cache,
+            cache_dir=model_config.cache_dir,
+            deploy_backend=global_config.deploy_backend,
+        )
+
+        # Step 4: Initialize compressor
+        slim_engine.prepare_compressor(
+            compress_name=compress_config.name,
+            compress_config=compress_config,
+            global_config=global_config,
         )
     else:
         slim_engine.from_pretrained(model_path=args.model_path)
@@ -79,13 +91,14 @@ def infer(config, args):
         output = slim_engine.generate(args.input_prompt)
     if slim_engine.series == "Diffusion":
         # Save the generated image
-        if global_config:
+        if config and global_config:
             save_path = os.path.join(global_config.save_path, "output_image.png")
         else:
             save_path = args.output_path or "output_image.png"
 
         # Ensure the directory exists
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        if save_path:
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
         output.save(save_path)
 

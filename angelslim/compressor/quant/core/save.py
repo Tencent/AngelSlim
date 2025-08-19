@@ -28,8 +28,8 @@ from safetensors.torch import save_model
 from tqdm import tqdm
 from transformers.models.deepseek_v3 import DeepseekV3Config
 
-from ....utils import print_info
-from ..modules import QDQModule, QDQSingleModule
+from ....utils import find_layers, find_parent_layer_and_sub_name, print_info
+from ..modules import QDQModule, QDQSingleModule, QLinear
 from .packing_utils import pack_weight_to_int8
 from .quant_func import fake_quant_dequant, tensor_quant, weight_dequant
 
@@ -210,17 +210,32 @@ class PTQDiffusionSave(PTQSaveBase):
             }
         }
 
+        os.makedirs(save_path, exist_ok=True)
         with open(os.path.join(save_path, "hf_quant_config.json"), "w") as f:
             json.dump(static_q_dict, f, indent=4)
 
-        print(self.quant_model.get_model().transformer)
-        for name, param in self.quant_model.get_model().transformer.named_parameters():
-            print("name:", name)
-            print("param:", param.shape, param.dtype)
-
-        os.makedirs(save_path, exist_ok=True)
+        save_scales = {}
+        layers_dict = find_layers(
+            self.quant_model.get_model().transformer, layers=[QDQModule]
+        )
+        for name, sub_layer in layers_dict.items():
+            parent_layer, sub_name = find_parent_layer_and_sub_name(
+                self.quant_model.get_model().transformer, name
+            )
+            q_module = QLinear(
+                quant_algo=sub_layer.quant_algo,
+                weight=sub_layer.weight,
+                bias=sub_layer.bias,
+                weight_scale=sub_layer.weight_scale.data.clone().detach(),
+                input_scale=sub_layer.input_scale.data.clone().detach(),
+            )
+            setattr(parent_layer, sub_name, q_module)
+            save_scales[name + ".input_scale"] = sub_layer.input_scale
+            save_scales[name + ".weight_scale"] = sub_layer.weight_scale
 
         self.quant_model.get_model().save_pretrained(save_path)
+        safetensor_file = os.path.join(save_path, "model-scales.safetensors")
+        safe_save(save_scales, safetensor_file)
 
 
 class PTQTorchSave(PTQSaveBase):

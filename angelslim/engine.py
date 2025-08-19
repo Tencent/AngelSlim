@@ -253,30 +253,8 @@ class Engine:
 
         print_info(f"Compressed model saved to {save_path}")
 
-    def infer(self, input_prompt: str, **kwargs) -> Any:
-        """Run inference with the compressed model
-        Args:
-            input_prompt (str): Input prompt for the model.
-        """
-        if not self.slim_model or not self.slim_model.model:
-            raise RuntimeError("Model not initialized. Call prepare_model() first")
 
-        if self.series in ["LLM", "VLM"]:
-            return self.slim_model.generate(
-                input_ids=self.slim_model.tokenizer(
-                    input_prompt, return_tensors="pt"
-                ).input_ids,
-                **kwargs,
-            )
-        elif self.series == "Diffusion":
-            return self.slim_model.generate(input_prompt, **kwargs)
-        else:
-            raise NotImplementedError(
-                f"Series {self.series} is not implemented for inference"
-            )
-
-
-class InferEngine:
+class InferEngine(Engine):
     def __init__(self):
         """
         Initialize engine configuration
@@ -342,6 +320,10 @@ class InferEngine:
             compress_config=slim_config.compression_config,
         )
 
+        self.series = SlimModelFactory.get_series_by_models(
+            slim_config.model_config.name
+        )
+
     def generate(self, input_prompt: str, **kwargs) -> Any:
         """Run inference with the compressed model
         Args:
@@ -350,4 +332,16 @@ class InferEngine:
         if not self.slim_model or not self.slim_model.model:
             raise RuntimeError("Model not initialized. Call from_pretrained() first")
 
-        self.slim_model.generate(input_prompt, **kwargs)
+        if self.series in ["LLM", "VLM"]:
+            return self.slim_model.generate(
+                input_ids=self.slim_model.tokenizer(
+                    input_prompt, return_tensors="pt"
+                ).input_ids,
+                **kwargs,
+            )
+        elif self.series == "Diffusion":
+            return self.slim_model.generate(input_prompt, **kwargs)
+        else:
+            raise NotImplementedError(
+                f"Series {self.series} is not implemented for inference"
+            )
