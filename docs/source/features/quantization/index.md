@@ -11,4 +11,5 @@ fp8
 int8
 awq
 gptq
+fp8_lepto
 :::
