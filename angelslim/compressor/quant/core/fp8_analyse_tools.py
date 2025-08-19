@@ -158,7 +158,7 @@ def get_weight_dict(model_path):
 def draw_hist(uniform_data, ax, name):
     uniform_data.sort()
     s = pd.Series(uniform_data)
-    ax.hist(s, bins=50, rwidth=1)
+    ax.hist(s, bins=1000, rwidth=1)
     ax.set_title(name + "_histgram")
     ax.grid(True)
 

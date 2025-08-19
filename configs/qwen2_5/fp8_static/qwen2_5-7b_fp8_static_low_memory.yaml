@@ -29,7 +29,7 @@ compression:
 # Dataset for calibration
 dataset:
   name: TextDataset
-  data_path: ./dataset/sharegpt/sharegpt_gpt4_512.json
+  data_path: ./dataset/sharegpt_gpt4_qwen/sharegpt_gpt4-qwen3_a22B_output.jsonl
   max_seq_length: 4096
   num_samples: 256
   batch_size: 1

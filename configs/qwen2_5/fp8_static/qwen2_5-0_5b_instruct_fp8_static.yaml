@@ -1,13 +1,16 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output
+
 # Simplified Configuration for LLM compression
 model:
   name: Qwen
-  model_path: Qwen/QwQ-32B
+  model_path: Qwen/Qwen2.5-0.5B-Instruct
   trust_remote_code: true
   low_cpu_mem_usage: true
   use_cache: false
   torch_dtype: auto
   device_map: auto
-  save_path: ./output
 
 # Compression configuration
 compression:

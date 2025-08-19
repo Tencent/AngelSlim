@@ -18,7 +18,7 @@ import torch.nn as nn
 from ...utils import find_parent_layer_and_sub_name, print_info
 from ..compressor_factory import CompressorFactory
 from .core import PTQHook
-from .modules import AWQ, FP8, GPTQ, INT8, SmoothQuant
+from .modules import AWQ, FP8, GPTQ, INT8, LeptoFP8, SmoothQuant
 
 __all__ = ["PTQ"]
 
@@ -67,13 +67,23 @@ class PTQ:
             max_seq_length = self.quant_model.quant_config.max_seq_length
             hidden_size = self.quant_model.quant_config.hidden_size
             model_arch_type = self.quant_model.quant_config.model_arch_type
-            self.fp8 = FP8(
-                self.quant_model,
-                seq_length=max_seq_length,
-                hidden_size=hidden_size,
-                model_arch_type=model_arch_type,
-                low_memory=self.quant_model.quant_config.low_memory,
-            )
+            if "lepto" in self.quant_algo:
+                self.fp8 = LeptoFP8(
+                    self.ptq_hook,
+                    self.quant_model,
+                    seq_length=max_seq_length,
+                    hidden_size=hidden_size,
+                    model_arch_type=model_arch_type,
+                    low_memory=self.quant_model.quant_config.low_memory,
+                )
+            else:
+                self.fp8 = FP8(
+                    self.quant_model,
+                    seq_length=max_seq_length,
+                    hidden_size=hidden_size,
+                    model_arch_type=model_arch_type,
+                    low_memory=self.quant_model.quant_config.low_memory,
+                )
         elif "int8" in self.quant_algo:
             max_seq_length = self.quant_model.quant_config.max_seq_length
             hidden_size = self.quant_model.quant_config.hidden_size
@@ -120,6 +130,8 @@ class PTQ:
             self.gptq.convert()
         elif "awq" in self.quant_algo:
             self.awq.convert()
+        elif "lepto" in self.quant_algo:
+            self.fp8.convert()
         else:
             if "smooth" in self.quant_helpers:
                 self.smooth.convert()
@@ -138,7 +150,7 @@ class PTQ:
             for k in self.quant_model.act_scales_dict.keys():
                 act_scales_data = self.quant_model.act_scales_dict[k].data
                 if act_scales_data > 1.5:
-                    print(
+                    print_info(
                         f"[AngelSlim Warning] Act_scales {k}: "
                         f"The weight is too high:{act_scales_data}. "
                         f"It is recommended to clip it to 1.5 "
@@ -146,7 +158,7 @@ class PTQ:
             for k in self.quant_model.weight_scales_dict.keys():
                 weight_scales_data = self.quant_model.weight_scales_dict[k].data
                 if weight_scales_data > 1.5:
-                    print(
+                    print_info(
                         f"[AngelSlim Warning] Weight_scales {k}: "
                         f"The weight is too high:{weight_scales_data}. "
                         f"It is recommended to clip it to 1.5 "
