@@ -163,7 +163,7 @@ class DeepSeek(BaseLLMModel):
             quant_algo=self.quant_config.quant_algo,
             weight=weight,
             weight_scale=weight_scale,
-            group_size=self.quant_config.quant_algo_info["w_group_size"],
+            group_size=self.quant_config.quant_algo_info.get("w_group_size", 128),
             bias=layer.bias,
             input_scale=act_scale,
         )
