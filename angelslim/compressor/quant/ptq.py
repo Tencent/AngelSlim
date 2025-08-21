@@ -45,7 +45,7 @@ class PTQ:
             self.ptq_hook = PTQHook(self.quant_model)
             self.ptq_hook.apply_hook()
 
-        if "gptq" in self.quant_algo:
+        if "gptq" in self.quant_algo or "gptaq" in self.quant_algo:
             max_seq_length = self.quant_model.quant_config.max_seq_length
             hidden_size = self.quant_model.quant_config.hidden_size
             self.gptq = GPTQ(
@@ -105,7 +105,7 @@ class PTQ:
             )
 
     def calibrate(self, dataloader):
-        if "gptq" in self.quant_algo:
+        if "gptq" in self.quant_algo or "gptaq" in self.quant_algo:
             self.gptq.run(dataloader)
         elif "awq" in self.quant_algo:
             self.awq.run(dataloader)
@@ -123,7 +123,7 @@ class PTQ:
         Saves scales and inserts QDQ modules.
         """
         print_info("Start convert model...")
-        if "gptq" in self.quant_algo:
+        if "gptq" in self.quant_algo or "gptaq" in self.quant_algo:
             self.gptq.convert()
         elif "awq" in self.quant_algo:
             self.awq.convert()
@@ -166,7 +166,7 @@ class PTQ:
                     )
 
         print_info("Start save PTQ ckpt to: {}".format(save_path))
-        if "gptq" in self.quant_algo:
+        if "gptq" in self.quant_algo or "gptaq" in self.quant_algo:
             self.gptq.save(save_path)
         elif "awq" in self.quant_algo:
             self.awq.save(save_path)

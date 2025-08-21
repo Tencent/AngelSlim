@@ -23,6 +23,7 @@ from tqdm import tqdm
 from .....utils import print_info
 from ...modules.catcher import Catcher
 from ...modules.helper_layer import GPTQQuantLinear
+from .gptaq_module import GPTAQModule
 from .gptq_module import GPTQModule
 
 __all__ = ["GPTQ"]
@@ -51,6 +52,8 @@ class GPTQ:
         self.dtype = next(iter(self.layers.parameters())).dtype
         self.quantizers = {}
         self.gptq = {}
+        self.quant_algo = self.model.quant_config.quant_algo
+        self.native_inp_caches = {}
 
     @torch.no_grad()
     def run(self, dataloader):
@@ -86,6 +89,8 @@ class GPTQ:
         torch.cuda.empty_cache()
 
         outs = torch.zeros_like(inps)
+        if "gptaq" in self.quant_algo:
+            native_inps = inps.clone().detach()
         # begin the gptq process
         print_info("Ready.")
 
@@ -96,17 +101,60 @@ class GPTQ:
             subset = self._find_layers(layer)
             print_info("subset:{}".format(subset))
             self.gptq = {}
+            if "gptaq" in self.quant_algo:
+                self.native_inp_caches = {}
             print_info("GPTQMoe start layer {}".format(i))
             for name in subset:
                 if name in self.ignore_layers:
                     continue
-                self.gptq[name] = GPTQModule(subset[name], quant_bits=self.quant_bits)
+                if "gptaq" in self.quant_algo:
+                    self.native_inp_caches[name] = []
+                    self.gptq[name] = GPTAQModule(
+                        subset[name], quant_bits=self.quant_bits
+                    )
+                else:
+                    self.gptq[name] = GPTQModule(
+                        subset[name], quant_bits=self.quant_bits
+                    )
+
+            def pre_process_fwd_hook(layer_name):
+                def tmp(_, inp, out):
+                    self.native_inp_caches[layer_name] += [inp[0].data]
+                    del inp, out
+
+                return tmp
 
             def add_batch(layer_name):
                 def tmp(_, inp, out):
-                    self.gptq[layer_name].add_batch(inp[0].data, out.data)
+                    if "gptaq" in self.quant_algo:
+                        native_inp = self.native_inp_caches[layer_name].pop(0)
+                        self.gptq[layer_name].add_batch(
+                            inp[0].data, out.data, native_inp
+                        )
+                    else:
+                        self.gptq[layer_name].add_batch(inp[0].data, out.data)
 
                 return tmp
+
+            if "gptaq" in self.quant_algo:
+                native_handles = []
+                for name in self.native_inp_caches:
+                    native_handles.append(
+                        subset[name].register_forward_hook(pre_process_fwd_hook(name))
+                    )
+
+                # being native hook
+                for j in range(nsamples):
+                    with torch.no_grad():
+                        outs[j, :, :] = layer(
+                            hidden_states=native_inps[j, :, :].unsqueeze(0),
+                            **layer_kwargs,
+                        )[0].squeeze(1)
+                native_inps = outs
+
+                print_info("Native HOOK Step{}".format(j))
+                for h in native_handles:
+                    h.remove()
 
             handles = []
             for name in self.gptq:

@@ -138,7 +138,7 @@ class QuantConfig:
             self.hidden_size = global_config.hidden_size
             self.model_arch_type = global_config.model_arch_type
             self.low_memory = config.quantization.low_memory
-        elif "int4_gptq" in self.quant_algo:
+        elif "int4_gptq" in self.quant_algo or "int4_gptaq" in self.quant_algo:
             self.act_observer = None
             self.weight_observer = None
             self.kv_cache_observer = None
