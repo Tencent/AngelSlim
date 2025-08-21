@@ -135,7 +135,7 @@ class QuantConfig:
                 "mse_range": quantization_args.quant_method["mse_range"],
             }
             self.low_memory = config.quantization.low_memory
-        elif "int4_gptq" in self.quant_algo:
+        elif "int4_gptq" in self.quant_algo or "int4_gptaq" in self.quant_algo:
             self.act_observer = None
             self.weight_observer = None
             self.kv_cache_observer = None

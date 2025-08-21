@@ -124,6 +124,7 @@ class QwenVL(BaseLLMModel):
         if (
             "gptq" in self.quant_config.quant_algo
             or "awq" in self.quant_config.quant_algo
+            or "gptaq" in self.quant_config.quant_algo
         ):
             device = "cuda:0"
         else:

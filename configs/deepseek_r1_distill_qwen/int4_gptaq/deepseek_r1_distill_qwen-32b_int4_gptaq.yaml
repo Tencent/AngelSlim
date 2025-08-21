@@ -1,0 +1,35 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output
+
+# Simplified Configuration for LLM compression
+model:
+  name: Qwen
+  model_path: deepseek-ai/DeepSeek-R1-Distill-Qwen-32B
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: cpu
+  save_path: ./output
+
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    name: int4_gptaq     # Supported: fp8_static, fp8_dynamic, int4_awq, int4_gptq
+    bits: 4                # Quantization bits (4/8)
+    quant_method:
+      weight: "per-group"
+      group_size: 128
+    ignore_layers:         # Skip quantization for these layers
+      - "lm_head"
+      - "model.embed_tokens"
+
+# Dataset for calibration
+dataset:
+  name: TextDataset
+  data_path: ./dataset/sharegpt_gpt4_qwen/sharegpt_gpt4-qwen3_a22B_output.jsonl
+  max_seq_length: 4096
+  num_samples: 128
+  batch_size: 1
