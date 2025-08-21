@@ -185,10 +185,6 @@ class PTQSaveVllmHF(PTQSaveBase):
         with open(os.path.join(save_path, "hf_quant_config.json"), "w") as f:
             json.dump(trtllm_config, f, indent=4)
 
-        for name, param in self.quant_model.get_model().named_parameters():
-            print("name:", name)
-            print("param:", param.shape, param.dtype)
-
         self.quant_model.tokenizer.save_pretrained(save_path)
 
 
@@ -644,7 +640,7 @@ class DeepseekV3HfPTQSave(PTQSaveBase):
                     param_list.append(param)
                 newparam = torch.cat(param_list, dim=0)
                 new_save_dict[k] = newparam
-                print(f"shape of {k}: {new_save_dict[k].shape}")
+                print_info(f"shape of {k}: {new_save_dict[k].shape}")
                 index_dict["weight_map"][k] = str(filename)
         safe_save(new_save_dict, os.path.join(save_model_path, filename))
         # process others
@@ -675,7 +671,7 @@ class DeepseekV3HfPTQSave(PTQSaveBase):
                         index_dict,
                         filename,
                     )
-                    print(f"shape of {k}: {new_save_dict[k].shape}")
+                    print_info(f"shape of {k}: {new_save_dict[k].shape}")
             safe_save(new_save_dict, os.path.join(save_model_path, filename))
 
         # update scales map

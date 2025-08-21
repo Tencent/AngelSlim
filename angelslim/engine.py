@@ -37,7 +37,6 @@ DEFAULT_COMPRESSION_CONFIG = {
     "int4_awq": default_compress_config.default_int4_awq_config(),
     "int4_gptq": default_compress_config.default_int4_gptq_config(),
     "w4a8_fp8": default_compress_config.default_w4a8_fp8_static_config(),
-    "int4_gptaq": default_compress_config.default_int4_gptaq_config(),
 }
 
 
@@ -260,6 +259,7 @@ class InferEngine(Engine):
         """
         Initialize engine configuration
         """
+        super().__init__()
         self.slim_model = None
         self.tokenizer = None
         self.dataloader = None

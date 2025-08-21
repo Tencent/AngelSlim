@@ -71,6 +71,8 @@ def find_parent_layer_and_sub_name(model, name):
 
 
 def find_layers(module, layers=None, name=""):
+    if not layers:
+        layers = [torch.nn.Linear]
     if type(module) in layers:
         return {name: module}
     res = {}

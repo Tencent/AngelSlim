@@ -22,10 +22,10 @@ from angelslim.utils.config_parser import SlimConfigParser, print_config
 
 def get_args():
     parser = argparse.ArgumentParser(description="AngelSlim")
-    parser.add_argument("--model-path", type=str, required=True)
+    parser.add_argument("--model-path", type=str, default=None)
     parser.add_argument("--input-prompt", type=str, default=None)
-    parser.add_argument("--output-path", type=str, default=None)
     parser.add_argument("-c", "--config", type=str, default=None)
+    parser.add_argument("--save-path", type=str, default="./output/")
 
     args = parser.parse_args()
     return args
@@ -54,6 +54,9 @@ def infer(config, args):
     Evaluate the compression process.
     This function is a placeholder for future evaluation logic.
     """
+    assert (
+        config or args.model_path
+    ), "Please provide a model path or a configuration file."
     slim_engine = InferEngine()
 
     if config:
@@ -94,7 +97,7 @@ def infer(config, args):
         if config and global_config:
             save_path = os.path.join(global_config.save_path, "output_image.png")
         else:
-            save_path = args.output_path or "output_image.png"
+            save_path = os.path.join(args.save_path, "output_image.png")
 
         # Ensure the directory exists
         if save_path:

@@ -158,8 +158,7 @@ class AWQ:
             if not self.low_memory:
                 outs = outs.to(dev)
                 self.inps = self.inps.to(dev)
-            f_layer = layer if layer else self.isinstance_list
-            subset = find_layers(f_layer)
+            subset = find_layers(layer)
 
             if self.model_arch_type in ["qwen3_moe", "hunyuan_v1_moe"]:
                 subset = {
@@ -335,8 +334,7 @@ class AWQ:
 
     def _convert_llm(self):
         for i in tqdm(range(len(self.layers)), desc="AWQ"):
-            f_layer = self.layers[i] if self.layers[i] else self.isinstance_list
-            subset = find_layers(f_layer)
+            subset = find_layers(self.layers[i])
             self._apply_quant(self.layers[i], subset)
 
     def convert(self):

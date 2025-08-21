@@ -26,8 +26,6 @@ from ...utils.utils import find_layers, find_parent_layer_and_sub_name
 from ..base_model import BaseDiffusionModel
 from ..model_factory import SlimModelFactory
 
-# COMPRESS_CONFIG = None
-
 
 @SlimModelFactory.register
 class FLUX(BaseDiffusionModel):
@@ -64,8 +62,6 @@ class FLUX(BaseDiffusionModel):
         """
         # load the model from the specified path
         if compress_config and compress_config.name == "PTQ":
-            # global COMPRESS_CONFIG
-            # COMPRESS_CONFIG = compress_config
             self.model = FluxQuantPipeline.from_pretrained(
                 model_path,
                 torch_dtype=torch_dtype,
@@ -228,6 +224,7 @@ class FluxQuantPipeline(FluxPipeline):
             )
             act_scale = scales_dicts[name + ".input_scale"]
             weight_scale = scales_dicts[name + ".weight_scale"]
+
             qdq_module = QLinear(
                 quant_algo=quant_config.quant_algo,
                 weight=sub_layer.weight,
@@ -235,4 +232,5 @@ class FluxQuantPipeline(FluxPipeline):
                 bias=sub_layer.bias,
                 input_scale=act_scale,
             )
+
             setattr(parent_layer, sub_name, qdq_module)
