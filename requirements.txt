@@ -11,3 +11,7 @@ qwen_vl_utils==0.0.11
 tiktoken
 triton
 datasets
+fschat
+openai
+anthropic
+ray
