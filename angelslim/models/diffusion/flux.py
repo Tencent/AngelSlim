@@ -20,7 +20,7 @@ from diffusers import FluxPipeline
 from safetensors.torch import load_file
 from tqdm import tqdm
 
-from ...compressor.quant.core import PTQDiffusionSave, QuantConfig
+from ...compressor.quant.core import PTQDiffusionSave, PTQOnlyScaleSave, QuantConfig
 from ...compressor.quant.modules import QLinear
 from ...utils.utils import find_layers, find_parent_layer_and_sub_name
 from ..base_model import BaseDiffusionModel
@@ -162,6 +162,8 @@ class FLUX(BaseDiffusionModel):
     def get_save_func(self):
         if self.deploy_backend in ["huggingface"]:
             return PTQDiffusionSave
+        elif self.deploy_backend in ["tensorrt"]:
+            return PTQOnlyScaleSave
         else:
             raise NotImplementedError(
                 f"deploy_backend {self.deploy_backend} is not supported for saving."

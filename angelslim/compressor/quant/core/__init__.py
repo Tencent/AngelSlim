@@ -21,6 +21,7 @@ from .sample_func import EMASampler, MultiStepSampler  # noqa: F401
 from .save import DeepseekV3HfPTQSave  # noqa: F401
 from .save import DeepseekV3PTQSaveTRTLLM  # noqa: F401
 from .save import PTQDiffusionSave  # noqa: F401
+from .save import PTQOnlyScaleSave  # noqa: F401
 from .save import PTQPTMSave  # noqa: F401
 from .save import PTQSaveVllmHF  # noqa: F401
 from .save import PTQTorchSave  # noqa: F401

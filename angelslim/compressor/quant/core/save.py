@@ -234,6 +234,50 @@ class PTQDiffusionSave(PTQSaveBase):
         safe_save(save_scales, safetensor_file)
 
 
+class PTQOnlyScaleSave(PTQSaveBase):
+    def __init__(self, quant_model):
+        super().__init__(quant_model=quant_model)
+
+    def save(self, save_path):
+        a_quant_algo = self.quant_model.quant_config.quant_algo_info["a"]
+        ignored_layers = self.quant_model.skip_layer_names()
+
+        static_q_dict = {
+            "quantization_config": {
+                "quant_method": "fp8",
+                "activation_scheme": (
+                    "dynamic" if "dynamic" in a_quant_algo else "static"
+                ),
+                "ignored_layers": ignored_layers,
+            }
+        }
+
+        os.makedirs(save_path, exist_ok=True)
+        with open(os.path.join(save_path, "hf_quant_config.json"), "w") as f:
+            json.dump(static_q_dict, f, indent=4)
+
+        save_scales = {}
+        new_model_index = {
+            "metadata": {},
+            "weight_map": {},
+        }
+        safetensor_name = "model-scales.safetensors"
+        for name, value in self.quant_model.act_scales_dict.items():
+            save_scales[name + ".input_scale"] = value
+            new_model_index["weight_map"][name + ".input_scale"] = safetensor_name
+        for name, value in self.quant_model.weight_scales_dict.items():
+            save_scales[name + ".weight_scale"] = value
+            new_model_index["weight_map"][name + ".weight_scale"] = safetensor_name
+
+        safetensor_file = os.path.join(save_path, safetensor_name)
+        safe_save(save_scales, safetensor_file)
+
+        # update model index json
+        new_model_index_file = os.path.join(save_path, "model.safetensors.index.json")
+        with open(new_model_index_file, "w") as f:
+            json.dump(new_model_index, f, indent=2)
+
+
 class PTQTorchSave(PTQSaveBase):
     def __init__(self, quant_model):
         super(PTQTorchSave, self).__init__(quant_model=quant_model)

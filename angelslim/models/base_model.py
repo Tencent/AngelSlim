@@ -44,11 +44,6 @@ class BaseLLMModel(metaclass=ABCMeta):
         model: Optional[torch.nn.Module] = None,
         deploy_backend: Optional[str] = "vllm",
     ):
-        assert deploy_backend in [
-            "vllm",
-            "huggingface",
-            "trtllm",
-        ], f"Unsupported deploy backend {deploy_backend}"
         self.deploy_backend = deploy_backend
         self.model = model
         self.tokenizer = None
@@ -127,7 +122,7 @@ class BaseLLMModel(metaclass=ABCMeta):
             act_scale = self.act_scales_dict[name]
         if name in self.weight_scales_dict:
             weight_scale = self.weight_scales_dict[name]
-        if self.deploy_backend in ["vllm", "huggingface"]:
+        if self.deploy_backend in ["vllm", "huggingface", "trtllm", "tensorrt"]:
             q_linear = QDQModule(
                 quant_algo=self.quant_config.quant_algo,
                 weight=sub_layer.weight,
