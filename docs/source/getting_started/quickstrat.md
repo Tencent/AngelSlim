@@ -35,6 +35,15 @@ python3 tools/run.py -c configs/qwen3/fp8_static/qwen3-1_7b_fp8_static.yaml
 from angelslim import engine
 engine.get_supported_compress_method()
 ```
+- fp8 block-wise量化可以使用并行GPU转化脚本，其中block_size是权重量化scale对应分块形状，`num_workers`是并行数
+
+```shell
+python3 tools/fp8_quant_blockwise.py \
+    --block_size 128 128 \
+    --num_workers 32 \
+    --input_path ${INPUT_PATH} \
+    --output_path ${OUTPUT_PATH}
+```
 
 
 ## 部署
