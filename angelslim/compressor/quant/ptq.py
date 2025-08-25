@@ -39,7 +39,7 @@ class PTQ:
         self.layers = self.quant_model.get_quant_module()
         self.quant_algo = self.quant_model.quant_config.quant_algo
         self.quant_helpers = self.quant_model.quant_config.quant_helpers
-        if "gptq" not in self.quant_algo or "awq" not in self.quant_algo:
+        if "fp8" in self.quant_algo or "int8" in self.quant_algo:
             # Add ptq observer hook
             self.ptq_hook = PTQHook(self.quant_model)
             self.ptq_hook.apply_hook()
