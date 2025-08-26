@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -117,6 +118,7 @@ class DatasetConfig:
     num_samples: int = field(default=256)
     batch_size: int = field(default=1)
     shuffle: bool = field(default=False)
+    inference_settings: Optional[Dict[str, Any]] = field(default=None)
 
 
 @dataclass
@@ -399,6 +401,76 @@ class SlimConfigParser:
             global_config=global_config,
             infer_config=None,
         )
+
+
+def parse_json_compression_config_section(compress_config: dict) -> CompressionConfig:
+    """
+    Parses the compression_config field from a JSON configuration file
+
+    Args:
+        compress_config: Dictionary containing compression configuration data
+
+    Returns:
+        CompressionConfig instance initialized with the parsed data
+    """
+    # Extract compression method name (required field)
+    name = compress_config["name"]
+
+    # Parse quantization configuration
+    quant_data = compress_config.get("quantization")
+    quantization = None
+    # Create QuantizationConfig if quantization data exists
+    if quant_data:
+        quantization = QuantizationConfig(**quant_data)
+
+    # Parse cache configuration
+    cache_data = compress_config.get("cache")
+    cache = None
+    # Create CacheConfig if cache data exists
+    if cache_data:
+        cache = CacheConfig(**cache_data)
+
+    # Create and return the CompressionConfig instance
+    return CompressionConfig(name=name, quantization=quantization, cache=cache)
+
+
+def parse_json_full_config(json_file_path: str) -> FullConfig:
+    """
+    Parses a JSON configuration file into a FullConfig instance
+
+    Args:
+        json_file_path: Path to JSON configuration file
+
+    Returns:
+        Fully populated FullConfig instance containing all configuration sections
+    """
+    with open(json_file_path, "r") as f:
+        config_data = json.load(f)
+
+    # Parse model configuration section
+    model_config = ModelConfig(**config_data["model_config"])
+
+    # Parse compression configuration section
+    comp_config = parse_json_compression_config_section(
+        config_data["compression_config"]
+    )
+
+    # Parse other configuration sections with default fallbacks
+    dataset_config, global_config, infer_config = None, None, None
+    if config_data.get("dataset_config", {}):
+        dataset_config = DatasetConfig(**config_data["dataset_config"])
+    if config_data.get("global_config", {}):
+        global_config = GlobalConfig(**config_data["global_config"])
+    if config_data.get("infer_config", {}):
+        infer_config = InferenceConfig(**config_data["infer_config"])
+
+    return FullConfig(
+        model_config=model_config,
+        compression_config=comp_config,
+        dataset_config=dataset_config,
+        global_config=global_config,
+        infer_config=infer_config,
+    )
 
 
 def print_config(config, indent=0):

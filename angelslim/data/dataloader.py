@@ -20,6 +20,7 @@ from transformers import ProcessorMixin
 
 from .base_dataset import BaseDataset
 from .multimodal_dataset import MultiModalDataset
+from .text2image_dataset import Text2ImageDataset
 from .text_dataset import TextDataset
 
 
@@ -37,6 +38,7 @@ class DataLoaderFactory:
         data_source: Union[str, Dict] = None,
         data_type: str = "auto",
         num_workers: int = 0,
+        inference_settings: Dict = None,
     ) -> DataLoader:
         """
         Create appropriate DataLoader based on data source
@@ -51,6 +53,12 @@ class DataLoaderFactory:
             data_source: File path or HF dataset dict
             data_type: "text", "multimodal" or "auto"
             num_workers: Number of workers for DataLoader
+            inference_settings: Settings for text-to-image inference
+                - height: Image height
+                - width: Image width
+                - guidance_scale: Guidance scale for inference
+                - num_inference_steps: Number of inference steps
+                - max_sequence_length: Maximum sequence length for text inputs
 
         Returns:
             PyTorch DataLoader ready for use
@@ -81,6 +89,12 @@ class DataLoaderFactory:
                 num_samples=num_samples,
                 data_source=data_source,
                 is_hf_dataset=not os.path.isfile(data_source),
+            )
+        elif data_type == "Text2ImageDataset":
+            dataset = Text2ImageDataset(
+                data_path=data_source,
+                num_samples=num_samples,
+                inference_settings=inference_settings,
             )
         else:
             raise ValueError(f"Unsupported data type: {data_type}")

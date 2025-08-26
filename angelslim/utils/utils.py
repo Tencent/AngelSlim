@@ -70,6 +70,23 @@ def find_parent_layer_and_sub_name(model, name):
     return parent_layer, sub_name
 
 
+def find_layers(module, layers=None, name=""):
+    if not layers:
+        layers = [torch.nn.Linear]
+    if type(module) in layers:
+        return {name: module}
+    res = {}
+    for name1, child in module.named_children():
+        res.update(
+            find_layers(
+                child,
+                layers=layers,
+                name=name + "." + name1 if name != "" else name1,
+            )
+        )
+    return res
+
+
 def get_tensor_item(x):
     return x.item()
 

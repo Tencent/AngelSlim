@@ -652,3 +652,57 @@ class QDQModule(torch.nn.Module):
                 qoutput = quantize_activation_per_tensor_fp8(output, self.output_scale)
                 output = qoutput.to(output.dtype) * self.output_scale
         return output
+
+
+class QLinear(torch.nn.Module):
+    def __init__(
+        self,
+        quant_algo: QuantConfig,
+        weight: torch.nn.Parameter,
+        weight_scale: torch.nn.Parameter,
+        bias: torch.nn.Parameter,
+        input_scale: Optional[torch.nn.Parameter] = None,
+    ):
+        super().__init__()
+        self.quant_algo = quant_algo
+        self.weight = weight
+
+        self.weight_scale = (
+            weight_scale.view(-1) if weight_scale.ndim == 0 else weight_scale
+        )
+        self.bias = bias
+        if input_scale is not None:
+            self.input_scale = (
+                input_scale.view(-1) if input_scale.ndim == 0 else input_scale
+            )
+        else:
+            self.input_scale = None
+
+    def forward(self, x):
+        if self.input_scale:
+            if "fp8" in self.quant_algo:
+                qinput = quantize_activation_per_tensor_fp8(x, self.input_scale)
+            elif "int8" in self.quant_algo:
+                qinput = tensor_quant_dequant_int(x, self.input_scale, bits=8)
+            else:
+                raise ValueError(
+                    f"Unsupported quantization algorithm: {self.quant_algo}"
+                )
+
+        if "fp8" in self.quant_algo:
+            output = gemm_fp8(
+                act=qinput,
+                act_scale=self.input_scale,
+                weight=self.weight,
+                weight_scale=self.weight_scale,
+                bias=self.bias,
+                out_dtype=x.dtype,
+            )
+        elif "int8" in self.quant_algo:
+            output = torch.nn.functional.linear(
+                x, self.weight * self.weight_scale, bias=self.bias
+            )
+        else:
+            raise ValueError(f"Unsupported quantization algorithm: {self.quant_algo}")
+
+        return output

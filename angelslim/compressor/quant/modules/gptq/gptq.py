@@ -20,7 +20,7 @@ import torch.nn as nn
 from huggingface_hub import save_torch_state_dict
 from tqdm import tqdm
 
-from .....utils import print_info
+from .....utils import find_layers, print_info
 from ...modules.catcher import Catcher
 from ...modules.helper_layer import GPTQQuantLinear
 from .gptaq_module import GPTAQModule
@@ -36,10 +36,7 @@ class GPTQ:
         super(GPTQ, self).__init__()
         self.model = model
         self.modal_type = self.model.modal_type
-        if self.modal_type == "VLM":
-            self.layers = self.model.model.model.language_model.layers
-        else:
-            self.layers = self.model.model.model.layers
+        self.layers = self.model.get_quant_module()
         self.layers_block_name = self.model.block_name
         self.quant_bits = self.model.quant_config.quant_bit
         self.group_size = self.model.quant_config.quant_algo_info["group_size"]
@@ -98,7 +95,7 @@ class GPTQ:
 
         for i in range(len(layers)):
             layer = layers[i].to(inps.device)
-            subset = self._find_layers(layer)
+            subset = find_layers(layer)
             print_info("subset:{}".format(subset))
             self.gptq = {}
             if "gptaq" in self.quant_algo:
@@ -246,12 +243,12 @@ class GPTQ:
             model.cpu()
 
         print_info("Packing model...")
-        layers = self._find_layers(model)
+        layers = find_layers(model)
         layers = {n: layers[n] for n in quantizers}
 
         self._make_quant(model, quantizers, bits, group_size)
 
-        qlayers = self._find_layers(model, [GPTQQuantLinear])
+        qlayers = find_layers(model, [GPTQQuantLinear])
 
         with tctl.threadpool_limits(limits=1):
             pbar = tqdm(qlayers.keys(), leave=True)
@@ -286,13 +283,7 @@ class GPTQ:
         Saves scales and inserts QDQ modules.
         """
         print_info("Start convert model...")
-        if self.modal_type in ["LLM", "VLM"]:
-            self._convert_llm()
-        elif self.modal_type == "AIGC":
-            pass
-        else:
-            print_info("current {} modal type not support".format(self.modal_type))
-            raise NotImplementedError
+        self._convert_llm()
         print_info("convert model done.")
 
     def save(self, save_dir: str, shard_size="5GB", safetensors=True):
@@ -357,19 +348,3 @@ class GPTQ:
         else:
             name, rest = name.split(".", 1)
             self._recurse_setattr(getattr(module, name), rest, value)
-
-    def _find_layers(self, module, layers=None, name=""):
-        if not layers:
-            layers = [torch.nn.Linear]
-        if type(module) in layers:
-            return {name: module}
-        res = {}
-        for name1, child in module.named_children():
-            res.update(
-                self._find_layers(
-                    child,
-                    layers=layers,
-                    name=name + "." + name1 if name != "" else name1,
-                )
-            )
-        return res

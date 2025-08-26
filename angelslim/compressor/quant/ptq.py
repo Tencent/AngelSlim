@@ -36,11 +36,10 @@ class PTQ:
         self.quant_model = model
         # init ptq config of model
         self.quant_model.init_ptq(slim_config)
-        self.modal_type = self.quant_model.modal_type
-        self.layers = self.quant_model.get_model()
+        self.layers = self.quant_model.get_quant_module()
         self.quant_algo = self.quant_model.quant_config.quant_algo
         self.quant_helpers = self.quant_model.quant_config.quant_helpers
-        if self.modal_type in ["LLM", "VLM"]:
+        if "fp8" in self.quant_algo or "int8" in self.quant_algo:
             # Add ptq observer hook
             self.ptq_hook = PTQHook(self.quant_model)
             self.ptq_hook.apply_hook()
@@ -51,8 +50,7 @@ class PTQ:
             self.gptq = GPTQ(
                 self.quant_model, seq_length=max_seq_length, hidden_size=hidden_size
             )
-
-        if "awq" in self.quant_algo:
+        elif "awq" in self.quant_algo:
             max_seq_length = self.quant_model.quant_config.max_seq_length
             hidden_size = self.quant_model.quant_config.hidden_size
             model_arch_type = self.quant_model.quant_config.model_arch_type
@@ -65,7 +63,7 @@ class PTQ:
                 observer_layer_classes=[nn.Linear],
                 low_memory=self.quant_model.quant_config.low_memory,
             )
-        if "fp8" in self.quant_algo:
+        elif "fp8" in self.quant_algo:
             max_seq_length = self.quant_model.quant_config.max_seq_length
             hidden_size = self.quant_model.quant_config.hidden_size
             model_arch_type = self.quant_model.quant_config.model_arch_type
@@ -86,7 +84,7 @@ class PTQ:
                     model_arch_type=model_arch_type,
                     low_memory=self.quant_model.quant_config.low_memory,
                 )
-        if "int8" in self.quant_algo:
+        elif "int8" in self.quant_algo:
             max_seq_length = self.quant_model.quant_config.max_seq_length
             hidden_size = self.quant_model.quant_config.hidden_size
             model_arch_type = self.quant_model.quant_config.model_arch_type
@@ -97,6 +95,11 @@ class PTQ:
                 model_arch_type=model_arch_type,
                 low_memory=self.quant_model.quant_config.low_memory,
             )
+        else:
+            raise NotImplementedError(
+                f"[AngelSlim Error] algo {self.quant_algo} is not support"
+            )
+
         if "smooth" in self.quant_helpers:
             self.smooth = SmoothQuant(
                 self.quant_model,
@@ -130,13 +133,9 @@ class PTQ:
         elif "lepto" in self.quant_algo:
             self.fp8.convert()
         else:
-            if self.modal_type in ["LLM", "VLM"]:
-                if "smooth" in self.quant_helpers:
-                    self.smooth.convert()
-                self._convert_llm()
-            else:
-                print_info("current {} modal type not support".format(self.modal_type))
-                raise NotImplementedError
+            if "smooth" in self.quant_helpers:
+                self.smooth.convert()
+            self._convert()
         print_info("convert model done.")
 
     def save(self, save_path: str):
@@ -174,7 +173,7 @@ class PTQ:
             save_func = self.quant_model.get_save_func()(self.quant_model)
             save_func.save(save_path)
 
-    def _convert_llm(self):
+    def _convert(self):
         # 1. get act, weight and kv-cache scale
         for name, sub_layer in self.ptq_hook.quant_layers_dict.items():
             if (

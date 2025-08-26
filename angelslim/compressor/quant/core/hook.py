@@ -12,14 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import re
-
-import torch
-
 from ..observers import ParentObserver, PTQObserver
 from .quant_func import get_fp_maxval, get_fp_search_maxval
 
-__all__ = ["PTQHook", "DiTHook"]
+__all__ = ["PTQHook"]
 
 
 class PTQHook:
@@ -119,66 +115,3 @@ class PTQHook:
         if self.quant_model.quant_algo_dict["c_quant_algo"] == "fp8":
             for k, v in self.quant_model.kv_cache_scales_dict.items():
                 self.quant_model.kv_cache_scales_dict[k] = v / maxval.type(v.dtype)
-
-
-def _filter_func(name):
-    pattern = re.compile(
-        r".*(mlp_t5|pooler|style_embedder|x_embedder|t_embedder|extra_embedder).*"
-    )
-    return pattern.match(name) is not None
-
-
-class DiTHook:
-    def __init__(self, model):
-        """
-        Args:
-            model(nn.Moudle, required): the model to be quant
-        """
-        self.model = model
-        self.input_activation = []
-        self.output_activation = []
-
-        self._apply_hook()
-
-    def _apply_hook(self):
-        self._forward_hook_list = []
-        for name, sub_layer in self.model.named_modules():
-            if _filter_func(name):
-                continue
-            if isinstance(sub_layer, (torch.nn.Conv2d, torch.nn.Linear)):
-                if "blocks" in name:
-                    # handle
-                    forward_pre_hook_handle = sub_layer.register_forward_hook(
-                        self._forward_pre_hook
-                    )
-                    self._forward_hook_list.append(forward_pre_hook_handle)
-
-    def _forward_pre_hook(self, layer, input, output):
-        layer_name = ""
-        for name, module in self.model.named_modules():
-            if _filter_func(name):
-                continue
-            if module == layer:
-                layer_name = name
-                break
-        x = (
-            output[0].detach().cpu()
-            if isinstance(output, tuple)
-            else output.detach().cpu()
-        )
-        self.output_activation.append((layer_name, x))
-        y = (
-            input[0].detach().cpu()
-            if isinstance(input, tuple)
-            else input.detach().cpu()
-        )
-        self.input_activation.append((layer_name, y))
-
-    def remove_hook(self):
-        for hook in self._forward_hook_list:
-            hook.remove()
-        self._forward_hook_list = []
-
-    def clean_acitvation_list(self):
-        self.input_activation = []
-        self.output_activation = []

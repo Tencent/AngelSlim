@@ -29,7 +29,6 @@ def get_args():
     parser.add_argument("-c", "--config", type=str, required=True)
     parser.add_argument("--model-path", type=str, default=None)
     parser.add_argument("--save-path", type=str, default=None)
-    parser.add_argument("--input-prompt", type=str, default=None)
     parser.add_argument("--multi-nodes", action="store_true")
     args = parser.parse_args()
     return args
@@ -90,6 +89,7 @@ def multi_nodes_run(config):
         trust_remote_code=model_config.trust_remote_code,
         low_cpu_mem_usage=model_config.low_cpu_mem_usage,
         use_cache=model_config.use_cache,
+        cache_dir=model_config.cache_dir,
         deploy_backend=global_config.deploy_backend,
         using_multi_nodes=True,
     )
@@ -104,6 +104,7 @@ def multi_nodes_run(config):
             batch_size=dataset_config.batch_size,
             num_samples=dataset_config.num_samples,
             shuffle=dataset_config.shuffle,
+            inference_settings=dataset_config.inference_settings,
         )
 
     # Step 6: Initialize compressor
@@ -146,6 +147,7 @@ def run(config):
         trust_remote_code=model_config.trust_remote_code,
         low_cpu_mem_usage=model_config.low_cpu_mem_usage,
         use_cache=model_config.use_cache,
+        cache_dir=model_config.cache_dir,
         deploy_backend=global_config.deploy_backend,
     )
 
@@ -159,6 +161,7 @@ def run(config):
             batch_size=dataset_config.batch_size,
             num_samples=dataset_config.num_samples,
             shuffle=dataset_config.shuffle,
+            inference_settings=dataset_config.inference_settings,
         )
 
     # Step 5: Initialize compressor
@@ -175,64 +178,13 @@ def run(config):
     slim_engine.save(global_config.save_path, config)
 
 
-def infer(config, input_prompt):
-    """
-    Evaluate the compression process.
-    This function is a placeholder for future evaluation logic.
-    """
-    # Step 1: Initialize configurations
-    model_config = config.model_config
-    compress_config = config.compression_config
-    global_config = config.global_config
-    infer_config = config.infer_config
-
-    # Step 2: Execute complete pipeline
-    slim_engine = Engine()
-
-    # Step 3: Prepare model
-    slim_engine.prepare_model(
-        model_name=model_config.name,
-        model_path=model_config.model_path,
-        torch_dtype=model_config.torch_dtype,
-        device_map=model_config.device_map,
-        trust_remote_code=model_config.trust_remote_code,
-        low_cpu_mem_usage=model_config.low_cpu_mem_usage,
-        use_cache=model_config.use_cache,
-        cache_dir=model_config.cache_dir,
-        deploy_backend=global_config.deploy_backend,
-    )
-
-    # Step 4: Initialize compressor
-    slim_engine.prepare_compressor(
-        compress_name=compress_config.name,
-        compress_config=compress_config,
-        global_config=global_config,
-    )
-
-    # Step 5: Run inference
-    output = slim_engine.infer(input_prompt, **infer_config.__dict__)
-    if slim_engine.series == "Diffusion":
-        # Save the generated image
-        if global_config.save_path:
-            save_path = os.path.join(global_config.save_path, "output_image.png")
-        else:
-            save_path = "output_image.png"
-
-        # Ensure the directory exists
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-
-        output.save(save_path)
-
-
 if __name__ == "__main__":
     args = get_args()
     parser = SlimConfigParser()
     config = parser.parse(args.config)
     merge_config(config, args)
     print_config(config)
-    if args.input_prompt:
-        infer(config, args.input_prompt)
-    elif args.multi_nodes:
+    if args.multi_nodes:
         multi_nodes_run(config)
     else:
         run(config)

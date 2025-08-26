@@ -42,7 +42,7 @@ class INT8:
         super(INT8, self).__init__()
         self.model = model
         self.modal_type = self.model.modal_type
-        self.layers = self.model.model.model.layers
+        self.layers = self.model.get_quant_module()
         self.quant_bits = self.model.quant_config.quant_bit
         self.seq_length = seq_length
         self.hidden_size = hidden_size

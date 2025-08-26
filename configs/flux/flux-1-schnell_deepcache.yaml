@@ -1,7 +1,7 @@
 # Global configuration of pipeline
 global:
   save_path: ./output
-  deploy_backend: torch
+  deploy_backend: huggingface
 
 # Simplified Configuration for LLM compression
 model:

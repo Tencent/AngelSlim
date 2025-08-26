@@ -38,17 +38,24 @@ class BaseDataset(Dataset):
 
     @staticmethod
     def collate_fn(batch: List[Dict]) -> Dict:
-        """Custom collate function to batch dictionary items"""
+        """Custom collate function for batching"""
         collated = {}
-        for key in batch[0].keys():
-            # Skip non-tensor items
-            if not isinstance(batch[0][key], torch.Tensor):
-                continue
 
-            # Stack tensors of the same type
-            tensors = [item[key] for item in batch]
-            if all(t.dim() == 0 for t in tensors):  # Handle scalar tensors
-                collated[key] = torch.stack(tensors)
+        # Get all keys from the first sample
+        for key in batch[0].keys():
+            # Collect the values for this key from all samples
+            values = [item[key] for item in batch]
+
+            # If the value is numeric, convert directly to tensor
+            if isinstance(values[0], torch.Tensor):
+                if all(t.dim() == 0 for t in values):  # Handle scalar tensors
+                    collated[key] = torch.stack(values)
+                else:
+                    collated[key] = torch.cat(values, dim=0)
+            elif isinstance(values[0], (int, float)):
+                collated[key] = torch.tensor(values)
             else:
-                collated[key] = torch.cat(tensors, dim=0)
+                # For text and other non-numeric types, keep as a list
+                collated[key] = values
+
         return collated

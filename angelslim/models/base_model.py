@@ -44,11 +44,6 @@ class BaseLLMModel(metaclass=ABCMeta):
         model: Optional[torch.nn.Module] = None,
         deploy_backend: Optional[str] = "vllm",
     ):
-        assert deploy_backend in [
-            "vllm",
-            "huggingface",
-            "trtllm",
-        ], f"Unsupported deploy backend {deploy_backend}"
         self.deploy_backend = deploy_backend
         self.model = model
         self.tokenizer = None
@@ -114,13 +109,20 @@ class BaseLLMModel(metaclass=ABCMeta):
     def get_model(self):
         return self.model
 
+    def get_quant_module(self):
+        """
+        Returns the module that will be quantized.
+        This is typically the main transformer module of the model.
+        """
+        return self.model.model.layers
+
     def get_qdq_module(self, sub_layer, name):
         act_scale, weight_scale = None, None
         if name in self.act_scales_dict:
             act_scale = self.act_scales_dict[name]
         if name in self.weight_scales_dict:
             weight_scale = self.weight_scales_dict[name]
-        if self.deploy_backend in ["vllm", "huggingface"]:
+        if self.deploy_backend in ["vllm", "huggingface", "trtllm", "tensorrt"]:
             q_linear = QDQModule(
                 quant_algo=self.quant_config.quant_algo,
                 weight=sub_layer.weight,
@@ -130,9 +132,7 @@ class BaseLLMModel(metaclass=ABCMeta):
             )
         else:
             print_info(
-                "[Slim] current {} deploy_backend not support".format(
-                    self.deploy_backend
-                )
+                "current {} deploy_backend not support".format(self.deploy_backend)
             )
             raise NotImplementedError
         return q_linear
@@ -210,30 +210,6 @@ class BaseLLMModel(metaclass=ABCMeta):
 
     def is_all_reduce(self):
         return False
-
-    def build_hf_model(self, model_path):
-        model = AutoModelForCausalLM.from_pretrained(
-            model_path,
-            torch_dtype="auto",
-            device_map="auto",
-            use_flash_attention_2=True,
-            trust_remote_code=True,
-        )
-        return model
-
-    def find_layers(self, module, layers=None, name=""):
-        if type(module) in layers and name not in self.skip_layer_names():
-            return {name: module}
-        res = {}
-        for name1, child in module.named_children():
-            res.update(
-                self.find_layers(
-                    child,
-                    layers=layers,
-                    name=name + "." + name1 if name != "" else name1,
-                )
-            )
-        return res
 
     def get_pre_transformer_modules(self):
         pre_transformer_modules_dict = {}
@@ -344,7 +320,7 @@ class BaseLLMModel(metaclass=ABCMeta):
         return super().__getattr__(item)
 
 
-class BaseDiffusionModel(metaclass=ABCMeta):
+class BaseDiffusionModel(BaseLLMModel):
     """
     Base class for diffusion model compression, providing common functionalities
     such as initialization, quantization configuration, and model handling.
@@ -357,10 +333,14 @@ class BaseDiffusionModel(metaclass=ABCMeta):
     def __init__(
         self,
         model: Optional[torch.nn.Module] = None,
-        deploy_backend: Optional[str] = "torch",
+        deploy_backend: Optional[str] = "huggingface",
     ):
+        super().__init__(
+            model=model,
+            deploy_backend=deploy_backend,
+        )
         assert deploy_backend in [
-            "torch",
+            "huggingface",
             "tensorrt",
         ], f"Unsupported deploy backend {deploy_backend}"
         self.deploy_backend = deploy_backend
@@ -383,3 +363,9 @@ class BaseDiffusionModel(metaclass=ABCMeta):
     @abstractmethod
     def get_save_func(self):
         pass
+
+    def skip_layer_names(self):
+        return self.quant_config.quant_algo_info.get("ignore_layers", [])
+
+    def get_model(self):
+        return self.model

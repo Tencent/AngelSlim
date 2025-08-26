@@ -23,7 +23,12 @@ import torch
 from .compressor import CompressorFactory
 from .data.dataloader import DataLoaderFactory
 from .models import SlimModelFactory
-from .utils import default_compress_config, get_package_info, print_info
+from .utils import (
+    default_compress_config,
+    get_package_info,
+    parse_json_full_config,
+    print_info,
+)
 
 DEFAULT_COMPRESSION_CONFIG = {
     "fp8_static": default_compress_config.default_fp8_static_config(),
@@ -32,7 +37,6 @@ DEFAULT_COMPRESSION_CONFIG = {
     "int4_awq": default_compress_config.default_int4_awq_config(),
     "int4_gptq": default_compress_config.default_int4_gptq_config(),
     "w4a8_fp8": default_compress_config.default_w4a8_fp8_static_config(),
-    "int4_gptaq": default_compress_config.default_int4_gptaq_config(),
 }
 
 
@@ -131,6 +135,7 @@ class Engine:
         batch_size=1,
         num_samples=128,
         shuffle=True,
+        inference_settings=None,
     ) -> Optional[Any]:
         """Prepare compression dataset"""
         if custom_dataloader is not None:
@@ -153,6 +158,7 @@ class Engine:
             shuffle=shuffle,
             num_samples=num_samples,
             data_source=data_path,
+            inference_settings=inference_settings,
         )
         self.max_seq_length = max_length
 
@@ -247,13 +253,85 @@ class Engine:
 
         print_info(f"Compressed model saved to {save_path}")
 
-    def infer(self, input_prompt: str, **kwargs) -> Any:
+
+class InferEngine(Engine):
+    def __init__(self):
+        """
+        Initialize engine configuration
+        """
+        super().__init__()
+        self.slim_model = None
+        self.tokenizer = None
+        self.dataloader = None
+        self.compressor = None
+        self.compress_type = None
+        self.model_path = None
+        self.max_seq_length = None
+
+    def from_pretrained(
+        self,
+        model_path,
+        torch_dtype=None,
+        device_map=None,
+        trust_remote_code=None,
+        low_cpu_mem_usage=None,
+        use_cache=None,
+    ) -> Any:
+        """Load pretrained model and tokenizer
+        Args:
+            model_path (str): Path to the pretrained model.
+            torch_dtype (str): Data type for the model weights.
+            device_map (str): Device map for the model.
+            trust_remote_code (bool): Whether to trust remote code.
+            low_cpu_mem_usage (bool): Whether to use low CPU memory usage mode.
+            use_cache (bool): Whether to use cache during loading.
+            cache_dir (str, optional): Directory to cache the model.
+        """
+        assert model_path, "model_path must be specified."
+        # load slim config
+        slim_config_path = os.path.join(model_path, "angelslim_config.json")
+        if not os.path.exists(slim_config_path):
+            raise FileNotFoundError(
+                f"angelslim_config.json not found in {model_path}. "
+                "Please ensure the model is compressed with Angelslim."
+            )
+        slim_config = parse_json_full_config(slim_config_path)
+        if torch_dtype:
+            slim_config.model_config.torch_dtype = torch_dtype
+        if device_map:
+            slim_config.model_config.device_map = device_map
+        if trust_remote_code is not None:
+            slim_config.model_config.trust_remote_code = trust_remote_code
+        if low_cpu_mem_usage is not None:
+            slim_config.model_config.low_cpu_mem_usage = low_cpu_mem_usage
+        if use_cache is not None:
+            slim_config.model_config.use_cache = use_cache
+
+        self.slim_model = SlimModelFactory.create(
+            slim_config.model_config.name, deploy_backend="huggingface"
+        )
+
+        self.slim_model.from_pretrained(
+            model_path=model_path,
+            torch_dtype=slim_config.model_config.torch_dtype,
+            device_map=slim_config.model_config.device_map,
+            trust_remote_code=slim_config.model_config.trust_remote_code,
+            low_cpu_mem_usage=slim_config.model_config.low_cpu_mem_usage,
+            use_cache=slim_config.model_config.use_cache,
+            compress_config=slim_config.compression_config,
+        )
+
+        self.series = SlimModelFactory.get_series_by_models(
+            slim_config.model_config.name
+        )
+
+    def generate(self, input_prompt: str, **kwargs) -> Any:
         """Run inference with the compressed model
         Args:
             input_prompt (str): Input prompt for the model.
         """
         if not self.slim_model or not self.slim_model.model:
-            raise RuntimeError("Model not initialized. Call prepare_model() first")
+            raise RuntimeError("Model not initialized. Call from_pretrained() first")
 
         if self.series in ["LLM", "VLM"]:
             return self.slim_model.generate(

@@ -57,10 +57,13 @@ class QuantConfig:
         quantization_args = config.quantization
         self.quant_algo = quantization_args.name
         self.quant_bit = quantization_args.bits
-        self.max_seq_length = global_config.max_seq_length
         self.quant_helpers = quantization_args.quant_helpers
         act_quant_method = quantization_args.quant_method.get("activation", None)
         weight_quant_method = quantization_args.quant_method["weight"]
+        if global_config:
+            self.max_seq_length = global_config.max_seq_length
+            self.hidden_size = global_config.hidden_size
+            self.model_arch_type = global_config.model_arch_type
 
         if "fp8" in self.quant_algo:
             is_dynamic = "dynamic" if "dynamic" in self.quant_algo else "static"
@@ -94,8 +97,6 @@ class QuantConfig:
 
             if act_quant_method is not None:
                 self.quant_algo_info["a"] = f"fp8_{act_quant_method}-{is_dynamic}"
-            self.hidden_size = global_config.hidden_size
-            self.model_arch_type = global_config.model_arch_type
             self.low_memory = config.quantization.low_memory
             self.quant_analyse = config.quantization.quant_analyse
             self.quant_vit = config.quantization.quant_vit
@@ -117,8 +118,6 @@ class QuantConfig:
             }
             if act_quant_method is not None:
                 self.quant_algo_info["a"] = f"int8_{act_quant_method}-{is_dynamic}"
-            self.hidden_size = global_config.hidden_size
-            self.model_arch_type = global_config.model_arch_type
             self.low_memory = config.quantization.low_memory
             self.quant_analyse = config.quantization.quant_analyse
         elif "int4_awq" in self.quant_algo:
@@ -135,8 +134,6 @@ class QuantConfig:
                 "group_size": int(group_size),
                 "mse_range": quantization_args.quant_method["mse_range"],
             }
-            self.hidden_size = global_config.hidden_size
-            self.model_arch_type = global_config.model_arch_type
             self.low_memory = config.quantization.low_memory
         elif "int4_gptq" in self.quant_algo or "int4_gptaq" in self.quant_algo:
             self.act_observer = None
@@ -151,7 +148,6 @@ class QuantConfig:
                 "group_size": group_size,
                 "ignore_layers": quantization_args.ignore_layers,
             }
-            self.hidden_size = global_config.hidden_size
 
         if "smooth" in self.quant_helpers:
             self.smooth_alpha = quantization_args.smooth_alpha

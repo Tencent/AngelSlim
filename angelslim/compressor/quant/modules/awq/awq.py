@@ -22,7 +22,7 @@ import torch.nn as nn
 from huggingface_hub import save_torch_state_dict
 from tqdm import tqdm
 
-from .....utils import get_best_device, print_info, set_op_by_name
+from .....utils import find_layers, get_best_device, print_info, set_op_by_name
 from ...core import pseudo_quantize_tensor
 from ...modules.catcher import Catcher
 from ...modules.helper_layer import WQLinearGEMM
@@ -60,10 +60,7 @@ class AWQ:
         super(AWQ, self).__init__()
         self.model = model
         self.modal_type = self.model.modal_type
-        if self.modal_type == "VLM":
-            self.layers = self.model.model.model.language_model.layers
-        else:
-            self.layers = self.model.model.model.layers
+        self.layers = self.model.get_quant_module()
         self.quant_bits = self.model.quant_config.quant_bit
         self.group_size = self.model.quant_config.quant_algo_info["group_size"]
         self.zero_point = self.model.quant_config.quant_algo_info["zero_point"]
@@ -161,7 +158,7 @@ class AWQ:
             if not self.low_memory:
                 outs = outs.to(dev)
                 self.inps = self.inps.to(dev)
-            subset = self._find_layers(layer)
+            subset = find_layers(layer)
 
             if self.model_arch_type in ["qwen3_moe", "hunyuan_v1_moe"]:
                 subset = {
@@ -302,22 +299,6 @@ class AWQ:
         if self.modal_type in ["LLM", "VLM"]:
             self.model.tokenizer.save_pretrained(save_dir)
 
-    def _find_layers(self, module, layers=None, name=""):
-        if not layers:
-            layers = self.isinstance_list
-        if type(module) in layers:
-            return {name: module}
-        res = {}
-        for name1, child in module.named_children():
-            res.update(
-                self._find_layers(
-                    child,
-                    layers=layers,
-                    name=name + "." + name1 if name != "" else name1,
-                )
-            )
-        return res
-
     def _apply_quant(self, module, named_linears: Dict[str, nn.Linear]):
         for name, linear_layer in named_linears.items():
             if "mlp.gate." in name:
@@ -353,7 +334,7 @@ class AWQ:
 
     def _convert_llm(self):
         for i in tqdm(range(len(self.layers)), desc="AWQ"):
-            subset = self._find_layers(self.layers[i])
+            subset = find_layers(self.layers[i])
             self._apply_quant(self.layers[i], subset)
 
     def convert(self):
@@ -361,11 +342,5 @@ class AWQ:
         Saves scales and inserts QDQ modules.
         """
         print_info("Start convert model...")
-        if self.modal_type in ["LLM", "VLM"]:
-            self._convert_llm()
-        elif self.modal_type == "AIGC":
-            pass
-        else:
-            print_info("current {} modal type not support".format(self.modal_type))
-            raise NotImplementedError
+        self._convert_llm()
         print_info("convert model done.")

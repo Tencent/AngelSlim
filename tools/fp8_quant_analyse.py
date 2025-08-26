@@ -45,7 +45,9 @@ def quant_analyse(args):
 
 if __name__ == "__main__":
 
-    global_parser = argparse.ArgumentParser(description="全局参数", add_help=True)
+    global_parser = argparse.ArgumentParser(
+        description="Quantization analyse", add_help=True
+    )
     global_parser.add_argument(
         "--analyse-type",
         type=str,
