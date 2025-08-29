@@ -337,8 +337,11 @@ class BenchmarkEngine:
         args.seed = self.config.seed
         args.load_in_8bit = False
 
+<<<<<<< HEAD
         args.early_stop_method = self.config.early_stop_method
 
+=======
+>>>>>>> 763d443 (feat: Add speculative decoding benchmark engine for Eagle3)
         return args
 
     def _get_question_file_path(self) -> str:
