@@ -93,6 +93,8 @@ For more detailed installation instructions, please refer to the [Installation D
 
 ### Quick Start
 
+#### Quantization
+
 After installing `AngelSlim`, you can quickly start by running the following script to perform static `FP8` quantization on the `Qwen3-1.7B` model:
 
 * One-click Start
@@ -122,6 +124,22 @@ After installing `AngelSlim`, you can quickly start by running the following scr
   ```
 
 For more details, please refer to the [Quick Start Documentation](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html).
+
+#### Speculative_Decoding
+
+##### Eagle3 PyTorch Performance Testing
+
+After installing `AngelSlim`, you can quickly start Eagle3 PyTorch performance testing with the following script:
+
+```bash
+python3 tools/spec_benchmark.py \
+    --base-model-path /path/to/base/model \
+    --eagle-model-path /path/to/eagle/model \
+    --model-id your_model_id \
+    --mode both
+```
+
+For more details, please refer to the [Quick Start Documentation](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html). 
 
 ### Deployment and Testing
 

@@ -12,6 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .benchmark import BenchmarkConfig, BenchmarkEngine, BenchmarkMode
+from .benchmark_engine import BenchmarkConfig, BenchmarkEngine, BenchmarkMode
 
 __all__ = ["BenchmarkEngine", "BenchmarkConfig", "BenchmarkMode"]

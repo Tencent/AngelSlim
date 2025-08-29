@@ -1,6 +1,12 @@
+# This file is adapted from the Hugging Face Transformers library:
 # Source: https://github.com/huggingface/transformers/blob/v4.31-release/src/transformers/models/llama/modeling_llama.py # noqa: E501
-# Modifications are denoted by the symbol: [MODIFIED]
-
+# Original Copyright: Copyright 2022 EleutherAI and the HuggingFace Inc. team. All rights reserved. # noqa: E501
+#
+# Modifications made for AngelSlim project:
+# - Modified KV cache mechanism for preallocated GPU memory optimization
+# - Added support for speculative decoding in EAGLE3 target model
+# - Customized attention mask handling for tree-based inference
+# - Other modifications are denoted by the symbol: [MODIFIED]
 
 """ PyTorch LLaMA model."""
 import math

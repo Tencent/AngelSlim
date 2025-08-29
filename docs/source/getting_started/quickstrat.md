@@ -1,3 +1,4 @@
+
 # 快速开始
 
 ## 环境准备
@@ -45,6 +46,93 @@ python3 tools/fp8_quant_blockwise.py \
     --output_path ${OUTPUT_PATH}
 ```
 
+### 投机采样
+
+投机采样（Speculative Decoding）是一种加速大语言模型推理的技术，通过使用较小的辅助模型来预测后续token，然后由主模型进行验证，从而提高生成效率。AngelSlim提供了完整的Eagle3基准测试工具。
+
+#### 基本用法
+
+使用 `tools/spec_benchmark.py` 脚本进行投机采样基准测试：
+
+```shell
+python3 tools/spec_benchmark.py \
+    --base-model-path ${BASE_MODEL_PATH} \
+    --eagle-model-path ${EAGLE_MODEL_PATH} \
+    --model-id ${MODEL_ID} \
+    --mode both
+```
+
+#### 参数说明
+
+**模型配置参数：**
+- `--base-model-path`: 基础模型路径（必需）
+- `--eagle-model-path`: Eagle辅助模型路径（必需）
+- `--model-id`: 模型标识符（必需）
+
+**基准测试配置：**
+- `--bench-name`: 基准数据集名称，默认为 `mt_bench`, 可选【`alpaca`,`gsm8k`,`humaneval`,`mt_bench`】
+- `--mode`: 执行模式，可选 `eagle`（仅投机采样）、`baseline`（仅基线）、`both`（两者都执行），默认为 `both`
+- `--output-dir`: 结果输出目录
+
+**生成参数：**
+- `--temperature`: 采样温度，默认为 1.0
+- `--max-new-token`: 最大生成token数，默认为 1024
+- `--total-token`: 草稿树中的总节点数，默认为 60
+- `--depth`: 树深度，默认为 5
+- `--top-k`: Top-k采样，默认为 10
+
+**硬件配置：**
+- `--num-gpus-per-model`: 每个模型使用的GPU数量，默认为 1
+- `--num-gpus-total`: 总GPU数量，默认为 1
+- `--max-gpu-memory`: 每个GPU的最大内存限制
+
+**其他设置：**
+- `--seed`: 随机种子，默认为 42
+- `--question-begin`: 问题起始索引（用于调试）
+- `--question-end`: 问题结束索引（用于调试）
+- `--no-metrics`: 跳过自动指标计算
+
+#### 使用示例
+
+1. **完整基准测试（推荐）：**
+```shell
+python3 tools/spec_benchmark.py \
+    --base-model-path /path/to/base/model \
+    --eagle-model-path /path/to/eagle/model \
+    --model-id qwen3-8b \
+    --mode both \
+    --output-dir ./results \
+    --max-new-token 512 \
+    --temperature 0.0
+```
+
+2. **仅运行投机采样：**
+```shell
+python3 tools/spec_benchmark.py \
+    --base-model-path /path/to/base/model \
+    --eagle-model-path /path/to/eagle/model \
+    --model-id qwen3-8b \
+    --mode eagle \
+```
+
+3. **多GPU配置：**
+```shell
+python3 tools/spec_benchmark.py \
+    --base-model-path /path/to/base/model \
+    --eagle-model-path /path/to/eagle/model \
+    --model-id qwen3-8b \
+    --num-gpus-per-model 1 \
+    --num-gpus-total 8
+```
+
+#### 性能报告
+
+运行完成后，工具会自动生成性能报告，包括：
+- 投机采样与基线模型的性能对比
+- 加速比统计
+- 生成质量指标（如果启用）
+
+结果将保存在指定的输出目录中，便于后续分析和比较。
 
 ## 部署
 

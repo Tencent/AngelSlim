@@ -1,4 +1,14 @@
-# Adapted from transformers.models.qwen3.modeling_qwen3.py
+# This file is adapted from the Hugging Face Transformers library:
+# Source: https://github.com/huggingface/transformers/blob/v4.51-release/src/transformers/models/qwen3/modeling_qwen3.py # noqa: E501
+# Original Copyright: Copyright 2024 The Qwen team, Alibaba Group and the HuggingFace Inc. team. All rights reserved. # noqa: E501
+#
+# Modifications made for AngelSlim project:
+# - Modified KV cache mechanism for preallocated GPU memory optimization
+# - Added support for speculative decoding in EAGLE3 target model
+# - Customized attention mask handling with tree_mask support for tree-based inference
+# - Modified forward pass to support custom cache position handling
+# - Other modifications are denoted by the symbol: [MODIFIED]
+
 from functools import partial
 from typing import Callable, Optional, Tuple, Union
 
