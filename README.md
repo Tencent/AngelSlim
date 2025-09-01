@@ -98,6 +98,7 @@ cd AngelSlim && python setup.py install
 
 ### 快速开始
 
+#### 量化
 完成安装`AngelSlim`后，您可以通过以下脚本快速开始，完成`Qwen3-1.7B`模型的静态`FP8`量化：
 
 - 一键式启动
@@ -125,6 +126,18 @@ cd AngelSlim && python setup.py install
   # Save compressed model
   slim_engine.save("./output")
   ```
+
+详情请参考[快速开始文档](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html)。
+
+#### 投机采样
+完成安装`AngelSlim`后，您可以通过以下脚本快速开始，完成`Eagle3`的Pytorch性能测试：
+```bash
+python3 tools/spec_benchmark.py \
+    --base-model-path /path/to/base/model \
+    --eagle-model-path /path/to/eagle/model \
+    --model-id your_model_id \
+    --mode both
+```
 
 详情请参考[快速开始文档](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html)。
 
