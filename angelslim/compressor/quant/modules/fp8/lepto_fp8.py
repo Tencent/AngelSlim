@@ -48,7 +48,7 @@ class LeptoFP8:
         self.ptq_hook = ptq_hook
         self.quant_model = model  # self.quant_model
         self.modal_type = self.quant_model.modal_type
-        self.layers = self.quant_model.model.model.layers
+        self.layers = self.quant_model.get_quant_module()
         self.quant_bits = self.quant_model.quant_config.quant_bit
         self.seq_length = seq_length
         self.hidden_size = hidden_size
@@ -252,9 +252,11 @@ class LeptoFP8:
         torch.cuda.empty_cache()
 
         # 2. insert qdq module
-        layers = self.quant_model.get_model()
+        quant_convert_module = self.quant_model.get_quant_convert_module()
         for name, sub_layer in self.ptq_hook.quant_layers_dict.items():
-            parent_layer, sub_name = find_parent_layer_and_sub_name(layers, name)
+            parent_layer, sub_name = find_parent_layer_and_sub_name(
+                quant_convert_module, name
+            )
 
             qdq_module = self.quant_model.get_qdq_module(sub_layer, name)
             setattr(parent_layer, sub_name, qdq_module)

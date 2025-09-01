@@ -159,6 +159,13 @@ class FLUX(BaseDiffusionModel):
         """
         return self.model.transformer
 
+    def get_quant_convert_module(self):
+        """
+        Returns the module that will be converted to quantized.
+        This is typically the main transformer module of the model.
+        """
+        return self.model.transformer
+
     def get_save_func(self):
         if self.deploy_backend in ["huggingface"]:
             return PTQDiffusionSave
