@@ -116,6 +116,13 @@ class BaseLLMModel(metaclass=ABCMeta):
         """
         return self.model.model.layers
 
+    def get_quant_convert_module(self):
+        """
+        Returns the module that will be converted to quantized.
+        This is typically the main transformer module of the model.
+        """
+        return self.model
+
     def get_qdq_module(self, sub_layer, name):
         act_scale, weight_scale = None, None
         if name in self.act_scales_dict:

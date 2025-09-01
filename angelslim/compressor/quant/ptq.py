@@ -36,7 +36,6 @@ class PTQ:
         self.quant_model = model
         # init ptq config of model
         self.quant_model.init_ptq(slim_config)
-        self.layers = self.quant_model.get_quant_module()
         self.quant_algo = self.quant_model.quant_config.quant_algo
         self.quant_helpers = self.quant_model.quant_config.quant_helpers
         if "fp8" in self.quant_algo or "int8" in self.quant_algo:
@@ -210,9 +209,12 @@ class PTQ:
 
         self.ptq_hook.post_process()
 
+        quant_convert_module = self.quant_model.get_quant_convert_module()
         # 2. insert qdq module
         for name, sub_layer in self.ptq_hook.quant_layers_dict.items():
-            parent_layer, sub_name = find_parent_layer_and_sub_name(self.layers, name)
+            parent_layer, sub_name = find_parent_layer_and_sub_name(
+                quant_convert_module, name
+            )
 
             qdq_module = self.quant_model.get_qdq_module(sub_layer, name)
             setattr(parent_layer, sub_name, qdq_module)
