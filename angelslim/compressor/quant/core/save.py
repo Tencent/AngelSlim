@@ -473,6 +473,17 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
 
             self.add_mtp_weight(save_path=save_model_path, file_name=file_name)
 
+            if os.path.exists(tmp_path):
+                shutil.rmtree(tmp_path)
+            parent_dir = os.path.dirname(
+                self.quant_model.model.ori_model_path.rstrip("/")
+            )
+            tp_model_path = os.path.join(
+                parent_dir, f"ds_ckpt_tp{self.quant_model.model.world_size}"
+            )
+            if os.path.exists(tp_model_path):
+                shutil.rmtree(tp_model_path)
+
     def _save_ckpt(self, scale, save_path, all_reduce=True):
         if all_reduce:
             if self.rank == 0:
