@@ -21,9 +21,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.models.deepseek_v3 import DeepseekV3Config
 
 from ...compressor.quant.core import (
-    DeepseekV3HfPTQSave,
-    DeepseekV3PTQSaveTRTLLM,
-    PTQSaveVllmHF,
+    DeepSeekV3PTQSaveMulti,
+    DeepSeekV3PTQSaveSingle,
     weight_dequant,
 )
 from ...compressor.quant.modules import QDQModule
@@ -207,14 +206,10 @@ class DeepSeek(BaseLLMModel):
                         pass
 
     def get_save_func(self):
-        if self.deploy_backend in ["vllm", "huggingface"]:
+        if self.deploy_backend in ["vllm", "trtllm"]:
             if self.model.using_multi_nodes:
-                return DeepseekV3HfPTQSave
-            return PTQSaveVllmHF
-        elif self.deploy_backend == "trtllm":
-            if self.quant_config.low_memory:
-                return DeepseekV3PTQSaveTRTLLM
-            return DeepseekV3HfPTQSave
+                return DeepSeekV3PTQSaveMulti
+            return DeepSeekV3PTQSaveSingle
         else:
             raise NotImplementedError(
                 f"deploy_backend {self.deploy_backend} is not supported for saving."
