@@ -95,6 +95,24 @@ class TextDataset(BaseDataset):
                     messages, tokenize=False, add_generation_prompt=True
                 )
 
+                thinking_data = False
+                for dic in messages:
+                    if dic["role"] == "assistant":
+                        if "<think>" and "</think>" in dic["content"]:
+                            thinking_data = True
+                            break
+                if thinking_data:
+                    text = self.processor.bos_token
+                    for dic in messages:
+                        if dic["role"] == "system":
+                            text += dic["content"]
+                        elif dic["role"] == "user":
+                            text = (
+                                text + "<｜User｜>" + dic["content"] + "<｜Assistant｜>"
+                            )
+                        elif dic["role"] == "assistant":
+                            text = text + dic["content"] + self.processor.eos_token
+
                 model_inputs = self.processor(
                     [text],
                     return_tensors="pt",

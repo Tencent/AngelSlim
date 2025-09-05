@@ -576,8 +576,8 @@ class QDQModule(torch.nn.Module):
         self.quant_algo = quant_algo
         if "fp8" in quant_algo:
             if "w4a8" in self.quant_algo:
-                tensor_max_value = weight_scale.clone()
-                tensor_wise_scale = tensor_max_value.max() / 448.0
+                max_value_group_wise = weight_scale.clone()
+                tensor_wise_scale = max_value_group_wise.max() / 448.0
                 quant_weight, _ = quantize_weight_per_tensor_fp8(
                     weight, tensor_wise_scale
                 )
@@ -587,10 +587,14 @@ class QDQModule(torch.nn.Module):
                     new_weight_bf16, method="groupwise", bits=4, group_size=group_size
                 )
                 quant_weight, _ = quantize_weight_int(
-                    new_weight_bf16_qdq, tensor_max_value, bits=4
+                    new_weight_bf16_qdq, max_value_group_wise, bits=4
                 )
                 quant_weight = pack_weight_to_int8(quant_weight)
                 del new_weight_bf16_qdq, new_weight_bf16
+                self.weight_scale_int4 = torch.nn.Parameter(
+                    max_value_group_wise / 8, requires_grad=False
+                )
+                weight_scale = tensor_wise_scale
             else:
                 quant_weight, weight_scale = quantize_weight_per_tensor_fp8(
                     weight, weight_scale
@@ -652,6 +656,14 @@ class QDQModule(torch.nn.Module):
                 qoutput = quantize_activation_per_tensor_fp8(output, self.output_scale)
                 output = qoutput.to(output.dtype) * self.output_scale
         return output
+
+    def state_dict(self, *args, **kwargs):
+        state_dict = super().state_dict(*args, **kwargs)
+        keys_to_rename = [k for k in state_dict.keys() if "weight_scale_int4" in k]
+        for old_key in keys_to_rename:
+            new_key = old_key.replace("weight_scale_int4", "weight_scale.int4")
+            state_dict[new_key] = state_dict.pop(old_key)
+        return state_dict
 
 
 class QLinear(torch.nn.Module):

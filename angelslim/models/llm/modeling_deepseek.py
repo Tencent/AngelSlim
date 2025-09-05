@@ -1017,7 +1017,7 @@ class DeepseekV3ForCausalLM(DeepseekV3PreTrainedModel, GenerationMixin):
         if using_multi_nodes:
             cls.using_multi_nodes = True
             rank = int(os.getenv("RANK", "0"))
-            parent_dir = os.path.dirname(model_path)
+            parent_dir = os.path.dirname(model_path.rstrip("/"))
             tp_model_path = os.path.join(parent_dir, f"ds_ckpt_tp{cls.world_size}")
             os.makedirs(tp_model_path, exist_ok=True)
 

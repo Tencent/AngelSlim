@@ -217,7 +217,8 @@ class PTQ:
             )
 
             qdq_module = self.quant_model.get_qdq_module(sub_layer, name)
-            setattr(parent_layer, sub_name, qdq_module)
+            if qdq_module is not sub_layer:
+                setattr(parent_layer, sub_name, qdq_module)
         self.quant_model.quantized = True
 
     def __getattr__(self, item):
