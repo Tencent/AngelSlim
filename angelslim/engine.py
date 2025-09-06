@@ -226,7 +226,9 @@ class Engine:
         elif isinstance(self.compressor, list):
             compressors = self.compressor
         for idx, compress_type in enumerate(self.compress_type):
-            if compress_type == "PTQ" and not self.only_inference[idx]:
+            if self.only_inference[idx]:
+                continue
+            if compress_type == "PTQ":
                 compressors[idx].calibrate(self.dataloader)
             else:
                 raise NotImplementedError(
@@ -241,12 +243,19 @@ class Engine:
             save_path (str, optional): Path to save the compressed model and tokenizer.
         """
         assert save_path, "Save path must be provided in model_config or as an argument"
-        if self.compress_type == "PTQ":
-            # Execute model conversion
-            self.compressor.convert()
+        if isinstance(self.compressor, str):
+            compressors = [self.compressor]
+        elif isinstance(self.compressor, list):
+            compressors = self.compressor
+        for idx, compress_type in enumerate(self.compress_type):
+            if self.only_inference[idx]:
+                continue
+            if compress_type == "PTQ":
+                # Execute model conversion
+                compressors[idx].convert()
 
-        # Save quantized model
-        self.compressor.save(save_path)
+            # Save quantized model
+            compressors[idx].save(save_path)
 
         # Save all config
         if config is not None:

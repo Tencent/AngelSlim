@@ -27,6 +27,20 @@ compression:
     ignore_layers:
       - "time_text_embed"
 
+# Dataset for calibration
+dataset:
+  name: Text2ImageDataset
+  data_path: ./dataset/text2image_data/text2image_example_data.jsonl
+  num_samples: 2
+  batch_size: 1
+  inference_settings:
+    height: 1024
+    width: 1024
+    guidance_scale: 3.5
+    num_inference_steps: 50
+    max_sequence_length: 512
+    seed: 42
+
 inference:
   height: 1024
   width: 1024

@@ -258,7 +258,7 @@ class CompressionConfig:
             results.append(method == CompressionMethod.CACHE.value)
 
         # Return single boolean for single method, list for multiple methods
-        return results[0] if len(results) == 1 else results
+        return results
 
     def __post_init__(self):
         """
@@ -435,6 +435,11 @@ class SlimConfigParser:
                     f"Supported methods: {self.supported_methods}"
                 )
 
+        if compression_conf.need_dataset and not dataset_conf:
+            raise ValueError(
+                "Compressor requires dataset, but 'dataset' section is missing in yaml."
+            )
+
         # Global properties
         global_config = self._get_global_config(config_dict, model_conf, dataset_conf)
 
@@ -507,7 +512,11 @@ def parse_json_compression_config_section(compress_config: dict) -> CompressionC
         CompressionConfig instance initialized with the parsed data
     """
     # Extract compression method name (required field)
-    name = compress_config["name"]
+    names = compress_config["name"]
+    if isinstance(names, str):
+        comp_names = [names]
+    elif isinstance(names, list):
+        comp_names = names
 
     # Parse quantization configuration
     quant_data = compress_config.get("quantization")
@@ -524,7 +533,7 @@ def parse_json_compression_config_section(compress_config: dict) -> CompressionC
         cache = CacheConfig(**cache_data)
 
     # Create and return the CompressionConfig instance
-    return CompressionConfig(name=name, quantization=quantization, cache=cache)
+    return CompressionConfig(name=comp_names, quantization=quantization, cache=cache)
 
 
 def parse_json_full_config(json_file_path: str) -> FullConfig:

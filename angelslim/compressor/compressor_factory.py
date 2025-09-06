@@ -79,7 +79,7 @@ class CompressorFactory:
                     f"Compress method '{name}' not registered. Available: {available}"
                 )
             compressor.append(cls._compress_methods[name](model, slim_config))
-        return compressor if len(compressor) > 1 else compressor[0]
+        return compressor
 
     @classmethod
     def get_available_compressor(cls) -> list:
