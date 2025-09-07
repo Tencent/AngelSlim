@@ -52,7 +52,6 @@ class FLUX(BaseDiffusionModel):
         model_path,
         torch_dtype="auto",
         cache_dir=None,
-        use_cache_helper=False,
         compress_config=None,
         **kwargs,
     ):
@@ -62,7 +61,6 @@ class FLUX(BaseDiffusionModel):
             model_path (str): Path to the pretrained model.
             torch_dtype (str): Data type for the model weights.
             cache_dir (str): Directory to cache the model.
-            use_cache_helper (bool): Whether to use cache helper for optimization.
             compress_config (dict): Compression configuration.
         """
         # load the model from the specified path
@@ -72,16 +70,17 @@ class FLUX(BaseDiffusionModel):
                 torch_dtype=torch_dtype,
                 cache_dir=cache_dir,
             )
-            if "PTQ" in compress_config.name:
-                scales_dicts = load_file(
-                    os.path.join(model_path, "model-scales.safetensors")
-                )
-                self.model.init_quantize(compress_config, scales_dicts)
-            if "Cache" in compress_config.name and use_cache_helper:
-                slim_config = {"compress_config": compress_config}
-                self.cache_compressor = CompressorFactory.create(
-                    compress_config.name, self, slim_config=slim_config
-                )
+            for comp_name in compress_config.name:
+                if comp_name == "PTQ":
+                    scales_dicts = load_file(
+                        os.path.join(model_path, "model-scales.safetensors")
+                    )
+                    self.model.init_quantize(compress_config, scales_dicts)
+                if comp_name == "Cache":
+                    slim_config = {"compress_config": compress_config}
+                    self.cache_compressor = CompressorFactory.create(
+                        [comp_name], self, slim_config=slim_config
+                    )
         else:
             self.model = FluxPipeline.from_pretrained(
                 model_path,
