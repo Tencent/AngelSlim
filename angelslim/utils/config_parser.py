@@ -14,11 +14,34 @@
 
 import json
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from enum import Enum
+from typing import Any, Dict, List, Optional, Union
 
 import yaml
 
 from .utils import get_hf_config
+
+
+class CompressionMethod(str, Enum):
+    """Enumeration of supported compression methods."""
+
+    CACHE = "Cache"
+    PTQ = "PTQ"
+    QAT = "QAT"
+    SPECULATIVE_DECODING = "speculative_decoding"
+
+
+class QuantizationMethod(str, Enum):
+    """Enumeration of supported quantization methods."""
+
+    FP8_STATIC = "fp8_static"
+    FP8_DYNAMIC = "fp8_dynamic"
+    FP8_LEPTO = "fp8_lepto"
+    INT4_AWQ = "int4_awq"
+    INT4_GPTQ = "int4_gptq"
+    INT8_DYNAMIC = "int8_dynamic"
+    W4A8_FP8 = "w4a8_fp8"
+    INT4_GPTAQ = "int4_gptaq"
 
 
 @dataclass
@@ -192,17 +215,78 @@ class CompressionConfig:
         speculative_decoding: Training settings for quantization-aware compression
     """
 
-    name: str
+    name: Union[str, List[str]]
     quantization: Optional[QuantizationConfig] = None
     cache: Optional[CacheConfig] = None
     # speculative_decoding: Optional[SpeculativeDecodingConfig] = None
 
     @property
     def need_dataset(self) -> bool:
-        return (
-            "dynamic" not in self.quantization.name
-            or "smooth" in self.quantization.quant_helpers
-        )
+        """Check if any of the methods requires a calibration dataset."""
+        if not self.name:
+            return False
+
+        for method in self.name:
+            # PTQ/QAT usually need calibration dataset
+            if method in ["PTQ", "QAT"]:
+                # Check if dynamic quantization (usually doesn't need dataset)
+                if self.quantization and "dynamic" in self.quantization.name:
+                    continue
+                # Check if specific quantization helpers need dataset
+                if (
+                    self.quantization
+                    and self.quantization.quant_helpers
+                    and "smooth" in self.quantization.quant_helpers
+                ):
+                    return True
+                # Default PTQ/QAT needs dataset
+                return True
+        return False
+
+    @property
+    def only_inference(self) -> Union[bool, List[bool]]:
+        """
+        Check if each method is inference-only. Returns a single boolean
+        for single method, or list of booleans for multiple methods.
+        """
+        if not self.name:
+            return False if len(self.name) == 1 else [False]
+
+        # For each method, check if it's Cache (only inference-only method)
+        results = []
+        for method in self.name:
+            results.append(method == CompressionMethod.CACHE.value)
+
+        # Return single boolean for single method, list for multiple methods
+        return results
+
+    def __post_init__(self):
+        """
+        Validates and normalizes the 'name' attribute after initialization.
+        """
+        # Convert single string to list for consistent processing
+        if isinstance(self.name, str):
+            self.name = [self.name]
+
+        # Ensure name is now a list
+        if not isinstance(self.name, list):
+            raise TypeError(
+                f"`name` must be a string or a list of strings, got {type(self.name)}"
+            )
+
+        # Validate all elements in the list are strings
+        for n in self.name:
+            if not isinstance(n, str):
+                raise TypeError(
+                    f"All elements in `name` must be strings, found {type(n)}"
+                )
+
+        # Further validate against predefined enumeration
+        try:
+            for n in self.name:
+                _ = CompressionMethod(n)  # Attempt to convert string to enum
+        except ValueError as e:
+            raise ValueError(f"Unsupported compression method in 'name': {e}")
 
 
 @dataclass
@@ -253,18 +337,9 @@ class SlimConfigParser:
 
     def __init__(self):
         # Supported compression methods
-        self.supported_methods = ["PTQ", "QAT", "Cache", "speculative_decoding"]
+        self.supported_methods = [method.value for method in CompressionMethod]
         # Supported quantization methods
-        self.supported_quant_methods = [
-            "fp8_static",
-            "fp8_dynamic",
-            "fp8_lepto",
-            "int4_awq",
-            "int4_gptq",
-            "int8_dynamic",
-            "w4a8_fp8",
-            "int4_gptaq",
-        ]
+        self.supported_quant_methods = [method.value for method in QuantizationMethod]
         # Supported speculative decoding methods
         self.supported_speculative_decoding_methods = ["EAGLE", "EAGLE2", "EAGLE3"]
 
@@ -310,36 +385,59 @@ class SlimConfigParser:
 
         # Validate compression method
         compress_name = compression_dict.get("name")
-        if compress_name not in self.supported_methods:
-            raise ValueError(
-                f"Unsupported compression method: {compress_name}. "
-                f"Supported methods: {self.supported_methods}"
+        # Convert single method to list for consistent processing
+        if isinstance(compress_name, str):
+            compress_names = [compress_name]
+        elif isinstance(compress_name, list):
+            compress_names = compress_name
+        else:
+            raise TypeError(
+                f"Compress method must be a str or list[str], got {type(compress_name)}"
             )
-
-        # Initialize compression config
-        compression_conf = CompressionConfig(name=compress_name)
-
-        # Parse method-specific configurations
-        if compress_name in ["PTQ", "QAT"]:
-            # Validate quantization type
-            quant_dict = compression_dict.get("quantization", {})
-            quant_method = quant_dict.get("name")
-            if quant_method not in self.supported_quant_methods:
+        for name in compress_names:
+            if name not in self.supported_methods:
                 raise ValueError(
-                    f"Unsupported quantization method: {quant_method}. "
-                    f"Supported: {self.supported_quant_methods}"
+                    f"Unsupported compression method: {name}. "
+                    f"Supported methods: {self.supported_methods}"
                 )
 
-            # Parse quantization config
-            compression_conf.quantization = QuantizationConfig(**quant_dict)
-        elif compress_name == "Cache":
-            # Parse cache configuration
-            cache_dict = compression_dict.get("cache", {})
-            compression_conf.cache = CacheConfig(**cache_dict)
-        else:
+        # Initialize compression config
+        compression_conf = CompressionConfig(name=compress_names)
+
+        # Parse method-specific configurations for each specified method
+        for method_name in compress_names:
+            if method_name in ["PTQ", "QAT"]:
+                # Validate quantization type
+                quant_dict = compression_dict.get("quantization", {})
+                quant_method = quant_dict.get("name")
+
+                # Get supported quantization methods (assuming similar enum exists)
+                if (
+                    quant_method not in self.supported_quant_methods
+                ):  # Keep existing or update similarly
+                    raise ValueError(
+                        f"Unsupported quantization method: {quant_method}. "
+                        f"Supported: {self.supported_quant_methods}"
+                    )
+
+                # Parse quantization config (only set if not already set)
+                if compression_conf.quantization is None:
+                    compression_conf.quantization = QuantizationConfig(**quant_dict)
+
+            elif method_name == CompressionMethod.CACHE.value:
+                # Parse cache configuration (only set if not already set)
+                cache_dict = compression_dict.get("cache", {})
+                if compression_conf.cache is None:
+                    compression_conf.cache = CacheConfig(**cache_dict)
+            else:
+                raise ValueError(
+                    f"Unsupported compression method: {method_name}. "
+                    f"Supported methods: {self.supported_methods}"
+                )
+
+        if compression_conf.need_dataset and not dataset_conf:
             raise ValueError(
-                f"Unsupported compression method: {compress_name}. "
-                f"Supported methods: {self.supported_methods}"
+                "Compressor requires dataset, but 'dataset' section is missing in yaml."
             )
 
         # Global properties
@@ -414,7 +512,11 @@ def parse_json_compression_config_section(compress_config: dict) -> CompressionC
         CompressionConfig instance initialized with the parsed data
     """
     # Extract compression method name (required field)
-    name = compress_config["name"]
+    names = compress_config["name"]
+    if isinstance(names, str):
+        comp_names = [names]
+    elif isinstance(names, list):
+        comp_names = names
 
     # Parse quantization configuration
     quant_data = compress_config.get("quantization")
@@ -431,7 +533,7 @@ def parse_json_compression_config_section(compress_config: dict) -> CompressionC
         cache = CacheConfig(**cache_data)
 
     # Create and return the CompressionConfig instance
-    return CompressionConfig(name=name, quantization=quantization, cache=cache)
+    return CompressionConfig(name=comp_names, quantization=quantization, cache=cache)
 
 
 def parse_json_full_config(json_file_path: str) -> FullConfig:

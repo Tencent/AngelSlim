@@ -55,6 +55,7 @@ class Engine:
         self.dataloader = None
         self.compressor = None
         self.compress_type = None
+        self.only_inference = False
         self.model_path = None
         self.max_seq_length = None
 
@@ -181,11 +182,16 @@ class Engine:
             default_method (str, optional): Default compression method if not specified.
                If set default_method, compress_config and global_config will be ignored.
         """
-        if compress_name not in CompressorFactory.get_available_compressor():
-            raise ValueError(
-                f"Compression method '{compress_name}' not registered. "
-                f"Available methods: {CompressorFactory.get_available_compressor()}"
-            )
+        if isinstance(compress_name, str):
+            compress_names = [compress_name]
+        elif isinstance(compress_name, list):
+            compress_names = compress_name
+        for method_name in compress_names:
+            if method_name not in CompressorFactory.get_available_compressor():
+                raise ValueError(
+                    f"Compression method '{method_name}' not registered. "
+                    f"Available methods: {CompressorFactory.get_available_compressor()}"
+                )
         if self.series in ["LLM", "VLM"]:
             global_config.update(self.model_path, self.max_seq_length)
 
@@ -199,10 +205,13 @@ class Engine:
                 "global_config": global_config,
                 "compress_config": compress_config,
             }
-        self.compress_type = compress_name
+        self.compress_type = compress_names
+        self.only_inference = (
+            compress_config.only_inference if compress_config else False
+        )
         # Create compressor by CompressorFactory
         self.compressor = CompressorFactory.create(
-            compress_name, self.slim_model, slim_config=slim_config
+            compress_names, self.slim_model, slim_config=slim_config
         )
         return self.compressor
 
@@ -212,13 +221,19 @@ class Engine:
             raise RuntimeError(
                 "Compressor not initialized. Call prepare_compressor() first"
             )
-
-        if self.compress_type == "PTQ":
-            self.compressor.calibrate(self.dataloader)
-        else:
-            raise NotImplementedError(
-                f"Compression type {self.compress_type} is not implemented"
-            )
+        if isinstance(self.compressor, str):
+            compressors = [self.compressor]
+        elif isinstance(self.compressor, list):
+            compressors = self.compressor
+        for idx, compress_type in enumerate(self.compress_type):
+            if self.only_inference[idx]:
+                continue
+            if compress_type == "PTQ":
+                compressors[idx].calibrate(self.dataloader)
+            else:
+                raise NotImplementedError(
+                    f"Compression type {self.compress_type} is not implemented"
+                )
 
     def save(
         self, save_path: Optional[str] = None, config: Optional[dataclass] = None
@@ -228,12 +243,19 @@ class Engine:
             save_path (str, optional): Path to save the compressed model and tokenizer.
         """
         assert save_path, "Save path must be provided in model_config or as an argument"
-        if self.compress_type == "PTQ":
-            # Execute model conversion
-            self.compressor.convert()
+        if isinstance(self.compressor, str):
+            compressors = [self.compressor]
+        elif isinstance(self.compressor, list):
+            compressors = self.compressor
+        for idx, compress_type in enumerate(self.compress_type):
+            if self.only_inference[idx]:
+                continue
+            if compress_type == "PTQ":
+                # Execute model conversion
+                compressors[idx].convert()
 
-        # Save quantized model
-        self.compressor.save(save_path)
+            # Save quantized model
+            compressors[idx].save(save_path)
 
         # Save all config
         if config is not None:

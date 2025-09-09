@@ -69,14 +69,17 @@ class CompressorFactory:
             raise TypeError("Invalid argument type for registration")
 
     @classmethod
-    def create(cls, name: str, model: Any, slim_config: Any) -> Any:
+    def create(cls, names: list, model: Any, slim_config: Any) -> Any:
         """Create compressor instance"""
-        if name not in cls._compress_methods:
-            available = list(cls._compress_methods.keys())
-            raise ValueError(
-                f"Compression method '{name}' not registered. Available: {available}"
-            )
-        return cls._compress_methods[name](model, slim_config)
+        compressor = []
+        for name in names:
+            if name not in cls._compress_methods:
+                available = list(cls._compress_methods.keys())
+                raise ValueError(
+                    f"Compress method '{name}' not registered. Available: {available}"
+                )
+            compressor.append(cls._compress_methods[name](model, slim_config))
+        return compressor
 
     @classmethod
     def get_available_compressor(cls) -> list:
