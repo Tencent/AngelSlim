@@ -23,28 +23,13 @@
 
 ### Hunyuan Series Models
 
-<table>
-  <thead>
-    <tr>
-        <th>&nbsp</th><th>&nbsp</th>
-        <th colspan="2" style="text-align: center; vertical-align: middle;">MT-bench</th>
-        <th colspan="2" style="text-align: center; vertical-align: middle;">HumanEval</th>
-        <th colspan="2" style="text-align: center; vertical-align: middle;">GSM8K</th>
-        <th colspan="2" style="text-align: center; vertical-align: middle;">Alpaca</th>
-        <th colspan="2" style="text-align: center; vertical-align: middle;">Mean</th></tr>
-    <tr><th>Temperature</th><th>Model</th><th>Speedup</th><th>τ</th><th>Speedup</th><th>τ</th><th>Speedup</th><th>τ</th><th>Speedup</th><th>τ</th><th>Speedup</th><th>τ</th></tr>
-  </thead>
-  <tbody>
-    <!-- <tr><td colspan="12" style="text-align: center; vertical-align: middle;"><strong>Temperature=0</strong></td></tr> -->
-    <tr><td rowspan="3"><strong>Temperature=0</strong></td>
-    <td>Hunyuan-1.8B-Instruct</td><td>1.97x</td><td>2.90</td><td>2.58x</td><td>3.73</td><td>2.61x</td><td>3.71</td><td>1.71x</td><td>2.43</td><td>2.22x</td><td>3.19</td></tr>
-    <tr> <td>Hunyuan-4B-Instruct</td><td>1.77x</td><td>2.60</td><td>2.64x</td><td>3.35</td><td>2.14x</td><td>3.17</td><td>1.72x</td><td>2.57</td><td>2.07x</td><td>2.92</td></tr>
-    <tr><td>Hunyuan-7B-Instruct</td><td>2.22x</td><td>3.58</td><td>3.59x</td><td>5.47</td><td>2.96x</td><td>4.68</td><td>1.64x</td><td>2.56</td><td>2.60x</td><td>4.07</td></tr>
-    <!-- <tr><td colspan="12" style="text-align: center; vertical-align: middle;"><strong>Temperature=1</strong></td></tr> -->
-    <tr><td rowspan="3"><strong>Temperature=1</strong></td>
-    <td>Hunyuan-1.8B-Instruct</td><td>1.58x</td><td>2.36</td><td>2.35x</td><td>3.56</td><td>2.23x</td><td>3.38</td><td>1.26x</td><td>1.87</td><td>1.86x</td><td>2.79</td></tr>
-    <tr><td>Hunyuan-4B-Instruct</td><td>1.36x</td><td>2.05</td><td>1.97x</td><td>2.86</td><td>1.72x</td><td>2.68</td><td>1.14x</td><td>1.76</td><td>1.55x</td><td>2.34</td></tr>
-    <tr><td>Hunyuan-7B-Instruct</td><td>1.90x</td><td>3.11</td><td>3.12x</td><td>5.09</td><td>2.74x</td><td>4.34</td><td>1.47x</td><td>2.39</td><td>2.31x</td><td>3.73</td></tr>
-  </tbody>
-</table>
-</table>
+|                  |              | MT-bench         |            | HumanEval         |             | GSM8K          |         | Alpaca         |          | Mean          |        |
+|------------------|--------------|------------------|------------|-------------------|-------------|----------------|---------|----------------|----------|---------------|--------|
+|                  | Model        |  Speedup         |  τ         |  Speedup          |  τ          |  Speedup       |  τ      |  Speedup       |  τ       |  Speedup      |  τ     |
+|                  | Hunyuan-1.8B | 1.97x            | 2.90       | 2.58x             | 3.73        | 2.61x          | 3.71    | 1.71x          | 2.43     | 2.22x         | 3.19   |
+| **Temperature=0**| Hunyuan-4B   | 1.77x            | 2.60       | 2.64x             | 3.35        | 2.14x          | 3.17    | 1.72x          | 2.57     | 2.07x         | 2.92   |
+|                  | Hunyuan-7B   | 2.22x            | 3.58       | 3.59x             | 5.47        | 2.96x          | 4.68    | 1.64x          | 2.56     | 2.60x         | 4.07   |
+|                  |              |                  |            |                   |             |                |         |                |          |               |        |
+|                  | Hunyuan-1.8B | 1.58x            | 2.36       | 2.35x             | 3.56        | 2.23x          | 3.38    | 1.26x          | 1.87     | 1.86x         | 2.79   |
+| **Temperature=1**| Hunyuan-1.8B | 1.36x            | 2.05       | 1.97x             | 2.86        | 1.72x          | 2.68    | 1.14x          | 1.76     | 1.55x         | 2.34   |
+|                  | Hunyuan-1.8B | 1.90x            | 3.11       | 3.12x             | 5.09        | 2.74x          | 4.34    | 1.47x          | 2.39     | 2.31x         | 3.73   |
