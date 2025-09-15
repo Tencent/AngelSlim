@@ -15,6 +15,7 @@
 from typing import Tuple
 
 import torch
+import torch.nn.functional as F
 import triton
 import triton.language as tl
 
@@ -429,3 +430,40 @@ def per_block_weight_quant(
     weight_quant[grid](x, y, s, M, N, BLOCK_SIZE=block_size)
 
     return y, s
+
+
+def reduce_block_padding(input: torch.Tensor, block_sizes: dict, pad_value: float = 0):
+    """Padding the input using block-based reduction for each dimension.
+
+    Args:
+        input_tensor (torch.Tensor): The input tensor.
+        block_sizes (dict): A dictionary specifying the block size for
+            padding each dimension. Example: `{-1: 128, -2: 128}` pads
+            the input over 2D blocks.
+    """
+    with torch.no_grad():
+        padded_tensor = input
+        num_dims = padded_tensor.dim()
+        # Process each specified dimension independently
+        for dim, block in block_sizes.items():
+            # Convert negative dimension to positive index
+            pos_dim = dim if dim >= 0 else num_dims + dim
+
+            # Calculate how many elements are missing along that dimension
+            current_size = padded_tensor.size(pos_dim)
+            remainder = current_size % block
+            pad_amt = 0 if remainder == 0 else block - remainder
+
+            if pad_amt > 0:
+                # F.pad expects a pad tuple of length 2*num_dims.
+                pad = [0] * (2 * num_dims)
+                # For dimension pos_dim, the right padding is at index:
+                # (num_dims - 1 - pos_dim)*2 + 1.
+                pad_index = (num_dims - 1 - pos_dim) * 2
+                pad[pad_index + 1] = (
+                    pad_amt  # Set padding on the right side of the target dimension
+                )
+
+                padded_tensor = F.pad(padded_tensor, pad, value=pad_value)
+
+        return padded_tensor

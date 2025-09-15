@@ -42,6 +42,7 @@ class QuantizationMethod(str, Enum):
     INT8_DYNAMIC = "int8_dynamic"
     W4A8_FP8 = "w4a8_fp8"
     INT4_GPTAQ = "int4_gptaq"
+    NVFP4 = "nvfp4"
 
 
 @dataclass
