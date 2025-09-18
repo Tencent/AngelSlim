@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 import torch
 
 from .....utils import print_info
@@ -89,7 +88,12 @@ class NVFP4:
         return q_per_block_scale
 
     def post_process(self, sub_layer, name):
-        weight_observer_amax = self.model.weight_scales_dict[name]
+        # TODO:Fuse observer amax because TRT-LLM requires the qkv,
+        # gate and up to share the weight_scale2
+        weight_observer_amax, input_observer_amax = self.model.fuse_observer_amax(
+            sub_layer, name
+        )
+
         weight_scale_2 = self.get_weights_scaling_factor_2(weight_observer_amax)
         self.model.weight_scales_dict_2[name] = weight_scale_2
 
@@ -100,6 +104,5 @@ class NVFP4:
         )
         self.model.weight_scales_dict[name] = weight_scale
 
-        input_observer_amax = self.model.act_scales_dict[name]
         input_scale = self.get_activation_scaling_factor(input_observer_amax)
         self.model.act_scales_dict[name] = input_scale

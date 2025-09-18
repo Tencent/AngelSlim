@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 import re
 from abc import ABCMeta, abstractmethod
 from typing import Optional
@@ -169,6 +170,10 @@ class BaseLLMModel(metaclass=ABCMeta):
             )
             raise NotImplementedError
         return q_linear
+
+    def get_observer_values(self):
+        self.weight_observer_amax_dict = copy.deepcopy(self.weight_scales_dict)
+        self.input_observer_amax_dict = copy.deepcopy(self.act_scales_dict)
 
     def get_kvcache_observer_layers_names(self, observe_names):
         names = ["self_attn.k_proj", "self_attn.v_proj"]

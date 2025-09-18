@@ -94,3 +94,43 @@ class Qwen(BaseLLMModel):
             raise NotImplementedError(
                 f"deploy_backend {self.deploy_backend} is not supported for saving."
             )
+
+    def fuse_observer_amax(self, sub_layer, name):
+        if "q_proj" in name or "k_proj" in name or "v_proj" in name:
+            prefix = name.rsplit(".", 1)[0]
+            q_name = f"{prefix}.q_proj"
+            k_name = f"{prefix}.k_proj"
+            v_name = f"{prefix}.v_proj"
+
+            weight_scales = []
+            for key in [q_name, k_name, v_name]:
+                tensor = self.weight_observer_amax_dict[key]
+                weight_scales.append(tensor)
+            weight_observer_amax = max(weight_scales)
+
+            act_scales = []
+            for key in [q_name, k_name, v_name]:
+                tensor = self.input_observer_amax_dict[key]
+                act_scales.append(tensor)
+            input_observer_amax = max(act_scales)
+        elif "gate_proj" in name or "up_proj" in name:
+            prefix = name.rsplit(".", 1)[0]
+            gate_name = f"{prefix}.gate_proj"
+            up_name = f"{prefix}.up_proj"
+
+            weight_scales = []
+            for key in [gate_name, up_name]:
+                tensor = self.weight_observer_amax_dict[key]
+                weight_scales.append(tensor)
+            weight_observer_amax = max(weight_scales)
+
+            act_scales = []
+            for key in [gate_name, up_name]:
+                tensor = self.input_observer_amax_dict[key]
+                act_scales.append(tensor)
+            input_observer_amax = max(act_scales)
+        else:
+            weight_observer_amax = self.weight_observer_amax_dict[name]
+            input_observer_amax = self.input_observer_amax_dict[name]
+
+        return weight_observer_amax, input_observer_amax
