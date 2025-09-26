@@ -31,7 +31,7 @@
 - [技术交流](#技术交流)
 
 ## 📣最新进展
-- [25/09/26] 我们发布了三值量化[TEQUILA](https://github.com/Tencent/AngelSlim/tree/tequila): TRAPPING-FREE TERNARY QUANTIZATION FOR LARGE LANGUAGE MODELS 相关代码。
+- [25/09/26] 我们发布了三值量化[TEQUILA](https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant): TRAPPING-FREE TERNARY QUANTIZATION FOR LARGE LANGUAGE MODELS 相关代码。
 - [25/09/24] 我们支持了Qwen3系列模型的NVFP4的PTQ量化，我们还开源了[Qwen3-32B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-32B_nvfp4)、[Qwen3-235B-A22B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-235B-A22B_nvfp4)权重。
 - [25/09/01] 我们支持了[Hunyuan-MT-7B](https://huggingface.co/tencent/Hunyuan-MT-7B-fp8)翻译开源模型的FP8量化；支持了Eagle3的Torch推理及Benchmark评测流程；支持了[FLUX](https://github.com/Tencent/AngelSlim/tree/main/configs/flux)的量化、Cache；支持了[Seed-OSS](https://github.com/Tencent/AngelSlim/tree/main/configs/seed_oss)模型量化压缩。
 - [25/08/06] 我们支持了`Hunyuan 0.5B/1.8B/4B/7B`和`Qwen2.5VL 3B/7B/32B/72B`的FP8、INT4量化，支持了`DeepSeek-R1/V3`和`Kimi-K2`模型的`FP8-Static`、`W4A8-FP8`量化。我们还开源了`Hunyuan 1.8B/4B/7B`系列模型的Eagle3权重。
