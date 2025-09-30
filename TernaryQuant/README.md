@@ -1,4 +1,4 @@
-# <img src="Image/teqaila.png" width="40"> Tequila: Trapping-free Ternary Quantization for Large Language Models
+# <img src="../docs/source/assets/tequila_logo.png" width="40"> Tequila: Trapping-free Ternary Quantization for Large Language Models
 
 This repository is the official implementation of the paper **"Tequila: Trapping-free Ternary Quantization for Large Language Models"**.
 
@@ -61,5 +61,16 @@ sh scripts/run_train_redpajama_deepspeed_sample_uqv2_lrud.sh
 ```bash
 # Run evaluation on benchmark tasks
 sh script/run_eval.sh
+```
+
+### Citation 📜
+
+```
+@misc{2025tequila,
+      title={Tequila: Trapping-free Ternary Quantization for Large Language Models}, 
+      author={Hong Huang and Decheng Wu and Rui Cen and Guanghua Yu and Zonghang Li and Kai Liu and Jianchen Zhu and Peng Chen and Xue Liu and Dapeng Wu},
+      year={2025},
+      url={https://arxiv.org/abs/2509.23809}, 
+}
 ```
 
