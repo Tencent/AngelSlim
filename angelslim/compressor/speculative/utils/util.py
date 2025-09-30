@@ -1,4 +1,5 @@
 import random
+from collections import deque
 
 import torch
 from transformers.generation.logits_process import (
@@ -8,6 +9,66 @@ from transformers.generation.logits_process import (
     TopKLogitsWarper,
     TopPLogitsWarper,
 )
+
+
+class MomentumScorePredictor:
+    def __init__(self, window_size=10):
+        if window_size < 2:
+            raise ValueError("Window size must be at least 2")
+        self.scores = deque(maxlen=window_size)
+        self.delta_window_size = window_size - 1
+        self.deltas = deque(maxlen=self.delta_window_size)
+        self.last_score = None
+
+    def add_score(self, score):
+        self.scores.append(score)
+        if len(self.scores) > 1:
+            delta = score - self.scores[-2]
+            self.deltas.append(delta)
+        self.last_score = score
+
+    def predict_next_score(self):
+        if len(self.deltas) < self.delta_window_size:
+            return None
+        average_delta = sum(self.deltas) / len(self.deltas)
+        return self.last_score + average_delta
+
+
+class EWMAScorePredictor:
+    def __init__(self, alpha=0.2, initial_score=None):
+        if not 0 < alpha <= 1:
+            raise ValueError("Alpha must be between 0 and 1")
+        self.alpha = alpha
+        self.ewma = initial_score
+
+    def add_score(self, score):
+        if self.ewma is None:
+            self.ewma = score
+        else:
+            self.ewma = self.alpha * score + (1 - self.alpha) * self.ewma
+
+    def predict_next_score(self):
+        return self.ewma
+
+
+class MeanScorePredictor:
+    def __init__(self, window_size=100):
+        self.scores = deque(maxlen=window_size)
+
+    def add_score(self, score):
+        self.scores.append(score)
+
+    def predict_next_score(self):
+        if len(self.scores) == 0:
+            return None
+        return sum(self.scores) / len(self.scores)
+
+    def clear_before(self):
+        if len(self.scores) == 0:
+            return
+        score = self.scores[-1]
+        self.scores.clear()
+        self.scores.append(score)
 
 
 def prepare_logits_processor(
@@ -51,7 +112,7 @@ def initialize_tree(input_ids, model, past_key_values, logits_processor):
             x.to(eagle_device) for x in outputs["hidden_states"]
         ]
     hidden_states = torch.cat(outputs["hidden_states"], dim=-1)
-    draft_tokens, retrieve_indices, tree_mask, tree_position_ids = (
+    draft_tokens, retrieve_indices, tree_mask, tree_position_ids, _ = (
         model.eagle_layer.topK_genrate(hidden_states, input_ids, logits_processor)
     )
     return (
@@ -127,6 +188,7 @@ def evaluate_posterior(
     Returns:
     - best_candidate (torch.Tensor): Index of the chosen best candidate.
     - accept_length (int): Length of the accepted candidate sequence.
+    - sample_token (torch.Tensor): Target model recover token of the best candidate.
     """
     # Greedy decoding based on temperature value
     if logits_processor is None:
@@ -143,7 +205,10 @@ def evaluate_posterior(
             best_candidate = torch.tensor(0, dtype=torch.long, device=candidates.device)
         else:
             best_candidate = torch.argmax(candidates_accept_length).to(torch.long)
-        return best_candidate, accept_length, logits[best_candidate, accept_length]
+        sample_p = logits[best_candidate, accept_length]
+        sample_token = torch.argmax(sample_p)
+        sample_token = sample_token[None, None]
+        return best_candidate, accept_length, sample_token
 
     else:
         accept_length = 1
@@ -185,7 +250,9 @@ def evaluate_posterior(
             gt_logits = logits[best_candidate, accept_length - 1][None]
             gt_logits = logits_processor(None, gt_logits)[0]
             sample_p = torch.softmax(gt_logits, dim=0)
-        return torch.tensor(best_candidate), accept_length - 1, sample_p
+        sample_token = torch.multinomial(sample_p, 1)
+        sample_token = sample_token[None]
+        return torch.tensor(best_candidate), accept_length - 1, sample_token
 
 
 @torch.no_grad()
@@ -201,7 +268,7 @@ def update_inference_inputs(
     current_length_data,
     model,
     hidden_state_new,
-    sample_p,
+    sample_token,
 ):
     prev_input_len = input_ids.shape[1]
     # Map the best candidate indices to the original indices in the sequence
@@ -237,20 +304,11 @@ def update_inference_inputs(
     accept_hidden_state_new = retrieve_hidden_state_new[
         :, best_candidate, : accept_length + 1
     ]
-    # token=model.base_model.lm_head(accept_hidden_state_new[:,-1]).argmax()
-    # token=token[None,None]
-    prob = sample_p
-    if logits_processor is not None:
-        token = torch.multinomial(prob, 1)
-        token = token[None]
-    else:
-        token = torch.argmax(prob)
-        token = token[None, None]
-    # hidden_state = torch.cat((hidden_state, accept_hidden_state_new), dim=1)
-    draft_tokens, retrieve_indices, tree_mask, tree_position_ids = (
+
+    draft_tokens, retrieve_indices, tree_mask, tree_position_ids, early_stop_signal = (
         model.eagle_layer.topK_genrate(
             accept_hidden_state_new,
-            input_ids=torch.cat((input_ids, token.to(input_ids.device)), dim=1),
+            input_ids=torch.cat((input_ids, sample_token.to(input_ids.device)), dim=1),
             logits_processor=logits_processor,
         )
     )
@@ -264,6 +322,5 @@ def update_inference_inputs(
         tree_mask,
         tree_position_ids,
         new_token,
-        None,
-        token,
+        early_stop_signal,
     )

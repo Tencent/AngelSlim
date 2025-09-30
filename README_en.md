@@ -31,7 +31,8 @@ Dedicated to building a more intuitive, comprehensive, and efficient LLMs compre
 - [Technical Discussion](#technical-discussion)
 
 ## 📣Latest Updates
-- [25/09/26] We have released the code related to the ternary quantization [TEQUILA] (https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant): TRAPPING-FREE TERNARY QUANTIZATION FOR LARGE LANGUAGE MODELS.
+- [25/09/30] We now open-source the implementation of the reasoning early-exit algorithm: *SpecExit: Accelerating Large Reasoning Model via Speculative Exit* | [[Paper]](http://arxiv.org/abs/2509.24248) | [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html)
+- [25/09/26] We now release the the ternary quantization *TEQUILA: TRAPPING-FREE TERNARY QUANTIZATION FOR LARGE LANGUAGE MODELS* | [[Paper]](https://arxiv.org/abs/2509.23809) | [[Code]](https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant)
 - [25/09/24] We now support the PTQ quantification of NVFP4 for the Qwen3 series models. We also opensource [Qwen3-32B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-32B_nvfp4) and [Qwen3-235B-A22B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-235B-A22B_nvfp4) weights.
 - [25/09/01] We now support ​FP8 quantization​ of the [Hunyuan-MT-7B](https://huggingface.co/tencent/Hunyuan-MT-7B-fp8) translation model. And enabled ​Torch inference and Benchmark evaluation​ for Eagle3. And implemented support for ​quantization and Cache​ for [FLUX](https://github.com/Tencent/AngelSlim/tree/main/configs/flux). And support ​quantization​ for the [Seed-OSS](https://github.com/Tencent/AngelSlim/tree/main/configs/seed_oss).
 - [25/08/06] We now support quantization for `Hunyuan 0.5B/1.8B/4B/7B` and multimodal model `Qwen2.5VL 3B/7B/32B/72B`, including `FP8/INT4` algorithms, and quantization for `DeepSeek-R1/V3` and `Kimi-K2`, including `FP8-Static` and `W4A8-FP8` algorithms. We also opensource `Hunyuan 1.8B/4B/7B` series Eagle3 model weight.

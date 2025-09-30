@@ -70,6 +70,9 @@ class BenchmarkConfig:
     # Analysis settings
     calculate_metrics: bool = True
 
+    # SpecExit
+    early_stop_method: Optional[str] = None
+
 
 class BenchmarkEngine:
     """Core benchmark engine for speculative decoding evaluation"""
@@ -333,6 +336,8 @@ class BenchmarkEngine:
 
         args.seed = self.config.seed
         args.load_in_8bit = False
+
+        args.early_stop_method = self.config.early_stop_method
 
         return args
 

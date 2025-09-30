@@ -93,6 +93,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--no-metrics", action="store_true", help="Skip automatic metrics calculation"
     )
+    parser.add_argument(
+        "--early-stop-method", type=str, default=None, help="Early stopping method"
+    )
 
     return parser.parse_args()
 
@@ -126,6 +129,7 @@ def main():
         question_begin=args.question_begin,
         question_end=args.question_end,
         calculate_metrics=not args.no_metrics,
+        early_stop_method=args.early_stop_method,
     )
 
     print("Starting benchmark with configuration:")
