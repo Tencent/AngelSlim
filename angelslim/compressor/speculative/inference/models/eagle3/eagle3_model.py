@@ -24,6 +24,9 @@ from safetensors.torch import load_file
 from transformers import AutoConfig, AutoTokenizer
 
 from ....utils import (
+    EWMAScorePredictor,
+    MeanScorePredictor,
+    MomentumScorePredictor,
     evaluate_posterior,
     initialize_past_key_values,
     initialize_tree,
@@ -228,13 +231,18 @@ class Eagle3Model(nn.Module):
     """
 
     def __init__(
-        self, base_model: nn.Module, tokenizer: AutoTokenizer, eagle_layer: nn.Module
+        self,
+        base_model: nn.Module,
+        tokenizer: AutoTokenizer,
+        eagle_layer: nn.Module,
+        early_stop_method: Optional[str] = None,
     ):
         super().__init__()
         self.base_model = base_model
         self.tokenizer = tokenizer
         self.eagle_layer = eagle_layer
         self.generation_manager = GenerationManager(tokenizer)
+        self.early_stop_method = early_stop_method
 
     @classmethod
     def from_pretrained(
@@ -246,12 +254,33 @@ class Eagle3Model(nn.Module):
         top_k: int = 10,
         threshold: float = 1.0,
         enable_benchmark: bool = False,
+        early_stop_method: Optional[str] = None,
+        stop_think_token: str = "</think>",
+        step_split_tokens: Optional[List[str]] = None,
         **kwargs,
     ) -> "Eagle3Model":
         """Create Eagle3Model from pretrained components"""
         # Load base model and tokenizer
+        if not step_split_tokens:
+            step_split_tokens = [
+                "\n\n",
+                "\n\n\n",
+                ".\n\n",
+                ".\n\n\n",
+                " \n\n",
+                " \n\n\n",
+            ]
         base_model = ModelLoader.load_base_model(base_model_path, **kwargs)
         tokenizer = AutoTokenizer.from_pretrained(base_model_path, use_fast=False)
+        tokenizer.stop_think_id = tokenizer.encode(
+            stop_think_token, add_special_tokens=False
+        )[0]
+        tokenizer.step_split_ids = []
+        for s in step_split_tokens:
+            t = tokenizer.encode(s, add_special_tokens=False)
+            if len(t) > 1:
+                continue
+            tokenizer.step_split_ids.append(t[0])
 
         # Load configuration
         config_path = ModelLoader.ensure_config_path(eagle_model_path)
@@ -270,6 +299,7 @@ class Eagle3Model(nn.Module):
             threshold=threshold,
             path=base_model_path,
             load_emb=True,
+            early_stop_method=early_stop_method,
         )
 
         # Clean up unused components
@@ -288,7 +318,7 @@ class Eagle3Model(nn.Module):
             )
             eagle_layer.total_tokens = total_token - 1
 
-        return cls(base_model, tokenizer, eagle_layer)
+        return cls(base_model, tokenizer, eagle_layer, early_stop_method)
 
     def get_tokenizer(self) -> AutoTokenizer:
         """Get the tokenizer"""
@@ -330,6 +360,7 @@ class Eagle3Model(nn.Module):
         max_length: int = 2048,
         log: bool = False,
         is_llama3: bool = False,
+        early_stop_smooth_type: str = "ewma",
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, int, int, List[int]]]:
         """Generate text using EAGLE speculative decoding"""
         config = GenerationConfig(
@@ -355,6 +386,22 @@ class Eagle3Model(nn.Module):
         accept_length_list = []
         max_decode_steps = config.max_length - self.eagle_layer.total_tokens - 10
 
+        if early_stop_smooth_type == "ewma":
+            predict_class = EWMAScorePredictor
+            kwargs = {"alpha": 0.1}
+        elif early_stop_smooth_type == "momentum":
+            predict_class = MomentumScorePredictor
+            kwargs = {"window_size": 10}
+        else:
+            predict_class = MeanScorePredictor
+            kwargs = {"window_size": 10}
+
+        predictors = []
+        if self.early_stop_method is not None:
+            for _ in range(self.early_stop_method.count("_") + 1):
+                predictors.append(predict_class(**kwargs))
+        is_thinking = True
+
         for step in range(max_decode_steps):  # noqa: B007
             # Ensure tensors are on correct device
             draft_tokens = draft_tokens.to(input_ids.device)
@@ -376,9 +423,40 @@ class Eagle3Model(nn.Module):
             candidates = draft_tokens[0, retrieve_indices]
 
             # Verification phase
-            best_candidate, accept_length, sample_p = evaluate_posterior(
+            best_candidate, accept_length, sample_token = evaluate_posterior(
                 logits, candidates, state.logits_processor
             )
+
+            new_token_ids = (
+                candidates[None, best_candidate, : accept_length + 1].view(-1).tolist()
+            )
+            if is_thinking and self.tokenizer.stop_think_id in new_token_ids:
+                is_thinking = False
+            if is_thinking and self.early_stop_method:
+                can_stop = False
+                for split_pos in range(len(new_token_ids)):
+                    if new_token_ids[split_pos] in self.tokenizer.step_split_ids:
+                        can_stop = True
+                        break
+                if can_stop:
+                    scores = []
+                    for p, m in zip(predictors, self.early_stop_method.split("_")):
+                        score = p.predict_next_score()
+                        scores.append(score)
+                        if m == "confidence":
+                            can_stop = can_stop and score and score > 0.8
+                        elif m == "progress":
+                            can_stop = can_stop and score and score > 0.3
+                        elif m == "remain":
+                            can_stop = can_stop and score and score < 200
+                    if early_stop_smooth_type == "paragraph_mean":
+                        for p in predictors:
+                            p.clear_before()
+                if can_stop:
+                    accept_length = split_pos
+                    sample_token[..., -1] = self.tokenizer.stop_think_id
+                    is_thinking = False
+                    print(f"Early Stop: scores={scores}")
 
             accept_length_list.append(
                 accept_length.item()
@@ -394,8 +472,7 @@ class Eagle3Model(nn.Module):
                 tree_mask,
                 tree_position_ids,
                 state.new_token,
-                _,
-                _,
+                early_stop_signal,
             ) = update_inference_inputs(
                 input_ids=state.input_ids,
                 candidates=candidates,
@@ -408,8 +485,12 @@ class Eagle3Model(nn.Module):
                 current_length_data=self.current_length_data,
                 model=self,
                 hidden_state_new=hidden_state_new,
-                sample_p=sample_p,
+                sample_token=sample_token,
             )
+            if is_thinking and early_stop_signal is not None:
+                early_stop_signal_cpu = early_stop_signal.tolist()
+                for p, s in zip(predictors, early_stop_signal_cpu):
+                    p.add_score(s)
 
             if self.generation_manager.should_stop(
                 state.input_ids,

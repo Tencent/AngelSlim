@@ -18,7 +18,7 @@ import torch.nn as nn
 from ...utils import find_parent_layer_and_sub_name, print_info
 from ..compressor_factory import CompressorFactory
 from .core import PTQHook
-from .modules import AWQ, FP8, GPTQ, INT8, LeptoFP8, SmoothQuant
+from .modules import AWQ, FP8, GPTQ, INT8, NVFP4, LeptoFP8, SmoothQuant
 
 __all__ = ["PTQ"]
 
@@ -38,7 +38,11 @@ class PTQ:
         self.quant_model.init_ptq(slim_config)
         self.quant_algo = self.quant_model.quant_config.quant_algo
         self.quant_helpers = self.quant_model.quant_config.quant_helpers
-        if "fp8" in self.quant_algo or "int8" in self.quant_algo:
+        if (
+            "fp8" in self.quant_algo
+            or "int8" in self.quant_algo
+            or "nvfp4" in self.quant_algo
+        ):
             # Add ptq observer hook
             self.ptq_hook = PTQHook(self.quant_model)
             self.ptq_hook.apply_hook()
@@ -94,6 +98,8 @@ class PTQ:
                 model_arch_type=model_arch_type,
                 low_memory=self.quant_model.quant_config.low_memory,
             )
+        elif "nvfp4" in self.quant_algo:
+            self.nvfp4 = NVFP4(self.quant_model)
         else:
             raise NotImplementedError(
                 f"[AngelSlim Error] algo {self.quant_algo} is not support"
@@ -115,6 +121,8 @@ class PTQ:
             self.fp8.run(dataloader)
         elif "int8" in self.quant_algo:
             self.int8.run(dataloader)
+        elif "nvfp4" in self.quant_algo:
+            self.nvfp4.run(dataloader)
         else:
             raise AssertionError(
                 f"[AngelSlim Error] algo {self.quant_algo} is not support calibrate"
@@ -210,13 +218,20 @@ class PTQ:
         self.ptq_hook.post_process()
 
         quant_convert_module = self.quant_model.get_quant_convert_module()
+        if "nvfp4" in self.quant_algo:
+            self.quant_model.get_observer_values()
         # 2. insert qdq module
         for name, sub_layer in self.ptq_hook.quant_layers_dict.items():
             parent_layer, sub_name = find_parent_layer_and_sub_name(
                 quant_convert_module, name
             )
 
-            qdq_module = self.quant_model.get_qdq_module(sub_layer, name)
+            if "nvfp4" in self.quant_algo:
+                self.nvfp4.post_process(sub_layer, name)
+                qdq_module = self.quant_model.get_nvfp4_qdq_module(sub_layer, name)
+            else:
+                qdq_module = self.quant_model.get_qdq_module(sub_layer, name)
+
             if qdq_module is not sub_layer:
                 setattr(parent_layer, sub_name, qdq_module)
         self.quant_model.quantized = True

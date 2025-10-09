@@ -31,6 +31,7 @@ from ..core import (
     quantize_activation_per_tensor_fp8,
     quantize_weight_int,
     quantize_weight_per_tensor_fp8,
+    reduce_block_padding,
     tensor_quant_dequant_fp8,
     tensor_quant_dequant_int,
 )
@@ -718,3 +719,305 @@ class QLinear(torch.nn.Module):
             raise ValueError(f"Unsupported quantization algorithm: {self.quant_algo}")
 
         return output
+
+
+class NVFP4QDQModule(torch.nn.Module):
+    def __init__(
+        self,
+        weight: torch.nn.Parameter,
+        weight_scale: torch.nn.Parameter,
+        weight_scale_2: torch.nn.Parameter,
+        bias: torch.nn.Parameter,
+        block_size: int = 16,
+        input_scale: Optional[torch.nn.Parameter] = None,
+    ):
+        super().__init__()
+        # Define conversion tables
+        self.e2m1_bounds = torch.tensor([0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5])
+        self.e2m1_values = torch.tensor(
+            [0, 0.5, 1, 1.5, 2, 3, 4, 6, 0, -0.5, -1, -1.5, -2, -3, -4, -6]
+        )
+        self.e2m1_values_on_device = {}
+        self.shape = weight.shape
+        self.dtype = weight.dtype
+        self.weight_scale = torch.nn.Parameter(weight_scale, requires_grad=False)
+        self.weight_scale_2 = torch.nn.Parameter(weight_scale_2, requires_grad=False)
+        self.bias = bias
+        self.block_size = block_size
+        if input_scale is not None:
+            self.input_scale = torch.nn.Parameter(input_scale, requires_grad=False)
+        else:
+            self.input_scale = None
+
+        quant_weight = self.to_quantized_weight(
+            weight,
+            weight_scale,
+            weight_scale_2,
+            block_size,
+        )
+        self.weight = torch.nn.Parameter(quant_weight, requires_grad=False)
+
+    def get_e2m1_values(self, device):
+        """Returns the e2m1 values on the device."""
+        if device not in self.e2m1_values_on_device:
+            self.e2m1_values_on_device[device] = self.e2m1_values.to(device)
+        return self.e2m1_values_on_device[device]
+
+    def _cast_fp4(self, weight: torch.Tensor):
+        """Converts tensor to uint4."""
+        # Get device
+        device = weight.device
+
+        # Define mask to perform rounding
+        mask = torch.tensor([0, 1, 0, 1, 0, 1, 0], dtype=torch.uint8).to(device)
+        mask_shape = list(weight.shape)
+        mask = mask.expand([*mask_shape, 7])
+
+        sign_bit = (weight < 0).to(torch.uint8)
+
+        weight_abs = weight.abs_()
+        # Calculate the ordinal value based on the bounds
+        ord = torch.searchsorted(
+            self.e2m1_bounds.to(device), weight_abs, out_int32=True
+        ).to(torch.uint8)
+        # All values equal to e2m1_bounds at odd indices are rounded up
+        # and even indices are rounded down
+        round = torch.any(
+            (weight_abs.unsqueeze(-1) == self.e2m1_bounds.to(device)) * mask, dim=-1
+        )
+        fp4_val = (sign_bit * 0b1000 + ord + round).to(torch.uint8)
+        return fp4_val
+
+    def quantize(
+        self,
+        weight: torch.Tensor,
+        block_size: int,
+        weights_scaling_factor: torch.Tensor | None = None,
+        weights_scaling_factor_2: torch.Tensor | None = None,
+        keep_high_precision: bool = False,
+    ):
+        """Converting a tensor to a quantized format based on NVFP4 quantization.
+
+        Args:
+            weight (torch.Tensor): The weight tensor to be quantized.
+            block_size (int): The size of each block for quantization.
+            weights_scaling_factor (torch.Tensor): The scaling factor for the weights.
+            weights_scaling_factor_2 (torch.Tensor): The scaling factor for the weights.
+            keep_high_precision (bool): Whether to keep output scales at high precision.
+
+        Returns:
+        Quantized data.
+        """
+        # pad the weight if needed
+        weight = reduce_block_padding(weight, block_sizes={-1: block_size})
+
+        # Reshape the weight and scale factors
+        weight = weight.view((*tuple(weight.shape[:-1]), -1, block_size))
+
+        # Scale weights
+        scaled_weight = weight / (
+            (
+                weights_scaling_factor.to(torch.float32) * weights_scaling_factor_2
+            ).unsqueeze(-1)
+        )
+
+        # Reshape weights to original
+        scaled_weight = scaled_weight.view((*tuple(scaled_weight.shape[:-2]), -1))
+
+        if keep_high_precision:
+            return scaled_weight
+        # Cast weights to fp4
+        q_weight = self._cast_fp4(scaled_weight)
+        # Pack weights
+        packed_weight = (q_weight[..., 1::2] << 4) | q_weight[..., 0::2]
+
+        return packed_weight
+
+    def to_quantized_weight(
+        self,
+        weight: torch.Tensor,
+        weights_scaling_factor: torch.Tensor,
+        weights_scaling_factor2: torch.Tensor | None = None,
+        block_size: int | None = None,
+    ):
+        """Converts the weight to the quantized (packed) format."""
+        if weights_scaling_factor is not None:
+            weights_scaling_factor = weights_scaling_factor.to(weight.device)
+
+        if weights_scaling_factor2 is not None:
+            weights_scaling_factor2 = weights_scaling_factor2.to(weight.device)
+
+        assert (
+            block_size is not None
+        ), "Block size not passed. Unable to quantize to NVFP4 format."
+        assert (
+            weights_scaling_factor2 is not None
+        ), "Weights scaling factor 2 not passed. Unable to quantize to NVFP4 format"
+        # If MoE reshape weights_scaling_factor2 to enable quantize operations
+        return self.quantize(
+            weight,
+            block_size,
+            weights_scaling_factor,
+            (
+                weights_scaling_factor2.view(-1, 1, 1)
+                if weights_scaling_factor2.dim() != 0
+                else weights_scaling_factor2
+            ),
+        )
+
+    def get_input_scaling_factor(
+        self,
+        inputs: torch.Tensor,
+        block_size: int,
+        inputs_scaling_factor_2: torch.Tensor | None = None,
+        keep_high_precision: bool = False,
+    ):
+        """Returns quantized per block input scaling factor."""
+        # Get per_block amax
+        [n, k] = inputs.shape[-2:]
+        assert (
+            block_size != 0
+        ), "Block size is zero. Cannot return per_block amax for given input."
+
+        assert (
+            k % block_size == 0
+        ), "input shape is not divisible for block size for block quantiation."
+
+        inputs = inputs.reshape(
+            (*tuple(inputs.shape[:-2]), n, k // block_size, block_size)
+        )
+        # Get per block amax
+        per_block_amax = inputs.abs().amax(dim=-1).float()
+        # Get per-block-scale
+        per_block_scale = per_block_amax / 6.0
+        # Quantize per_block_scale to FP8
+        q_per_block_scale = per_block_scale / inputs_scaling_factor_2
+        # Set all zero values in scale to 1.0
+        q_per_block_scale[per_block_scale == 0] = 1.0
+        # Convert to torch.float8_e4m3fn
+        if not keep_high_precision:
+            finfo = torch.finfo(torch.float8_e4m3fn)
+            q_per_block_scale = q_per_block_scale.clamp(min=finfo.min, max=finfo.max)
+            q_per_block_scale = q_per_block_scale.to(torch.float8_e4m3fn)
+        return q_per_block_scale
+
+    def quantize_input(
+        self,
+        inputs: torch.Tensor,
+        block_size: int,
+        inputs_scaling_factor: torch.Tensor | None = None,
+        inputs_scaling_factor_2: torch.Tensor | None = None,
+        keep_high_precision: bool = False,
+    ):
+        """Converting a tensor to a quantized format based on NVFP4 quantization.
+
+        Args:
+            weight (torch.Tensor): The weight tensor to be quantized.
+            block_size (int): The size of each block for quantization.
+            weights_scaling_factor (torch.Tensor): The scaling factor for the weights.
+            weights_scaling_factor_2 (torch.Tensor): The scaling factor for the weights.
+            keep_high_precision (bool): Whether to keep output scales at high precision.
+
+        Returns:
+        tuple: Contains quantized data, quantized per block scaling factor,
+        and per tensor scaling factor.
+        """
+        # pad the weight if needed
+        inputs = reduce_block_padding(inputs, block_sizes={-1: block_size})
+
+        # Reshape the weight and scale factors
+        inputs = inputs.view((*tuple(inputs.shape[:-1]), -1, block_size))
+
+        # Scale weights
+        scaled_inputs = inputs / (
+            (
+                inputs_scaling_factor.to(torch.float32) * inputs_scaling_factor_2
+            ).unsqueeze(-1)
+        )
+
+        # Reshape weights to original
+        scaled_inputs = scaled_inputs.view((*tuple(scaled_inputs.shape[:-2]), -1))
+
+        if keep_high_precision:
+            return scaled_inputs
+        # Cast weights to fp4
+        cast_inputs = self._cast_fp4(scaled_inputs)
+        qinputs = self.get_e2m1_values(cast_inputs.device)[cast_inputs.long()]
+
+        return qinputs
+
+    def forward(self, x):
+        qdqweight = self.dequantize(
+            self.weight, self.block_size, self.weight_scale, self.weight_scale_2
+        )
+
+        if self.input_scale is None:
+            input_amax = x.abs().amax()
+            input_scale_2 = input_amax.float() / 6.0 / 448.0
+        else:
+            input_scale_2 = self.input_scale
+
+        input_scale = self.get_input_scaling_factor(
+            inputs=x.detach(),
+            inputs_scaling_factor_2=input_scale_2,
+            block_size=self.block_size,
+        )
+
+        qinput = self.quantize_input(
+            x,
+            self.block_size,
+            input_scale,
+            input_scale_2.view(-1, 1, 1) if input_scale_2.dim() != 0 else input_scale_2,
+        )
+
+        qdqinput = qinput.view(
+            qinput.shape[0], qinput.shape[1], qinput.shape[2] // self.block_size, -1
+        ) * (input_scale.to(torch.float32) * input_scale_2).unsqueeze(-1)
+        qdqinput = qdqinput.view(-1)[: np.prod(x.shape)].reshape(x.shape).to(x.dtype)
+
+        output = torch.nn.functional.linear(
+            qdqinput.to(self.dtype),
+            qdqweight,
+            bias=self.bias,
+        )
+
+        return output
+
+    def dequantize(
+        self,
+        weight: torch.Tensor,
+        block_size: int,
+        weights_scaling_factor: torch.Tensor | None = None,
+        weights_scaling_factor_2: torch.Tensor | None = None,
+    ):
+        """Dequantze NVFP4 packed tensor to a target dtype."""
+        dtype = self.dtype
+
+        def _unpack_tensor(input: torch.Tensor):
+            # Initalize storage for unpacked tensor
+            unpacked = torch.empty(
+                [input.shape[0], input.shape[1] * 2], dtype=dtype, device=input.device
+            )
+            unpacked_shape = unpacked.shape
+
+            unpacked[..., 1::2] = input >> 4
+            unpacked[..., 0::2] = input & 0x0F
+
+            unpacked = unpacked.reshape(-1)
+            unpacked = self.get_e2m1_values(input.device)[unpacked.long()]
+
+            return unpacked.reshape(unpacked_shape)
+
+        q_per_block_scale = weights_scaling_factor.to(torch.float32)
+        per_block_quant_scale = weights_scaling_factor_2
+
+        # Dequantize scales
+        per_block_scale = q_per_block_scale * per_block_quant_scale
+
+        # Unpack and unscale weights
+        deq_data = _unpack_tensor(weight)
+
+        deq_data = deq_data.view(
+            deq_data.shape[0], deq_data.shape[1] // block_size, -1
+        ) * per_block_scale.unsqueeze(-1)
+        return deq_data.view(-1)[: np.prod(self.shape)].reshape(self.shape).to(dtype)

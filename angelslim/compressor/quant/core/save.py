@@ -154,6 +154,23 @@ class PTQSaveVllmHF(PTQSaveBase):
                 "dynamic": False,
                 "type": "int",
             }
+        elif "nvfp4" in self.quant_model.quant_config.quant_algo:
+            quant_format = "naive-quantized"
+            group_size = self.quant_model.quant_config.quant_algo_info["block_size"]
+            trtllm_config["quantization"]["quant_algo"] = "NVFP4"
+            trtllm_config["quantization"]["group_size"] = group_size
+            act_config = {
+                "num_bits": 4,
+                "group_size": group_size,
+                "dynamic": "dynamic" in a_quant_algo,
+                "type": "float",
+            }
+            weight_config = {
+                "num_bits": 4,
+                "group_size": group_size,
+                "dynamic": False,
+                "type": "float",
+            }
         else:
             raise ValueError(
                 f"{self.quant_model.quant_config.quant_algo} not supported"

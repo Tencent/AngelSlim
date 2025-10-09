@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 import re
 from abc import ABCMeta, abstractmethod
 from typing import Optional
@@ -22,7 +23,7 @@ from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from ..compressor.quant.core import QuantConfig
-from ..compressor.quant.modules import QDQModule
+from ..compressor.quant.modules import NVFP4QDQModule, QDQModule
 from ..utils import common_prefix, print_info
 
 __all__ = ["BaseLLMModel", "BaseDiffusionModel"]
@@ -88,6 +89,7 @@ class BaseLLMModel(metaclass=ABCMeta):
         self.quant_config = quant_config
         self.act_scales_dict = {}
         self.weight_scales_dict = {}
+        self.weight_scales_dict_2 = {}
         self.kv_cache_scales_dict = {}
         if hasattr(self.quant_config, "weight_observer"):
             self.quant_algo_dict = self.get_quant_config()
@@ -143,6 +145,35 @@ class BaseLLMModel(metaclass=ABCMeta):
             )
             raise NotImplementedError
         return q_linear
+
+    def get_nvfp4_qdq_module(self, sub_layer, name):
+        act_scale, weight_scale, weight_scale_2 = None, None, None
+        block_size = self.quant_config.quant_algo_info["block_size"]
+        if name in self.act_scales_dict:
+            act_scale = self.act_scales_dict[name]
+        if name in self.weight_scales_dict:
+            weight_scale = self.weight_scales_dict[name]
+        if name in self.weight_scales_dict_2:
+            weight_scale_2 = self.weight_scales_dict_2[name]
+        if self.deploy_backend in ["vllm", "huggingface", "trtllm", "tensorrt"]:
+            q_linear = NVFP4QDQModule(
+                weight=sub_layer.weight,
+                weight_scale=weight_scale,
+                weight_scale_2=weight_scale_2,
+                bias=sub_layer.bias,
+                block_size=block_size,
+                input_scale=act_scale,
+            )
+        else:
+            print_info(
+                "current {} deploy_backend not support".format(self.deploy_backend)
+            )
+            raise NotImplementedError
+        return q_linear
+
+    def get_observer_values(self):
+        self.weight_observer_amax_dict = copy.deepcopy(self.weight_scales_dict)
+        self.input_observer_amax_dict = copy.deepcopy(self.act_scales_dict)
 
     def get_kvcache_observer_layers_names(self, observe_names):
         names = ["self_attn.k_proj", "self_attn.v_proj"]

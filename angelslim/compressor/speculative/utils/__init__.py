@@ -1,5 +1,8 @@
 from .kv_cache import initialize_past_key_values
 from .util import (
+    EWMAScorePredictor,
+    MeanScorePredictor,
+    MomentumScorePredictor,
     evaluate_posterior,
     initialize_tree,
     prepare_logits_processor,
@@ -16,4 +19,7 @@ __all__ = [
     "evaluate_posterior",
     "update_inference_inputs",
     "initialize_past_key_values",
+    "MomentumScorePredictor",
+    "EWMAScorePredictor",
+    "MeanScorePredictor",
 ]

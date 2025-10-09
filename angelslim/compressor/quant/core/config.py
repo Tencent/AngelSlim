@@ -148,6 +148,30 @@ class QuantConfig:
                 "group_size": group_size,
                 "ignore_layers": quantization_args.ignore_layers,
             }
+        elif "nvfp4" in self.quant_algo:
+            is_dynamic = "dynamic" if "dynamic" in self.quant_algo else "static"
+            assert (
+                is_dynamic or act_quant_method is not None
+            ), "[Error] nvfp4 need act_quant_method"
+            self.act_observer = (
+                AbsmaxPertensorObserver if "static" in is_dynamic else None
+            )
+            self.weight_observer = AbsmaxPertensorObserver
+            self.kv_cache_observer = None
+            block_size = (
+                16
+                if quantization_args.quant_method["group_size"] == -1
+                else quantization_args.quant_method["group_size"]
+            )
+
+            self.quant_algo_info = {
+                "w": f"nvfp4_{weight_quant_method}",
+                "ignore_layers": quantization_args.ignore_layers,
+                "block_size": block_size,
+            }
+
+            if act_quant_method is not None:
+                self.quant_algo_info["a"] = f"nvfp4_{act_quant_method}-{is_dynamic}"
 
         if "smooth" in self.quant_helpers:
             self.smooth_alpha = quantization_args.smooth_alpha

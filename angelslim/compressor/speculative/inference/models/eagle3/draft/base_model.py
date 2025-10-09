@@ -36,6 +36,7 @@ class BaseEagle3Drafter(nn.Module, ABC):
         depth: int = 5,
         top_k: int = 8,
         threshold: float = 1.0,
+        early_stop_method: Optional[str] = None,
     ):
         """
         Initialize the drafter model.
@@ -56,6 +57,7 @@ class BaseEagle3Drafter(nn.Module, ABC):
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
         self.hidden_size = config.hidden_size
+        self.early_stop_method = early_stop_method
 
         self.embed_tokens = nn.Embedding(
             config.vocab_size, config.hidden_size, self.padding_idx
@@ -66,16 +68,19 @@ class BaseEagle3Drafter(nn.Module, ABC):
 
         # Handle different hidden sizes between target and draft models
         hidden_size_multiplier = 3
+        fc_output_size = config.hidden_size
+        if early_stop_method is not None:
+            fc_output_size += early_stop_method.count("_") + 1
         if hasattr(config, "target_hidden_size"):
             self.fc = nn.Linear(
                 config.target_hidden_size * hidden_size_multiplier,
-                self.hidden_size,
+                fc_output_size,
                 bias=False,
             )
         else:
             self.fc = nn.Linear(
                 config.hidden_size * hidden_size_multiplier,
-                self.hidden_size,
+                fc_output_size,
                 bias=False,
             )
 
@@ -203,7 +208,7 @@ class BaseEagle3Drafter(nn.Module, ABC):
         self.reset()
 
         # Generate initial hidden states and tokens
-        last_hidden, past_key_values = self._get_initial_hidden(
+        last_hidden, past_key_values, early_stop_signal = self._get_initial_hidden(
             hidden_states, input_ids
         )
         self.stable_kv = past_key_values
@@ -258,7 +263,13 @@ class BaseEagle3Drafter(nn.Module, ABC):
         # Delete some used lists and variables to free memory
         del scores_list, parents_list, ss_token
 
-        return draft_tokens, retrieve_indices, tree_mask, tree_position_ids
+        return (
+            draft_tokens,
+            retrieve_indices,
+            tree_mask,
+            tree_position_ids,
+            early_stop_signal,
+        )
 
     def _get_initial_hidden(
         self, hidden_states: Tensor, input_ids: Tensor
@@ -266,17 +277,20 @@ class BaseEagle3Drafter(nn.Module, ABC):
         """Get initial hidden states and past key values."""
         if hasattr(self, "stable_kv") and self.stable_kv is not None:
             kv_len = self.stable_kv[0][0].shape[2]
-            out_hidden, past_key_values = self(
+            outputs = self(
                 hidden_states,
                 input_ids=input_ids[:, kv_len:],
                 past_key_values=self.stable_kv,
                 use_cache=True,
             )
         else:
-            out_hidden, past_key_values = self(
-                hidden_states, input_ids=input_ids, use_cache=True
-            )
-        return out_hidden[:, -1], past_key_values
+            outputs = self(hidden_states, input_ids=input_ids, use_cache=True)
+        if self.early_stop_method is not None:
+            out_hidden, past_key_values, early_stop_signal = outputs
+        else:
+            out_hidden, past_key_values = outputs
+            early_stop_signal = None
+        return out_hidden[:, -1], past_key_values, early_stop_signal
 
     def _get_topk_tokens(self, hidden: Tensor) -> Tuple[Tensor, Tensor]:
         """Get top-k tokens from hidden states."""
@@ -303,7 +317,7 @@ class BaseEagle3Drafter(nn.Module, ABC):
         position_ids = self.position_ids + self.initial_position_id
 
         # Get next level hidden states
-        out_hidden, past_key_values = self(
+        out_hidden, past_key_values, early_stop_signal = self(
             input_hidden,
             input_ids=input_ids,
             past_key_values=past_key_values,

@@ -570,6 +570,7 @@ class Llama3Eagle3Drafter(BaseEagle3Drafter):
         depth=5,
         top_k=8,
         threshold=1.0,
+        **kwargs,
     ):
         super().__init__(
             config=config,
@@ -579,6 +580,7 @@ class Llama3Eagle3Drafter(BaseEagle3Drafter):
             depth=depth,
             top_k=top_k,
             threshold=threshold,
+            **kwargs,
         )
         self.midlayer = LlamaDecoderLayeremb(config)
         self.norm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
@@ -673,6 +675,23 @@ class Llama3Eagle3Drafter(BaseEagle3Drafter):
         inputs_embeds = inputs_embeds.to(hidden_states.dtype)
         if hidden_states.shape[-1] != inputs_embeds.shape[-1]:
             hidden_states = self.fc(hidden_states)
+        early_stop_signal: Optional[torch.Tensor] = None
+        if self.early_stop_method is not None:
+            signal_params = hidden_states[..., self.hidden_size :]
+            hidden_states = hidden_states[..., : self.hidden_size]
+            if self.early_stop_method in ["confidence", "progress"]:
+                early_stop_signal = torch.sigmoid(signal_params.squeeze(-1).float())
+                early_stop_signal = early_stop_signal.view(-1, 1).mean(dim=0)
+            elif self.early_stop_method == "remain":
+                early_stop_signal = torch.exp(signal_params.squeeze(-1).float()).mean()
+                early_stop_signal = early_stop_signal.view(-1, 1).mean(dim=0)
+            elif self.early_stop_method == "confidence_progress_remain":
+                signal_params = signal_params.view(-1, 3).float()
+                confidence = torch.sigmoid(signal_params[:, 0])[:, None]
+                progress = torch.sigmoid(signal_params[:, 1])[:, None]
+                remain = torch.exp(signal_params[:, 2])[:, None]
+                early_stop_signal = torch.cat((confidence, progress, remain), dim=-1)
+                early_stop_signal = early_stop_signal.view(-1, 3).mean(dim=0)
 
         next_decoder_cache = () if use_cache else None
 
@@ -690,7 +709,4 @@ class Llama3Eagle3Drafter(BaseEagle3Drafter):
             next_decoder_cache += (layer_outputs[2 if output_attentions else 1],)
         hidden_states = layer_outputs[0]
 
-        if use_cache:
-            return hidden_states, next_decoder_cache
-
-        return hidden_states
+        return hidden_states, next_decoder_cache, early_stop_signal
