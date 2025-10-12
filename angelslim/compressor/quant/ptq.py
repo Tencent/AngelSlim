@@ -15,6 +15,11 @@
 import torch
 import torch.nn as nn
 
+from ...models.llm.modeling_deepseek import (
+    ColumnParallelLinear,
+    Linear,
+    RowParallelLinear,
+)
 from ...utils import find_parent_layer_and_sub_name, print_info
 from ..compressor_factory import CompressorFactory
 from .core import PTQHook
@@ -63,7 +68,12 @@ class PTQ:
                 hidden_size=hidden_size,
                 model_arch_type=model_arch_type,
                 mse_range=self.quant_model.quant_config.quant_algo_info["mse_range"],
-                observer_layer_classes=[nn.Linear],
+                observer_layer_classes=[
+                    nn.Linear,
+                    ColumnParallelLinear,
+                    RowParallelLinear,
+                    Linear,
+                ],
                 low_memory=self.quant_model.quant_config.low_memory,
             )
         elif "fp8" in self.quant_algo:
