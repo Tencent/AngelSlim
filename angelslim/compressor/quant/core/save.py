@@ -401,7 +401,6 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
 
         if fused_act_scale_dict:
             for k, v in fused_act_scale_dict.items():
-                torch.distributed.all_reduce(v, op=torch.distributed.ReduceOp.MAX)
                 _save_path = os.path.join(
                     save_path, "{}.input_scale.{}.pt".format(k, _index)
                 )
@@ -412,6 +411,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
                     )
                     torch.save(v, _save_path)
                 else:
+                    torch.distributed.all_reduce(v, op=torch.distributed.ReduceOp.MAX)
                     if self.rank == 0:
                         torch.save(v, _save_path)
             print_info("save act scales done.")
@@ -419,6 +419,9 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
         if self.quant_model.weight_scales_dict:
             for k, v in self.quant_model.weight_scales_dict.items():
                 max_value_group_wise = v
+                # fp8 pertensor scale
+                fused_max_value = fused_weight_fp8_scale_dict[k]
+
                 # if weight quant is int4 and act quant is fp8, extra save int4 absmax
                 if (
                     self.quant_model.quant_algo_dict["w_quant_algo"] == "int4"
@@ -442,14 +445,11 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
                             _save_path,
                             self.quant_model.quant_algo_dict["all_reduce"],
                         )
+                    scale = (fused_max_value.max() / 448.0).to(fused_max_value.dtype)
+                elif self.quant_model.quant_algo_dict["w_quant_algo"] == "fp8":
+                    scale = fused_max_value.max().to(fused_max_value.dtype)
 
-                # fp8 pertensor scale
-                fused_max_value = fused_weight_fp8_scale_dict[k]
-                scale = (fused_max_value.max() / 448.0).to(fused_max_value.dtype)
                 assert scale.numel() == 1
-                print_info(f"before all reduce scale = {scale}")
-                torch.distributed.all_reduce(scale, op=torch.distributed.ReduceOp.MAX)
-                print_info(f"after all reduce scale = {scale}")
 
                 if "experts" in k and "shared_experts" not in k:
                     _save_path = os.path.join(
@@ -457,6 +457,11 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
                     )
                     torch.save(scale, _save_path)
                 else:
+                    print_info(f"before all reduce scale = {scale}")
+                    torch.distributed.all_reduce(
+                        scale, op=torch.distributed.ReduceOp.MAX
+                    )
+                    print_info(f"after all reduce scale = {scale}")
                     _save_path = os.path.join(
                         save_path, "{}.weight_scale.{}.pt".format(k, _index)
                     )
@@ -492,6 +497,8 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
 
             if os.path.exists(tmp_path):
                 shutil.rmtree(tmp_path)
+            if os.path.exists(save_path):
+                shutil.rmtree(save_path)
             parent_dir = os.path.dirname(
                 self.quant_model.model.ori_model_path.rstrip("/")
             )

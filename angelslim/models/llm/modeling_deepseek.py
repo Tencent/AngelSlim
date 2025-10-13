@@ -574,9 +574,11 @@ class MLA(nn.Module):
         q_nope, q_pe = torch.split(
             q, [self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1
         )
+        freqs_cis = freqs_cis.to(q_pe.device)
         q_pe = apply_rotary_emb(q_pe, freqs_cis)
         kv = self.kv_a_proj_with_mqa(x)
         kv, k_pe = torch.split(kv, [self.kv_lora_rank, self.qk_rope_head_dim], dim=-1)
+        freqs_cis = freqs_cis.to(k_pe.device)
         k_pe = apply_rotary_emb(k_pe.unsqueeze(2), freqs_cis)
         if attn_impl == "naive":
             q = torch.cat([q_nope, q_pe], dim=-1)

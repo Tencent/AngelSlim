@@ -16,7 +16,12 @@ import torch
 from torch.nn import Linear
 
 from .....utils import get_best_device, print_info
-from ...core import mse_loss, pseudo_quantize_tensor
+from ...core import (
+    mse_loss,
+    per_block_weight_quant,
+    pseudo_quantize_tensor,
+    weight_dequant,
+)
 
 print_func = print_info
 
@@ -95,7 +100,13 @@ class AWQSearch:
                 scales = act_abs_max_tmp.pow(ratio).clamp(min=1e-4).view(-1)
                 scales = scales / (scales.max() * scales.min()).sqrt()
                 for layer in layers:
-                    layer.weight.mul_(scales.view(1, -1))
+                    if layer.weight.dtype == torch.float8_e4m3fn:
+                        weight = weight_dequant(layer.weight, layer.weight_scale_inv)
+                        weight.mul_(scales.view(1, -1))
+                        weight, _ = per_block_weight_quant(weight)
+                        layer.weight.data.copy_(weight)
+                    else:
+                        layer.weight.mul_(scales.view(1, -1))
                     if type(layer) in [Linear]:
                         quant_dequant_weight = pseudo_quantize_tensor(
                             layer.weight,

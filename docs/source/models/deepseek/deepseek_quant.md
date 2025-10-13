@@ -117,3 +117,37 @@ torchrun \
 python3 tools/run.py -c configs/deepseek_r1/w4a8_fp8/deepseek_r1_w4a8_fp8_low_memmory.yaml
 ```
 
+## INT4-AWQ量化
+
+DeepSeekR1的INT4-AWQ量化，可使用vllm部署。其中权重为per-group的粒度，group-size可选64/128；激活为动态per-token量化，可支持激活数据类型为int8/fp8。具体可见对应PR:
+```shell
+https://github.com/vllm-project/vllm/pull/24722
+```
+
+
+您可以量化`AngelSlim/configs/deepseek_r1`下面带有`int4_awq`字段的模型类型。
+
+### 配置
+
+INT4-AWQ `confg.yaml`文件参数配置，您可以参考`config/deepseek_r1/int4_awq`路径下的文件，下面是参数信息介绍。
+
+#### model配置
+- `name`：填写`DeepSeek`。
+- `torch_dtype`：权重加载时使用的数据类型。设置为`fp8`时可直接加载HF上的deepseek-ai/DeepSeek-R1-0528模型。设置为`bf16`时需要将fp8权重进行转换后再进行量化。
+- `device_map`：设置为`cpu`。
+
+#### Compression配置
+- `name`：压缩策略，填写`PTQ`。
+- `quantization.name`：压缩算法选填`int4_awq`。
+- `quantization.bits`：量化比特数，设置为4。
+- `quantization.quant_method`：主要指定权重的量化粒度，设置为`per-group`。
+- `quantization.group_size`：权重量化分组数。
+- `quantization.zero_point`：权重量化偏置，设置为`True`。
+- `quantization.ignore_layers`：指定模型中不需要量化的层。
+
+### INT4-AWQ量化
+
+您可以通过下面代码启动INT4-AWQ量化流程:
+```shell
+python3 tools/run.py --config configs/deepseek_r1/int4_awq/deepseek_r1_int4_awq.yaml
+```

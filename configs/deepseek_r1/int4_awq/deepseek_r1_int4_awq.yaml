@@ -1,0 +1,37 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output
+
+# Simplified Configuration for LLM compression
+model:
+  name: DeepSeek
+  model_path: deepseek-ai/DeepSeek-R1
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: fp8
+  device_map: cpu
+
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    name: int4_awq     # Supported: fp8_static, w4a8_fp8, int4_awq
+    bits: 4                # Quantization bits (4/8)
+    quant_method:
+      weight: "per-group"
+      group_size: 128
+      zero_point: true
+      mse_range: false
+    ignore_layers:         # Skip quantization for these layers
+      - "lm_head"
+      - "model.embed_tokens"
+      - "model.layers.61."
+
+# Dataset for calibration
+dataset:
+  name: TextDataset
+  data_path: your/data/path
+  max_seq_length: 4096
+  num_samples: 128
+  batch_size: 1

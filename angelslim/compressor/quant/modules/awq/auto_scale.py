@@ -15,7 +15,7 @@
 import torch
 
 from .....utils import get_op_by_name, get_op_name, print_info, set_op_by_name
-from ...core import mse_loss
+from ...core import mse_loss, per_block_weight_quant, weight_dequant
 from ...modules.helper_layer import SmoothHelpModule
 from .search import AWQSearch
 
@@ -75,7 +75,13 @@ class AutoLayerScale:
                     assert torch.isnan(p).sum() == 0, f"nan in {prev_op_name} weight"
 
                 for layer in layers:
-                    layer.weight.mul_(scales.view(1, -1))
+                    if layer.weight.dtype == torch.float8_e4m3fn:
+                        weight = weight_dequant(layer.weight, layer.weight_scale_inv)
+                        weight.mul_(scales.view(1, -1))
+                        weight, _ = per_block_weight_quant(weight)
+                        layer.weight.data.copy_(weight)
+                    else:
+                        layer.weight.mul_(scales.view(1, -1))
                     for p in layer.parameters():
                         assert torch.isnan(p).sum() == 0, f"nan in {layer_names} weight"
 
@@ -144,31 +150,59 @@ class AutoLayerScale:
 
         scales_list = []
         print_info(input_feat.keys())
-        scales_list.append(
-            _auto_get_scale(
-                layer_name="attn.qkv",
-                prev_op=module.input_layernorm,
-                layers=[
-                    module.self_attn.q_proj,
-                    module.self_attn.k_proj,
-                    module.self_attn.v_proj,
-                ],
-                inp=input_feat["self_attn.q_proj"],
-                module2inspect=module.self_attn,
-                cache=cache,
+        if self.model_type == "deepseek_v3":
+            scales_list.append(
+                _auto_get_scale(
+                    layer_name="attn.qkv",
+                    prev_op=module.input_layernorm,
+                    layers=[
+                        module.self_attn.q_a_proj,
+                        module.self_attn.kv_a_proj_with_mqa,
+                    ],
+                    inp=input_feat["self_attn.q_a_proj"],
+                    module2inspect=module.self_attn,
+                    cache=cache,
+                )
             )
-        )
 
-        # attention output
-        if module.self_attn.v_proj.weight.shape == module.self_attn.o_proj.weight.shape:
+            # attention output
             scales_list.append(
                 _auto_get_scale(
                     layer_name="attn.o",
-                    prev_op=module.self_attn.v_proj,
+                    prev_op=module.self_attn.kv_b_proj,
                     layers=[module.self_attn.o_proj],
                     inp=input_feat["self_attn.o_proj"],
                 )
             )
+        else:
+            scales_list.append(
+                _auto_get_scale(
+                    layer_name="attn.qkv",
+                    prev_op=module.input_layernorm,
+                    layers=[
+                        module.self_attn.q_proj,
+                        module.self_attn.k_proj,
+                        module.self_attn.v_proj,
+                    ],
+                    inp=input_feat["self_attn.q_proj"],
+                    module2inspect=module.self_attn,
+                    cache=cache,
+                )
+            )
+
+            # attention output
+            if (
+                module.self_attn.v_proj.weight.shape
+                == module.self_attn.o_proj.weight.shape
+            ):
+                scales_list.append(
+                    _auto_get_scale(
+                        layer_name="attn.o",
+                        prev_op=module.self_attn.v_proj,
+                        layers=[module.self_attn.o_proj],
+                        inp=input_feat["self_attn.o_proj"],
+                    )
+                )
 
         if hasattr(module.mlp, "gate"):
             print_info("auto scale -> MoeAWQ")
@@ -219,6 +253,58 @@ class AutoLayerScale:
                             prev_op=expert.up_proj,
                             layers=[expert.down_proj],
                             inp=input_feat[f"mlp.experts.{i}.down_proj"],
+                        )
+                    )
+            elif self.model_type == "deepseek_v3":
+                # share_mlp fc1
+                scales_list.append(
+                    _auto_get_scale(
+                        layer_name="shared_experts.gate_proj",
+                        prev_op=module.post_attention_layernorm,
+                        layers=[
+                            module.mlp.shared_experts.gate_proj,
+                            module.mlp.shared_experts.up_proj,
+                        ],
+                        inp=input_feat["mlp"],
+                        module2inspect=module.mlp,
+                        cache=cache,
+                    )
+                )
+                # share_mlp fc2
+                scales_list.append(
+                    _auto_get_scale(
+                        layer_name="shared_experts.down_proj",
+                        prev_op=module.mlp.shared_experts.up_proj,
+                        layers=[module.mlp.shared_experts.down_proj],
+                        inp=input_feat["mlp.shared_experts.down_proj"].view(
+                            input_feat["mlp"].shape[0], input_feat["mlp"].shape[1], -1
+                        ),
+                    )
+                )
+                # fc1
+                scales_list.append(
+                    _auto_get_scale(
+                        layer_name="expert.gate_proj",
+                        prev_op=module.post_attention_layernorm,
+                        layers=[
+                            w
+                            for expert in module.mlp.experts
+                            for w in [expert.gate_proj, expert.up_proj]
+                        ]
+                        + [module.mlp.gate],
+                        inp=input_feat["mlp"],
+                        module2inspect=module.mlp,
+                        cache=cache,
+                    )
+                )
+                # fc2
+                for i, expert in enumerate(module.mlp.experts):
+                    scales_list.append(
+                        _auto_get_scale(
+                            layer_name=f"expert.{i}.down_proj",
+                            prev_op=expert.up_proj,
+                            layers=[expert.down_proj],
+                            inp=input_feat[f"mlp.experts.{i}.down_proj"].unsqueeze(0),
                         )
                     )
             else:
