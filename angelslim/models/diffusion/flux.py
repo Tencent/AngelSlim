@@ -143,9 +143,8 @@ class FLUX(BaseDiffusionModel):
             "norm1_context.linear",
         ]
         self.quant_module = self.model.transformer
-        obs_layers = [nn.Linear]
         observer_layers_dict = {}
-        layers_dict = find_layers(self.quant_module, layers=obs_layers)
+        layers_dict = find_layers(self.quant_module, layers=self.observer_layer_classes)
 
         ignore_layers = self.skip_layer_names()
         for name, module in layers_dict.items():

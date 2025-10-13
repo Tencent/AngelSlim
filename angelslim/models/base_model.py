@@ -50,6 +50,7 @@ class BaseLLMModel(metaclass=ABCMeta):
         self.tokenizer = None
         self.modal_type = "LLM"
         self.pre_transformer_module_names = ["model.embed_tokens"]
+        self.observer_layer_classes = [torch.nn.Linear]
 
     def from_pretrained(
         self,

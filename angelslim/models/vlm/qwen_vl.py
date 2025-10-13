@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
 from transformers import (
@@ -93,9 +92,8 @@ class QwenVL(BaseLLMModel):
             vit_names = ["qkv", "proj"]
             names.extend(vit_names)
 
-        obs_layers = [nn.Linear]
         observer_layers_dict = {}
-        layers_dict = find_layers(self.model, layers=obs_layers)
+        layers_dict = find_layers(self.model, layers=self.observer_layer_classes)
 
         ignore_layers = self.skip_layer_names()
         for name, module in layers_dict.items():
