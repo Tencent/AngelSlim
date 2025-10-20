@@ -160,6 +160,7 @@ class QuantizationConfig:
     """
 
     name: str = field(default="fp8_dynamic")
+    save_name: str = field(default="compressed-tensors")
     bits: int = field(default=8)
     quant_method: Dict[str, Any] = field(
         default_factory=lambda: {

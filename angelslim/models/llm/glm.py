@@ -45,24 +45,18 @@ class GLM(BaseLLMModel):
             "gate_proj",
             "down_proj",
         ]
-        ignore_name = "shared_experts"
         obs_layers = [nn.Linear]
         observer_layers_dict = {}
         layers_dict = find_layers(self.model, layers=obs_layers)
 
         ignore_layers = self.skip_layer_names()
         for name, module in layers_dict.items():
-            if (
-                name.startswith(self.block_name)
-                and name.split(".")[-1] in names
-                and ignore_name not in name
-            ):
+            if name.startswith(self.block_name) and name.split(".")[-1] in names:
                 observer_layers_dict[name] = module
             else:
                 ignore_layers.append(name)
-        self.quant_config.quant_algo_info["ignore_layers"] = sorted(
-            list(set(ignore_layers))
-        )
+        ignore_layers = sorted(list(set(ignore_layers)))
+        self.quant_config.quant_algo_info["ignore_layers"] = ignore_layers
 
         if self.quant_config.custom_observe_layers_names != "default":
             for custom_observe_name in self.quant_config.custom_observe_layers_names:
