@@ -30,7 +30,6 @@ compression:
       activation: "per-token"
     ignore_layers:         # Skip quantization for these layers
       - "lm_head"
-      - "model.embed_tokens"
 ```
 
 ## 产出模型
@@ -64,8 +63,7 @@ compression:
   },
   "format": "int-quantized",
   "ignore": [
-    "lm_head",
-    "model.embed_tokens"
+    "lm_head"
   ],
   "kv_cache_scheme": null,
   "quant_method": "compressed-tensors",

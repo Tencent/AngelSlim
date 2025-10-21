@@ -30,7 +30,6 @@ compression:
       activation: "per-tensor"
     ignore_layers:         # Skip quantization for these layers
       - "lm_head"
-      - "model.embed_tokens"
 ```
 
 
@@ -92,8 +91,7 @@ dataset:
   },
   "format": "naive-quantized",
   "ignore": [
-    "lm_head",
-    "model.embed_tokens"
+    "lm_head"
   ],
   "quant_method": "compressed-tensors",
   "quantization_status": "compressed"
@@ -135,7 +133,6 @@ compression:
       activation: "per-tensor"
     ignore_layers:         # Skip quantization for these layers
       - "lm_head"
-      - "model.embed_tokens"
 ```
 
 ## 开启FP8量化分析
@@ -159,7 +156,6 @@ compression:
       activation: "per-tensor"
     ignore_layers:         # Skip quantization for these layers
       - "lm_head"
-      - "model.embed_tokens"
     quant_analyse: true
 ```
 

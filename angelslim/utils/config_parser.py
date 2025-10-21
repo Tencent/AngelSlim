@@ -495,7 +495,7 @@ class SlimConfigParser:
                 quantization=QuantizationConfig(
                     name="fp8_dynamic",
                     bits=8,
-                    ignore_layers=["lm_head", "model.embed_tokens"],
+                    ignore_layers=["lm_head"],
                 ),
             ),
             dataset_config=None,

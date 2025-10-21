@@ -17,11 +17,11 @@ compression:
   name: PTQ
   quantization:
     name: fp8_dynamic
+    save_name: fp8
     bits: 8
     quant_method:
       weight: "per-tensor"
       activation: "per-tensor"
     ignore_layers:         # Skip quantization for these layers
       - "lm_head"
-      - "model.embed_tokens"
 

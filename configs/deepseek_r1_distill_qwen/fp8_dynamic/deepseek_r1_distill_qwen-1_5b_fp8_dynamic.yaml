@@ -23,5 +23,4 @@ compression:
       activation: "per-tensor"
     ignore_layers:         # Skip quantization for these layers
       - "lm_head"
-      - "model.embed_tokens"
 
