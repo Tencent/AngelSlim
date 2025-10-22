@@ -14,4 +14,6 @@ eval/
 *_ckpt*/
 output/
 outs/
+wandb/
+tools/results/
 __pycache__/

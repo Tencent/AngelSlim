@@ -1,3 +1,4 @@
+from .data_utils import process_token_dict_to_mappings
 from .kv_cache import initialize_past_key_values
 from .util import (
     EWMAScorePredictor,
@@ -5,6 +6,7 @@ from .util import (
     MomentumScorePredictor,
     evaluate_posterior,
     initialize_tree,
+    padding,
     prepare_logits_processor,
     reset_tree_mode,
     tree_decoding,
@@ -22,4 +24,6 @@ __all__ = [
     "MomentumScorePredictor",
     "EWMAScorePredictor",
     "MeanScorePredictor",
+    "padding",
+    "process_token_dict_to_mappings",
 ]
