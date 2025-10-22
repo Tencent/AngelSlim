@@ -51,7 +51,12 @@ class DeepSeek(BaseLLMModel):
         self.block_name = "model.layers"
         self.column_parallel_linear_class = ColumnParallelLinear
         self.row_parallel_linear_class = RowParallelLinear
-        self.observer_layer_classes = [nn.Linear, Linear]
+        self.observer_layer_classes = [
+            nn.Linear,
+            Linear,
+            ColumnParallelLinear,
+            RowParallelLinear,
+        ]
         torch.set_default_dtype(torch.bfloat16)
 
     def from_pretrained(

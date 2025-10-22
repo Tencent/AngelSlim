@@ -148,6 +148,18 @@ INT4-AWQ `confg.yaml`文件参数配置，您可以参考`config/deepseek_r1/int
 ### INT4-AWQ量化
 
 您可以通过下面代码启动INT4-AWQ量化流程:
+#### AWQ算法
 ```shell
 python3 tools/run.py --config configs/deepseek_r1/int4_awq/deepseek_r1_int4_awq.yaml
+```
+#### 快速转换AWQ格式
+```shell
+python3 tools/convert_int4_awq_offline.py \
+--bit 4 \
+--group-size xx \ # 128或者64
+--zero-point xx \ # 设置为True时在vllm中对应AWQ，设置为False对应GPTQ
+--num-workers xx \ # 线程数
+--input_path 权重路径 \
+--output_path 保存路径 \
+--exclude-patterns None \ # 设置不量化模块，默认为None
 ```

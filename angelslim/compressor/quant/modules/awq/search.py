@@ -13,15 +13,9 @@
 # limitations under the License.
 
 import torch
-from torch.nn import Linear
 
 from .....utils import get_best_device, print_info
-from ...core import (
-    mse_loss,
-    per_block_weight_quant,
-    pseudo_quantize_tensor,
-    weight_dequant,
-)
+from ...core import mse_loss, pseudo_quantize_tensor, weight_dequant
 
 print_func = print_info
 
@@ -101,13 +95,10 @@ class AWQSearch:
                 scales = scales / (scales.max() * scales.min()).sqrt()
                 for layer in layers:
                     if layer.weight.dtype == torch.float8_e4m3fn:
-                        weight = weight_dequant(layer.weight, layer.weight_scale_inv)
-                        weight.mul_(scales.view(1, -1))
-                        weight, _ = per_block_weight_quant(weight)
-                        layer.weight.data.copy_(weight)
-                    else:
-                        layer.weight.mul_(scales.view(1, -1))
-                    if type(layer) in [Linear]:
+                        w = weight_dequant(layer.weight, layer.weight_scale_inv)
+                        layer.weight.data = w
+                    layer.weight.mul_(scales.view(1, -1))
+                    if type(layer) in self.observer_layer_classes:
                         quant_dequant_weight = pseudo_quantize_tensor(
                             layer.weight,
                             w_bit=self.bits_length,
@@ -121,7 +112,16 @@ class AWQSearch:
                         layer_name, new_act, block, cache
                     ).to(act.device)
 
-                loss = self.loss_function(origin_out, new_out).to(torch.float32)
+                try:
+                    loss = self.loss_function(origin_out, new_out).to(torch.float32)
+                except RuntimeError as e:
+                    if "CUDA out of memory" in str(e):
+                        print_func("switch cpu to compute loss...")
+                        origin_out = origin_out.cpu()
+                        new_out = new_out.cpu()
+                        loss = self.loss_function(origin_out, new_out).to(torch.float32)
+                    else:
+                        raise
 
                 if loss < best_error:
                     print_func("find better ratio: {}, loss: {}".format(ratio, loss))
@@ -130,7 +130,7 @@ class AWQSearch:
                     best_scales = scales
 
                 for layer, w in zip(layers, org_w):
-                    layer.weight.data.copy_(w)
+                    layer.weight.data = w.to(act.device)
 
         origin_out = origin_out.detach().cpu()
         new_out = w.detach().cpu()
