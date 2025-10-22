@@ -24,7 +24,6 @@ compression:
       group_size: 128
     ignore_layers:         # Skip quantization for these layers
       - "lm_head"
-      - "model.embed_tokens"
 
 # Dataset for calibration
 dataset:

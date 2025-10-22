@@ -575,6 +575,7 @@ class QDQModule(torch.nn.Module):
     ):
         super().__init__()
         self.quant_algo = quant_algo
+        weight_scale = weight_scale.to(weight.device)
         if "fp8" in quant_algo:
             if "w4a8" in self.quant_algo:
                 max_value_group_wise = weight_scale.clone()

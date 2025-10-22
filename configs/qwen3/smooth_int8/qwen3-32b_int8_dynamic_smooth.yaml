@@ -25,7 +25,6 @@ compression:
       - "smooth"
     ignore_layers:
       - "lm_head"
-      - "model.embed_tokens"
 
 # Dataset for calibration
 dataset:

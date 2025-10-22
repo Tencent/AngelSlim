@@ -4,8 +4,8 @@ global:
 
 # Simplified Configuration for LLM compression
 model:
-  name: Qwen
-  model_path: Qwen/Qwen2.5-3B-Instruct
+  name: GLM
+  model_path: zai-org/GLM-4.6
   trust_remote_code: true
   low_cpu_mem_usage: true
   use_cache: false
@@ -16,10 +16,12 @@ model:
 compression:
   name: PTQ
   quantization:
-    name: fp8_dynamic     # Supported: fp8_static, fp8_dynamic, int4_awq, int4_gptq
-    bits: 8                # Quantization bits (4/8)
+    name: fp8_dynamic
+    save_name: fp8
+    bits: 8
     quant_method:
       weight: "per-tensor"
       activation: "per-tensor"
     ignore_layers:         # Skip quantization for these layers
       - "lm_head"
+    cpu_convert: true

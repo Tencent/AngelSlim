@@ -112,10 +112,13 @@ class PTQSaveVllmHF(PTQSaveBase):
         super().__init__(quant_model=quant_model)
 
     def save(self, save_path):
-        deploy_backend = self.quant_model.deploy_backend
-        ignore_field = "ignored_layers" if deploy_backend == "vllm" else "ignore"
+        save_name = self.quant_model.quant_config.save_name
+        ignore_field = (
+            "ignore" if save_name == "compressed-tensors" else "ignored_layers"
+        )
         w_quant_algo = self.quant_model.quant_config.quant_algo_info["w"]
         a_quant_algo = self.quant_model.quant_config.quant_algo_info["a"]
+        is_dynamic = "dynamic" in a_quant_algo
         ignored_layers = self.quant_model.skip_layer_names()
         trtllm_config = {
             "quantization": {
@@ -130,7 +133,7 @@ class PTQSaveVllmHF(PTQSaveBase):
             act_config = {
                 "num_bits": 8,
                 "strategy": re.search(r"per-([a-zA-Z]+)", a_quant_algo).group(1),
-                "dynamic": "dynamic" in a_quant_algo,
+                "dynamic": is_dynamic,
                 "type": "float",
             }
             weight_config = {
@@ -145,7 +148,7 @@ class PTQSaveVllmHF(PTQSaveBase):
             act_config = {
                 "num_bits": 8,
                 "strategy": re.search(r"per-([a-zA-Z]+)", a_quant_algo).group(1),
-                "dynamic": "dynamic" in a_quant_algo,
+                "dynamic": is_dynamic,
                 "type": "int",
             }
             weight_config = {
@@ -162,7 +165,7 @@ class PTQSaveVllmHF(PTQSaveBase):
             act_config = {
                 "num_bits": 4,
                 "group_size": group_size,
-                "dynamic": "dynamic" in a_quant_algo,
+                "dynamic": is_dynamic,
                 "type": "float",
             }
             weight_config = {
@@ -176,23 +179,29 @@ class PTQSaveVllmHF(PTQSaveBase):
                 f"{self.quant_model.quant_config.quant_algo} not supported"
             )
 
-        quant_dict = {
-            "quantization_config": {
-                "config_groups": {
-                    "group_0": {
-                        "weights": weight_config,
-                        "input_activations": act_config,
-                        "output_activations": None,
-                        "targets": ["Linear"],
-                    }
-                },
-                "kv_cache_scheme": None,
-                "format": quant_format,
-                ignore_field: ignored_layers,
-                "quantization_status": "compressed",
-                "quant_method": "compressed-tensors",
-            }
-        }
+        quantization_config = {"quant_method": save_name, ignore_field: ignored_layers}
+        if save_name == "compressed-tensors":
+            quantization_config.update(
+                {
+                    "config_groups": {
+                        "group_0": {
+                            "weights": weight_config,
+                            "input_activations": act_config,
+                            "output_activations": None,
+                            "targets": ["Linear"],
+                        }
+                    },
+                    "kv_cache_scheme": None,
+                    "format": quant_format,
+                    "quantization_status": "compressed",
+                }
+            )
+        else:
+            quantization_config["activation_scheme"] = (
+                "dynamic" if is_dynamic else "static"
+            )
+
+        quant_dict = {"quantization_config": quantization_config}
         self.quant_model.get_model().config.update(quant_dict)
         print_info("Save quantization_config: {}".format(quant_dict))
 

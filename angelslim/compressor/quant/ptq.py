@@ -12,7 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
+import os
+
 import torch
+from safetensors.torch import load_file
 
 from ...utils import find_parent_layer_and_sub_name, print_info
 from ..compressor_factory import CompressorFactory
@@ -35,6 +39,7 @@ class PTQ:
         self.quant_model = model
         # init ptq config of model
         self.quant_model.init_ptq(slim_config)
+        self.model_path = slim_config.get("model_path")
         self.quant_algo = self.quant_model.quant_config.quant_algo
         self.quant_helpers = self.quant_model.quant_config.quant_helpers
         if (
@@ -206,6 +211,35 @@ class PTQ:
                 )
                 is not None
             ):
+                if sub_layer.weight.device.type == "meta":
+                    with open(
+                        os.path.join(self.model_path, "model.safetensors.index.json"),
+                        "r",
+                    ) as f:
+                        model_index = json.load(f)
+                    orign_w_file = os.path.join(
+                        self.model_path, model_index["weight_map"][name + ".weight"]
+                    )
+                    orign_w = load_file(orign_w_file, device="cpu")
+                    print_info(f"Load meta weight {name} from file {orign_w_file}")
+                    sub_layer.to_empty(device="cpu")
+                    sub_layer.weight.data = orign_w[name + ".weight"]
+
+                    if hasattr(sub_layer, "bias"):
+                        if (name + ".bias") in model_index["weight_map"]:
+                            orign_b_file = os.path.join(
+                                self.model_path,
+                                model_index["weight_map"][name + ".bias"],
+                            )
+                            orign_b = load_file(orign_b_file, device="cpu")
+                            print_info(
+                                f"Load meta bias {name} from file {orign_b_file}"
+                            )
+                            sub_layer.bias.data = orign_b[name + ".bias"]
+                        else:
+                            print_info(f"{name + '.bias'} not found. Set bias to None.")
+                            sub_layer.bias = None
+
                 weight_scales = self.quant_model.get_weight_scales(
                     sub_layer, self.ptq_hook.observer_dict[sub_layer].weight_observer
                 )
@@ -225,6 +259,9 @@ class PTQ:
                 quant_convert_module, name
             )
 
+            if self.quant_model.quant_config.cpu_convert:
+                sub_layer = sub_layer.to("cpu")
+                print_info(f"Convert layer {name} on cpu")
             if "nvfp4" in self.quant_algo:
                 self.nvfp4.post_process(sub_layer, name)
                 qdq_module = self.quant_model.get_nvfp4_qdq_module(sub_layer, name)
