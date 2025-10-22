@@ -19,9 +19,14 @@ import os
 import shutil
 from argparse import ArgumentParser
 
+import accelerate
 import torch
 from safetensors.torch import safe_open, save_file
+from torch import nn
 from tqdm import tqdm
+from transformers import AutoConfig, AutoModelForCausalLM
+
+from angelslim.utils import find_layers
 
 SUFFIX_TO_QUANT = [
     ".gate_and_up_proj.weight",
@@ -156,9 +161,25 @@ def main(input_path, output_path, block_size):
     safetensor_files = list(sorted(safetensor_files))
     print(f"Found {len(safetensor_files)} safetensor files")
 
+    # Analyze model structure to find ignored layers
+    config = AutoConfig.from_pretrained(input_path)
+    with accelerate.init_empty_weights():
+        model = AutoModelForCausalLM.from_config(config)
+    layers = find_layers(model, [nn.Linear])
+    print(f"Found {len(layers)} linear layers")
+    ignored_layers = []
+    for name, _ in layers.items():
+        weight_name = f"{name}.weight"
+        if not any(weight_name.endswith(suffix) for suffix in SUFFIX_TO_QUANT):
+            ignored_layers.append(name)
+    print(f"Ignored layers: {ignored_layers}")
+    del model
+
+    args.num_workers = min(args.num_workers, len(safetensor_files))
     file_subsets = [
         safetensor_files[i :: args.num_workers] for i in range(args.num_workers)
     ]
+    mp.set_start_method("spawn", force=True)
     manager = mp.Manager()
     return_dict = manager.dict()
     processes = []
@@ -200,6 +221,7 @@ def main(input_path, output_path, block_size):
         "activation_scheme": "dynamic",
         "fmt": "e4m3",
         "quant_method": "fp8",
+        "modules_to_not_convert": ignored_layers,
     }
     if block_size[0] != -1 and block_size[1] != -1:
         config["quantization_config"]["weight_block_size"] = block_size
