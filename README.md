@@ -31,7 +31,7 @@
 - [技术交流](#技术交流)
 
 ## 📣最新进展
-- 🌟[25/09/30] 我们开源了思考早退算法 SpecExit 的实现：*SpecExit: Accelerating Large Reasoning Model via Speculative Exit* | [[论文]](http://arxiv.org/abs/2509.24248) | [[文档]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html)
+- 🌟[25/09/30] 我们开源了思考早退算法 SpecExit 的实现：*SpecExit: Accelerating Large Reasoning Model via Speculative Exit* | [[论文]](http://arxiv.org/abs/2509.24248) | [[文档]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html) | [[vLLM代码]](https://github.com/vllm-project/vllm/pull/27192)
 - 🌟[25/09/30] 我们发布了三值量化 Tequila 的实现：*TEQUILA: TRAPPING-FREE TERNARY QUANTIZATION FOR LARGE LANGUAGE MODELS* | [[论文]](https://arxiv.org/abs/2509.23809) | [[代码]](https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant)。
 - [25/09/24] 我们支持了Qwen3系列模型的NVFP4的PTQ量化，我们还开源了[Qwen3-32B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-32B_nvfp4)、[Qwen3-235B-A22B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-235B-A22B_nvfp4)权重。
 - [25/09/01] 我们支持了[Hunyuan-MT-7B](https://huggingface.co/tencent/Hunyuan-MT-7B-fp8)翻译开源模型的FP8量化；支持了Eagle3的Torch推理及Benchmark评测流程；支持了[FLUX](https://github.com/Tencent/AngelSlim/tree/main/configs/flux)的量化、Cache；支持了[Seed-OSS](https://github.com/Tencent/AngelSlim/tree/main/configs/seed_oss)模型量化压缩。

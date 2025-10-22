@@ -30,14 +30,14 @@ Despite their strong performance on reasoning tasks, large reasoning models (LRM
 
 To run inference with the trained `SpecExit` model and evaluate its performance on benchmarks like GSM8K, GPQA, etc., use the `spec_benchmark.py` script.
 
-    ```shell
-    python3 tools/spec_benchmark.py \
-        --base-model-path ${BASE_MODEL} \
-        --eagle-model-path ${SpecExit_Model} \
-        --mode eagle \
-        --num-gpus-total 8 \
-        --early-stop-method confidence_progress_remain
-    ```
+```shell
+python3 tools/spec_benchmark.py \
+    --base-model-path ${BASE_MODEL} \
+    --eagle-model-path ${SpecExit_Model} \
+    --mode eagle \
+    --num-gpus-total 8 \
+    --early-stop-method confidence_progress_remain
+```
 
 ## 📈 Results
 
