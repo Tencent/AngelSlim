@@ -14,6 +14,7 @@
 
 from .config_parser import SlimConfigParser, parse_json_full_config  # noqa: F401
 from .default_compress_config import *  # noqa: F401 F403
+from .lazy_imports import *  # noqa: F401 F403
 from .utils import common_prefix  # noqa: F401
 from .utils import find_layers  # noqa: F401
 from .utils import find_parent_layer_and_sub_name  # noqa: F401
