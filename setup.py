@@ -26,9 +26,9 @@ else:
     TOOLS_VERSION = tag_list[-1]
 
 
-def get_requirements():
-    """from requirements.txt load dependency package"""
-    with open("requirements.txt") as f:
+def get_requirements(filename):
+    """Load dependency packages from specified requirements file"""
+    with open(filename) as f:
         return [
             line.strip()
             for line in f.readlines()
@@ -43,7 +43,23 @@ setup(
     long_description="Tools for llm model compression",
     url="https://github.com/Tencent/AngelSlim",
     author="Tencent Author",
-    install_requires=get_requirements(),
+    # Core dependencies: installed by default
+    install_requires=get_requirements("requirements/requirements.txt"),
+    # Define optional dependency groups
+    extras_require={
+        # Install all optional features: pip install angelslim[all]
+        "all": (
+            get_requirements("requirements/requirements_speculative.txt")
+            + get_requirements("requirements/requirements_diffusion.txt")
+            + get_requirements("requirements/requirements_vlm.txt")
+        ),
+        # Install speculative sampling functionality: pip install angelslim[speculative]
+        "speculative": get_requirements("requirements/requirements_speculative.txt"),
+        # Install Diffusion functionality: pip install angelslim[diffusion]
+        "diffusion": get_requirements("requirements/requirements_diffusion.txt"),
+        # Install Diffusion functionality: pip install angelslim[diffusion]
+        "vlm": get_requirements("requirements/requirements_vlm.txt"),
+    },
     packages=find_packages(),
     python_requires=">=3.0",
     # PyPI package information.

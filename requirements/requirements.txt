@@ -1,0 +1,11 @@
+torch>=2.6.0
+torchvision>=0.21.0
+transformers>=4.56.1
+safetensors>=0.5.3
+numpy
+tqdm
+triton
+pyarrow
+tiktoken
+datasets
+threadpoolctl
