@@ -20,9 +20,7 @@ import numpy as np
 import torch
 
 from ...utils import print_info
-from ...utils.lazy_imports import diffusers
-
-Transformer2DModelOutput = diffusers.models.modeling_outputs.Transformer2DModelOutput
+from ...utils.lazy_imports import Transformer2DModelOutput, diffusers
 
 
 class TeaCache:

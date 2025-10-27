@@ -24,15 +24,15 @@ from tqdm import tqdm
 from ...compressor import CompressorFactory
 from ...compressor.quant.core import PTQDiffusionSave, PTQOnlyScaleSave, QuantConfig
 from ...compressor.quant.modules import QLinear
-from ...utils.lazy_imports import diffusers
+from ...utils.lazy_imports import (
+    FluxPipelineOutput,
+    calculate_shift,
+    diffusers,
+    retrieve_timesteps,
+)
 from ...utils.utils import find_layers, find_parent_layer_and_sub_name
 from ..base_model import BaseDiffusionModel
 from ..model_factory import SlimModelFactory
-
-FluxPipeline = diffusers.FluxPipeline
-calculate_shift = diffusers.pipelines.flux.pipeline_flux.calculate_shift
-retrieve_timesteps = diffusers.pipelines.flux.pipeline_flux.retrieve_timesteps
-FluxPipelineOutput = diffusers.pipelines.flux.pipeline_output.FluxPipelineOutput
 
 
 @SlimModelFactory.register
@@ -85,7 +85,7 @@ class FLUX(BaseDiffusionModel):
                         [comp_name], self, slim_config=slim_config
                     )
         else:
-            self.model = FluxPipeline.from_pretrained(
+            self.model = diffusers.FluxPipeline.from_pretrained(
                 model_path,
                 torch_dtype=torch_dtype,
                 cache_dir=cache_dir,
@@ -202,7 +202,7 @@ class FLUX(BaseDiffusionModel):
                 ).images[0]
 
 
-class FluxSlimPipeline(FluxPipeline):
+class FluxSlimPipeline(diffusers.FluxPipeline):
     def __init__(
         self,
         scheduler,
