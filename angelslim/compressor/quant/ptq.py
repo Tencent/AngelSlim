@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import json
 import torch
 import torch.nn as nn
+from safetensors.torch import load_file
 
 from ...utils import find_parent_layer_and_sub_name, print_info
 from ..compressor_factory import CompressorFactory
@@ -37,6 +40,7 @@ class PTQ:
         # init ptq config of model
         self.quant_model.init_ptq(slim_config)
         self.modal_type = self.quant_model.modal_type
+        self.model_path = slim_config['model_config'].model_path
         self.layers = self.quant_model.get_model()
         self.quant_algo = self.quant_model.quant_config.quant_algo
         self.quant_helpers = self.quant_model.quant_config.quant_helpers
@@ -189,6 +193,14 @@ class PTQ:
                 )
                 is not None
             ):
+                if sub_layer.weight.device.type == 'meta':
+                    print_info(f"Meta Layer{name} trans to cpu")
+                    with open(os.path.join(self.model_path, "model.safetensors.index.json"), "r") as f:
+                        model_index = json.load(f)
+                        orign_w_file = model_index["weight_map"][name+".weight"]
+                        orign_w = load_file(os.path.join(self.model_path, orign_w_file), device="cpu")
+                        sub_layer.to_empty(device="cpu")
+                        sub_layer.weight.data = orign_w[name+".weight"]
                 weight_scales = self.quant_model.get_weight_scales(
                     sub_layer, self.ptq_hook.observer_dict[sub_layer].weight_observer
                 )
