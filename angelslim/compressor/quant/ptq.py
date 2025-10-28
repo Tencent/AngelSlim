@@ -39,7 +39,7 @@ class PTQ:
         self.quant_model = model
         # init ptq config of model
         self.quant_model.init_ptq(slim_config)
-        self.model_path = slim_config.get("model_path")
+        self.absolute_model_path = slim_config["global_config"].absolute_model_path
         self.quant_algo = self.quant_model.quant_config.quant_algo
         self.quant_helpers = self.quant_model.quant_config.quant_helpers
         if (
@@ -213,12 +213,15 @@ class PTQ:
             ):
                 if sub_layer.weight.device.type == "meta":
                     with open(
-                        os.path.join(self.model_path, "model.safetensors.index.json"),
+                        os.path.join(
+                            self.absolute_model_path, "model.safetensors.index.json"
+                        ),
                         "r",
                     ) as f:
                         model_index = json.load(f)
                     orign_w_file = os.path.join(
-                        self.model_path, model_index["weight_map"][name + ".weight"]
+                        self.absolute_model_path,
+                        model_index["weight_map"][name + ".weight"],
                     )
                     orign_w = load_file(orign_w_file, device="cpu")
                     print_info(f"Load meta weight {name} from file {orign_w_file}")
@@ -228,7 +231,7 @@ class PTQ:
                     if hasattr(sub_layer, "bias"):
                         if (name + ".bias") in model_index["weight_map"]:
                             orign_b_file = os.path.join(
-                                self.model_path,
+                                self.absolute_model_path,
                                 model_index["weight_map"][name + ".bias"],
                             )
                             orign_b = load_file(orign_b_file, device="cpu")
