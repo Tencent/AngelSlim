@@ -20,7 +20,7 @@ from typing import Callable, List, Optional, Tuple, Union
 import torch
 import tqdm
 
-from .modules import FP8DynamicLinear
+from .modules import FP8DynamicLinear, FP8WeightOnlyLinear
 from .quant_func import (
     fp8_per_block_quant,
     fp8_per_tensor_quant,
@@ -90,7 +90,10 @@ class DynamicDiTQuantizer:
 
     def _set_quantize_linear_module(self) -> torch.nn.Module:
         if "fp8" in self.quant_type:
-            return FP8DynamicLinear
+            if self.quant_type == QuantType.FP8_PER_TENSOR_WEIGHT_ONLY:
+                return FP8WeightOnlyLinear
+            else:
+                return FP8DynamicLinear
         raise ValueError(f"Invalid quant_type: {self.quant_type}")
 
     def _quantize_linear_weight(
@@ -107,6 +110,8 @@ class DynamicDiTQuantizer:
             if self.native_fp8_support:
                 _ensure_deep_gemm()
             quant_weight, weight_scale = fp8_per_block_quant(linear.weight)
+        elif self.quant_type == QuantType.FP8_PER_TENSOR_WEIGHT_ONLY:
+            quant_weight, weight_scale = fp8_per_tensor_quant(linear.weight)
         else:
             raise ValueError(f"Invalid quant_type: {self.quant_type}")
         return quant_weight, weight_scale

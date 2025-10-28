@@ -48,7 +48,7 @@ from angelslim.compressor.diffusion import DynamicDiTQuantizer
 # Load DiT pipeline with bfloat16 to reduce memory usage
 pipe = FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-schnell", torch_dtype=torch.bfloat16)
 
-# Supported quantization types: "fp8-per-tensor", "fp8-per-block", "fp8-per-token"
+# Supported quantization types: "fp8-per-tensor", "fp8-per-block", "fp8-per-token", "fp8-per-tensor-weight-only"
 # If you want to use "fp8-per-block" + DeepGEMM on NVIDIA Hopper (SM90+) devices,
 # please refer to https://github.com/deepseek-ai/DeepGEMM for installation instructions.
 quantizer = DynamicDiTQuantizer(quant_type="fp8-per-tensor")
@@ -86,9 +86,10 @@ quantizer.export_quantized_weight(pipe.transformer, save_path="/path/to/save/qua
 
 ## Supported Quantization Types
 
-AngelSlim supports three FP8 quantization strategies:
+AngelSlim supports four FP8 quantization strategies:
 
 - **`fp8-per-tensor`**: Per-tensor quantization for both weights and activations (recommended for most use cases)
+- **`fp8-per-tensor-weight-only`**: Weight-only quantization with per-tensor scaling (weights: FP8, activations: BF16/FP16)
 - **`fp8-per-block`**: Per-block quantization with DeepGEMM support for NVIDIA Hopper (SM90+) devices
 - **`fp8-per-token`**: Per-token quantization for fine-grained control
 
@@ -132,7 +133,7 @@ The main quantizer class for DiT models.
 
 #### Constructor Parameters
 
-- `quant_type` (str): Quantization type - "fp8-per-tensor", "fp8-per-block", or "fp8-per-token"
+- `quant_type` (str): Quantization type - "fp8-per-tensor", "fp8-per-tensor-weight-only", "fp8-per-block", or "fp8-per-token"
 - `layer_filter` (Callable, optional): Custom function to determine which layers to quantize
 - `include_patterns` (List[str|re.Pattern], optional): Patterns for layers to include
 - `exclude_patterns` (List[str|re.Pattern], optional): Patterns for layers to exclude

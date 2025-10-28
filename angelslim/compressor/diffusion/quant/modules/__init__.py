@@ -12,6 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .linear import FP8DynamicLinear
+from .linear import FP8DynamicLinear, FP8WeightOnlyLinear
 
-__all__ = ["FP8DynamicLinear"]
+__all__ = ["FP8DynamicLinear", "FP8WeightOnlyLinear"]

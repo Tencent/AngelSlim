@@ -31,7 +31,7 @@ image = pipe("A cat holding a sign that says hello world",
 image.save("flux-schnell_fp8_per_tensor.png")
 ```
 
-### 方式2：模型动态量化
+### 方式2：模型动态量化 & 仅权重量化
 
 ```python
 import torch
@@ -66,6 +66,7 @@ quantizer.export_quantized_weight(pipe.transformer, save_path="/path/to/save/qua
 ## 支持的FP8量化类型
 
 - **fp8-per-tensor**：全局per-tensor量化（推荐）
+- **fp8-per-tensor-weight-only**：权重量化（权重：FP8，激活：BF16/FP16）
 - **fp8-per-block**：per-block量化，支持NVIDIA Hopper (SM90+) DeepGEMM
 - **fp8-per-token**：per-token量化，粒度更细
 
@@ -105,7 +106,7 @@ quantizer = DynamicDiTQuantizer(
 
 ### DynamicDiTQuantizer
 
-- `quant_type`：量化类型（"fp8-per-tensor"/"fp8-per-block"/"fp8-per-token"）
+- `quant_type`：量化类型（"fp8-per-tensor"/"fp8-per-tensor-weight-only"/"fp8-per-block"/"fp8-per-token"）
 - `layer_filter`：自定义筛选函数（可选）
 - `include_patterns`/`exclude_patterns`：包含/排除哪些层（字符串或正则，支持混用）
 - `native_fp8_support`：是否使用原生FP8支持（如支持自动检测）
