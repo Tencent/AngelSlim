@@ -166,7 +166,6 @@ def run(config):
         compress_name=compress_config.name,
         compress_config=compress_config,
         global_config=global_config,
-        model_config=model_config,
     )
 
     # Step 6: Compress model

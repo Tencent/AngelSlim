@@ -162,7 +162,6 @@ class Engine:
         compress_name="PTQ",
         global_config=None,
         compress_config=None,
-        model_config=None,
         default_method=None,
     ) -> Any:
         """
@@ -191,7 +190,6 @@ class Engine:
             slim_config = {
                 "global_config": global_config,
                 "compress_config": compress_config,
-                "model_config": model_config,
             }
         self.compress_type = compress_name
         # Create compressor by CompressorFactory
