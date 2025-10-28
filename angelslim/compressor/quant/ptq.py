@@ -40,7 +40,7 @@ class PTQ:
         # init ptq config of model
         self.quant_model.init_ptq(slim_config)
         self.modal_type = self.quant_model.modal_type
-        self.absolute_model_path = slim_config['global_config'].model_path
+        self.absolute_model_path = slim_config['global_config'].absolute_model_path
         self.layers = self.quant_model.get_model()
         self.quant_algo = self.quant_model.quant_config.quant_algo
         self.quant_helpers = self.quant_model.quant_config.quant_helpers

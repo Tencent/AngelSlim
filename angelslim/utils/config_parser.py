@@ -37,7 +37,7 @@ class GlobalConfig:
     max_seq_length: int = field(default=2048)
     hidden_size: int = field(default=2048)
     model_arch_type: str = field(default=None)
-    model_path: str = field(default=None)
+    absolute_model_path: str = field(default=None)
     deploy_backend: str = field(default="vllm")
 
     def update(self, model_path: str = None, max_seq_length: int = None):
@@ -54,7 +54,7 @@ class GlobalConfig:
         if model_path:
             self.set_model_hidden_size(model_path)
             self.set_model_arch_type(model_path)
-            self.model_path = get_hf_model_path(model_path)
+            self.absolute_model_path = get_hf_model_path(model_path)
         if max_seq_length:
             self.set_max_seq_length(max_seq_length)
 
