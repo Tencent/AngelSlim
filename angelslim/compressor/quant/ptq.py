@@ -40,7 +40,7 @@ class PTQ:
         # init ptq config of model
         self.quant_model.init_ptq(slim_config)
         self.modal_type = self.quant_model.modal_type
-        self.model_path = slim_config['global_config'].model_path
+        self.absolute_model_path = slim_config['global_config'].model_path
         self.layers = self.quant_model.get_model()
         self.quant_algo = self.quant_model.quant_config.quant_algo
         self.quant_helpers = self.quant_model.quant_config.quant_helpers
@@ -195,10 +195,10 @@ class PTQ:
             ):
                 if sub_layer.weight.device.type == 'meta':
                     print_info(f"Meta Layer{name} trans to cpu")
-                    with open(os.path.join(self.model_path, "model.safetensors.index.json"), "r") as f:
+                    with open(os.path.join(self.absolute_model_path, "model.safetensors.index.json"), "r") as f:
                         model_index = json.load(f)
                         orign_w_file = model_index["weight_map"][name+".weight"]
-                        orign_w = load_file(os.path.join(self.model_path, orign_w_file), device="cpu")
+                        orign_w = load_file(os.path.join(self.absolute_model_path, orign_w_file), device="cpu")
                         sub_layer.to_empty(device="cpu")
                         sub_layer.weight.data = orign_w[name+".weight"]
                 weight_scales = self.quant_model.get_weight_scales(
