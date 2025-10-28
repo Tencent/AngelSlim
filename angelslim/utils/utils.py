@@ -147,6 +147,7 @@ def get_hf_config(model_path) -> dict:
         json_data = json.load(fp)
         return json_data
 
+
 def get_hf_model_path(model_path) -> str:
     "When model_path does not exist, fetch the model.config from cached_file."
     if os.path.isfile(model_path):
