@@ -1,0 +1,27 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output
+
+# Simplified Configuration for LLM compression
+model:
+  name: Qwen
+  model_path: Qwen/Qwen3-Coder-480B-A35B-Instruct
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: cpu
+
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    low_memory: true
+    name: fp8_dynamic
+    bits: 8
+    quant_method:
+      weight: "per-tensor"
+      activation: "per-tensor"
+    ignore_layers:         # Skip quantization for these layers
+      - "lm_head"
+      - "model.embed_tokens"
