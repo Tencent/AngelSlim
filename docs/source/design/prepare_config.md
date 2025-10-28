@@ -27,7 +27,6 @@ compression:
       activation: "per-tensor"
     ignore_layers:
       - "lm_head"
-      - "model.embed_tokens"
 
 # 数据集相关配置
 dataset:

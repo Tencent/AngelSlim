@@ -277,6 +277,28 @@ Seed-OSS-36B-Instruct模型的`FP8-Static`、`FP8-Dynamic`在`CEVAL`、`MMLU`、
 该数据使用[lm-eval](https://github.com/EleutherAI/lm-evaluation-harness)工具评测，注意需要设置`--gen_kwargs max_gen_toks`防止思考内容过长被截断。
 
 
+## GLM-4.6
+
+GLM-4.6模型的`FP8-Static`、`FP8-Dynamic`在`CEVAL`、`GSM8K`、`HUMANEVAL`上的评测结果如下：
+
+```{eval-rst}
+.. table::
+   :align: center
+   :name: glm-4.6-performance
+
+   +-------------------+--------------+---------+---------+-----------+
+   | Model             | Quantization | CEVAL   | GSM8K   | HUMANEVAL |
+   +===================+==============+=========+=========+===========+
+   | GLM-4.6           | BF16         | 82.6    | 93.71   | 73.78     |
+   +                   +--------------+---------+---------+-----------+
+   |                   | FP8-Static   | 83.14   | 93.86   | 66.46     |
+   +                   +--------------+---------+---------+-----------+
+   |                   | FP8-Dynamic  | 82.91   | 93.71   | 63.41     |
+   +-------------------+--------------+---------+---------+-----------+
+
+```
+
+
 ## 其他模型
 
 其他模型的`BF16`、`FP8-Static`、`FP8-Dynamic`、`INT4-GPTQ`、`INT4-AWQ`在`CEVAL`、`MMLU`、`GSM8K`上的评测结果如下：

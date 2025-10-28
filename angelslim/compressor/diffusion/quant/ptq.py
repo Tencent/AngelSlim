@@ -13,13 +13,14 @@
 # limitations under the License.
 
 import copy
+import logging
 import re
-from typing import List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union
 
 import torch
 import tqdm
 
-from .modules import FP8DynamicLinear
+from .modules import FP8DynamicLinear, FP8WeightOnlyLinear
 from .quant_func import (
     fp8_per_block_quant,
     fp8_per_tensor_quant,
@@ -29,47 +30,45 @@ from .utils import (
     QuantType,
     _ensure_deep_gemm,
     cleanup_memory,
+    load_fp8_scales,
+    load_quantized_model,
     replace_module,
+    save_quantized_model,
     should_quantize_layer,
 )
 
 __all__ = ["DynamicDiTQuantizer"]
 
+logger = logging.getLogger(__name__)
+
 
 class DynamicDiTQuantizer:
     """
     Quantizer for DiT that supports various FP8 quantization strategies.
+    Optimized for efficient initialization and conversion.
     """
 
     def __init__(
         self,
         quant_type: str = QuantType.FP8_PER_TENSOR,
-        layer_filter: Optional[callable] = None,
+        layer_filter: Optional[Callable[[str], bool]] = None,
         include_patterns: Optional[List[Union[str, re.Pattern]]] = None,
         exclude_patterns: Optional[List[Union[str, re.Pattern]]] = None,
         native_fp8_support: Optional[bool] = None,
     ):
-        """
-        Args:
-            quant_type: Choose from 'fp8-per-tensor', 'fp8-per-token', 'fp8-per-block'.
-            layer_filter: Custom function to decide which layer names to quantize.
-            include_patterns: List of keywords or regex to include layers.
-            exclude_patterns: List of keywords or regex to exclude layers.
-            native_fp8_support: Whether to use FP8-accelerated kernels if available.
-        """
         QuantType.validate(quant_type)
-
+        self.fp8_scales_map = {}
         self.quant_type = quant_type
-        self.include_patterns = (
-            include_patterns
-            if include_patterns is not None
-            else ["wrapped_module", "block", "lin", "img", "txt"]
-        )
-        self.exclude_patterns = (
-            exclude_patterns if exclude_patterns is not None else ["embed"]
-        )
+        self.include_patterns = include_patterns or [
+            "wrapped_module",
+            "block",
+            "lin",
+            "img",
+            "txt",
+        ]
+        self.exclude_patterns = exclude_patterns or ["embed"]
 
-        # Layer filter: callable for layer name selection
+        # Configure layer filter function
         self.layer_filter = (
             layer_filter
             if layer_filter is not None
@@ -78,69 +77,83 @@ class DynamicDiTQuantizer:
             )
         )
 
-        # Auto-enable FP8 if native device supports it (Ampere+)
+        # Auto-detect FP8 native support, fallback to False if not present
         if native_fp8_support is not None:
             self.native_fp8_support = native_fp8_support
         else:
             self.native_fp8_support = (
                 torch.cuda.is_available()
-                and torch.cuda.get_device_capability() >= (9, 0)
+                and torch.cuda.get_device_capability() >= (8, 9)
             )
 
         self.quantize_linear_module = self._set_quantize_linear_module()
 
     def _set_quantize_linear_module(self) -> torch.nn.Module:
-        """
-        Returns the quantized module type to replace nn.Linear.
-        """
         if "fp8" in self.quant_type:
-            return FP8DynamicLinear
-        else:
-            raise ValueError(f"Invalid quant_type: {self.quant_type}")
+            if self.quant_type == QuantType.FP8_PER_TENSOR_WEIGHT_ONLY:
+                return FP8WeightOnlyLinear
+            else:
+                return FP8DynamicLinear
+        raise ValueError(f"Invalid quant_type: {self.quant_type}")
 
     def _quantize_linear_weight(
         self, linear: torch.nn.Linear
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Quantize the given Linear layer's weight according to the selected quant_type.
-
-        Returns:
-            quant_weight: Quantized weight (FP8 format)
-            weight_scale: Scale used for quantization
-        """
         if self.quant_type == QuantType.FP8_PER_TENSOR:
             quant_weight, weight_scale = fp8_per_tensor_quant(linear.weight)
         elif self.quant_type == QuantType.FP8_PER_TOKEN:
             quant_weight, weight_scale = fp8_per_token_group_quant(
                 linear.weight, linear.weight.shape[-1]
             )
-            weight_scale = weight_scale.t()  # match broadcast order for inference
+            weight_scale = weight_scale.t()
         elif self.quant_type == QuantType.FP8_PER_BLOCK:
             if self.native_fp8_support:
-                # Enable native accelerated FP8 kernels if available.
                 _ensure_deep_gemm()
             quant_weight, weight_scale = fp8_per_block_quant(linear.weight)
+        elif self.quant_type == QuantType.FP8_PER_TENSOR_WEIGHT_ONLY:
+            quant_weight, weight_scale = fp8_per_tensor_quant(linear.weight)
         else:
             raise ValueError(f"Invalid quant_type: {self.quant_type}")
         return quant_weight, weight_scale
 
-    def quantize(self, model: torch.nn.Module):
-        """
-        Quantize all eligible nn.Linear modules in the input model in-place.
-        """
-        # Use bfloat16 for better kernel compatibility and less memory pressure
+    def _convert_linear_with_scale(
+        self, model: torch.nn.Module, scale: Union[torch.Tensor, float]
+    ):
         model.to(torch.bfloat16)
+        assert scale is not None, "scale is required"
+        self.fp8_scales_map = load_fp8_scales(scale)
+        for name, module in tqdm.tqdm(
+            list(model.named_modules()), desc="converting linear"
+        ):
+            if isinstance(module, torch.nn.Linear) and self.layer_filter(name):
+                # Prefer $name.weight_scale, fallback to "$name" key if needed
+                s = self.fp8_scales_map.get(
+                    f"{name}.weight_scale"
+                ) or self.fp8_scales_map.get(name)
+                if s is None:
+                    continue
+                # import pdb; pdb.set_trace()
+                weight = module.weight.to(torch.float8_e4m3fn)
+                bias = copy.deepcopy(module.bias) if module.bias is not None else None
+                quant_linear = self.quantize_linear_module(
+                    weight=weight,
+                    weight_scale=s.float(),
+                    bias=bias,
+                    native_fp8_support=self.native_fp8_support,
+                    quant_type=self.quant_type,
+                )
+                replace_module(model, name, quant_linear)
+                del module.weight, module.bias, module
+        cleanup_memory()
 
+    def _convert_linear(self, model: torch.nn.Module):
+        model.to(torch.bfloat16)
         named_modules = list(model.named_modules())
-
-        # Quantize eligible Linear modules
-        for name, module in tqdm.tqdm(named_modules, desc="Quantizing weights"):
+        for name, module in tqdm.tqdm(named_modules, desc="converting linear"):
             if isinstance(module, torch.nn.Linear) and self.layer_filter(name):
                 quant_weight, weight_scale = self._quantize_linear_weight(module)
-                # Deep copy bias to detach from original module
+                self.fp8_scales_map[f"{name}.weight_scale"] = weight_scale
                 bias = copy.deepcopy(module.bias) if module.bias is not None else None
-
-                # Instantiate quantized FP8 linear layer
                 quant_linear = self.quantize_linear_module(
                     weight=quant_weight,
                     weight_scale=weight_scale,
@@ -148,13 +161,36 @@ class DynamicDiTQuantizer:
                     native_fp8_support=self.native_fp8_support,
                     quant_type=self.quant_type,
                 )
-
-                # Replace Linear with Quantized Linear in the model
                 replace_module(model, name, quant_linear)
-
-                # Cleanup: Explicitly delete reference to old weights (accelerate GC)
-                del module.weight
-                del module.bias
-                del module
-
+                del module.weight, module.bias, module
         cleanup_memory()
+
+    def convert_linear(
+        self, model: torch.nn.Module, scale: Optional[Union[torch.Tensor, float]] = None
+    ):
+        if scale is not None:
+            self._convert_linear_with_scale(model, scale)
+        else:
+            self._convert_linear(model)
+
+    def export_quantized_weight(self, model: torch.nn.Module, save_path: str):
+        assert (
+            self.quant_type == QuantType.FP8_PER_TENSOR
+        ), "Currently only FP8_PER_TENSOR is supported for export"
+        self.convert_linear(model)
+        save_quantized_model(model, save_path, self.fp8_scales_map)
+
+    @staticmethod
+    def load_quantized_model(model_class, save_path: str, device: str = "cpu"):
+        """
+        Load a quantized model from save_path.
+
+        Args:
+            model_class: The model class to instantiate
+            save_path: Path to the saved model directory
+            device: Device to load the model on
+
+        Returns:
+            Loaded model with quantized weights
+        """
+        return load_quantized_model(model_class, save_path, device)

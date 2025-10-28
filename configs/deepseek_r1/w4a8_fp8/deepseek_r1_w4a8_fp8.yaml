@@ -35,7 +35,6 @@ compression:
       - "mlp.down_proj"
       - "shared_expert"
       - "lm_head"
-      - "model.embed_tokens"
 
 # Dataset for calibration
 dataset:

@@ -34,7 +34,6 @@ compression:
       activation: "per-tensor"
     ignore_layers:         # Skip quantization for these layers
       - "lm_head"
-      - "model.embed_tokens"
 ```
 
 激活静态量化需要指定校准数据集，例如使用`sharegpt`数据集：

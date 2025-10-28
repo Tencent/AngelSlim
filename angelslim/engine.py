@@ -271,7 +271,10 @@ class Engine:
             }
             config_dict["model_config"]["model_path"] = "Base Model Path"
             config_dict["global_config"]["save_path"] = "Save Model Path"
-            config_dict["dataset_config"]["data_path"] = "Data Path"
+            if "dataset_config" in config_dict and isinstance(
+                config_dict["dataset_config"], dict
+            ):
+                config_dict["dataset_config"]["data_path"] = "Data Path"
             with open(os.path.join(save_path, "angelslim_config.json"), "w") as f:
                 json.dump(config_dict, f, indent=4)
 

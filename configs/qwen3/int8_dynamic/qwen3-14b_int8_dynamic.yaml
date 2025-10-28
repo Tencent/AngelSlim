@@ -23,4 +23,3 @@ compression:
       activation: "per-token"
     ignore_layers:
       - "lm_head"
-      - "model.embed_tokens"

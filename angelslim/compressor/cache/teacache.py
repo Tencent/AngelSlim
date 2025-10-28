@@ -18,15 +18,9 @@ from typing import Any, Dict, Optional, Union
 
 import numpy as np
 import torch
-from diffusers.models.modeling_outputs import Transformer2DModelOutput
-from diffusers.utils import (
-    USE_PEFT_BACKEND,
-    is_torch_version,
-    scale_lora_layers,
-    unscale_lora_layers,
-)
 
 from ...utils import print_info
+from ...utils.lazy_imports import Transformer2DModelOutput, diffusers
 
 
 class TeaCache:
@@ -130,9 +124,9 @@ def flux_teacache_forward(
     else:
         lora_scale = 1.0
 
-    if USE_PEFT_BACKEND:
+    if diffusers.utils.USE_PEFT_BACKEND:
         # weight the lora layers by setting `lora_scale` for each PEFT layer
-        scale_lora_layers(self, lora_scale)
+        diffusers.utils.scale_lora_layers(self, lora_scale)
     else:
         if (
             joint_attention_kwargs is not None
@@ -236,7 +230,7 @@ def flux_teacache_forward(
 
                     ckpt_kwargs: Dict[str, Any] = (
                         {"use_reentrant": False}
-                        if is_torch_version(">=", "1.11.0")
+                        if diffusers.utils.is_torch_version(">=", "1.11.0")
                         else {}
                     )
                     encoder_hidden_states, hidden_states = (
@@ -294,7 +288,7 @@ def flux_teacache_forward(
 
                     ckpt_kwargs: Dict[str, Any] = (
                         {"use_reentrant": False}
-                        if is_torch_version(">=", "1.11.0")
+                        if diffusers.utils.is_torch_version(">=", "1.11.0")
                         else {}
                     )
                     hidden_states = torch.utils.checkpoint.checkpoint(
@@ -342,7 +336,9 @@ def flux_teacache_forward(
                     return custom_forward
 
                 ckpt_kwargs: Dict[str, Any] = (
-                    {"use_reentrant": False} if is_torch_version(">=", "1.11.0") else {}
+                    {"use_reentrant": False}
+                    if diffusers.utils.is_torch_version(">=", "1.11.0")
+                    else {}
                 )
                 encoder_hidden_states, hidden_states = (
                     torch.utils.checkpoint.checkpoint(
@@ -398,7 +394,9 @@ def flux_teacache_forward(
                     return custom_forward
 
                 ckpt_kwargs: Dict[str, Any] = (
-                    {"use_reentrant": False} if is_torch_version(">=", "1.11.0") else {}
+                    {"use_reentrant": False}
+                    if diffusers.utils.is_torch_version(">=", "1.11.0")
+                    else {}
                 )
                 hidden_states = torch.utils.checkpoint.checkpoint(
                     create_custom_forward(block),
@@ -432,9 +430,9 @@ def flux_teacache_forward(
     hidden_states = self.norm_out(hidden_states, temb)
     output = self.proj_out(hidden_states)
 
-    if USE_PEFT_BACKEND:
+    if diffusers.utils.USE_PEFT_BACKEND:
         # remove `lora_scale` from each PEFT layer
-        unscale_lora_layers(self, lora_scale)
+        diffusers.utils.unscale_lora_layers(self, lora_scale)
 
     if not return_dict:
         return (output,)

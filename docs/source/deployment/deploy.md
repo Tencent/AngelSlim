@@ -29,8 +29,7 @@
   },
   "format": "naive-quantized",
   "ignored_layers": [
-    "lm_head",
-    "model.embed_tokens"
+    "lm_head"
   ],
   "quant_method": "compressed-tensors",
   "quantization_status": "compressed"

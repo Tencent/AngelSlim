@@ -19,6 +19,7 @@ from ..quant_func import (
     fp8_per_block_quant,
     fp8_per_tensor_quant,
     fp8_per_token_group_quant,
+    fp8_weight_only_gemm,
 )
 
 
@@ -84,5 +85,54 @@ class FP8DynamicLinear(torch.nn.Module):
 
         if self.quant_type == "fp8-per-token" and x.dim() == 3 and output.dim() == 2:
             output = output.unsqueeze(0)
+
+        return output
+
+
+class FP8WeightOnlyLinear(torch.nn.Module):
+    """
+    FP8 Weight-Only Quantized Linear Layer.
+
+    This layer quantizes only the weights to FP8 while keeping activations
+    in higher precision (bfloat16/float16). This provides a good balance
+    between memory savings and accuracy.
+    """
+
+    def __init__(
+        self,
+        weight: torch.Tensor,
+        weight_scale: torch.Tensor,
+        bias: torch.nn.Parameter,
+        native_fp8_support: bool = False,  # not used
+        quant_type: str = "fp8-per-tensor-weight-only",
+    ):
+        super().__init__()
+        self.weight = torch.nn.Parameter(weight, requires_grad=False)
+        self.weight_scale = torch.nn.Parameter(weight_scale, requires_grad=False)
+        self.bias = bias
+        self.native_fp8_support = native_fp8_support  # not used
+        self.quant_type = quant_type
+
+    @torch.compiler.disable(recursive=True)
+    def forward(self, x):
+        ori_dtype = x.dtype
+        assert ori_dtype in [
+            torch.float32,
+            torch.bfloat16,
+            torch.float16,
+        ], "x.dtype must be float32, bfloat16, or float16"
+
+        if ori_dtype == torch.float32:
+            x = x.to(torch.bfloat16)
+
+        # For weight-only quantization, we don't quantize activations
+        # Just use the original activations with quantized weights
+        output = fp8_weight_only_gemm(
+            A=x,  # Keep activations in original precision
+            B=self.weight,
+            B_scale=self.weight_scale,
+            bias=self.bias,
+            out_dtype=x.dtype,
+        )
 
         return output

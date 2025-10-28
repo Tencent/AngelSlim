@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import yaml
 
-from .utils import get_hf_config
+from .utils import get_hf_config, get_hf_model_path
 
 
 class CompressionMethod(str, Enum):
@@ -62,6 +62,7 @@ class GlobalConfig:
     max_seq_length: int = field(default=2048)
     hidden_size: int = field(default=2048)
     model_arch_type: str = field(default=None)
+    absolute_model_path: str = field(default=None)
     deploy_backend: str = field(default="vllm")
 
     def update(self, model_path: str = None, max_seq_length: int = None):
@@ -78,6 +79,7 @@ class GlobalConfig:
         if model_path:
             self.set_model_hidden_size(model_path)
             self.set_model_arch_type(model_path)
+            self.absolute_model_path = get_hf_model_path(model_path)
         if max_seq_length:
             self.set_max_seq_length(max_seq_length)
 
@@ -160,6 +162,7 @@ class QuantizationConfig:
     """
 
     name: str = field(default="fp8_dynamic")
+    save_name: str = field(default="compressed-tensors")
     bits: int = field(default=8)
     quant_method: Dict[str, Any] = field(
         default_factory=lambda: {
@@ -171,6 +174,7 @@ class QuantizationConfig:
     quant_helpers: List[str] = field(default_factory=list)
     smooth_alpha: float = field(default=0.5)
     low_memory: bool = field(default=False)
+    cpu_convert: bool = field(default=False)
     modules_to_quantize: List[str] = field(default_factory=list)
     zero_point: bool = field(default=True)
     mse_range: bool = field(default=False)
@@ -493,7 +497,7 @@ class SlimConfigParser:
                 quantization=QuantizationConfig(
                     name="fp8_dynamic",
                     bits=8,
-                    ignore_layers=["lm_head", "model.embed_tokens"],
+                    ignore_layers=["lm_head"],
                 ),
             ),
             dataset_config=None,

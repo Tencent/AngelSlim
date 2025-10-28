@@ -18,15 +18,18 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import numpy as np
 import torch
 import torch.nn as nn
-from diffusers import FluxPipeline
-from diffusers.pipelines.flux.pipeline_flux import calculate_shift, retrieve_timesteps
-from diffusers.pipelines.flux.pipeline_output import FluxPipelineOutput
 from safetensors.torch import load_file
 from tqdm import tqdm
 
 from ...compressor import CompressorFactory
 from ...compressor.quant.core import PTQDiffusionSave, PTQOnlyScaleSave, QuantConfig
 from ...compressor.quant.modules import QLinear
+from ...utils.lazy_imports import (
+    FluxPipelineOutput,
+    calculate_shift,
+    diffusers,
+    retrieve_timesteps,
+)
 from ...utils.utils import find_layers, find_parent_layer_and_sub_name
 from ..base_model import BaseDiffusionModel
 from ..model_factory import SlimModelFactory
@@ -82,7 +85,7 @@ class FLUX(BaseDiffusionModel):
                         [comp_name], self, slim_config=slim_config
                     )
         else:
-            self.model = FluxPipeline.from_pretrained(
+            self.model = diffusers.FluxPipeline.from_pretrained(
                 model_path,
                 torch_dtype=torch_dtype,
                 cache_dir=cache_dir,
@@ -199,7 +202,7 @@ class FLUX(BaseDiffusionModel):
                 ).images[0]
 
 
-class FluxSlimPipeline(FluxPipeline):
+class FluxSlimPipeline(diffusers.FluxPipeline):
     def __init__(
         self,
         scheduler,

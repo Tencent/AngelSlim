@@ -232,6 +232,34 @@ def fp8_gemm_torch_tensor_token(
     return output
 
 
+def fp8_weight_only_gemm(A, B, B_scale, bias, out_dtype):
+    """Perform FP8 GEMM operation with fallback to standard linear.
+
+    Args:
+        A: Input tensor A.
+        B: Input tensor B.
+        B_scale: Scale factor for tensor B.
+        bias: Optional bias tensor.
+        out_dtype: Output data type.
+        native_fp8_support: Whether to use native FP8 support.
+        quant_type: Quantization type.
+        origin_shape: Original shape for reshaping.
+
+    Returns:
+        torch.Tensor: Result of the GEMM operation.
+    """
+    if A.numel() == 0:
+        return torch.empty(size=(0, B.shape[0]), dtype=out_dtype, device=A.device)
+
+    output = torch.nn.functional.linear(
+        A.to(out_dtype),
+        B.to(out_dtype) * B_scale.to(out_dtype),
+        bias=bias,
+    )
+
+    return output
+
+
 def fp8_gemm(
     A: torch.Tensor,
     A_scale: torch.Tensor,

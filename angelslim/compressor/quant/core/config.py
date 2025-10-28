@@ -60,6 +60,9 @@ class QuantConfig:
         self.quant_helpers = quantization_args.quant_helpers
         act_quant_method = quantization_args.quant_method.get("activation", None)
         weight_quant_method = quantization_args.quant_method["weight"]
+        self.cpu_convert = quantization_args.cpu_convert
+        self.save_name = quantization_args.save_name
+
         if global_config:
             self.max_seq_length = global_config.max_seq_length
             self.hidden_size = global_config.hidden_size

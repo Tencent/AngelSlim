@@ -20,13 +20,12 @@ import time
 from typing import Any, Dict, List
 
 import numpy as np
-import ray
 import shortuuid
 import torch
-from fastchat.llm_judge.common import load_questions
 from tqdm import tqdm
 
 from angelslim.compressor.speculative.inference.models import Eagle3Model
+from angelslim.utils.lazy_imports import fastchat, ray
 
 SYSTEM_PROMPT = {
     "role": "system",
@@ -231,7 +230,7 @@ def get_model_answers(
 
 def run_evaluation(config: EvaluationConfig, args: argparse.Namespace) -> None:
     """Run the evaluation with optional distributed processing"""
-    questions = load_questions(
+    questions = fastchat.llm_judge.common.load_questions(
         config.question_file, args.question_begin, args.question_end
     )
 
