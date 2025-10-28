@@ -193,14 +193,35 @@ class PTQ:
                 )
                 is not None
             ):
-                if sub_layer.weight.device.type == 'meta':
-                    print_info(f"Meta Layer{name} trans to cpu")
-                    with open(os.path.join(self.absolute_model_path, "model.safetensors.index.json"), "r") as f:
+                if sub_layer.weight.device.type == "meta":
+                    with open(
+                        os.path.join(self.absolute_model_path, "model.safetensors.index.json"),
+                        "r",
+                    ) as f:
                         model_index = json.load(f)
-                        orign_w_file = model_index["weight_map"][name+".weight"]
-                        orign_w = load_file(os.path.join(self.absolute_model_path, orign_w_file), device="cpu")
-                        sub_layer.to_empty(device="cpu")
-                        sub_layer.weight.data = orign_w[name+".weight"]
+                    orign_w_file = os.path.join(
+                        self.absolute_model_path, model_index["weight_map"][name + ".weight"]
+                    )
+                    orign_w = load_file(orign_w_file, device="cpu")
+                    print_info(f"Load meta weight {name} from file {orign_w_file}")
+                    sub_layer.to_empty(device="cpu")
+                    sub_layer.weight.data = orign_w[name + ".weight"]
+
+                    if hasattr(sub_layer, "bias"):
+                        if (name + ".bias") in model_index["weight_map"]:
+                            orign_b_file = os.path.join(
+                                self.absolute_model_path,
+                                model_index["weight_map"][name + ".bias"],
+                            )
+                            orign_b = load_file(orign_b_file, device="cpu")
+                            print_info(
+                                f"Load meta bias {name} from file {orign_b_file}"
+                            )
+                            sub_layer.bias.data = orign_b[name + ".bias"]
+                        else:
+                            print_info(f"{name + '.bias'} not found. Set bias to None.")
+                            sub_layer.bias = None
+
                 weight_scales = self.quant_model.get_weight_scales(
                     sub_layer, self.ptq_hook.observer_dict[sub_layer].weight_observer
                 )
