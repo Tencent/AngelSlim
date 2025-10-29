@@ -155,20 +155,6 @@ anthropic = LazyModule("anthropic", "speculative")
 jsonschema_specifications = LazyModule("jsonschema_specifications", "speculative")
 referencing = LazyModule("referencing", "speculative")
 
-# --- Diffusion related lazy imports ---
-diffusers = LazyModule("diffusers", "diffusion")
-Transformer2DModelOutput = LazyAttribute(
-    "diffusers.models.modeling_outputs", "Transformer2DModelOutput", "diffusion"
-)
-retrieve_timesteps = LazyAttribute(
-    "diffusers.pipelines.flux.pipeline_flux", "retrieve_timesteps", "diffusion"
-)
-calculate_shift = LazyAttribute(
-    "diffusers.pipelines.flux.pipeline_flux", "calculate_shift", "diffusion"
-)
-FluxPipelineOutput = LazyAttribute(
-    "diffusers.pipelines.flux.pipeline_output", "FluxPipelineOutput", "diffusion"
-)
 
 # --- VLM related lazy imports ---
 qwen_vl_utils = LazyModule("qwen_vl_utils", "vlm")
