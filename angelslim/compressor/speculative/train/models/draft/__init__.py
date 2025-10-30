@@ -13,5 +13,6 @@
 # limitations under the License.
 
 from .draft_model_factory import DraftModelConfig, create_draft_model
+from .llama_eagle3 import Eagle3LlamaForCausalLM
 
-__all__ = ["create_draft_model", "DraftModelConfig"]
+__all__ = ["create_draft_model", "DraftModelConfig", "Eagle3LlamaForCausalLM"]

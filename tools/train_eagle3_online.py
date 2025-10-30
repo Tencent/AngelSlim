@@ -3,7 +3,6 @@ import os
 from pathlib import Path
 
 import torch
-import torch.distributed as dist
 import transformers
 
 from angelslim.compressor.speculative.train.data import (
@@ -19,6 +18,7 @@ from angelslim.compressor.speculative.train.models.draft import (
 )
 from angelslim.compressor.speculative.train.models.target import create_target_model
 from angelslim.compressor.speculative.train.trainer import OnlineEagle3Trainer
+from angelslim.utils import rank0_print
 
 
 def parse_args():
@@ -130,9 +130,6 @@ def parse_args():
         help="Output directory for model checkpoints",
     )
     training_group.add_argument(
-        "--cache_dir", type=str, default=None, help="Cache directory"
-    )
-    training_group.add_argument(
         "--optim", type=str, default="adamw_torch", help="Optimizer to use"
     )
     training_group.add_argument(
@@ -208,9 +205,6 @@ def parse_args():
         help="Limit the total amount of checkpoints",
     )
     training_group.add_argument(
-        "--local_rank", type=int, default=-1, help="Local rank for distributed training"
-    )
-    training_group.add_argument(
         "--deepspeed", type=str, default=None, help="DeepSpeed config file"
     )
     training_group.add_argument(
@@ -225,17 +219,15 @@ def parse_args():
     training_group.add_argument(
         "--lr_scheduler_type",
         type=str,
-        default="cosine",
-        help="Learning rate scheduler type",
+        default="constant",
+        help=(
+            "Learning rate scheduler type. "
+            "Common options: 'linear', 'cosine', 'cosine_with_restarts', "
+            "'polynomial', 'constant', 'constant_with_warmup'"
+        ),
     )
     training_group.add_argument(
         "--run_name", type=str, default=None, help="Run name for tracking"
-    )
-    training_group.add_argument(
-        "--wandb_api_key",
-        type=str,
-        default=None,
-        help="Wandb API key for authentication",
     )
     training_group.add_argument(
         "--report_to",
@@ -250,17 +242,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def rank0_print(*args, **kwargs):
-    if dist.is_initialized():
-        rank = dist.get_rank()
-    else:
-        rank = int(os.environ.get("LOCAL_RANK", 0))
-
-    if rank == 0:
-        print(*args, **kwargs)
-
-
-def train_eagle3_online():
+def train():
     args = parse_args()
 
     # Parse torch dtype
@@ -278,14 +260,6 @@ def train_eagle3_online():
         model_path=args.target_model_name_or_path,
         torch_dtype=torch_dtype,
         trust_remote_code=args.trust_remote_code,
-        tensor_parallel_size=args.tensor_parallel_size,
-        api_key=args.vllm_api_key,
-        model_name=args.vllm_model_name,
-        tokenizer_path=(
-            args.target_model_name_or_path
-            if args.target_backend == "vllm_serving"
-            else None
-        ),
     )
     rank0_print("Target model loaded successfully")
 
@@ -324,25 +298,56 @@ def train_eagle3_online():
     rank0_print("Vocabulary mapping built successfully")
 
     # Create a TrainingArguments object for the trainer
+    # Organize training arguments by category
+    basic_args = {
+        "output_dir": args.output_dir,
+        "num_train_epochs": args.num_train_epochs,
+    }
+
+    batch_args = {
+        "per_device_train_batch_size": args.per_device_train_batch_size,
+        "per_device_eval_batch_size": args.per_device_eval_batch_size,
+        "gradient_accumulation_steps": args.gradient_accumulation_steps,
+    }
+
+    optimizer_args = {
+        "learning_rate": args.learning_rate,
+        "weight_decay": args.weight_decay,
+        "warmup_steps": args.warmup_steps,
+        "optim": args.optim,
+        "lr_scheduler_type": args.lr_scheduler_type,
+    }
+
+    precision_args = {
+        "fp16": args.fp16,
+        "bf16": args.bf16,
+    }
+
+    checkpoint_args = {
+        "save_strategy": args.save_strategy,
+        "save_steps": args.save_steps,
+        "save_total_limit": args.save_total_limit,
+    }
+
+    logging_args = {
+        "logging_steps": args.logging_steps,
+        "eval_steps": args.eval_steps,
+        "report_to": args.report_to,
+        "run_name": args.run_name,
+    }
+
+    distributed_args = {
+        "deepspeed": args.deepspeed,
+    }
+
     training_args = transformers.TrainingArguments(
-        output_dir=args.output_dir,
-        per_device_train_batch_size=args.per_device_train_batch_size,
-        per_device_eval_batch_size=args.per_device_eval_batch_size,
-        gradient_accumulation_steps=args.gradient_accumulation_steps,
-        num_train_epochs=args.num_train_epochs,
-        learning_rate=args.learning_rate,
-        weight_decay=args.weight_decay,
-        warmup_steps=args.warmup_steps,
-        logging_steps=args.logging_steps,
-        save_steps=args.save_steps,
-        eval_steps=args.eval_steps,
-        save_total_limit=args.save_total_limit,
-        fp16=args.fp16,
-        bf16=args.bf16,
-        optim=args.optim,
-        report_to=args.report_to,
-        run_name=args.run_name,
-        deepspeed=args.deepspeed,
+        **basic_args,
+        **batch_args,
+        **optimizer_args,
+        **precision_args,
+        **checkpoint_args,
+        **logging_args,
+        **distributed_args,
     )
 
     # Initialize trainer
@@ -369,4 +374,4 @@ def train_eagle3_online():
 
 
 if __name__ == "__main__":
-    train_eagle3_online()
+    train()

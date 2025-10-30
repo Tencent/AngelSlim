@@ -12,7 +12,40 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Any, Dict, List
+
 import torch
+
+__all__ = [
+    "process_token_dict_to_mappings",
+    "convert_sharegpt_data",
+    "convert_ultrachat_data",
+    "DataCollatorWithPadding",
+]
+
+
+def convert_sharegpt_data(row, dataset_column="conversations"):
+    converted_messages = []
+
+    role_mapping = {"human": "user", "gpt": "assistant"}
+    messages = row[dataset_column]
+    for message in messages:
+        converted_messages.append(
+            {"role": role_mapping[message["from"]], "content": message["value"]}
+        )
+
+    return {"conversations": converted_messages, "id": row["id"]}
+
+
+def convert_ultrachat_data(row, dataset_column="messages"):
+    converted_messages = []
+
+    messages = row[dataset_column]
+    for message in messages:
+        converted_messages.append(
+            {"role": message["role"], "content": message["content"]}
+        )
+    return {"conversations": converted_messages, "id": row["prompt_id"]}
 
 
 # Copied from https://github.com/sgl-project/SpecForge/blob/main/specforge/data/preprocessing.py # noqa: E501
@@ -65,3 +98,40 @@ def process_token_dict_to_mappings(
     t2d = torch.tensor(t2d)
 
     return d2t, t2d
+
+
+class DataCollatorWithPadding:
+    def paddingtensor(self, intensors, N):
+        B, n, S = intensors.shape
+        # padding_tensor = torch.zeros(B, N - n, S,dtype=intensors.dtype)
+        padding_tensor = torch.zeros(B, N - n, S, dtype=intensors.dtype)
+        outtensors = torch.cat((intensors, padding_tensor), dim=1)
+        return outtensors
+
+    def paddingtensor2D(self, intensors, N):
+        B, n = intensors.shape
+        padding_tensor = torch.zeros(B, N - n, dtype=intensors.dtype)
+        outtensors = torch.cat((intensors, padding_tensor), dim=1)
+        return outtensors
+
+    def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, Any]:
+        max_length = max(item["input_ids"].shape[1] for item in features)
+        batch_input_ids = torch.cat(
+            [self.paddingtensor2D(item["input_ids"], max_length) for item in features]
+        )
+        batch_attention_mask = torch.cat(
+            [
+                self.paddingtensor2D(item["attention_mask"], max_length)
+                for item in features
+            ]
+        )
+        batch_loss_mask = torch.cat(
+            [self.paddingtensor2D(item["loss_mask"], max_length) for item in features]
+        )
+
+        batch = {
+            "input_ids": batch_input_ids,
+            "attention_mask": batch_attention_mask,
+            "loss_mask": batch_loss_mask,
+        }
+        return batch

@@ -14,28 +14,65 @@
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Callable, Dict, Optional, Type, Union
 
 import torch
 from transformers import AutoConfig, PretrainedConfig, PreTrainedModel
 
-from .llama_eagle3 import Eagle3LLamaforCausalLM
-
 
 class DraftModelFactory:
     """
-    Factory for creating draft models based on architecture field.
-
-    This approach keeps model_type="llama" but uses the architectures field
-    to determine which model class to instantiate.
+    Factory class for draft models with flexible registration.
+    Supports both explicit name registration and direct class name registration.
     """
 
-    _ARCHITECTURE_MAPPING = {
-        "Eagle3LLamaforCausalLM": Eagle3LLamaforCausalLM,
-    }
+    _draft_models: Dict[str, Type[PreTrainedModel]] = {}
 
     @classmethod
-    def _get_model_class(cls, config: PretrainedConfig):
+    def register(cls, name: Optional[Union[str, Callable]] = None) -> Callable:
+        """Decorator to register draft models. Supports two usage patterns:
+        1. @DraftModelFactory.register("explicit_name")
+        2. @DraftModelFactory.register (uses class name as key)
+        """
+
+        # Handler for direct class registration (@DraftModelFactory.register)
+        def register_class(model_cls: Type[PreTrainedModel]) -> Type[PreTrainedModel]:
+            """Register a class using its own name as the key"""
+            key = model_cls.__name__
+            if key in cls._draft_models:
+                print(f"Draft model '{key}' already exists, will be overwritten.")
+            cls._draft_models[key] = model_cls
+            return model_cls
+
+        # Handler for named registration (@DraftModelFactory.register("name"))
+        def register_with_name(
+            key: str,
+        ) -> Callable[[Type[PreTrainedModel]], Type[PreTrainedModel]]:
+            """Decorator that registers a class with a custom key"""
+
+            def decorator(model_cls: Type[PreTrainedModel]) -> Type[PreTrainedModel]:
+                if key in cls._draft_models:
+                    print(f"Draft model '{key}' already exists, will be overwritten.")
+                cls._draft_models[key] = model_cls
+                return model_cls
+
+            return decorator
+
+        # Determine registration type based on input
+        if name is None:
+            # Case 1: Direct class registration (@DraftModelFactory.register)
+            return register_class
+        elif isinstance(name, str):
+            # Case 2: Explicit name registration (@DraftModelFactory.register("name"))
+            return register_with_name(name)
+        elif callable(name):
+            # Case 3: Direct class registration (called without parentheses)
+            return register_class(name)
+        else:
+            raise TypeError("Invalid argument type for registration")
+
+    @classmethod
+    def _get_model_class(cls, config: PretrainedConfig) -> Type[PreTrainedModel]:
         """Get the appropriate model class based on config."""
         architectures = getattr(config, "architectures", [])
 
@@ -44,43 +81,11 @@ class DraftModelFactory:
 
         arch = architectures[0]
 
-        if cls._ARCHITECTURE_MAPPING.get(arch, None) is None:
-            raise ValueError(f"Unknown architecture: {arch}")
+        if arch not in cls._draft_models:
+            available = list(cls._draft_models.keys())
+            raise ValueError(f"Unknown architecture: {arch}. Available: {available}")
 
-        return cls._ARCHITECTURE_MAPPING[arch]
-
-    @classmethod
-    def from_pretrained(
-        cls,
-        model_name_or_path: Union[str, Path],
-        **kwargs: Any,
-    ) -> PreTrainedModel:
-        """
-        Load a pretrained model with architecture-based selection.
-
-        Args:
-            model_name_or_path: Path to pretrained model
-            load_emb: Whether to load embeddings (for Eagle3 models)
-            **kwargs: Additional arguments
-
-        Returns:
-            Loaded model instance
-
-        Example:
-            >>> # Load Eagle3 model (architectures=["Eagle3LLamaforCausalLM"])
-            >>> model = DraftModelFactory.from_pretrained("/path/to/eagle3/model")
-        """
-        # Load config
-        config = AutoConfig.from_pretrained(
-            model_name_or_path,
-            trust_remote_code=True,
-        )
-
-        # Get model class
-        model_class = cls._get_model_class(config)
-
-        model = model_class.from_pretrained(model_name_or_path, **kwargs)
-        return model
+        return cls._draft_models[arch]
 
     @classmethod
     def from_config(
@@ -101,14 +106,17 @@ class DraftModelFactory:
 
         return model
 
+    @classmethod
+    def get_available_models(cls) -> list:
+        """Get list of all registered draft models."""
+        return list(cls._draft_models.keys())
+
 
 class DraftModelConfig:
-    _ARCHITECTURE_MAPPING = {
-        "Eagle3LLamaforCausalLM": Eagle3LLamaforCausalLM,
-    }
+    """Helper class for loading draft model configurations."""
 
     @classmethod
-    def from_file(cls, config_path: Union[str, Path]):
+    def from_file(cls, config_path: Union[str, Path]) -> PretrainedConfig:
         """Create config from file."""
         # Check if it's a file or directory
         if isinstance(config_path, str):
@@ -125,11 +133,14 @@ class DraftModelConfig:
                 raise ValueError("Config file must contain 'architectures' field")
 
             arch = architectures[0]
-            if arch not in cls._ARCHITECTURE_MAPPING:
-                raise ValueError(f"Unknown architecture: {arch}")
+            if arch not in DraftModelFactory._draft_models:
+                available = DraftModelFactory.get_available_models()
+                raise ValueError(
+                    f"Unknown architecture: {arch}. Available: {available}"
+                )
 
             # Get the model class and its config class
-            model_class = cls._ARCHITECTURE_MAPPING[arch]
+            model_class = DraftModelFactory._draft_models[arch]
             config_class = model_class.config_class
 
             # Create config instance from dict
@@ -142,8 +153,8 @@ class DraftModelConfig:
 
 
 def create_draft_model(
-    config_path: Union[str, Path],
+    config: Union[PretrainedConfig],
     **kwargs: Any,
 ) -> PreTrainedModel:
     """Convenience function to load draft model."""
-    return DraftModelFactory.from_config(config_path, **kwargs)
+    return DraftModelFactory.from_config(config, **kwargs)

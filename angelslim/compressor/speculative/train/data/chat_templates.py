@@ -15,6 +15,13 @@
 from enum import Enum
 from typing import Dict
 
+__all__ = [
+    "ChatTemplateType",
+    "template_manager",
+    "string_to_chat_template_type",
+    "get_supported_chat_template_type_strings",
+]
+
 
 class ChatTemplateType(Enum):
     """Supported chat template types."""
@@ -31,15 +38,17 @@ CHAT_TEMPLATE_TYPE_MAPPING = {
 class ChatTemplate:
     """Chat template configuration for a specific model type."""
 
-    def __init__(self, user_header: str, assistant_header: str):
+    def __init__(self, user_header: str, assistant_header: str, system_prompt: str):
         self.user_header = user_header
         self.assistant_header = assistant_header
+        self.system_prompt = system_prompt
 
     def to_dict(self) -> Dict[str, str]:
         """Convert template to dictionary format."""
         return {
             "user_header": self.user_header,
             "assistant_header": self.assistant_header,
+            "system_prompt": self.system_prompt,
         }
 
 
@@ -55,6 +64,17 @@ class ChatTemplateManager:
             ChatTemplateType.QWEN3: ChatTemplate(
                 user_header="<|im_start|>user\n",
                 assistant_header="<|im_start|>assistant\n",
+                system_prompt=(
+                    "You are a helpful, respectful and honest assistant. "
+                    "Always answer as helpfully as possible, while being safe. "
+                    "Your answers should not include any harmful, unethical, racist, "
+                    "sexist, toxic, dangerous, or illegal content. Please ensure that "
+                    "your responses are socially unbiased and positive in nature.\n\n"
+                    "If a question does not make any sense, or is not factually "
+                    "coherent, explain why instead of answering something not "
+                    "correct. If you don't know the answer to a question, "
+                    "please don't share false information."
+                ),
             )
         }
 
@@ -104,16 +124,6 @@ template_manager = ChatTemplateManager()
 
 
 # Convenience functions for backward compatibility
-def get_template(chat_template_type: ChatTemplateType) -> Dict[str, str]:
-    """Get chat template dictionary for specified chat template type."""
-    return template_manager.get_template_dict(chat_template_type)
-
-
-def list_supported_chat_template_types() -> list[str]:
-    """List all supported chat template types."""
-    return template_manager.list_supported_types()
-
-
 def string_to_chat_template_type(template_type_str: str) -> ChatTemplateType:
     """
     Convert string to ChatTemplateType enum.

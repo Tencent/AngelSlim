@@ -1,6 +1,6 @@
 {
   "architectures": [
-    "Eagle3LLamaforCausalLM"
+    "Eagle3LlamaForCausalLM"
   ],
   "attention_bias": false,
   "attention_dropout": 0.0,

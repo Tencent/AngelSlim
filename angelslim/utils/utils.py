@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Optional
 
 import torch
+import torch.distributed as dist
 from transformers.utils.hub import cached_file
 
 
@@ -180,3 +181,13 @@ def get_package_info(package_name: str) -> dict:
         except Exception:
             pass
     return info
+
+
+def rank0_print(*args, **kwargs):
+    if dist.is_initialized():
+        rank = dist.get_rank()
+    else:
+        rank = int(os.environ.get("LOCAL_RANK", 0))
+
+    if rank == 0:
+        print(*args, **kwargs)

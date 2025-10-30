@@ -285,11 +285,8 @@ class BaseEagle3Drafter(nn.Module, ABC):
             )
         else:
             outputs = self(hidden_states, input_ids=input_ids, use_cache=True)
-        if self.early_stop_method is not None:
-            out_hidden, past_key_values, early_stop_signal = outputs
-        else:
-            out_hidden, past_key_values = outputs
-            early_stop_signal = None
+        out_hidden, past_key_values, early_stop_signal = outputs
+
         return out_hidden[:, -1], past_key_values, early_stop_signal
 
     def _get_topk_tokens(self, hidden: Tensor) -> Tuple[Tensor, Tensor]:

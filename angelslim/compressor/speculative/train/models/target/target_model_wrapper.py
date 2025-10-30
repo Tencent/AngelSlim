@@ -37,8 +37,6 @@ class BaseBackend(ABC):
         self,
         input_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.Tensor] = None,
-        past_key_values: Optional[Tuple] = None,
         **kwargs,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Get hidden states and logits from model"""
@@ -52,7 +50,7 @@ class TransformersBackend(BaseBackend):
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         default_kwargs = {
-            "torch_dtype": torch.bfloat16,
+            "dtype": torch.bfloat16,
             "device_map": "auto",
             "trust_remote_code": True,
         }
@@ -73,8 +71,6 @@ class TransformersBackend(BaseBackend):
         self,
         input_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.Tensor] = None,
-        past_key_values: Optional[Tuple] = None,
         **kwargs,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
@@ -109,131 +105,16 @@ class TransformersBackend(BaseBackend):
         return hidden_states, target.to(input_ids.device)
 
 
-class VLLMLocalBackend(BaseBackend):
-    """vLLM local model backend"""
-
-    def load_model(self):
-        from vllm import LLM
-
-        self.model = LLM(
-            model=self.model_path,
-            tensor_parallel_size=self.kwargs.get("tensor_parallel_size", 1),
-            trust_remote_code=self.kwargs.get("trust_remote_code", True),
-            **self.kwargs,
-        )
-        self.tokenizer = self.model.get_tokenizer()
-
-    def get_hidden_states_and_logits(
-        self,
-        input_ids: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.Tensor] = None,
-        past_key_values: Optional[Tuple] = None,
-        **kwargs,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        # Access vLLM internal model runner
-        model_runner = self.model.llm_engine.model_executor.driver_worker.model_runner
-        device = next(model_runner.model.parameters()).device
-
-        # Process batch
-        token_ids_list = input_ids.cpu().tolist()
-        hidden_states_list = []
-        logits_list = []
-
-        for token_ids in token_ids_list:
-            outputs = model_runner.model(
-                input_ids=torch.tensor([token_ids]).to(device),
-                output_hidden_states=True,
-            )
-            hidden_states_list.append(outputs.hidden_states[-1])
-            logits_list.append(outputs.logits)
-
-        hidden_states = torch.cat(hidden_states_list, dim=0)
-        logits = torch.cat(logits_list, dim=0)
-
-        return hidden_states, logits
-
-
-class VLLMServingBackend(BaseBackend):
-    """vLLM serving endpoint backend"""
-
-    def load_model(self):
-        from openai import OpenAI
-
-        self.client = OpenAI(
-            api_key=self.kwargs.get("api_key", "EMPTY"), base_url=self.model_path
-        )
-        self.model_name = self.kwargs.get("model_name", "default")
-
-        # Try to get tokenizer if available
-        try:
-            from transformers import AutoTokenizer
-
-            tokenizer_path = self.kwargs.get("tokenizer_path", self.model_path)
-            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
-        except Exception as e:  # noqa: F841
-            self.tokenizer = None
-
-    def get_hidden_states_and_logits(
-        self,
-        input_ids: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.Tensor] = None,
-        past_key_values: Optional[Tuple] = None,
-        **kwargs,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        if self.tokenizer is None:
-            raise RuntimeError("Tokenizer not available for vLLM serving backend")
-
-        # Convert input_ids to text
-        texts = self.tokenizer.batch_decode(input_ids, skip_special_tokens=False)
-
-        # Call serving API
-        responses = []
-        for text in texts:
-            response = self.client.completions.create(
-                model=self.model_name,
-                prompt=text,
-                max_tokens=1,
-                logprobs=True,
-                echo=True,
-                extra_body={"return_hidden_states": True},
-            )
-            responses.append(response)
-
-        # Parse responses
-        hidden_states = self._parse_hidden_states(responses)
-        logits = self._parse_logits(responses)
-
-        return hidden_states, logits
-
-    def _parse_hidden_states(self, responses) -> torch.Tensor:
-        """Parse hidden states from serving responses"""
-        raise NotImplementedError(
-            "Hidden states parsing from vLLM serving requires custom implementation"
-        )
-
-    def _parse_logits(self, responses) -> torch.Tensor:
-        """Parse logits from serving responses"""
-        raise NotImplementedError(
-            "Logits parsing from vLLM serving requires custom implementation"
-        )
-
-
 class TargetModelWrapper:
     """
     Target model wrapper for Eagle3 training.
 
     Supports three backends:
     - hf: HuggingFace Transformers AutoModelForCausalLM
-    - vllm_local: vLLM local model
-    - vllm_serving: vLLM serving endpoint
     """
 
     BACKENDS = {
         "hf": TransformersBackend,
-        "vllm_local": VLLMLocalBackend,
-        "vllm_serving": VLLMServingBackend,
     }
 
     def __init__(self, backend: str, model_path: str, **kwargs):
@@ -259,8 +140,6 @@ class TargetModelWrapper:
         self,
         input_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.Tensor] = None,
-        past_key_values: Optional[Tuple] = None,
         **kwargs,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -280,8 +159,6 @@ class TargetModelWrapper:
         return self.backend.get_hidden_states_and_logits(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            position_ids=position_ids,
-            past_key_values=past_key_values,
             **kwargs,
         )
 
@@ -292,7 +169,13 @@ class TargetModelWrapper:
 
     @property
     def tokenizer(self):
-        """Access tokenizer"""
+        """Access underlying tokenizer"""
+        if not hasattr(self.backend, "tokenizer"):
+            raise AttributeError(
+                f"Backend '{self.backend_name}' does not have a tokenizer attribute"
+            )
+        if self.backend.tokenizer is None:
+            raise ValueError(f"Backend '{self.backend_name}' does not have a tokenizer")
         return self.backend.tokenizer
 
 
@@ -301,50 +184,21 @@ def create_target_model(
     model_path: str,
     torch_dtype: torch.dtype = torch.bfloat16,
     trust_remote_code: bool = True,
-    tensor_parallel_size: int = 1,
-    api_key: str = "EMPTY",
-    model_name: str = "default",
-    tokenizer_path: Optional[str] = None,
     **extra_kwargs,
 ) -> TargetModelWrapper:
     """
     Factory function to create target model with appropriate backend configuration.
 
     Args:
-        backend: Backend type, one of ["hf", "vllm_local", "vllm_serving"]
+        backend: Backend type, one of ["hf"]
         model_path: Path to model or serving endpoint URL
         torch_dtype: Data type for model weights (for HF backend)
         trust_remote_code: Whether to trust remote code
-        tensor_parallel_size: Tensor parallel size (for vLLM local backend)
-        api_key: API key (for vLLM serving backend)
-        model_name: Model name (for vLLM serving backend)
-        tokenizer_path: Path to tokenizer (for vLLM serving backend)
+        tokenizer_path: Path to tokenizer
         **extra_kwargs: Additional backend-specific arguments
 
     Returns:
         TargetModelWrapper instance
-
-    Examples:
-        >>> # HuggingFace backend
-        >>> model = create_target_model(
-        ...     backend="hf",
-        ...     model_path="/path/to/model"
-        ... )
-
-        >>> # vLLM local backend
-        >>> model = create_target_model(
-        ...     backend="vllm_local",
-        ...     model_path="/path/to/model",
-        ...     tensor_parallel_size=2
-        ... )
-
-        >>> # vLLM serving backend
-        >>> model = create_target_model(
-        ...     backend="vllm_serving",
-        ...     model_path="http://localhost:8000/v1",
-        ...     model_name="my-model",
-        ...     tokenizer_path="/path/to/tokenizer"
-        ... )
     """
     # Prepare common kwargs
     kwargs = {"trust_remote_code": trust_remote_code, **extra_kwargs}
@@ -353,23 +207,10 @@ def create_target_model(
     if backend == "hf":
         kwargs.update(
             {
-                "torch_dtype": torch_dtype,
+                "dtype": torch_dtype,
             }
         )
-    elif backend == "vllm_local":
-        kwargs.update(
-            {
-                "tensor_parallel_size": tensor_parallel_size,
-            }
-        )
-    elif backend == "vllm_serving":
-        kwargs.update(
-            {
-                "api_key": api_key,
-                "model_name": model_name,
-            }
-        )
-        if tokenizer_path:
-            kwargs["tokenizer_path"] = tokenizer_path
+    else:
+        raise ValueError(f"Unsupported backend: {backend}")
 
     return TargetModelWrapper(backend=backend, model_path=model_path, **kwargs)

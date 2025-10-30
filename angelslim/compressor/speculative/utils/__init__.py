@@ -1,4 +1,3 @@
-from .data_utils import process_token_dict_to_mappings
 from .kv_cache import initialize_past_key_values
 from .util import (
     EWMAScorePredictor,
@@ -25,5 +24,4 @@ __all__ = [
     "EWMAScorePredictor",
     "MeanScorePredictor",
     "padding",
-    "process_token_dict_to_mappings",
 ]

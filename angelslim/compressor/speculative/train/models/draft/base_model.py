@@ -23,7 +23,7 @@ from safetensors import safe_open
 from tqdm import tqdm
 from transformers import PreTrainedModel
 
-from ....utils import process_token_dict_to_mappings
+from ...data.data_utils import process_token_dict_to_mappings
 from ..model_utils import expand_mask, make_causal_mask
 
 

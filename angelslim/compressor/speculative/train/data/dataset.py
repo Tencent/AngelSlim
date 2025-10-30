@@ -20,6 +20,8 @@ from datasets import load_dataset
 from torch.utils.data import Dataset
 from transformers import AutoTokenizer
 
+from angelslim.utils import rank0_print
+
 from .chat_templates import (
     ChatTemplateType,
     string_to_chat_template_type,
@@ -44,6 +46,7 @@ class DatasetBuilder:
         template = template_manager.get_template_dict(chat_template_type)
         self.user_header = template["user_header"]
         self.assistant_header = template["assistant_header"]
+        self.system_prompt = template["system_prompt"]
 
     def build_dataset(self, datapath: str, num_proc: int = 8) -> Dataset:
         try:
@@ -88,8 +91,7 @@ class DatasetBuilder:
                             new_examples[key].append(value)
 
             except Exception as e:
-                # TODO: rank0 print
-                print(f"Error processing example: {e}")
+                rank0_print(f"Error processing example: {e}")
                 # Add None placeholders to maintain batch consistency
                 for key in new_examples:
                     new_examples[key].append(None)
@@ -139,8 +141,7 @@ class DatasetBuilder:
             }
 
         except Exception as e:
-            # TODO: rank0 print
-            print(f"Error processing conversation: {e}")
+            rank0_print(f"Error processing conversation: {e}")
             return None
 
     # Copied from https://github.com/NickL77/BaldEagle/blob/master/generate_data/generate_data.py # noqa: E501
@@ -173,26 +174,32 @@ class DatasetBuilder:
 
     def _build_messages(self, source: List[Dict]) -> List[Dict]:
         # System message
-        messages = [{"role": "system", "content": self._get_system_prompt()}]
+        if source[0]["role"] != "system":
+            messages = [{"role": "system", "content": self.system_prompt}]
+        else:
+            messages = [{"role": "system", "content": source[0]["content"]}]
+            source = source[1:]
 
         # Role mapping
-        role_mapping = {"human": "user", "gpt": "assistant"}
         expected_roles = ["user", "assistant"]
 
         # Ensure conversation starts with user
-        if source[0]["from"] != "human":
+        if source[0]["role"] != "user":
             source = source[1:]
 
         # Filter and validate conversation turns
         valid_turns = []
         for turn in source:
-            # TODO: 数据集改成openai格式
-            if not isinstance(turn, dict) or "from" not in turn or "value" not in turn:
+            if (
+                not isinstance(turn, dict)
+                or "role" not in turn
+                or "content" not in turn
+            ):
                 continue
 
-            role = role_mapping.get(turn["from"])
-            if role and turn["value"].strip():
-                valid_turns.append({"role": role, "content": turn["value"].strip()})
+            role = turn["role"]
+            if role and turn["content"].strip():
+                valid_turns.append({"role": role, "content": turn["content"].strip()})
 
         # Validate alternating pattern
         for i, turn in enumerate(valid_turns):
@@ -202,19 +209,6 @@ class DatasetBuilder:
             messages.append(turn)
 
         return messages if len(messages) > 1 else []
-
-    def _get_system_prompt(self) -> str:
-        """Get the system prompt for conversations."""
-        return (
-            "You are a helpful, respectful and honest assistant. "
-            "Always answer as helpfully as possible, while being safe. "
-            "Your answers should not include any harmful, unethical, racist, "
-            "sexist, toxic, dangerous, or illegal content. Please ensure that "
-            "your responses are socially unbiased and positive in nature.\n\n"
-            "If a question does not make any sense, or is not factually coherent, "
-            "explain why instead of answering something not correct. If you don't "
-            "know the answer to a question, please don't share false information."
-        )
 
 
 class DataCollatorWithPadding:
