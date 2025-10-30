@@ -1,4 +1,3 @@
-
 # 快速开始
 
 ## 环境准备
@@ -48,9 +47,81 @@ python3 tools/fp8_quant_blockwise.py \
 
 ### 投机采样
 
-投机采样（Speculative Decoding）是一种加速大语言模型推理的技术，通过使用较小的辅助模型来预测后续token，然后由主模型进行验证，从而提高生成效率。AngelSlim提供了完整的Eagle3基准测试工具。
+投机采样（Speculative Decoding）是一种加速大语言模型推理的技术，通过使用较小的辅助模型来预测后续token，然后由主模型进行验证，从而提高生成效率。AngelSlim提供了完整的Eagle3训练和基准测试工具。
 
-#### 基本用法
+#### 1. 训练Eagle3模型
+
+Eagle3模型的训练分为两个步骤：数据准备和在线训练。
+
+##### 1.1 准备训练数据
+
+训练数据的准备分为两个步骤：启动vLLM server和生成采样数据。
+
+**步骤1：启动vLLM server**
+
+首先需要启动vLLM server来提供模型推理服务：
+
+```shell
+bash scripts/speculative/run_vllm_server.sh
+```
+
+**server配置说明：**
+- 该脚本会启动目标基础模型的vLLM推理服务
+- 确保服务器成功启动后再进行下一步数据生成
+- 可以通过修改脚本中的参数来调整vLLM server配置（如vLLM启动参数、GPU数量等），来适应不同的目标模型
+
+**步骤2：生成采样数据**
+
+vLLM server启动后，使用 `scripts/speculative/generate_data_for_target_model.sh` 脚本生成训练数据：
+
+```shell
+bash scripts/speculative/generate_data_for_target_model.sh
+```
+
+**脚本功能说明：**
+- 通过vLLM server调用目标基础模型对输入数据进行采样
+- 生成 `.jsonl` 格式的训练数据集
+- 数据将用于后续Eagle模型的在线训练
+
+**脚本参数说明：**
+
+在使用前，需要在脚本中配置以下参数：
+
+- `DATA_NAME_OR_PATH`: 输入数据集的HF名称或本地路径
+- `OUTPUT_DIR`: 生成的数据集输出路径
+- `DATA_FORMAT`: 输入数据集的格式（sharegpt|ultrachat）
+- `DATA_SHARD_SIZE`: 生成数据集的切分子集大小
+- `BASE_PORT`: vLLM server的端口号
+
+**注意事项：**
+- 确保vLLM服务器已成功启动并正常运行
+- 数据生成过程可能需要较长时间，取决于样本数量和模型规模
+
+##### 1.2 在线训练
+
+使用 `scripts/speculative/train_eagle3_online.sh` 脚本进行Eagle3模型的在线训练：
+
+```shell
+bash scripts/speculative/train_eagle3_online.sh
+```
+
+**脚本参数说明：**
+
+在使用前，需要在脚本中配置以下参数：
+
+- `TARGET_MODEL_NAME_OR_PATH`: 目标模型的HF名称或本地名称
+- `DRAFT_MODEL_CONFIG_PATH`: 草稿模型的config路径
+- `TRAIN_DATA_PATH`: 训练数据路径
+- `EVAL_DATA_PATH`: 验证数据路径
+- `OUTPUT_DIR`: Eagle3模型输出路径
+- `MODEL_MAX_LENGTH`: 训练数据的最大长度
+- `CHAT_TEMPLATE_TYPE`: 目标模型的数据模板类型
+
+#### 2. 基准测试
+
+AngelSlim提供了完整的Eagle3基准测试工具，用于评估投机采样的性能提升。
+
+##### 2.1 基本用法
 
 使用 `tools/spec_benchmark.py` 脚本进行投机采样基准测试：
 
@@ -62,7 +133,7 @@ python3 tools/spec_benchmark.py \
     --mode both
 ```
 
-#### 参数说明
+##### 2.2 参数说明
 
 **模型配置参数：**
 - `--base-model-path`: 基础模型路径（必需）
@@ -92,9 +163,9 @@ python3 tools/spec_benchmark.py \
 - `--question-end`: 问题结束索引（用于调试）
 - `--no-metrics`: 跳过自动指标计算
 
-#### 使用示例
+##### 2.3 使用示例
 
-1. **完整基准测试（推荐）：**
+**完整基准测试（推荐）：**
 ```shell
 python3 tools/spec_benchmark.py \
     --base-model-path /path/to/base/model \
@@ -106,16 +177,16 @@ python3 tools/spec_benchmark.py \
     --temperature 0.0
 ```
 
-2. **仅运行投机采样：**
+**仅运行投机采样：**
 ```shell
 python3 tools/spec_benchmark.py \
     --base-model-path /path/to/base/model \
     --eagle-model-path /path/to/eagle/model \
     --model-id qwen3-8b \
-    --mode eagle \
+    --mode eagle
 ```
 
-3. **多GPU配置：**
+**多GPU配置：**
 ```shell
 python3 tools/spec_benchmark.py \
     --base-model-path /path/to/base/model \
@@ -125,7 +196,7 @@ python3 tools/spec_benchmark.py \
     --num-gpus-total 8
 ```
 
-#### 性能报告
+##### 2.4 性能报告
 
 运行完成后，工具会自动生成性能报告，包括：
 - 投机采样与基线模型的性能对比
