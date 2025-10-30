@@ -131,6 +131,7 @@ class Engine:
         num_samples=128,
         shuffle=True,
         inference_settings=None,
+        model_name=None,
     ) -> Optional[Any]:
         """Prepare compression dataset"""
         if custom_dataloader is not None:
@@ -154,6 +155,7 @@ class Engine:
             num_samples=num_samples,
             data_source=data_path,
             inference_settings=inference_settings,
+            model_name=model_name,
         )
         self.max_seq_length = max_length
 

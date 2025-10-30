@@ -86,3 +86,62 @@ def snr_loss(
         return snr
     else:
         raise ValueError("Unsupported reduction method.")
+
+
+class LossFilter:
+    def __init__(self, processor, model_config=None):
+        self.processor = processor
+        self.model_config = model_config or {}
+        self.filter_tokens_map = {
+            "QwenVL": [151643, 151654, 151655, 151656],
+            "Qwen3VL": [151643, 151654, 151655, 151656],
+            "default": [],  # default: do not filter any tokens
+        }
+
+    def get_filter_tokens(self, model_type=None):
+        """Get the filter token for a specific model type"""
+        if model_type and model_type in self.filter_tokens_map:
+            return self.filter_tokens_map[model_type]
+        return self.filter_tokens_map["default"]
+
+    def filter_loss(self, loss, labels, model_type=None, custom_filter_tokens=None):
+        """
+        Filter loss corresponding to specific tokens
+
+        Args:
+            loss: precomputed loss, shape same as labels
+            labels: target labels
+            model_type: model type
+            custom_filter_tokens: custom filter tokens, will override preset values
+
+        Returns:
+            filtered average loss
+        """
+        # Get the list of tokens to filter
+        if custom_filter_tokens is not None:
+            filter_tokens = custom_filter_tokens
+        else:
+            filter_tokens = self.get_filter_tokens(model_type)
+
+        # Flatten loss and labels for processing
+        loss_flat = loss.view(-1)
+        labels_flat = labels.view(-1)
+
+        # Create mask for valid tokens
+        # First exclude padding tokens
+        valid_mask = labels_flat != self.processor.tokenizer.pad_token_id
+
+        # Exclude special tokens that need to be filtered
+        for token_id in filter_tokens:
+            valid_mask = valid_mask & (labels_flat != token_id)
+
+        # Keep only loss for valid tokens
+        filtered_loss = loss_flat[valid_mask]
+
+        # Use assert to check if all tokens are filtered
+        assert (
+            len(filtered_loss) > 0
+        ), "All tokens have been filtered, check your filter configuration"
+
+        # Return average loss
+        return filtered_loss

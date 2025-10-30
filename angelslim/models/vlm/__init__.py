@@ -13,4 +13,5 @@
 # limitations under the License.
 
 
+from .qwen3_vl import Qwen3VL  # noqa: F401
 from .qwen_vl import QwenVL  # noqa: F401

@@ -15,11 +15,7 @@
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-from transformers import (
-    AutoProcessor,
-    AutoTokenizer,
-    Qwen2_5_VLForConditionalGeneration,
-)
+from transformers import AutoProcessor, AutoTokenizer, Qwen3VLForConditionalGeneration
 
 from ...compressor.quant.core import LossFilter, PTQVLMSaveVllmHF
 from ...utils import find_layers, print_info
@@ -28,7 +24,7 @@ from ..model_factory import SlimModelFactory
 
 
 @SlimModelFactory.register
-class QwenVL(BaseLLMModel):
+class Qwen3VL(BaseLLMModel):
     def __init__(
         self,
         model=None,
@@ -58,13 +54,12 @@ class QwenVL(BaseLLMModel):
         use_cache=False,
         using_multi_nodes=False,
     ):
-        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+        self.model = Qwen3VLForConditionalGeneration.from_pretrained(
             model_path,
             torch_dtype=torch_dtype,
             device_map=device_map,
             trust_remote_code=trust_remote_code,
             low_cpu_mem_usage=low_cpu_mem_usage,
-            use_cache=use_cache,
         )
 
         # Load tokenizer
@@ -79,17 +74,17 @@ class QwenVL(BaseLLMModel):
 
     def get_observer_layers(self):
         names = [
-            "k_proj",
-            "v_proj",
-            "q_proj",
-            "o_proj",
-            "up_proj",
-            "gate_proj",
-            "down_proj",
+            "self_attn.k_proj",
+            "self_attn.v_proj",
+            "self_attn.q_proj",
+            "self_attn.o_proj",
+            "mlp.up_proj",
+            "mlp.gate_proj",
+            "mlp.down_proj",
         ]
 
         if hasattr(self.quant_config, "quant_vit") and self.quant_config.quant_vit:
-            vit_names = ["qkv", "proj"]
+            vit_names = ["attn.qkv", "attn.proj", "mlp.linear_fc1", "mlp.linear_fc2"]
             names.extend(vit_names)
 
         observer_layers_dict = {}
@@ -102,7 +97,9 @@ class QwenVL(BaseLLMModel):
                 and self.quant_config.quant_vit
                 and name.startswith(self.vit_block_name)
             )
-            if block_condition and name.split(".")[-1] in names:
+            parts = name.split(".")
+            result = ".".join(parts[-2:])
+            if block_condition and result in names:
                 observer_layers_dict[name] = module
             else:
                 ignore_layers.append(name)
@@ -159,7 +156,7 @@ class QwenVL(BaseLLMModel):
                         )
                         loss = loss * attention_mask
                         loss = loss_filter.filter_loss(
-                            loss=loss, labels=labels, model_type="QwenVL"
+                            loss=loss, labels=labels, model_type="Qwen3VL"
                         )
                         avg_loss = loss.mean()
                         ppl = torch.exp(avg_loss)

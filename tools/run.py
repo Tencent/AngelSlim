@@ -162,6 +162,7 @@ def run(config):
             num_samples=dataset_config.num_samples,
             shuffle=dataset_config.shuffle,
             inference_settings=dataset_config.inference_settings,
+            model_name=model_config.name,
         )
 
     # Step 5: Initialize compressor

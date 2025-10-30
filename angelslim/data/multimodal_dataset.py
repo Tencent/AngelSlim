@@ -36,9 +36,11 @@ class MultiModalDataset(BaseDataset):
         num_samples: int = -1,
         data_source: Union[str, Dict] = None,
         is_hf_dataset: bool = False,
+        model_name: str = None,
     ):
         super().__init__(processor, device, max_length)
         self.is_hf_dataset = is_hf_dataset
+        self.model_name = model_name
 
         if is_hf_dataset:
             self._load_hf_dataset(data_source, num_samples)
@@ -70,7 +72,10 @@ class MultiModalDataset(BaseDataset):
                             },
                         ],
                     },
-                    {"role": "assistant", "content": data["answer"]},
+                    {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": data["answer"]}],
+                    },
                 ]
 
                 self._process_and_append(messages)
@@ -103,25 +108,36 @@ class MultiModalDataset(BaseDataset):
 
     def _process_and_append(self, messages: List[Dict]):
         """Process messages and append to dataset"""
-        text = self.processor.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
+        if self.model_name in ["Qwen3VL"]:
+            inputs = self.processor.apply_chat_template(
+                messages,
+                tokenize=True,
+                add_generation_prompt=True,
+                return_dict=True,
+                return_tensors="pt",
+            )
+        else:
+            text = self.processor.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
 
-        # Extract vision info
-        image_inputs, video_inputs = qwen_vl_utils.process_vision_info(messages)
+            # Extract vision info
+            image_inputs, video_inputs = qwen_vl_utils.process_vision_info(messages)
 
-        # Process inputs
-        inputs = self.processor(
-            text=[text],
-            images=image_inputs,
-            videos=video_inputs,
-            padding="max_length",
-            truncation=True,
-            return_tensors="pt",
-            max_length=self.max_length,
-        )
+            # Process inputs
+            inputs = self.processor(
+                text=[text],
+                images=image_inputs,
+                videos=video_inputs,
+                padding="max_length",
+                truncation=True,
+                return_tensors="pt",
+                max_length=self.max_length,
+            )
 
-        inputs["labels"] = inputs["input_ids"]
+        labels = inputs["input_ids"].roll(shifts=-1, dims=-1)
+        labels[:, -1] = -100
+        inputs["labels"] = labels
 
         self.data.append(inputs)
 

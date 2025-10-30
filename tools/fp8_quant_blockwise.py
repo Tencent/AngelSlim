@@ -24,7 +24,13 @@ import torch
 from safetensors.torch import safe_open, save_file
 from torch import nn
 from tqdm import tqdm
-from transformers import AutoConfig, AutoModelForCausalLM
+from transformers import (
+    AutoConfig,
+    AutoModelForCausalLM,
+    Qwen3VLForConditionalGeneration,
+    Qwen3VLMoeForConditionalGeneration,
+)
+from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import Qwen3VLMoeTextExperts
 
 from angelslim.utils import find_layers
 
@@ -42,6 +48,8 @@ SUFFIX_TO_QUANT = [
     ".k_proj.weight",
     ".v_proj.weight",
     ".o_proj.weight",
+    ".experts.gate_up_proj",
+    ".experts.down_proj",
 ]
 
 
@@ -153,25 +161,42 @@ def worker(i, file_names, input_path, output_path, block_size, return_dict):
 
 def main(input_path, output_path, block_size):
     os.makedirs(output_path, exist_ok=True)
+
+    # Check if model.safetensors.index.json exists, otherwise use model.safetensors
     model_index_file = os.path.join(input_path, "model.safetensors.index.json")
-    with open(model_index_file, "r") as f:
-        model_index = json.load(f)
-    weight_map = model_index["weight_map"]
-    safetensor_files = set(weight_map.values())
-    safetensor_files = list(sorted(safetensor_files))
+    has_index = os.path.exists(model_index_file)
+    if has_index:
+        with open(model_index_file, "r") as f:
+            model_index = json.load(f)
+        weight_map = model_index["weight_map"]
+        safetensor_files = set(weight_map.values())
+        safetensor_files = list(sorted(safetensor_files))
+    else:
+        # If no index file, directly use model.safetensors
+        safetensor_files = ["model.safetensors"]
     print(f"Found {len(safetensor_files)} safetensor files")
 
     # Analyze model structure to find ignored layers
     config = AutoConfig.from_pretrained(input_path)
+    model_type = config.model_type
     with accelerate.init_empty_weights():
-        model = AutoModelForCausalLM.from_config(config)
-    layers = find_layers(model, [nn.Linear])
+        if model_type == "qwen3_vl_moe":
+            model = Qwen3VLMoeForConditionalGeneration._from_config(config)
+        elif model_type == "qwen3_vl":
+            model = Qwen3VLForConditionalGeneration._from_config(config)
+        else:
+            model = AutoModelForCausalLM.from_config(config)
+    if model_type == "qwen3_vl_moe":
+        layers = find_layers(model, [nn.Linear, Qwen3VLMoeTextExperts])
+    else:
+        layers = find_layers(model, [nn.Linear])
     print(f"Found {len(layers)} linear layers")
     ignored_layers = []
     for name, _ in layers.items():
-        weight_name = f"{name}.weight"
-        if not any(weight_name.endswith(suffix) for suffix in SUFFIX_TO_QUANT):
-            ignored_layers.append(name)
+        if not name.endswith("mlp.experts"):
+            weight_name = f"{name}.weight"
+            if not any(weight_name.endswith(suffix) for suffix in SUFFIX_TO_QUANT):
+                ignored_layers.append(name)
     print(f"Ignored layers: {ignored_layers}")
     del model
 

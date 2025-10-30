@@ -39,6 +39,7 @@ class DataLoaderFactory:
         data_type: str = "auto",
         num_workers: int = 0,
         inference_settings: Dict = None,
+        model_name: str = None,
     ) -> DataLoader:
         """
         Create appropriate DataLoader based on data source
@@ -89,6 +90,7 @@ class DataLoaderFactory:
                 num_samples=num_samples,
                 data_source=data_source,
                 is_hf_dataset=not os.path.isfile(data_source),
+                model_name=model_name,
             )
         elif data_type == "Text2ImageDataset":
             dataset = Text2ImageDataset(

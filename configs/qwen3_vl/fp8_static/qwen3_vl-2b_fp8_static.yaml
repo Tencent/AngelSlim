@@ -1,0 +1,36 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output
+
+# Simplified Configuration for LLM compression
+model:
+  name: Qwen3VL
+  model_path: Qwen/Qwen3-VL-2B-Instruct
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    name: fp8_static
+    bits: 8
+    quant_method:
+      weight: "per-tensor"
+      activation: "per-tensor"
+    ignore_layers:         # Skip quantization for these layers
+      - "model.visual.patch_embed.proj"
+      - "model.lm_head"
+      - "model.language_model.embed_tokens"
+    quant_vit: false
+
+# Dataset for calibration
+dataset:
+  name: MultiModalDataset
+  data_path: HuggingFaceM4/ChartQA
+  max_seq_length: 4096
+  num_samples: 256
+  batch_size: 1
