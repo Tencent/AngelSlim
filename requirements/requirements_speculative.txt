@@ -4,3 +4,5 @@ anthropic
 ray
 referencing
 jsonschema_specifications
+deepspeed
+wandb

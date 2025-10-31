@@ -25,4 +25,5 @@ from .utils import get_package_info  # noqa: F401
 from .utils import get_tensor_item  # noqa: F401
 from .utils import get_yaml_prefix_simple  # noqa: F401
 from .utils import print_info  # noqa: F401
+from .utils import rank0_print  # noqa: F401
 from .utils import set_op_by_name  # noqa: F401

@@ -5,6 +5,7 @@ from .util import (
     MomentumScorePredictor,
     evaluate_posterior,
     initialize_tree,
+    padding,
     prepare_logits_processor,
     reset_tree_mode,
     tree_decoding,
@@ -22,4 +23,5 @@ __all__ = [
     "MomentumScorePredictor",
     "EWMAScorePredictor",
     "MeanScorePredictor",
+    "padding",
 ]
