@@ -87,8 +87,9 @@ def parse_args():
     data_group.add_argument(
         "--train_data_path",
         type=str,
+        nargs="+",
         required=True,
-        help="Path to training data file (JSON format)",
+        help="Path to training data file(s) (JSON format). Can specify multiple files.",
     )
     data_group.add_argument(
         "--eval_data_path",
@@ -191,7 +192,7 @@ def parse_args():
     )
     training_group.add_argument(
         "--save_steps",
-        type=int,
+        type=float,
         default=500,
         help="Save checkpoint every X updates steps",
     )
