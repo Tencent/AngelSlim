@@ -179,6 +179,8 @@ class DynamicDiTQuantizer:
         ), "Currently only FP8_PER_TENSOR is supported for export"
         self.convert_linear(model)
         save_quantized_model(model, save_path, self.fp8_scales_map)
+        logger.info(f"Quantized model saved to {save_path}")
+        logger.info(f"Quantized scales saved to {save_path}/fp8_scales.safetensors")
 
     @staticmethod
     def load_quantized_model(model_class, save_path: str, device: str = "cpu"):

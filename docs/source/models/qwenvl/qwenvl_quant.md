@@ -83,10 +83,10 @@ python3 tools/run.py -c configs/qwen2_5_vl/int4_gptq/qwen2_5_vl-7b_int4_gptq.yam
 vLLM框架支持QwenVL2.5的FP8（per-tensor）量化和INT4（AWQ、GPTQ）量化模型部署，建议使用`vllm==0.10.0`版本。
 
 部署步骤：
-1. 修改`AngelSlim/deploy/run_vllm.sh`中的`MODEL_PATH`字段，指定量化后的模型路径。
+1. 修改`AngelSlim/scripts/deploy/run_vllm.sh`中的`MODEL_PATH`字段，指定量化后的模型路径。
 2. 执行以下命令启动部署：
 
 ```shell
-cd AngelSlim/deploy
+cd AngelSlim/scripts/deploy
 sh run_vllm.sh 
 ```

@@ -27,9 +27,9 @@ python3 tools/run.py -c configs/qwen2_5/int4_gptq/qwen2_5-7b_int4_gptq.yaml
 ```
 
 ## 部署
-要使用 vLLM 运行 GPTQ 模型，您可以修改`AngelSlim/deploy/run_vllm.sh`中的`MODEL_PATH`字段后通过以下命令使用：
+要使用 vLLM 运行 GPTQ 模型，您可以修改`AngelSlim/scripts/deploy/run_vllm.sh`中的`MODEL_PATH`字段后通过以下命令使用：
 
 ```shell
-cd AngelSlim/deploy
+cd AngelSlim/scripts/deploy
 sh run_vllm.sh
 ```

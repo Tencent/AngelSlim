@@ -57,10 +57,10 @@ python3 tools/run.py -c configs/deepseek_r1/fp8_static/deepseek_r1_fp8_static_lo
 ### 部署
 vLLM支持DeepSeek的per-tensor量化，已验证vllm==0.8.5可部署。
 
-若使用单机8卡141GB H20，您可以修改`AngelSlim/deploy/run_vllm.sh`中的`MODEL_PATH`字段后通过以下命令使用：
+若使用单机8卡141GB H20，您可以修改`AngelSlim/scripts/deploy/run_vllm.sh`中的`MODEL_PATH`字段后通过以下命令使用：
 
 ```shell
-cd AngelSlim/deploy
+cd AngelSlim/scripts/deploy
 sh run_vllm.sh
 ```
 
