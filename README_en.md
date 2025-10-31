@@ -154,7 +154,7 @@ If you need to load a quantized model via `transformers`, please set the `deploy
 To test offline inference with a quantized model loaded via `transformers`, run the following command:
 
 ```shell
-python deploy/offline.py $MODEL_PATH
+python scripts/deploy/offline.py $MODEL_PATH "Hello, my name is"
 ```
 
 Where `MODEL_PATH` is the path to the quantized model output.
@@ -169,8 +169,9 @@ Use the following script to launch a [vLLM](https://github.com/vllm-project/vllm
 
 
 ```shell
-bash deploy/run_vllm.sh $MODEL_PATH
+bash scripts/deploy/run_vllm.sh --model-path $MODEL_PATH --port 8080 -d 0,1,2,3 -t 4 -p 1 -g 0.8 --max-model-len 4096
 ```
+Where `-d` is the visible devices, `-t` is tensor parallel size, `-p` is pipeline parallel size, and `-g` is the GPU memory utilization.
 
 **SGLang**
 
@@ -178,7 +179,7 @@ bash deploy/run_vllm.sh $MODEL_PATH
 Use the following script to launch a [SGLang](https://github.com/sgl-project/sglang) server, recommended version `sglang>=0.4.6.post1`.
 
 ```shell
-bash deploy/run_sglang.sh $MODEL_PATH
+bash scripts/deploy/run_sglang.sh --model-path $MODEL_PATH --port 8080 -d 0,1,2,3 -t 4 -g 0.8
 ```
 
 #### 3. Service Invocation
@@ -186,16 +187,18 @@ bash deploy/run_sglang.sh $MODEL_PATH
 Invoke requests via [OpenAI's API format](https://platform.openai.com/docs/api-reference/introduction):
 
 ```shell
-bash deploy/openai.sh $MODEL_PATH
+bash scripts/deploy/openai.sh -m $MODEL_PATH -p "Hello, my name is" --port 8080 --max-tokens 4096 --temperature 0.7 --top-p 0.8 --top-k 20 --repetition-penalty 1.05 --system-prompt "You are a helpful assistant."
 ```
+where `-p` is the input prompt.
 
 #### 4. Performance Evaluation
 
 Evaluate the performance of quantized model using [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness), recommended version`lm-eval>=0.4.8`:
 
 ```shell
-bash deploy/lm_eval.sh $MODEL_PATH
+bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --tasks ceval-valid,mmlu,gsm8k,humaneval -n 0 $MODEL_PATH
 ```
+where `RESULT_PATH` is the directory for saving test results, `-b` is batch size, `--tasks` specifies the evaluation tasks, and `-n` is the number of few-shot examples.
 
 For more detaileds, please refer to the [Deployment Documentation](https://angelslim.readthedocs.io/zh-cn/latest/deployment/deploy.html).
 

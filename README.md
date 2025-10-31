@@ -154,7 +154,7 @@ python3 tools/spec_benchmark.py \
 测试`transformers`加载量化模型离线推理：
 
 ```shell
-python deploy/offline.py $MODEL_PATH
+python scripts/deploy/offline.py $MODEL_PATH "Hello, my name is"
 ```
 
 其中 `MODEL_PATH` 为量化产出模型路径。
@@ -168,15 +168,16 @@ python deploy/offline.py $MODEL_PATH
 [vLLM](https://github.com/vllm-project/vllm) 服务启动脚本，建议版本`vllm>=0.8.5.post1`，部署MOE INT8量化模型需要`vllm>=0.9.2`。
 
 ```shell
-bash deploy/run_vllm.sh $MODEL_PATH
+bash scripts/deploy/run_vllm.sh --model-path $MODEL_PATH --port 8080 -d 0,1,2,3 -t 4 -p 1 -g 0.8 --max-model-len 4096
 ```
+其中`-d`为可见设备，`-t`为张量并行度，`-p`为流水线并行度，`-g`为显存使用率。
 
 **SGLang**
 
 [SGLang](https://github.com/sgl-project/sglang) 服务启动脚本，建议版本 `sglang>=0.4.6.post1`：
 
 ```shell
-bash deploy/run_sglang.sh $MODEL_PATH
+bash scripts/deploy/run_sglang.sh --model-path $MODEL_PATH --port 8080 -d 0,1,2,3 -t 4 -g 0.8
 ```
 
 #### 3. 服务调用
@@ -184,16 +185,18 @@ bash deploy/run_sglang.sh $MODEL_PATH
 通过 [OpenAI 格式](https://platform.openai.com/docs/api-reference/introduction) 接口发起请求：
 
 ```shell
-bash deploy/openai.sh $MODEL_PATH
+bash scripts/deploy/openai.sh -m $MODEL_PATH -p "Hello, my name is" --port 8080 --max-tokens 4096 --temperature 0.7 --top-p 0.8 --top-k 20 --repetition-penalty 1.05 --system-prompt "You are a helpful assistant."
 ```
+其中`-p`为输入prompt
 
 #### 4. 效果验证
 
 使用 [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness) 评估量化模型精度，建议版本`lm-eval>=0.4.8`：
 
 ```shell
-bash deploy/lm_eval.sh $MODEL_PATH
+bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --tasks ceval-valid,mmlu,gsm8k,humaneval -n 0 $MODEL_PATH
 ```
+其中`RESULT_PATH`为测试结果保存目录，`-b`为batch size大小，`--tasks`为评测任务，`-n`为few-shot数量
 
 详细操作指南请参阅[部署文档](https://angelslim.readthedocs.io/zh-cn/latest/deployment/deploy.html)。
 

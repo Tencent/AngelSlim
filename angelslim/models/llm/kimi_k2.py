@@ -16,11 +16,11 @@
 from transformers import AutoModelForCausalLM
 from transformers.models.deepseek_v3 import DeepseekV3Config
 
-from ...tokenizer import TikTokenTokenizer
 from ...utils import print_info
 from ..model_factory import SlimModelFactory
 from .deepseek import DeepSeek
 from .modeling_deepseek import DeepseekV3ForCausalLM
+from .tiktoken_tokenizer import TikTokenTokenizer
 
 
 @SlimModelFactory.register
