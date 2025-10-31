@@ -3,6 +3,7 @@ import sys
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 model_path = sys.argv[1]
+prompt = sys.argv[2]
 model = AutoModelForCausalLM.from_pretrained(
     model_path,
     device_map="auto",
@@ -12,7 +13,6 @@ model = AutoModelForCausalLM.from_pretrained(
 )
 tokenizer = AutoTokenizer.from_pretrained(model_path)
 
-prompt = "Hello, my name is"
 inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 outputs = model.generate(**inputs)
 print(tokenizer.decode(outputs[0]))
