@@ -51,14 +51,11 @@ setup(
         "all": (
             get_requirements("requirements/requirements_speculative.txt")
             + get_requirements("requirements/requirements_diffusion.txt")
-            + get_requirements("requirements/requirements_vlm.txt")
         ),
         # Install speculative sampling functionality: pip install angelslim[speculative]
         "speculative": get_requirements("requirements/requirements_speculative.txt"),
         # Install Diffusion functionality: pip install angelslim[diffusion]
         "diffusion": get_requirements("requirements/requirements_diffusion.txt"),
-        # Install Diffusion functionality: pip install angelslim[diffusion]
-        "vlm": get_requirements("requirements/requirements_vlm.txt"),
     },
     packages=find_packages(),
     python_requires=">=3.0",

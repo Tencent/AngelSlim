@@ -10,3 +10,4 @@ tiktoken
 datasets
 threadpoolctl
 shortuuid
+qwen_vl_utils==0.0.11
