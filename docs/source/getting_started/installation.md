@@ -10,6 +10,8 @@ AngelSlim支持如下安装方式：
 
 ## pip安装（推荐）
 
+#### 默认安装（LLM & VLM）
+
 通过`pip`安装最新AngelSlim稳定发布版：
 
 ```shell
@@ -22,6 +24,25 @@ pip install angelslim
 pip install --upgrade --force-reinstall --no-cache-dir angelslim
 ```
 
+#### 投机采样安装
+
+```shell
+pip install angelslim[speculative]
+```
+
+#### Diffusion安装
+
+```shell
+pip install angelslim[diffusion]
+```
+
+#### 全部安装
+
+```shell
+pip install angelslim[all]
+```
+
+
 :::{note}
 - 如果pip安装失败，请检查联网是否正确，并更新pip：`pip install --upgrade pip`
 - CUDA工具包: 可以参考[CUDA Toolkit 安装文档](https://developer.nvidia.com/cuda-toolkit-archive)安装所需要的版本；
@@ -30,7 +51,7 @@ pip install --upgrade --force-reinstall --no-cache-dir angelslim
 
 ## 编译安装
 
-如果对工具代码做过改动，或者想使用master分支最新功能，推荐使用编译安装方式：
+如果对工具代码做过改动，或者想使用main分支最新功能，推荐使用编译安装方式：
 
 ```shell
 cd AngelSlim

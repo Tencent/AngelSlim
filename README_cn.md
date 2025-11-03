@@ -1,4 +1,4 @@
-English | [简体中文](README_cn.md)
+简体中文 | [English](README.md)
 
 <p align="center">
   <picture>
@@ -8,53 +8,54 @@ English | [简体中文](README_cn.md)
 </p>
 
 <h3 align="center">
-A more accessible, comprehensive, and efficient toolkit for large model compression.
+致力于打造更易用、更全面和更高效的大模型压缩工具包
 </h3>
 
 <p align="center">
-          📖 <a href="https://angelslim.readthedocs.io/">Documentation</a>&nbsp&nbsp | &nbsp&nbsp🤗 <a href="https://huggingface.co/AngelSlim">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="https://modelscope.cn/organization/AngelSlim">ModelScope</a>&nbsp&nbsp | &nbsp&nbsp💬 <a href="./docs/source/assets/angel_slim_wechat.png">WeChat</a> | &nbsp&nbsp🫨 <a href="https://discord.com/invite/dHVNeuNdFt">Discord</a>
+          📖 <a href="https://angelslim.readthedocs.io/">Documentation</a>&nbsp&nbsp | &nbsp&nbsp🤗 <a href="https://huggingface.co/AngelSlim">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="https://modelscope.cn/organization/AngelSlim">ModelScope</a>&nbsp&nbsp | &nbsp&nbsp💬 <a href="./docs/source/assets/angel_slim_wechat.png">WeChat (微信)</a> | &nbsp&nbsp🫨 <a href="https://discord.com/invite/dHVNeuNdFt">Discord</a>
 <br>
 </p>
 
-## 📣Latest News
-- [25/11/03] We have released v0.2. Quantization support for new models, such as `GLM-4.6` and `Qwen3-VL`, open-sources the Eagle3 speculative decoding training framework, and updates the Diffusion model quantization tools.
-- [25/09/30] We have released **SpecExit**, the reasoning early-exit algorithm: [[Paper]](http://arxiv.org/abs/2509.24248) | [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html) | [[vLLM Code]](https://github.com/vllm-project/vllm/pull/27192)🔥🔥🔥
-- [25/09/26] We have released **TEQUILA**, the ternary quantization algorithm [[Paper]](https://arxiv.org/abs/2509.23809) | [[Code]](https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant)🔥🔥🔥
-- [25/09/24] We now support the PTQ quantification of NVFP4 for the Qwen3 series models. We also opensource [Qwen3-32B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-32B_nvfp4) and [Qwen3-235B-A22B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-235B-A22B_nvfp4) weights.
+## 📣最新进展
+- [25/11/03] 我们发布V0.2版本，支持了包括GLM-4.6/Qwen3-VL等更多模型的量化，开源投机采样Eagle3训练框架，更新Diffusion模型量化工具。
+- [25/09/30] 我们开源了思考早退新算法 **SpecExit** [[论文]](http://arxiv.org/abs/2509.24248) | [[文档]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html) | [[vLLM代码]](https://github.com/vllm-project/vllm/pull/27192)🔥🔥🔥
+- [25/09/30] 我们发布了三值量化新算法 **Tequila** [[论文]](https://arxiv.org/abs/2509.23809) | [[代码]](https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant)。🔥🔥🔥
+- [25/09/24] 我们支持了Qwen3系列模型的NVFP4的PTQ量化，我们还开源了[Qwen3-32B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-32B_nvfp4)、[Qwen3-235B-A22B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-235B-A22B_nvfp4)权重。
 
 <details>
-<summary>Previous News</summary>
+<summary>历史更新</summary>
 
-- [25/09/01] We now support ​FP8 quantization​ of the [Hunyuan-MT-7B](https://huggingface.co/tencent/Hunyuan-MT-7B-fp8) translation model. And enabled ​Torch inference and Benchmark evaluation​ for Eagle3. And implemented support for ​quantization and Cache​ for [FLUX](https://github.com/Tencent/AngelSlim/tree/main/configs/flux). And support ​quantization​ for the [Seed-OSS](https://github.com/Tencent/AngelSlim/tree/main/configs/seed_oss).
-- [25/08/06] We now support quantization for `Hunyuan 0.5B/1.8B/4B/7B` and multimodal model `Qwen2.5VL 3B/7B/32B/72B`, including `FP8/INT4` algorithms, and quantization for `DeepSeek-R1/V3` and `Kimi-K2`, including `FP8-Static` and `W4A8-FP8` algorithms. We also opensource `Hunyuan 1.8B/4B/7B` series Eagle3 model weight.
-- [25/07/04] We now support quantization for `Hunyuan/Qwen2.5/Qwen3/DeepSeek-R1-Distill-Qwen` and other models, including `INT8/FP8/INT4` algorithms. We also opensource `Qwen3` series Eagle3 model weight.
+- [25/09/01] 我们支持了[Hunyuan-MT-7B](https://huggingface.co/tencent/Hunyuan-MT-7B-fp8)翻译开源模型的FP8量化；支持了Eagle3的Torch推理及Benchmark评测流程。
+- [25/08/06] 我们支持了`Hunyuan 0.5B/1.8B/4B/7B`和`Qwen2.5VL 3B/7B/32B/72B`的FP8、INT4量化，支持了`DeepSeek-R1/V3`和`Kimi-K2`模型的`W4A8-FP8`量化。我们还开源了`Hunyuan 1.8B/4B/7B`系列模型的Eagle3权重。
+- [25/07/04] 我们支持了`Hunyuan/Qwen2.5/Qwen3/DeepSeek-R1-Distill-Qwen`等模型的量化，包含INT8、FP8、INT4等算法。
+我们还开源了`Qwen3`系列模型的Eagle3权重。
 
 </details>
 
-## 🌟Key Features
+## 🌟主要特性
 
-- **Highly Integrated**: This toolkit integrates mainstream compression algorithms into a unified framework, offering developers one-click access with exceptional ease of use.
-- **Continuous Innovation**: Beyond integrating widely-used industry algorithms, we are continuously researching better compression algorithms, which will be gradually open-sourced in the future.
-- **Performance-Driven**: We continuously optimize end-to-end performance in model compression workflows and algorithm deployment, such as enabling quantization of models like Qwen3-235B and DeepSeek-R1 on a single GPU.
+- **高度集成化**：本工具将主流的压缩算法集成到工具，开发者可一键式调用，具有很好的易用性。
+- **持续算法创新**：本工具除了集成工业界使用最广的算法，还持续自研更好的压缩算法，并且会陆续开源。
+- **追求极致性能**：在模型压缩流程、压缩算法部署方面，本工具持续端到端优化，例如单卡GPU可量化Qwen3-235B和Deepseek-R1。
 
-## 💼Technical Overview
+## 💼技术概览
 
 <table>
   <thead>
     <tr>
-      <th rowspan="2" style="text-align: center; vertical-align: middle;">Scenario</th>
-      <th rowspan="2" style="text-align: center; vertical-align: middle;">Model</th>
-      <th colspan="3" style="text-align: center; vertical-align: middle;">Compression Strategy</th>
+      <th rowspan="2" style="text-align: center; vertical-align: middle;">场景</th>
+      <th rowspan="2" style="text-align: center; vertical-align: middle;">模型</th>
+      <th colspan="3" style="text-align: center; vertical-align: middle;">压缩策略</th>
     </tr>
     <tr>
-      <th style="text-align: center; vertical-align: middle;">Quantization</th>
-      <th style="text-align: center; vertical-align: middle;">Speculative Decoding</th>
-      <th style="text-align: center; vertical-align: middle;">Other Techniques</th>
+      <th style="text-align: center; vertical-align: middle;">量化</th>
+      <th style="text-align: center; vertical-align: middle;">投机采样</th>
+      <th style="text-align: center; vertical-align: middle;">其他技术</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><strong>Large Language Models (LLMs)</strong></td>
+      <td><strong>文生文(LLM)</strong></td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
           <li><a href="https://huggingface.co/collections/tencent/hunyuan-dense-model">Hunyuan-Dense</a></li>
@@ -84,16 +85,16 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
           <li>
-            <strong>Sparse Attention</strong>
+            <strong>稀疏注意力</strong>
             <ul style="padding-left: 1.5rem">
-              <li>Under Development</li>
+              <li>Minference(建设中)</li>
             </ul>
           </li>
         </ul>
       </td>
     </tr>
     <tr>
-      <td><strong>Vision Language Models (VLMs)</strong></td>
+      <td><strong>图/视频生文(VLM)</strong></td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
           <li><a href="">Hunyuan-VL</a></li>
@@ -110,22 +111,22 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
-          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle.html">Eagle3(ing)</a></li>
+          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle.html">Eagle3建设中</a></li>
         </ul>
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
           <li>
-            <strong>Token Pruning</strong>
+            <strong>Token剪枝</strong>
             <ul style="padding-left: 1.5rem">
-              <li>Under Development</li>
+              <li>建设中</li>
             </ul>
           </li>
         </ul>
       </td>
     </tr>
     <tr>
-      <td><strong>Diffusion Models</strong></td>
+      <td><strong>文生图/视频/3D(Diffusion)</strong></td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
           <li><a href="https://huggingface.co/collections/tencent/hunyuanimage">Hunyuan-Image</a></li>
@@ -147,23 +148,23 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
           <li>
-            <strong>Cache Technology</strong>
+            <strong>Cache技术</strong>
             <ul style="padding-left: 1.5rem">
               <li>DeepCache</li>
               <li>TeaCache</li>
             </ul>
           </li>
           <li>
-            <strong>Sparse Attention</strong>
+            <strong>稀疏注意力</strong>
             <ul style="padding-left: 1.5rem">
-              <li>Under Development</li>
+              <li>建设中</li>
             </ul>
           </li>
         </ul>
       </td>
     </tr>
     <tr>
-      <td><strong>Speech Models​ (TTS/ASR)</strong></td>
+      <td><strong>语音(TTS/ASR)</strong></td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
           <li><a href="https://huggingface.co/collections/Qwen/qwen3-omni">Qwen3-Omni</a></li>
@@ -171,20 +172,20 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
-          <li>Under Development</li>
+          <li>建设中</li>
         </ul>
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
-          <li>Under Development</li>
+          <li>建设中</li>
         </ul>
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
           <li>
-            <strong>Token Pruning</strong>
+            <strong>Token剪枝</strong>
             <ul style="padding-left: 1.5rem">
-              <li>Under Development</li>
+              <li>建设中</li>
             </ul>
           </li>
         </ul>
@@ -193,155 +194,158 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
   </tbody>
 </table>
 
-## 🛎️How to Use
 
-### 1. Install AngelSlim
+## 🛎️如何使用
 
-We recommend using `pip` to install the latest stable version of `AngelSlim`:
+### 1、安装 AngelSlim
+
+推荐使用`pip`直接安装最新稳定版`AngelSlim`：
 
 ```shell
 pip install angelslim
 ```
 
-Alternatively, you can clone the repository and install from source in editable mode:
+也可以选择克隆代码仓库后，以可编辑的方式从源代码安装：
 
 ```shell
 cd AngelSlim && python setup.py install
 ```
 
-For more detailed installation instructions, please refer to the [Installation Documentation](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/installation.html).
+更详细的安装说明可参考[安装文档](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/installation.html)。
 
-### 2. Quick Start
+### 2、快速开始
 
-- **Quantization**
+#### 量化
+完成安装`AngelSlim`后，您可以通过以下脚本快速开始，完成`Qwen3-1.7B`模型的静态`FP8`量化：
 
-  After installing `AngelSlim`, you can launch static FP8 quantization for the Qwen3-1.7B model with the following one-command script:
+1、一键式启动
 
   ```shell
   python3 tools/run.py -c configs/qwen3/fp8_static/qwen3-1_7b_fp8_static.yaml
   ```
 
-  This example produces quantized model weights by performing PTQ calibration on a model loaded from HuggingFace.
+  该示例将会加载`HugggingFace`模型进行PTQ量化校准，最终量化产出模型权重.
 
-  <details>
-  <summary>Code-based Start</summary>
+<details>
+<summary>2、源码启动</summary>
 
-    To perform dynamic `FP8` quantization on `Qwen3-1.7B`:
+  例如对`Qwen3-1.7B`完成动态`FP8`量化：
 
-    ```python
-    from angelslim.engine import Engine
+  ```python
+  from angelslim.engine import Engine
 
-    slim_engine = Engine()
-    # Prepare model
-    slim_engine.prepare_model(model_name="Qwen", model_path="Qwen/Qwen3-1.7B",)
-    # Initialize compressor
-    slim_engine.prepare_compressor("PTQ", default_method="fp8_dynamic")
-    # Compress model
-    slim_engine.run()
-    # Save compressed model
-    slim_engine.save("./output")
-    ```
-
-  </details>
-
-  For more details, please refer to the [Quick Start Documentation](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html).
-
-- **Speculative Decoding**
-
-  After installing AngelSlim, you can quickly start Eagle3 training with the following scripts:
-
-  ```shell
-  # Start the vLLM server
-  bash scripts/speculative/run_vllm_server.sh
-  # Generate training data
-  bash scripts/speculative/generate_data_for_target_model.sh
-  # Perform online training for the Eagle3 model
-  bash scripts/speculative/train_eagle3_online.sh
+  slim_engine = Engine()
+  # Prepare model
+  slim_engine.prepare_model(model_name="Qwen", model_path="Qwen/Qwen3-1.7B")
+  # Initialize compressor
+  slim_engine.prepare_compressor("PTQ", default_method="fp8_dynamic")
+  # Compress model
+  slim_engine.run()
+  # Save compressed model
+  slim_engine.save("./output")
   ```
 
-  For detailed training configurations and PyTorch performance benchmarks of Eagle3, please refer to the [Quick Start Guide for Speculative Sampling](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html#id5).
+</details>
 
-- **Diffusion Model Quantization**
+详情请参考量化[快速开始文档](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html)。
 
-  Use the `scripts/diffusion/run_diffusion.py` for quantization and inference:
+#### 投机采样
+完成安装`AngelSlim`后，您可以通过以下脚本快速开始`Eagle3`训练：
 
-  ```shell
-  # Online quantization and inference
-  python scripts/diffusion/run_diffusion.py \
-    --model-name-or-path black-forest-labs/FLUX.1-schnell \
-    --quant-type fp8-per-tensor \
-    --prompt "A cat holding a sign that says hello world" \
-    --height 1024 --width 1024 --steps 4 --guidance 0.0 --seed 0
-  ```
-  For more quantization inference methods, please refer to [the Diffusion Model Quantization Documentation](https://angelslim.readthedocs.io/zh-cn/latest/features/diffusion/quantization.html).
+```shell
+# 启动vLLM server
+bash scripts/speculative/run_vllm_server.sh
+# 生成训练数据
+bash scripts/speculative/generate_data_for_target_model.sh
+# 进行Eagle3模型的在线训练
+bash scripts/speculative/train_eagle3_online.sh
+```
 
-### 3. Deployment and Testing
+详细训练配置，以及`Eagle3`的Pytorch性能测试，详情请参考投机采样[快速开始文档](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html#id5)。
 
-#### 3.1 Offline Inference
+#### Diffusion模型量化
 
-To test offline inference with a quantized model loaded via `transformers`, run the following command:
+使用 `scripts/diffusion/run_diffusion.py` 脚本进行量化与推理：
+
+```shell
+# 在线量化并运行推理
+python scripts/diffusion/run_diffusion.py \
+  --model-name-or-path black-forest-labs/FLUX.1-schnell \
+  --quant-type fp8-per-tensor \
+  --prompt "A cat holding a sign that says hello world" \
+  --height 1024 --width 1024 --steps 4 --guidance 0.0 --seed 0
+```
+
+更多量化推理方式请参考[Diffusion模型量化文档](https://angelslim.readthedocs.io/zh-cn/latest/features/diffusion/quantization.html)。
+
+### 3、部署与测试
+
+#### 3.1 离线推理
+
+通过`transformers`加载量化模型离线推理：
 
 ```shell
 python scripts/deploy/offline.py $MODEL_PATH "Hello, my name is"
 ```
 
-Where `MODEL_PATH` is the path to the quantized model output. please set the `deploy_backend: huggingface` in the `global` configuration before quantizing the model, or manually modify the `ignored_layers` field in the `config.json` file located in the quantized model output directory to `ignore`.
+其中 `MODEL_PATH` 为量化产出模型路径。
 
-#### 3.2 API Service Deployment
 
-After specifying the quantized model path `MODEL_PATH`, you can deploy an OpenAI-compatible API service using the following LLMs inference frameworks:
+#### 3.2 服务部署
+
+支持通过以下推理框架部署 OpenAI 兼容的 API 服务：
 
 - **vLLM**
 
-  Use the following script to launch a [vLLM](https://github.com/vllm-project/vllm) server, recommended version `vllm>=0.8.5.post1`. For MOE INT8 quantized models, vllm>=0.9.0 is required.
+  [vLLM](https://github.com/vllm-project/vllm) 服务启动脚本，建议版本`vllm>=0.8.5.post1`，部署MOE INT8量化模型需要`vllm>=0.9.2`。
 
   ```shell
   bash scripts/deploy/run_vllm.sh --model-path $MODEL_PATH --port 8080 -d 0,1,2,3 -t 4 -p 1 -g 0.8 --max-model-len 4096
   ```
-  Where `-d` is the visible devices, `-t` is tensor parallel size, `-p` is pipeline parallel size, and `-g` is the GPU memory utilization.
+  其中`-d`为可见设备，`-t`为张量并行度，`-p`为流水线并行度，`-g`为显存使用率。
 
 - **SGLang**
 
-  Use the following script to launch a [SGLang](https://github.com/sgl-project/sglang) server, recommended version `sglang>=0.4.6.post1`.
+  [SGLang](https://github.com/sgl-project/sglang) 服务启动脚本，建议版本 `sglang>=0.4.6.post1`：
 
   ```shell
   bash scripts/deploy/run_sglang.sh --model-path $MODEL_PATH --port 8080 -d 0,1,2,3 -t 4 -g 0.8
   ```
 
-#### 3.3 Service Invocation
+#### 3.3 服务调用
 
-Invoke requests via [OpenAI's API format](https://platform.openai.com/docs/api-reference/introduction):
+通过 [OpenAI 格式](https://platform.openai.com/docs/api-reference/introduction) 接口发起请求：
 
 ```shell
 bash scripts/deploy/openai.sh -m $MODEL_PATH -p "Hello, my name is" --port 8080 --max-tokens 4096 --temperature 0.7 --top-p 0.8 --top-k 20 --repetition-penalty 1.05 --system-prompt "You are a helpful assistant."
 ```
-where `-p` is the input prompt.
+其中`-p`为输入prompt
 
-#### 3.4 Performance Evaluation
+#### 3.4 效果验证
 
-Evaluate the performance of quantized model using [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness), recommended version`lm-eval>=0.4.8`
+使用 [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness) 评估量化模型精度，建议版本`lm-eval>=0.4.8`
 
 <details>
-<summary>Run script details</summary>
+<summary>执行脚本细节</summary>
 
 ```shell
 bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --tasks ceval-valid,mmlu,gsm8k,humaneval -n 0 $MODEL_PATH
 ```
-where `RESULT_PATH` is the directory for saving test results, `-b` is batch size, `--tasks` specifies the evaluation tasks, and `-n` is the number of few-shot examples.
+其中`RESULT_PATH`为测试结果保存目录，`-b`为batch size大小，`--tasks`为评测任务，`-n`为few-shot数量
 
-For more detaileds, please refer to the [Deployment Documentation](https://angelslim.readthedocs.io/zh-cn/latest/deployment/deploy.html).
+详细操作指南请参阅[部署文档](https://angelslim.readthedocs.io/zh-cn/latest/deployment/deploy.html)。
 
 </details>
 
-## 📈 Benchmark
+## 📈Benchmark
 
-### 1. Quantization
+### 1、量化
 
-The performance test results for selected models are shown below. For the complete benchmark, refer to the [Benchmark documentation](https://angelslim.readthedocs.io/zh-cn/latest/performance/quantization/benchmarks.html)
+下面只展示了部分模型的效果测试情况，完整Benchmark可以参考[Benchmark文档](https://angelslim.readthedocs.io/zh-cn/latest/performance/quantization/benchmarks.html)
 
-#### 1.1 Hunyuan Series Models
+#### 1.1 Hunyuan系列模型
 
-Benchmark results for the `Hunyuan-Instruct` model with `FP8`, `INT4-AWQ` and `INT4-GPTQ` quantization algorithms on datasets including`OlympiadBench`, `AIME 2024` and `DROP`:
+Hunyuan-Instruct的`BF16`、`FP8`、`INT4-GPTQ`、`INT4-AWQ`在`OlympiadBench`、`AIME 2024`、`DROP`、`GPQA-Diamond`上的评测结果如下：
 
 <table>
   <thead>
@@ -384,9 +388,12 @@ Benchmark results for the `Hunyuan-Instruct` model with `FP8`, `INT4-AWQ` and `I
   </tbody>
 </table>
 
-#### 1.2 Qwen3 Series Models
 
-Benchmark results for Qwen3 series models with `FP8-Static`, `FP8-Dynamic`, `INT4-GPTQ`, and `INT4-AWQ` quantization algorithms on datasets including `CEVAL`, `MMLU`, `GSM8K`, and `HUMANEVAL`:
+#### 1.2 Qwen3系列模型
+
+Qwen3系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`、`INT8-Dynamic`、`INT4-GPTQ`、`INT4-AWQ`在`CEVAL`、`MMLU`、`GSM8K`、`HUMANEVAL`上的评测结果如下：
+
+
 
 <table>
   <thead>
@@ -425,9 +432,9 @@ Benchmark results for Qwen3 series models with `FP8-Static`, `FP8-Dynamic`, `INT
   </tbody>
 </table>
 
-#### 1.3 DeepSeek Series Models
+#### 1.3 DeepSeek系列模型
 
-Benchmark results for DeepSeek-R1-0528 series models with `FP8-Block-Wise` and `W4A8-FP8` quantization algorithms on datasets including `GPQA Diamond`、`AIME 2024`、`SimpleQA` and `LiveCodeBench`：
+DeepSeek-R1-0528模型的`FP8-Block-Wise`、`W4A8-FP8`在`GPQA Diamond`、`AIME 2024`、`SimpleQA`、`LiveCodeBench`上的评测结果如下：
 
 <table>
   <thead>
@@ -440,10 +447,10 @@ Benchmark results for DeepSeek-R1-0528 series models with `FP8-Block-Wise` and `
 </table>
 
 <details>
-<summary>Note</summary>
+<summary>备注</summary>
 
-> - The above results are based on the average of 5 test runs deployed with TRT-LLM
-> - The hyperparameters used during evaluation are as follows:
+> - 以上评测结果使用TRT-LLM框架部署测试5次求平均
+> - 评测时使用的超参如下:
 > ```json
 >{
 >  "top_k": 20,
@@ -456,11 +463,11 @@ Benchmark results for DeepSeek-R1-0528 series models with `FP8-Block-Wise` and `
 
 </details>
 
-#### 1.4 Qwen-VL Series Models
+#### 1.4 Qwen-VL 系列模型
 
 **Qwen3-VL Benchmark**
 
-Benchmark results for Qwen3VL series models with `BF16`、`FP8-Static` and `FP8-Dynamic` quantization algorithms on datasets including `MMMU_VAL`、`DocVQA_VAL` and `ChartQA_TEST`：
+Qwen3VL系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`在`MMMU_VAL`、`DocVQA_VAL`、`ChartQA_TEST`上的评测结果如下：
 
 <table>
   <thead>
@@ -478,7 +485,7 @@ Benchmark results for Qwen3VL series models with `BF16`、`FP8-Static` and `FP8-
 <details>
 <summary><strong>Qwen2.5VL Benchmark</strong></summary>
 
-Benchmark results for Qwen2.5VL series models with `BF16`、`FP8-Static`、`FP8-Dynamic`、`INT4-GPTQ`、`INT4-AWQ` quantization algorithms on datasets including `MMMU_VAL`、`DocVQA_VAL` and `ChartQA_TEST`：
+Qwen2.5VL系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`、`INT4-GPTQ`、`INT4-AWQ`在`MMMU_VAL`、`DocVQA_VAL`、`ChartQA_TEST`上的评测结果如下：
 
 <table>
   <thead>
@@ -510,12 +517,12 @@ Benchmark results for Qwen2.5VL series models with `BF16`、`FP8-Static`、`FP8-
 
 </details>
 
-#### 1.5 Other Models
+#### 1.5 其他模型
 
-Other models such as GLM-4.6, Qwen2.5, and Seed-OSS have been evaluated on benchmarks like `CEVAL`, `MMLU`, and `GSM8K` using quantization strategies including `FP8-Static`, `FP8-Dynamic`, `INT4-GPTQ`, and `INT4-AWQ`.
+其他模型比如GLM、Qwen2.5、Seed-OSS等模型利用`FP8-Static`、`FP8-Dynamic`、`INT4-GPTQ`、`INT4-AWQ`量化等策略在`CEVAL`、`MMLU`、`GSM8K`上进行了评测。
 
 <details>
-<summary>Benchmark Experiment Details</summary>
+<summary>Benchmark实验细节</summary>
 
 <table>
   <thead>
@@ -555,11 +562,11 @@ Other models such as GLM-4.6, Qwen2.5, and Seed-OSS have been evaluated on bench
 
 </details>
 
-### 2. Speculative Decoding
+### 2、投机采样
 
-#### 2.1 Qwen3 Series Models
+#### 2.1 Qwen3系列模型
 
-Benchmark results for Qwen3 series models with `Eagle3` speculative decoding algorithm on datasets including `MT-bench`, `HunmanEval`, `GSM8K`, and `Alpaca`:
+Qwen3系列的Eagle3模型在MT-bench/HunmanEval/GSM8K/Alpaca上的加速结果如下：
 
 <table>
   <thead>
@@ -592,9 +599,9 @@ Benchmark results for Qwen3 series models with `Eagle3` speculative decoding alg
   </tbody>
 </table>
 
-#### 2.2 Hunyuan Series Models
+#### 2.2 Hunyuan系列模型
 
-Benchmark results for Hunyuan series models with `Eagle3` speculative decoding algorithm on datasets including `MT-bench`, `HunmanEval`, `GSM8K`, and `Alpaca`:
+Hunyuan系列的Eagle3模型在MT-bench/HunmanEval/GSM8K/Alpaca上的加速结果如下：
 
 <table>
   <thead>
@@ -621,22 +628,21 @@ Benchmark results for Hunyuan series models with `Eagle3` speculative decoding a
   </tbody>
 </table>
 
-## 📝 License
+## 📝许可协议
 
-The code for this project is open-sourced under the [License for AngelSlim](LICENSE).
+本项目的代码依照 [License for AngelSlim](LICENSE) 协议开源。
 
-## 🔗 Citation
-
+## 🔗引用
 ```
 @software{AngelSlim2025,
     title={{AngelSlim}},
     author={Tencent AngelSlim Project Contributors},
     year={2025},
-    month={6},
+    month={7},
     url={https://github.com/Tencent/AngelSlim},
 }
 ```
 
-## 💬 Technical Discussion
+## 💬技术交流
 
-* AngelSlim is continuously iterating and new features will be released soon. If you have any questions or suggestions, please open an issue on [GitHub Issues](https://github.com/Tencent/AngelSlim/issues) or join our [WeChat discussion group](./docs/source/assets/angel_slim_wechat.png).
+- AngelSlim正在快速迭代更新中，后续会推出更多的功能，有问题或建议欢迎通过[GitHub Issues](https://github.com/Tencent/AngelSlim/issues)给我们提issue，或者加入[微信技术交流群](./docs/source/assets/angel_slim_wechat.png)。

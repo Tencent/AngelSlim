@@ -16,10 +16,11 @@ import os
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
-import deepspeed
 import torch
 from torch import nn
 from transformers import Trainer
+
+from angelslim.utils.lazy_imports import deepspeed
 
 from ...utils import padding
 
