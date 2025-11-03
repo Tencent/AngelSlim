@@ -92,6 +92,7 @@ def multi_nodes_run(config):
         cache_dir=model_config.cache_dir,
         deploy_backend=global_config.deploy_backend,
         using_multi_nodes=True,
+        use_audio_in_video=dataset_config.use_audio_in_video,
     )
 
     # Step 5: Prepare data (optional custom dataloader)
@@ -105,6 +106,7 @@ def multi_nodes_run(config):
             num_samples=dataset_config.num_samples,
             shuffle=dataset_config.shuffle,
             inference_settings=dataset_config.inference_settings,
+            use_audio_in_video=dataset_config.use_audio_in_video,
         )
 
     # Step 6: Initialize compressor
@@ -149,6 +151,7 @@ def run(config):
         use_cache=model_config.use_cache,
         cache_dir=model_config.cache_dir,
         deploy_backend=global_config.deploy_backend,
+        use_audio_in_video=dataset_config.use_audio_in_video,
     )
 
     # Step 4: Prepare data (optional custom dataloader)
@@ -162,6 +165,7 @@ def run(config):
             num_samples=dataset_config.num_samples,
             shuffle=dataset_config.shuffle,
             inference_settings=dataset_config.inference_settings,
+            use_audio_in_video=dataset_config.use_audio_in_video,
             model_name=model_config.name,
         )
 

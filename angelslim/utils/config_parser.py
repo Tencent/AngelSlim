@@ -93,6 +93,12 @@ class GlobalConfig:
         json_data = get_hf_config(model_path)
         if json_data["model_type"] in ["qwen3_vl"]:
             self.hidden_size = json_data["text_config"]["hidden_size"]
+        elif (
+            json_data["architectures"][0]
+            if isinstance(json_data["architectures"], list)
+            else json_data["architectures"]
+        ) == "Qwen3OmniMoeForConditionalGeneration":
+            self.hidden_size = json_data["thinker_config"]["text_config"]["hidden_size"]
         else:
             self.hidden_size = json_data["hidden_size"]
 
@@ -147,6 +153,7 @@ class DatasetConfig:
     num_samples: int = field(default=256)
     batch_size: int = field(default=1)
     shuffle: bool = field(default=False)
+    use_audio_in_video: bool = field(default=False)
     inference_settings: Optional[Dict[str, Any]] = field(default=None)
 
 
