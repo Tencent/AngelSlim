@@ -17,9 +17,9 @@ import os
 from pathlib import Path
 from typing import Dict, List, Union
 
-from qwen_omni_utils import process_mm_info
 from transformers import ProcessorMixin
 
+from ..utils.lazy_imports import qwen_omni_utils
 from .base_dataset import BaseDataset
 
 
@@ -110,7 +110,7 @@ class OmniDataset(BaseDataset):
         text = self.processor.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
-        audios, images, videos = process_mm_info(
+        audios, images, videos = qwen_omni_utils.process_mm_info(
             messages, use_audio_in_video=self.use_audio_in_video
         )
 

@@ -10,4 +10,3 @@ tiktoken
 datasets
 threadpoolctl
 shortuuid
-qwen_omni_utils

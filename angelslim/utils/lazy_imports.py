@@ -156,5 +156,6 @@ jsonschema_specifications = LazyModule("jsonschema_specifications", "speculative
 referencing = LazyModule("referencing", "speculative")
 
 
-# --- VLM related lazy imports ---
-qwen_vl_utils = LazyModule("qwen_vl_utils", "vlm")
+# --- multimodal related lazy imports ---
+qwen_vl_utils = LazyModule("qwen_vl_utils", "multimodal")
+qwen_omni_utils = LazyModule("qwen_omni_utils", "multimodal")
