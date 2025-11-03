@@ -8,7 +8,7 @@ AngelSlim 支持以下四种 FP8 量化策略：
 
 - **fp8-per-tensor**：全局 per-tensor 量化（推荐，速度/精度平衡最佳）
 - **fp8-per-tensor-weight-only**：仅对权重量化（权重：FP8，激活仍为 BF16/FP16），适合对精度有更高要求的场景
-- **fp8-per-block**：支持 per-block 量化，适用于 NVIDIA Hopper (SM90+) 架构。
+- **fp8-per-block**：支持 per-block 量化，适用于 NVIDIA Hopper (SM90+) 架构，block_size目前只支持128
 - **fp8-per-token**：精细的 per-token 量化，对多样输入有更强适应性
 
 ## 配置

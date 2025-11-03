@@ -32,6 +32,7 @@ class FP8DynamicLinear(torch.nn.Module):
         bias: torch.nn.Parameter,
         native_fp8_support: bool = False,
         quant_type: str = "fp8-per-tensor",
+        block_size: int = 128,
     ):
         super().__init__()
         self.weight = torch.nn.Parameter(weight, requires_grad=False)
@@ -39,6 +40,7 @@ class FP8DynamicLinear(torch.nn.Module):
         self.bias = bias
         self.native_fp8_support = native_fp8_support
         self.quant_type = quant_type
+        self.block_size = block_size
 
     @torch.compiler.disable(recursive=True)
     def forward(self, x):
