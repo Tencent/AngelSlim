@@ -16,12 +16,12 @@ import json
 import os
 from typing import Dict, List, Union
 
+import qwen_vl_utils
 from datasets import load_dataset
 from PIL import Image
 from tqdm import tqdm
 from transformers import ProcessorMixin
 
-from ..utils.lazy_imports import qwen_vl_utils
 from .base_dataset import BaseDataset
 
 

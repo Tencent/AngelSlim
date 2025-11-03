@@ -204,4 +204,4 @@ deepspeed = LazyModule("deepspeed", "speculative")
 
 
 # --- VLM related lazy imports ---
-qwen_vl_utils = LazyModule("qwen_vl_utils", "vlm")
+# qwen_vl_utils = LazyModule("qwen_vl_utils", "vlm")
