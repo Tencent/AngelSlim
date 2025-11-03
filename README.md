@@ -8,7 +8,7 @@ English | [简体中文](README_cn.md)
 </p>
 
 <h3 align="center">
-Dedicated to building a more intuitive, comprehensive, and efficient LLMs compression toolkit.
+A more accessible, comprehensive, and efficient toolkit for large model compression.
 </h3>
 
 <p align="center">
@@ -18,8 +18,8 @@ Dedicated to building a more intuitive, comprehensive, and efficient LLMs compre
 
 ## 📣Latest News
 - [25/11/03] We have released v0.2. This release adds support for quantizing additional models such as `GLM-4.6` and `Qwen3-VL`, open-sources the Eagle3 speculative decoding training framework, and updates the Diffusion model quantization tools.
-- [25/09/30] We now open-source the implementation of the reasoning early-exit algorithm: **SpecExit** [[Paper]](http://arxiv.org/abs/2509.24248) | [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html) | [[vLLM Code]](https://github.com/vllm-project/vllm/pull/27192)
-- [25/09/26] We now release the the ternary quantization **TEQUILA** [[Paper]](https://arxiv.org/abs/2509.23809) | [[Code]](https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant)
+- [25/09/30] We have released **SpecExit**, the reasoning early-exit algorithm: [[Paper]](http://arxiv.org/abs/2509.24248) | [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html) | [[vLLM Code]](https://github.com/vllm-project/vllm/pull/27192)🔥🔥🔥
+- [25/09/26] We have released **TEQUILA**, the ternary quantization algorithm [[Paper]](https://arxiv.org/abs/2509.23809) | [[Code]](https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant)🔥🔥🔥
 - [25/09/24] We now support the PTQ quantification of NVFP4 for the Qwen3 series models. We also opensource [Qwen3-32B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-32B_nvfp4) and [Qwen3-235B-A22B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-235B-A22B_nvfp4) weights.
 
 <details>
@@ -70,6 +70,7 @@ Dedicated to building a more intuitive, comprehensive, and efficient LLMs compre
           <li><a href="https://github.com/Tencent/AngelSlim/tree/main/configs/qwen3">FP8-Static/Dynamic</a></li>
           <li><a href="https://github.com/Tencent/AngelSlim/tree/main/configs/qwen3">INT8-Dynamic</a></li>
           <li><a href="https://github.com/Tencent/AngelSlim/tree/main/configs/qwen3">INT4-GPTQ/AWQ/GPTAQ</a></li>
+          <li><a href="https://github.com/Tencent/AngelSlim/tree/d55b06aeffc53e31f485044c5026e754f4e27b74/configs/qwen3/nvfp4">NVFP4</a></li>
           <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/quantization/fp8_lepto.html">LeptoQuant</a></li>
           <li><a href="https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant">Tequila</a></li>
         </ul>
@@ -214,18 +215,16 @@ For more detailed installation instructions, please refer to the [Installation D
 
 #### Quantization
 
-After installing `AngelSlim`, you can quickly start by running the following script to perform static `FP8` quantization on the `Qwen3-1.7B` model:
-
-(1) One-click Start
+After installing `AngelSlim`, you can launch static FP8 quantization for the Qwen3-1.7B model with the following one-command script:
 
   ```shell
   python3 tools/run.py -c configs/qwen3/fp8_static/qwen3-1_7b_fp8_static.yaml
   ```
 
-  This example will load the HuggingFace model and perform activation value calibration using the `dataset` specified in the config file, saving the quantized model weights.
+  This example produces quantized model weights by performing PTQ calibration on a model loaded from HuggingFace.
 
 <details>
-<summary>(2) Code-based Start</summary>
+<summary>Code-based Start</summary>
 
   To perform dynamic `FP8` quantization on `Qwen3-1.7B`:
 
@@ -423,43 +422,6 @@ Benchmark results for Qwen3 series models with `FP8-Static`, `FP8-Dynamic`, `INT
     <tr><td>FP8-Static</td><td>89.67</td><td>86.19</td><td>86.96</td><td>27.44</td></tr>
     <tr><td>FP8-Dynamic</td><td>89.67</td><td>86.18</td><td>85.22</td><td>28.05</td></tr>
     <tr><td>INT8-Dynamic</td><td>88.93</td><td>86.20</td><td>86.20</td><td>23.78</td></tr>
-    <tr><td rowspan="5">QwQ-32B</td><td>BF16</td><td>85.74</td><td>82.03</td><td>73.31</td><td>42.68</td></tr>
-    <tr><td>FP8-Static</td><td>85.44</td><td>81.91</td><td>75.36</td><td>42.68</td></tr>
-    <tr><td>FP8-Dynamic</td><td>85.07</td><td>81.93</td><td>75.66</td><td>42.07</td></tr>
-    <tr><td>INT4-GPTQ</td><td>84.03</td><td>81.26</td><td>68.23</td><td>45.73</td></tr>
-    <tr><td>INT4-AWQ</td><td>83.58</td><td>81.01</td><td>68.69</td><td>43.29</td></tr>
-  </tbody>
-</table>
-
-#### Qwen2.5VL Series Models
-
-Benchmark results for Qwen2.5VL series models with `BF16`、`FP8-Static`、`FP8-Dynamic`、`INT4-GPTQ`、`INT4-AWQ` quantization algorithms on datasets including `MMMU_VAL`、`DocVQA_VAL` and `ChartQA_TEST`：
-
-<table>
-  <thead>
-    <tr><th>Model</th><th>Quantization</th><th>MMMU_VAL</th><th>MMLDocVQA_VALU</th><th>ChartQA_TEST</th></tr>
-  </thead>
-  <tbody>
-    <tr><td rowspan="5">Qwen2.5VL-3B</td><td>BF16</td><td>47.11</td><td>78.57</td><td>80.32</td></tr>
-    <tr><td>FP8-Static</td><td>47.33</td><td>79.34</td><td>79.68</td></tr>
-    <tr><td>FP8-Dynamic</td><td>45.99</td><td>46.93</td><td>38.29</td></tr>
-    <tr><td>INT4-GPTQ</td><td>46.56</td><td>77.20</td><td>78.96</td></tr>
-    <tr><td>INT4-AWQ</td><td>45.78</td><td>-</td><td>79.60</td></tr>
-   <tr><td rowspan="5">Qwen2.5VL-7B</td><td>BF16</td><td>45.44</td><td>89.71</td><td>84.64</td></tr>
-    <tr><td>FP8-Static</td><td>47.00</td><td>89.83</td><td>85.92</td></tr>
-    <tr><td>FP8-Dynamic</td><td>47.22</td><td>89.80</td><td>88.64</td></tr>
-    <tr><td>INT4-GPTQ</td><td>46.67</td><td>90.45</td><td>-</td></tr>
-    <tr><td>INT4-AWQ</td><td>45.67</td><td>89.28</td><td>-</td></tr>
-    <tr><td rowspan="5">Qwen2.5VL-32B</td><td>BF16</td><td>57.00</td><td>90.03</td><td>-</td></tr>
-    <tr><td>FP8-Static</td><td>57.00</td><td>89.88</td><td>-</td></tr>
-    <tr><td>FP8-Dynamic</td><td>56.44</td><td>89.88</td><td>-</td></tr>
-    <tr><td>INT4-GPTQ</td><td>55.22</td><td>89.80 </td><td>-</td></tr>
-    <tr><td>INT4-AWQ</td><td>55.22</td><td>90.30</td><td>-</td></tr>
-    <tr><td rowspan="5">Qwen2.5VL-72B</td><td>BF16</td><td>58.78</td><td>94.39</td><td>85.60</td></tr>
-    <tr><td>FP8-Static</td><td>57.89</td><td>94.41</td><td>85.84</td></tr>
-    <tr><td>FP8-Dynamic</td><td>58.67</td><td>94.38</td><td>85.60</td></tr>
-    <tr><td>INT4-GPTQ</td><td>57.56</td><td>94.46</td><td>86.48</td></tr>
-    <tr><td>INT4-AWQ</td><td>58.78</td><td>94.19</td><td>87.28</td></tr>
   </tbody>
 </table>
 
@@ -495,9 +457,50 @@ Benchmark results for DeepSeek-R1-0528 series models with `FP8-Block-Wise` and `
 
 </details>
 
+#### Qwen-VL Series Models
+
+- **Qwen3-VL Benchmark**
+
+待更新
+
+<details>
+<summary><li><strong>Qwen2.5VL Benchmark</strong></li></summary>
+
+Benchmark results for Qwen2.5VL series models with `BF16`、`FP8-Static`、`FP8-Dynamic`、`INT4-GPTQ`、`INT4-AWQ` quantization algorithms on datasets including `MMMU_VAL`、`DocVQA_VAL` and `ChartQA_TEST`：
+
+<table>
+  <thead>
+    <tr><th>Model</th><th>Quantization</th><th>MMMU_VAL</th><th>MMLDocVQA_VALU</th><th>ChartQA_TEST</th></tr>
+  </thead>
+  <tbody>
+    <tr><td rowspan="5">Qwen2.5VL-3B</td><td>BF16</td><td>47.11</td><td>78.57</td><td>80.32</td></tr>
+    <tr><td>FP8-Static</td><td>47.33</td><td>79.34</td><td>79.68</td></tr>
+    <tr><td>FP8-Dynamic</td><td>45.99</td><td>46.93</td><td>38.29</td></tr>
+    <tr><td>INT4-GPTQ</td><td>46.56</td><td>77.20</td><td>78.96</td></tr>
+    <tr><td>INT4-AWQ</td><td>45.78</td><td>-</td><td>79.60</td></tr>
+   <tr><td rowspan="5">Qwen2.5VL-7B</td><td>BF16</td><td>45.44</td><td>89.71</td><td>84.64</td></tr>
+    <tr><td>FP8-Static</td><td>47.00</td><td>89.83</td><td>85.92</td></tr>
+    <tr><td>FP8-Dynamic</td><td>47.22</td><td>89.80</td><td>88.64</td></tr>
+    <tr><td>INT4-GPTQ</td><td>46.67</td><td>90.45</td><td>-</td></tr>
+    <tr><td>INT4-AWQ</td><td>45.67</td><td>89.28</td><td>-</td></tr>
+    <tr><td rowspan="5">Qwen2.5VL-32B</td><td>BF16</td><td>57.00</td><td>90.03</td><td>-</td></tr>
+    <tr><td>FP8-Static</td><td>57.00</td><td>89.88</td><td>-</td></tr>
+    <tr><td>FP8-Dynamic</td><td>56.44</td><td>89.88</td><td>-</td></tr>
+    <tr><td>INT4-GPTQ</td><td>55.22</td><td>89.80 </td><td>-</td></tr>
+    <tr><td>INT4-AWQ</td><td>55.22</td><td>90.30</td><td>-</td></tr>
+    <tr><td rowspan="5">Qwen2.5VL-72B</td><td>BF16</td><td>58.78</td><td>94.39</td><td>85.60</td></tr>
+    <tr><td>FP8-Static</td><td>57.89</td><td>94.41</td><td>85.84</td></tr>
+    <tr><td>FP8-Dynamic</td><td>58.67</td><td>94.38</td><td>85.60</td></tr>
+    <tr><td>INT4-GPTQ</td><td>57.56</td><td>94.46</td><td>86.48</td></tr>
+    <tr><td>INT4-AWQ</td><td>58.78</td><td>94.19</td><td>87.28</td></tr>
+  </tbody>
+</table>
+
+</details>
+
 #### Other Models
 
-Other models such as GLM, Qwen2.5, and Seed-OSS have been evaluated on benchmarks like `CEVAL`, `MMLU`, and `GSM8K` using quantization strategies including `FP8-Static`, `FP8-Dynamic`, `INT4-GPTQ`, and `INT4-AWQ`.
+Other models such as GLM-4.6, Qwen2.5, and Seed-OSS have been evaluated on benchmarks like `CEVAL`, `MMLU`, and `GSM8K` using quantization strategies including `FP8-Static`, `FP8-Dynamic`, `INT4-GPTQ`, and `INT4-AWQ`.
 
 <details>
 <summary>Benchmark Experiment Details</summary>
