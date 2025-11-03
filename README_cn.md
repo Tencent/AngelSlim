@@ -197,7 +197,7 @@
 
 ## 🛎️如何使用
 
-### 安装 AngelSlim
+### 1、安装 AngelSlim
 
 推荐使用`pip`直接安装最新稳定版`AngelSlim`：
 
@@ -213,7 +213,7 @@ cd AngelSlim && python setup.py install
 
 更详细的安装说明可参考[安装文档](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/installation.html)。
 
-### 快速开始
+### 2、快速开始
 
 #### 量化
 完成安装`AngelSlim`后，您可以通过以下脚本快速开始，完成`Qwen3-1.7B`模型的静态`FP8`量化：
@@ -278,9 +278,9 @@ python scripts/diffusion/run_diffusion.py \
 
 更多量化推理方式请参考[Diffusion模型量化文档](https://angelslim.readthedocs.io/zh-cn/latest/features/diffusion/quantization.html)。
 
-### 部署与测试
+### 3、部署与测试
 
-#### 1. 离线推理
+#### 3.1 离线推理
 
 通过`transformers`加载量化模型离线推理：
 
@@ -291,7 +291,7 @@ python scripts/deploy/offline.py $MODEL_PATH "Hello, my name is"
 其中 `MODEL_PATH` 为量化产出模型路径。
 
 
-#### 2. 服务部署
+#### 3.2 服务部署
 
 支持通过以下推理框架部署 OpenAI 兼容的 API 服务：
 
@@ -312,7 +312,7 @@ python scripts/deploy/offline.py $MODEL_PATH "Hello, my name is"
   bash scripts/deploy/run_sglang.sh --model-path $MODEL_PATH --port 8080 -d 0,1,2,3 -t 4 -g 0.8
   ```
 
-#### 3. 服务调用
+#### 3.3 服务调用
 
 通过 [OpenAI 格式](https://platform.openai.com/docs/api-reference/introduction) 接口发起请求：
 
@@ -321,7 +321,7 @@ bash scripts/deploy/openai.sh -m $MODEL_PATH -p "Hello, my name is" --port 8080 
 ```
 其中`-p`为输入prompt
 
-#### 4. 效果验证
+#### 3.4 效果验证
 
 使用 [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness) 评估量化模型精度，建议版本`lm-eval>=0.4.8`
 
@@ -339,11 +339,11 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
 
 ## 📈Benchmark
 
-### （1）量化
+### 1、量化
 
 下面只展示了部分模型的效果测试情况，完整Benchmark可以参考[Benchmark文档](https://angelslim.readthedocs.io/zh-cn/latest/performance/quantization/benchmarks.html)
 
-#### Hunyuan系列模型
+#### 1.1 Hunyuan系列模型
 
 Hunyuan-Instruct的`BF16`、`FP8`、`INT4-GPTQ`、`INT4-AWQ`在`OlympiadBench`、`AIME 2024`、`DROP`、`GPQA-Diamond`上的评测结果如下：
 
@@ -389,7 +389,7 @@ Hunyuan-Instruct的`BF16`、`FP8`、`INT4-GPTQ`、`INT4-AWQ`在`OlympiadBench`�
 </table>
 
 
-#### Qwen3系列模型
+#### 1.2 Qwen3系列模型
 
 Qwen3系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`、`INT8-Dynamic`、`INT4-GPTQ`、`INT4-AWQ`在`CEVAL`、`MMLU`、`GSM8K`、`HUMANEVAL`上的评测结果如下：
 
@@ -432,7 +432,7 @@ Qwen3系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`、`INT8-Dynamic`、`IN
   </tbody>
 </table>
 
-#### DeepSeek系列模型
+#### 1.3 DeepSeek系列模型
 
 DeepSeek-R1-0528模型的`FP8-Block-Wise`、`W4A8-FP8`在`GPQA Diamond`、`AIME 2024`、`SimpleQA`、`LiveCodeBench`上的评测结果如下：
 
@@ -463,7 +463,7 @@ DeepSeek-R1-0528模型的`FP8-Block-Wise`、`W4A8-FP8`在`GPQA Diamond`、`AIME 
 
 </details>
 
-#### Qwen-VL 系列模型
+#### 1.4 Qwen-VL 系列模型
 
 - **Qwen3-VL Benchmark**
 
@@ -504,7 +504,7 @@ Qwen2.5VL系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`、`INT4-GPTQ`、`I
 
 </details>
 
-#### 其他模型
+#### 1.5 其他模型
 
 其他模型比如GLM、Qwen2.5、Seed-OSS等模型利用`FP8-Static`、`FP8-Dynamic`、`INT4-GPTQ`、`INT4-AWQ`量化等策略在`CEVAL`、`MMLU`、`GSM8K`上进行了评测。
 
@@ -549,8 +549,10 @@ Qwen2.5VL系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`、`INT4-GPTQ`、`I
 
 </details>
 
-### （2）投机采样
-#### Qwen3 Series Models
+### 2、投机采样
+
+#### 2.1 Qwen3系列模型
+
 Qwen3系列的Eagle3模型在MT-bench/HunmanEval/GSM8K/Alpaca上的加速结果如下：
 
 <table>
@@ -584,6 +586,8 @@ Qwen3系列的Eagle3模型在MT-bench/HunmanEval/GSM8K/Alpaca上的加速结果�
   </tbody>
 </table>
 
+#### 2.2 Hunyuan系列模型
+
 Hunyuan系列的Eagle3模型在MT-bench/HunmanEval/GSM8K/Alpaca上的加速结果如下：
 
 <table>
@@ -612,6 +616,7 @@ Hunyuan系列的Eagle3模型在MT-bench/HunmanEval/GSM8K/Alpaca上的加速结�
 </table>
 
 ## 📝许可协议
+
 本项目的代码依照 [License for AngelSlim](LICENSE) 协议开源。
 
 ## 🔗引用

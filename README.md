@@ -17,7 +17,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
 </p>
 
 ## 📣Latest News
-- [25/11/03] We have released v0.2. This release adds support for quantizing additional models such as `GLM-4.6` and `Qwen3-VL`, open-sources the Eagle3 speculative decoding training framework, and updates the Diffusion model quantization tools.
+- [25/11/03] We have released v0.2. Quantization support for new models, such as `GLM-4.6` and `Qwen3-VL`, open-sources the Eagle3 speculative decoding training framework, and updates the Diffusion model quantization tools.
 - [25/09/30] We have released **SpecExit**, the reasoning early-exit algorithm: [[Paper]](http://arxiv.org/abs/2509.24248) | [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html) | [[vLLM Code]](https://github.com/vllm-project/vllm/pull/27192)🔥🔥🔥
 - [25/09/26] We have released **TEQUILA**, the ternary quantization algorithm [[Paper]](https://arxiv.org/abs/2509.23809) | [[Code]](https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant)🔥🔥🔥
 - [25/09/24] We now support the PTQ quantification of NVFP4 for the Qwen3 series models. We also opensource [Qwen3-32B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-32B_nvfp4) and [Qwen3-235B-A22B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-235B-A22B_nvfp4) weights.
@@ -195,7 +195,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
 
 ## 🛎️How to Use
 
-### Install AngelSlim
+### 1. Install AngelSlim
 
 We recommend using `pip` to install the latest stable version of `AngelSlim`:
 
@@ -211,11 +211,11 @@ cd AngelSlim && python setup.py install
 
 For more detailed installation instructions, please refer to the [Installation Documentation](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/installation.html).
 
-### Quick Start
+### 2. Quick Start
 
-#### Quantization
+- **Quantization**
 
-After installing `AngelSlim`, you can launch static FP8 quantization for the Qwen3-1.7B model with the following one-command script:
+  After installing `AngelSlim`, you can launch static FP8 quantization for the Qwen3-1.7B model with the following one-command script:
 
   ```shell
   python3 tools/run.py -c configs/qwen3/fp8_static/qwen3-1_7b_fp8_static.yaml
@@ -223,61 +223,61 @@ After installing `AngelSlim`, you can launch static FP8 quantization for the Qwe
 
   This example produces quantized model weights by performing PTQ calibration on a model loaded from HuggingFace.
 
-<details>
-<summary>Code-based Start</summary>
+  <details>
+  <summary>Code-based Start</summary>
 
-  To perform dynamic `FP8` quantization on `Qwen3-1.7B`:
+    To perform dynamic `FP8` quantization on `Qwen3-1.7B`:
 
-  ```python
-  from angelslim.engine import Engine
+    ```python
+    from angelslim.engine import Engine
 
-  slim_engine = Engine()
-  # Prepare model
-  slim_engine.prepare_model(model_name="Qwen", model_path="Qwen/Qwen3-1.7B",)
-  # Initialize compressor
-  slim_engine.prepare_compressor("PTQ", default_method="fp8_dynamic")
-  # Compress model
-  slim_engine.run()
-  # Save compressed model
-  slim_engine.save("./output")
+    slim_engine = Engine()
+    # Prepare model
+    slim_engine.prepare_model(model_name="Qwen", model_path="Qwen/Qwen3-1.7B",)
+    # Initialize compressor
+    slim_engine.prepare_compressor("PTQ", default_method="fp8_dynamic")
+    # Compress model
+    slim_engine.run()
+    # Save compressed model
+    slim_engine.save("./output")
+    ```
+
+  </details>
+
+  For more details, please refer to the [Quick Start Documentation](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html).
+
+- **Speculative Decoding**
+
+  After installing AngelSlim, you can quickly start Eagle3 training with the following scripts:
+
+  ```shell
+  # Start the vLLM server
+  bash scripts/speculative/run_vllm_server.sh
+  # Generate training data
+  bash scripts/speculative/generate_data_for_target_model.sh
+  # Perform online training for the Eagle3 model
+  bash scripts/speculative/train_eagle3_online.sh
   ```
 
-</details>
+  For detailed training configurations and PyTorch performance benchmarks of Eagle3, please refer to the [Quick Start Guide for Speculative Sampling](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html#id5).
 
-For more details, please refer to the [Quick Start Documentation](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html).
+- **Diffusion Model Quantization**
 
-#### Speculative Decoding
+  Use the `scripts/diffusion/run_diffusion.py` for quantization and inference:
 
-After installing AngelSlim, you can quickly start Eagle3 training with the following scripts:
+  ```shell
+  # Online quantization and inference
+  python scripts/diffusion/run_diffusion.py \
+    --model-name-or-path black-forest-labs/FLUX.1-schnell \
+    --quant-type fp8-per-tensor \
+    --prompt "A cat holding a sign that says hello world" \
+    --height 1024 --width 1024 --steps 4 --guidance 0.0 --seed 0
+  ```
+  For more quantization inference methods, please refer to [the Diffusion Model Quantization Documentation](https://angelslim.readthedocs.io/zh-cn/latest/features/diffusion/quantization.html).
 
-```shell
-# Start the vLLM server
-bash scripts/speculative/run_vllm_server.sh
-# Generate training data
-bash scripts/speculative/generate_data_for_target_model.sh
-# Perform online training for the Eagle3 model
-bash scripts/speculative/train_eagle3_online.sh
-```
+### 3. Deployment and Testing
 
-For detailed training configurations and PyTorch performance benchmarks of Eagle3, please refer to the [Quick Start Guide for Speculative Sampling](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html#id5).
-
-#### Diffusion Model Quantization
-
-Use the `scripts/diffusion/run_diffusion.py` for quantization and inference:
-
-```shell
-# Online quantization and inference
-python scripts/diffusion/run_diffusion.py \
-  --model-name-or-path black-forest-labs/FLUX.1-schnell \
-  --quant-type fp8-per-tensor \
-  --prompt "A cat holding a sign that says hello world" \
-  --height 1024 --width 1024 --steps 4 --guidance 0.0 --seed 0
-```
-For more quantization inference methods, please refer to [the Diffusion Model Quantization Documentation](https://angelslim.readthedocs.io/zh-cn/latest/features/diffusion/quantization.html).
-
-## Deployment and Testing
-
-#### 1. Offline Inference
+#### 3.1 Offline Inference
 
 To test offline inference with a quantized model loaded via `transformers`, run the following command:
 
@@ -287,7 +287,7 @@ python scripts/deploy/offline.py $MODEL_PATH "Hello, my name is"
 
 Where `MODEL_PATH` is the path to the quantized model output. please set the `deploy_backend: huggingface` in the `global` configuration before quantizing the model, or manually modify the `ignored_layers` field in the `config.json` file located in the quantized model output directory to `ignore`.
 
-#### 2. API Service Deployment
+#### 3.2 API Service Deployment
 
 After specifying the quantized model path `MODEL_PATH`, you can deploy an OpenAI-compatible API service using the following LLMs inference frameworks:
 
@@ -308,7 +308,7 @@ After specifying the quantized model path `MODEL_PATH`, you can deploy an OpenAI
   bash scripts/deploy/run_sglang.sh --model-path $MODEL_PATH --port 8080 -d 0,1,2,3 -t 4 -g 0.8
   ```
 
-#### 3. Service Invocation
+#### 3.3 Service Invocation
 
 Invoke requests via [OpenAI's API format](https://platform.openai.com/docs/api-reference/introduction):
 
@@ -317,7 +317,7 @@ bash scripts/deploy/openai.sh -m $MODEL_PATH -p "Hello, my name is" --port 8080 
 ```
 where `-p` is the input prompt.
 
-#### 4. Performance Evaluation
+#### 3.4 Performance Evaluation
 
 Evaluate the performance of quantized model using [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness), recommended version`lm-eval>=0.4.8`
 
@@ -335,11 +335,11 @@ For more detaileds, please refer to the [Deployment Documentation](https://angel
 
 ## 📈 Benchmark
 
-### (1) Quantization
+### 1. Quantization
 
 The performance test results for selected models are shown below. For the complete benchmark, refer to the [Benchmark documentation](https://angelslim.readthedocs.io/zh-cn/latest/performance/quantization/benchmarks.html)
 
-#### Hunyuan Series Models
+#### 1.1 Hunyuan Series Models
 
 Benchmark results for the `Hunyuan-Instruct` model with `FP8`, `INT4-AWQ` and `INT4-GPTQ` quantization algorithms on datasets including`OlympiadBench`, `AIME 2024` and `DROP`:
 
@@ -384,7 +384,7 @@ Benchmark results for the `Hunyuan-Instruct` model with `FP8`, `INT4-AWQ` and `I
   </tbody>
 </table>
 
-#### Qwen3 Series Models
+#### 1.2 Qwen3 Series Models
 
 Benchmark results for Qwen3 series models with `FP8-Static`, `FP8-Dynamic`, `INT4-GPTQ`, and `INT4-AWQ` quantization algorithms on datasets including `CEVAL`, `MMLU`, `GSM8K`, and `HUMANEVAL`:
 
@@ -425,7 +425,7 @@ Benchmark results for Qwen3 series models with `FP8-Static`, `FP8-Dynamic`, `INT
   </tbody>
 </table>
 
-#### DeepSeek Series Models
+#### 1.3 DeepSeek Series Models
 
 Benchmark results for DeepSeek-R1-0528 series models with `FP8-Block-Wise` and `W4A8-FP8` quantization algorithms on datasets including `GPQA Diamond`、`AIME 2024`、`SimpleQA` and `LiveCodeBench`：
 
@@ -442,7 +442,6 @@ Benchmark results for DeepSeek-R1-0528 series models with `FP8-Block-Wise` and `
 <details>
 <summary>Note</summary>
 
-> **Note**：
 > - The above results are based on the average of 5 test runs deployed with TRT-LLM
 > - The hyperparameters used during evaluation are as follows:
 > ```json
@@ -457,14 +456,14 @@ Benchmark results for DeepSeek-R1-0528 series models with `FP8-Block-Wise` and `
 
 </details>
 
-#### Qwen-VL Series Models
+#### 1.4 Qwen-VL Series Models**
 
 - **Qwen3-VL Benchmark**
 
-待更新
+Coming soon.
 
 <details>
-<summary><li><strong>Qwen2.5VL Benchmark</strong></li></summary>
+<summary><strong>Qwen2.5VL Benchmark</strong></summary>
 
 Benchmark results for Qwen2.5VL series models with `BF16`、`FP8-Static`、`FP8-Dynamic`、`INT4-GPTQ`、`INT4-AWQ` quantization algorithms on datasets including `MMMU_VAL`、`DocVQA_VAL` and `ChartQA_TEST`：
 
@@ -498,7 +497,7 @@ Benchmark results for Qwen2.5VL series models with `BF16`、`FP8-Static`、`FP8-
 
 </details>
 
-#### Other Models
+#### 1.5 Other Models
 
 Other models such as GLM-4.6, Qwen2.5, and Seed-OSS have been evaluated on benchmarks like `CEVAL`, `MMLU`, and `GSM8K` using quantization strategies including `FP8-Static`, `FP8-Dynamic`, `INT4-GPTQ`, and `INT4-AWQ`.
 
@@ -543,9 +542,10 @@ Other models such as GLM-4.6, Qwen2.5, and Seed-OSS have been evaluated on bench
 
 </details>
 
-### (2) Speculative Decoding
+### 2. Speculative Decoding
 
-#### Qwen3 Series Models
+#### 2.1 Qwen3 Series Models
+
 Benchmark results for Qwen3 series models with `Eagle3` speculative decoding algorithm on datasets including `MT-bench`, `HunmanEval`, `GSM8K`, and `Alpaca`:
 
 <table>
@@ -579,7 +579,8 @@ Benchmark results for Qwen3 series models with `Eagle3` speculative decoding alg
   </tbody>
 </table>
 
-#### Hunyuan Series Models
+#### 2.2 Hunyuan Series Models
+
 Benchmark results for Hunyuan series models with `Eagle3` speculative decoding algorithm on datasets including `MT-bench`, `HunmanEval`, `GSM8K`, and `Alpaca`:
 
 <table>
