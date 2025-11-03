@@ -34,6 +34,7 @@ class LazyModule:
         _module_name (str): The full name of the module to import
         _extra_group (str): The extra dependency group required for this module
         _module (ModuleType): The actual imported module (None until first access)
+        _submodules (dict): Cache for LazyModule instances of submodules
 
     Example:
         >>> ray = LazyModule('ray', 'speculative')
@@ -52,23 +53,14 @@ class LazyModule:
         self._module_name = module_name
         self._extra_group = extra_group
         self._module = None
+        self._submodules = {}
 
-    def __getattr__(self, name: str) -> Any:
+    def _import_module(self):
         """
-        Delegate attribute access to the actual module.
-
-        On first access, this method imports the target module and then
-        delegates the attribute lookup to the actual module.
-
-        Args:
-            name: Name of the attribute to access
-
-        Returns:
-            The requested attribute from the target module
+        Import the target module if not already imported.
 
         Raises:
-            ImportError: If the module cannot be imported and an
-                extra_group is specified, provides installation instructions
+            ImportError: If the module cannot be imported
         """
         if self._module is None:
             try:
@@ -81,7 +73,61 @@ class LazyModule:
                         f"pip install 'angelslim[{self._extra_group}]'"
                     ) from e
                 raise
-        return getattr(self._module, name)
+
+    def __getattr__(self, name: str) -> Any:
+        """
+        Delegate attribute access to the actual module.
+
+        On first access, this method imports the target module and then
+        delegates the attribute lookup to the actual module. For submodules,
+        it returns a LazyModule instance to support multi-level access.
+
+        Args:
+            name: Name of the attribute to access
+
+        Returns:
+            The requested attribute from the target module, or a LazyModule
+            instance for submodules
+
+        Raises:
+            ImportError: If the module cannot be imported and an
+                extra_group is specified, provides installation instructions
+        """
+        # Return cached submodule if exists
+        if name in self._submodules:
+            return self._submodules[name]
+
+        self._import_module()
+
+        # Try to get the attribute from the imported module
+        try:
+            attr = getattr(self._module, name)
+            # If it's a module, wrap it in LazyModule for consistent behavior
+            if isinstance(attr, type(self._module)):
+                submodule_name = f"{self._module_name}.{name}"
+                lazy_submodule = LazyModule(submodule_name, self._extra_group)
+                lazy_submodule._module = attr  # Cache the already imported module
+                self._submodules[name] = lazy_submodule
+                return lazy_submodule
+            return attr
+        except AttributeError:
+            # If attribute not found, try importing as a submodule
+            submodule_name = f"{self._module_name}.{name}"
+            try:
+                # Create a LazyModule for the submodule
+                lazy_submodule = LazyModule(submodule_name, self._extra_group)
+                # Trigger import to verify it exists
+                lazy_submodule._import_module()
+                # Cache it
+                self._submodules[name] = lazy_submodule
+                # Also cache in parent module for consistency
+                setattr(self._module, name, lazy_submodule._module)
+                return lazy_submodule
+            except ImportError:
+                # If submodule import fails, re-raise the original AttributeError
+                raise AttributeError(
+                    f"module '{self._module_name}' has no attribute '{name}'"
+                )
 
 
 class LazyAttribute:
@@ -154,6 +200,7 @@ openai = LazyModule("openai", "speculative")
 anthropic = LazyModule("anthropic", "speculative")
 jsonschema_specifications = LazyModule("jsonschema_specifications", "speculative")
 referencing = LazyModule("referencing", "speculative")
+deepspeed = LazyModule("deepspeed", "speculative")
 
 
 # --- VLM related lazy imports ---
