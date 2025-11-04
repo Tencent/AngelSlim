@@ -14,13 +14,13 @@
 
 import argparse
 import json
+import multiprocessing as mp
 import os
 import random
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
-import ray
 import shortuuid
 import torch
 from fastchat.llm_judge.common import load_questions
@@ -187,16 +187,20 @@ def get_model_answers(
     num_choices: int,
     temperature: float,
     args: argparse.Namespace,
+    lock: Optional[mp.Lock] = None,
+    device_list: Optional[List] = None,
 ) -> None:
     """Generate answers for a batch of questions."""
     config = EvaluationConfig(args)
+    if device_list:
+        os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, device_list))
+
     llm = initialize_model(config, args)
     tokenizer = AutoTokenizer.from_pretrained(config.base_model_path)
 
     if questions:
         warmup_model(llm, tokenizer, questions[0], temperature, config.max_tokens)
 
-    os.makedirs(os.path.dirname(answer_file), exist_ok=True)
     print(
         f"Generating {len(questions)} answers to {answer_file}, "
         f"batch_size={config.batch_size}"
@@ -294,45 +298,37 @@ def get_model_answers(
                     }
                 )
 
-            with open(os.path.expanduser(answer_file), "a") as fout:
-                ans_json = {
-                    "question_id": question["question_id"],
-                    "answer_id": shortuuid.uuid(),
-                    "model_id": model_id,
-                    "choices": choices,
-                    "tstamp": time.time(),
-                }
-                fout.write(json.dumps(ans_json) + "\n")
+            ans_json = {
+                "question_id": question["question_id"],
+                "answer_id": shortuuid.uuid(),
+                "model_id": model_id,
+                "choices": choices,
+                "tstamp": time.time(),
+            }
+
+            if lock:
+                with lock:
+                    with open(os.path.expanduser(answer_file), "a") as fout:
+                        fout.write(json.dumps(ans_json) + "\n")
+            else:
+                with open(os.path.expanduser(answer_file), "a") as fout:
+                    fout.write(json.dumps(ans_json) + "\n")
 
 
 def run_evaluation(config: EvaluationConfig, args: argparse.Namespace) -> None:
-    """Run the evaluation with optional distributed processing"""
+    """Run the evaluation. Standalone execution is single-process."""
     questions = load_questions(
         config.question_file, args.question_begin, args.question_end
     )
 
-    use_ray = args.num_gpus_total // args.num_gpus_per_model > 1
-    get_answers_func = (
-        ray.remote(num_gpus=args.num_gpus_per_model)(get_model_answers).remote
-        if use_ray
-        else get_model_answers
+    get_model_answers(
+        config.model_id,
+        questions,
+        config.answer_file,
+        config.num_choices,
+        config.temperature,
+        args,
     )
-
-    chunk_size = len(questions) // (args.num_gpus_total // args.num_gpus_per_model)
-    ans_handles = [
-        get_answers_func(
-            config.model_id,
-            questions[i : i + chunk_size],
-            config.answer_file,
-            config.num_choices,
-            config.temperature,
-            args,
-        )
-        for i in range(0, len(questions), chunk_size)
-    ]
-
-    if use_ray:
-        ray.get(ans_handles)
 
 
 def reorg_answer_file(answer_file: str) -> None:
@@ -388,9 +384,6 @@ def main() -> None:
     """Main execution function"""
     args = parse_args()
     setup_seed(args.seed)
-
-    if args.num_gpus_total // args.num_gpus_per_model > 1:
-        ray.init()
 
     config = EvaluationConfig(args)
     os.makedirs(os.path.dirname(config.answer_file), exist_ok=True)

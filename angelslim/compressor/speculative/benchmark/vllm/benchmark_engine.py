@@ -14,12 +14,12 @@
 
 import argparse
 import json
+import multiprocessing as mp
 import os
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Optional
 
-import ray
 from fastchat.llm_judge.common import load_questions
 
 from .generate_baseline_answer import get_model_answers as get_baseline_answers
@@ -114,9 +114,12 @@ class BenchmarkEngine:
         print(f"Starting vLLM benchmark in {mode.value} mode...")
 
         # Initialize Ray if needed
-        use_ray = self.config.num_gpus_total // self.config.num_gpus_per_model > 1
-        if use_ray:
-            ray.init()
+        use_multiprocessing = (
+            self.config.num_gpus_total // self.config.num_gpus_per_model > 1
+        )
+        print(f"Using multiprocessing: {use_multiprocessing}")
+        if use_multiprocessing:
+            mp.set_start_method("spawn", force=True)
 
         try:
             if mode == BenchmarkMode.EAGLE or mode == BenchmarkMode.BOTH:
@@ -134,14 +137,14 @@ class BenchmarkEngine:
                 self._save_analysis()
 
         finally:
-            if use_ray:
-                ray.shutdown()
+            pass
 
         return self.results
 
     def _run_eagle_benchmark(self):
         """Run Eagle speculative decoding benchmark with vLLM"""
         args = self._create_args_namespace("eagle")
+        os.makedirs(os.path.dirname(self.eagle_file), exist_ok=True)
 
         question_file = self._get_question_file_path()
         questions = load_questions(
@@ -149,44 +152,53 @@ class BenchmarkEngine:
             self.config.question_begin,
             self.config.question_end,
         )
+        devices = list(range(self.config.num_gpus_total))
         print(f"Total {len(questions)} questions from file {question_file}")
 
-        use_ray = (self.config.num_gpus_total // self.config.num_gpus_per_model) > 1
-        get_answers_func = (
-            ray.remote(num_gpus=self.config.num_gpus_per_model)(
-                get_eagle_answers
-            ).remote
-            if use_ray
-            else get_eagle_answers
-        )
+        num_processes = self.config.num_gpus_total // self.config.num_gpus_per_model
+        use_multiprocessing = num_processes > 1
 
-        chunk_size = len(questions) // (
-            self.config.num_gpus_total // self.config.num_gpus_per_model
-        )
-        ans_handles = [
-            get_answers_func(
-                f"{self.config.model_id}-temperature-{self.config.temperature}",
-                questions[i : i + chunk_size],
-                self.eagle_file,
-                self.config.num_choices,
-                self.config.temperature,
-                args,
-            )
-            for i in range(0, len(questions), chunk_size)
-        ]
+        if use_multiprocessing:
+            manager = mp.Manager()
+            lock = manager.Lock()
+            results_list = manager.list()
+            processes = []
+            for i in range(num_processes):
+                questions_subset = questions[i::num_processes]
+                devices_subset = devices[i::num_processes]
+                p = mp.Process(
+                    target=get_eagle_answers,
+                    args=(
+                        f"{self.config.model_id}-temperature-{self.config.temperature}",
+                        questions_subset,
+                        self.eagle_file,
+                        self.config.num_choices,
+                        self.config.temperature,
+                        args,
+                        lock,
+                        results_list,
+                        devices_subset,
+                    ),
+                )
+                p.start()
+                processes.append(p)
+            for p in processes:
+                p.join()
 
-        if use_ray:
-            results = ray.get(ans_handles)
-            avg_accept_lengths = [r for r in results if r is not None]
-            print(f"Avg acceptance lengths: {avg_accept_lengths}")
+            avg_accept_lengths = [r for r in results_list if r is not None]
             if avg_accept_lengths:
                 self.results["average_acceptance_length"] = sum(
                     avg_accept_lengths
                 ) / len(avg_accept_lengths)
         else:
-            # For a single process, there's only one result
-            result = ans_handles[0]
-            print(f"Acceptance length from single process: {result}")
+            result = get_eagle_answers(
+                f"{self.config.model_id}-temperature-{self.config.temperature}",
+                questions,
+                self.eagle_file,
+                self.config.num_choices,
+                self.config.temperature,
+                args,
+            )
             if result is not None:
                 self.results["average_acceptance_length"] = result
 
@@ -196,39 +208,53 @@ class BenchmarkEngine:
     def _run_baseline_benchmark(self):
         """Run baseline benchmark with vLLM"""
         args = self._create_args_namespace("baseline")
+        os.makedirs(os.path.dirname(self.baseline_file), exist_ok=True)
 
+        question_file = self._get_question_file_path()
         questions = load_questions(
-            self._get_question_file_path(),
+            question_file,
             self.config.question_begin,
             self.config.question_end,
         )
+        devices = list(range(self.config.num_gpus_total))
+        print(f"Total {len(questions)} questions from file {question_file}")
 
-        use_ray = self.config.num_gpus_total // self.config.num_gpus_per_model > 1
-        get_answers_func = (
-            ray.remote(num_gpus=self.config.num_gpus_per_model)(
-                get_baseline_answers
-            ).remote
-            if use_ray
-            else get_baseline_answers
-        )
+        num_processes = self.config.num_gpus_total // self.config.num_gpus_per_model
+        use_multiprocessing = num_processes > 1
 
-        chunk_size = len(questions) // (
-            self.config.num_gpus_total // self.config.num_gpus_per_model
-        )
-        ans_handles = [
-            get_answers_func(
+        if use_multiprocessing:
+            manager = mp.Manager()
+            lock = manager.Lock()
+            processes = []
+            for i in range(num_processes):
+                questions_subset = questions[i::num_processes]
+                devices_subset = devices[i::num_processes]
+                p = mp.Process(
+                    target=get_baseline_answers,
+                    args=(
+                        f"{self.config.model_id}-temperature-{self.config.temperature}",
+                        questions_subset,
+                        self.baseline_file,
+                        self.config.num_choices,
+                        self.config.temperature,
+                        args,
+                        lock,
+                        devices_subset,
+                    ),
+                )
+                p.start()
+                processes.append(p)
+            for p in processes:
+                p.join()
+        else:
+            get_baseline_answers(
                 f"{self.config.model_id}-temperature-{self.config.temperature}",
-                questions[i : i + chunk_size],
+                questions,
                 self.baseline_file,
                 self.config.num_choices,
                 self.config.temperature,
                 args,
             )
-            for i in range(0, len(questions), chunk_size)
-        ]
-
-        if use_ray:
-            ray.get(ans_handles)
 
         self._reorg_answer_file(self.baseline_file)
         self.results["baseline_file"] = self.baseline_file
@@ -351,8 +377,12 @@ class BenchmarkEngine:
         answers = {}
         with open(answer_file, "r") as fin:
             for line in fin:
-                qid = json.loads(line)["question_id"]
-                answers[qid] = line
+                try:
+                    qid = json.loads(line)["question_id"]
+                    answers[qid] = line
+                except json.JSONDecodeError as e:
+                    print(f"Error decoding JSON: {e}")
+                    print(f"Invalid JSON: {line}")
 
         with open(answer_file, "w") as fout:
             for qid in sorted(answers.keys()):
