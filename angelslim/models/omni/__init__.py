@@ -13,4 +13,4 @@
 # limitations under the License.
 
 
-from .qwen_omni import Qwen_Omni  # noqa: F401
+from .qwen3_omni import Qwen_Omni  # noqa: F401

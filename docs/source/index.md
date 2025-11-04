@@ -57,7 +57,7 @@ AngelSlim是腾讯自研的，致力于打造更易用、更全面和更高效�
    |                   | Wan             |                      |            | 建设中          |
    |                   | SDXL            |                      |            |                 |
    +-------------------+-----------------+----------------------+------------+-----------------+
-   | **语音(TTS/ASR)** | Qwen3-Omni      | 建设中                 | 建设中     | **Token剪枝**   |
+   | **语音(TTS/ASR)** | Qwen3-Omni      | FP8-Static/Dynamic    | 建设中     | **Token剪枝**   |
    |                   |                 |                      |            | 建设中          |
    +-------------------+-----------------+----------------------+------------+-----------------+
 
@@ -94,6 +94,7 @@ models/hunyuan/hunyuan_quant
 models/deepseek/deepseek_quant
 models/qwen/qwen_quant
 models/qwenvl/qwenvl_quant
+models/qwen3_omni/qwen3_omni_quant
 :::
 
 
