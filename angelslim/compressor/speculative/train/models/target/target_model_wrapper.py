@@ -65,7 +65,9 @@ class TransformersBackend(BaseBackend):
             param.requires_grad = False
 
         self.model.eval()
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            self.model_path, trust_remote_code=True
+        )
 
     def get_hidden_states_and_logits(
         self,
@@ -122,8 +124,8 @@ class TargetModelWrapper:
         Initialize TargetModel with specified backend
 
         Args:
-            backend: One of ["hf", "vllm_local", "vllm_serving"]
-            model_path: Path to model or serving endpoint
+            backend: One of ["hf"]
+            model_path: Path to model
             **kwargs: Additional arguments for backend initialization
         """
         if backend not in self.BACKENDS:
@@ -148,8 +150,6 @@ class TargetModelWrapper:
         Args:
             input_ids: Input token ids, shape [batch_size, seq_len]
             attention_mask: Attention mask, shape [batch_size, seq_len]
-            position_ids: Position ids, shape [batch_size, seq_len]
-            past_key_values: Past key values for generation
 
         Returns:
             Tuple of (hidden_states, logits)

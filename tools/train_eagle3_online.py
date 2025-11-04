@@ -5,19 +5,15 @@ from pathlib import Path
 import torch
 import transformers
 
-from angelslim.compressor.speculative.train.data import (
+from angelslim.compressor.speculative import (
     DataCollatorWithPadding,
     DatasetManager,
-)
-from angelslim.compressor.speculative.train.data.chat_templates import (
+    DraftModelConfig,
+    OnlineEagle3Trainer,
+    create_draft_model,
+    create_target_model,
     get_supported_chat_template_type_strings,
 )
-from angelslim.compressor.speculative.train.models.draft import (
-    DraftModelConfig,
-    create_draft_model,
-)
-from angelslim.compressor.speculative.train.models.target import create_target_model
-from angelslim.compressor.speculative.train.trainer import OnlineEagle3Trainer
 from angelslim.utils import rank0_print
 
 
@@ -43,12 +39,8 @@ def parse_args():
         "--target_backend",
         type=str,
         default="hf",
-        choices=["hf", "vllm_local", "vllm_serving"],
-        help=(
-            "Target model backend: hf (HuggingFace Transformers), "
-            "vllm_local (vLLM local), "
-            "vllm_serving (vLLM serving endpoint)"
-        ),
+        choices=["hf"],
+        help=("Target model backend: hf (HuggingFace Transformers)"),
     )
     model_group.add_argument(
         "--torch_dtype",
@@ -62,24 +54,6 @@ def parse_args():
         action="store_true",
         default=True,
         help="Whether to trust remote code when loading models",
-    )
-    model_group.add_argument(
-        "--tensor_parallel_size",
-        type=int,
-        default=1,
-        help="Tensor parallel size for vLLM local backend",
-    )
-    model_group.add_argument(
-        "--vllm_api_key",
-        type=str,
-        default="EMPTY",
-        help="API key for vLLM serving backend",
-    )
-    model_group.add_argument(
-        "--vllm_model_name",
-        type=str,
-        default="default",
-        help="Model name for vLLM serving backend",
     )
 
     # Data arguments
@@ -100,7 +74,7 @@ def parse_args():
     data_group.add_argument(
         "--chat_template_type",
         type=str,
-        default="llama",
+        default="qwen3",
         help=(
             f"Chat template type for conversation formatting. "
             f"Supported types: {', '.join(get_supported_chat_template_type_strings())}"
@@ -116,10 +90,10 @@ def parse_args():
         "--shuffle_seed", type=int, default=42, help="Random seed for shuffling dataset"
     )
     data_group.add_argument(
-        "--preprocessing_num_workers",
-        type=int,
-        default=None,
-        help="Number of workers for preprocessing (deprecated, use num_proc)",
+        "--display",
+        action="store_true",
+        default=False,
+        help="Display data samples during preprocessing (default: False)",
     )
 
     # Training arguments
@@ -282,6 +256,7 @@ def train():
         tokenizer=target_model.tokenizer,
         model_max_length=args.model_max_length,
         chat_template_type=args.chat_template_type,
+        display=args.display,
     )
     train_dataset, eval_dataset = dataset_manager.create_datasets()
     rank0_print(

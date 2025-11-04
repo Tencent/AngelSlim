@@ -36,17 +36,81 @@ class DatasetBuilder:
         max_length: int = 2048,
         shuffle_seed: int = 42,
         chat_template_type: ChatTemplateType = ChatTemplateType.QWEN3,
+        display: bool = False,
     ):
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.shuffle_seed = shuffle_seed
         self.chat_template_type = chat_template_type
+        self.display = display
+        self.display_count = 0  # Track how many samples have been displayed
 
         # Get chat template
         template = template_manager.get_template_dict(chat_template_type)
         self.user_header = template["user_header"]
         self.assistant_header = template["assistant_header"]
         self.system_prompt = template["system_prompt"]
+
+    def _visualize_loss_mask(
+        self, input_ids: torch.Tensor, loss_mask: torch.Tensor, conversation: str
+    ) -> None:
+        """
+        Visualize loss_mask with color-coded output.
+
+        Args:
+            input_ids: Token IDs
+            loss_mask: Loss mask tensor (1 for training, 0 for ignoring)
+            conversation: Original conversation text
+        """
+        # ANSI color codes
+        RED = "\033[91m"  # For masked out tokens (loss_mask=0)
+        GREEN = "\033[92m"  # For training tokens (loss_mask=1)
+        RESET = "\033[0m"  # Reset color
+        BOLD = "\033[1m"
+
+        rank0_print("\n" + "=" * 80)
+        rank0_print(f"{BOLD}Loss Mask Visualization{RESET}")
+        rank0_print("=" * 80)
+
+        # Display legend
+        rank0_print(f"\n{BOLD}Legend:{RESET}")
+        rank0_print(f"{GREEN}■ Green: Training tokens (loss_mask=1){RESET}")
+        rank0_print(f"{RED}■ Red: Ignored tokens (loss_mask=0){RESET}")
+
+        # Display statistics
+        total_tokens = len(loss_mask)
+        training_tokens = loss_mask.sum().item()
+        ignored_tokens = total_tokens - training_tokens
+        training_ratio = training_tokens / total_tokens * 100 if total_tokens > 0 else 0
+
+        rank0_print(f"\n{BOLD}Statistics:{RESET}")
+        rank0_print(f"Total tokens: {total_tokens}")
+        rank0_print(f"Training tokens: {training_tokens} ({training_ratio:.2f}%)")
+        rank0_print(f"Ignored tokens: {ignored_tokens} ({100-training_ratio:.2f}%)")
+
+        # Display token-by-token visualization
+        rank0_print(f"\n{BOLD}Token-by-token visualization:{RESET}")
+        rank0_print("-" * 80)
+
+        decoded_tokens = []
+        for token_id, mask_value in zip(input_ids, loss_mask):
+            token_text = self.tokenizer.decode([token_id], skip_special_tokens=False)
+
+            # Choose color based on mask value
+            color = GREEN if mask_value == 1 else RED
+
+            # Format token with color
+            colored_token = f"{color}{token_text}{RESET}"
+            decoded_tokens.append(colored_token)
+
+        # Print all tokens directly
+        rank0_print("".join(decoded_tokens))
+
+        # Display original conversation for reference
+        rank0_print(f"\n{BOLD}Original conversation:{RESET}")
+        rank0_print("-" * 80)
+        rank0_print(conversation)
+        rank0_print("=" * 80 + "\n")
 
     def build_dataset(self, datapath: str, num_proc: int = 8) -> Dataset:
         try:
@@ -67,8 +131,10 @@ class DatasetBuilder:
                 desc="Processing conversations",
             )
 
-            # Filter out None results
-            processed_ds = processed_ds.filter(lambda x: x["input_ids"] is not None)
+            # Filter out None results with multiprocessing support
+            processed_ds = processed_ds.filter(
+                lambda x: x["input_ids"] is not None, num_proc=num_proc
+            )
             processed_ds.set_format(type="torch")
 
             return processed_ds
@@ -133,6 +199,11 @@ class DatasetBuilder:
             loss_mask = self._create_loss_mask_from_offsets(conversation, offsets)
             input_ids = torch.tensor(input_ids)
             attention_mask = torch.ones_like(input_ids)
+
+            # Visualize loss mask if display mode is enabled
+            if self.display and self.display_count == 0:
+                self._visualize_loss_mask(input_ids, loss_mask, conversation)
+                self.display_count += 1
 
             return {
                 "input_ids": input_ids[None, :],
@@ -262,6 +333,7 @@ class DatasetManager:
         tokenizer: AutoTokenizer,
         model_max_length: int = 2048,
         chat_template_type: Optional[Union[str, ChatTemplateType]] = None,
+        display: bool = False,
     ):
         """
         Initialize DatasetManager with DataArguments.
@@ -274,10 +346,12 @@ class DatasetManager:
                 - ChatTemplateType enum value (e.g., ChatTemplateType.QWEN3)
                 - String (e.g., "llama", "qwen")
                 - None (will default to LLAMA)
+            display: Whether to display loss mask visualization for the first sample
         """
         self.data_args = data_args
         self.tokenizer = tokenizer
         self.model_max_length = model_max_length
+        self.display = display
 
         # Convert chat_template_type to ChatTemplateType enum
         if chat_template_type is None:
@@ -293,6 +367,7 @@ class DatasetManager:
             max_length=model_max_length,
             shuffle_seed=data_args.shuffle_seed,
             chat_template_type=chat_template_type,
+            display=display,
         )
 
     def create_datasets(self) -> Tuple[Dataset, Optional[Dataset]]:
@@ -305,8 +380,8 @@ class DatasetManager:
         """
         # Determine number of processes
         num_proc = self.data_args.num_proc
-        if self.data_args.preprocessing_num_workers is not None:
-            num_proc = self.data_args.preprocessing_num_workers
+        if self.display:
+            num_proc = None
 
         # Create train dataset
         train_dataset = self.dataset_builder.build_dataset(
