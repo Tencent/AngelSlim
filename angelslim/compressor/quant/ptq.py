@@ -14,6 +14,7 @@
 
 import json
 import os
+import warnings
 
 import torch
 from safetensors.torch import load_file
@@ -193,9 +194,19 @@ class PTQ:
                 )
                 is not None
             ):
-                self.quant_model.act_scales_dict[name] = self.ptq_hook.observer_dict[
-                    sub_layer
-                ].act_observer.scales()
+                try:
+                    self.quant_model.act_scales_dict[name] = (
+                        self.ptq_hook.observer_dict[sub_layer].act_observer.scales()
+                    )
+                except ValueError:
+                    self.quant_model.act_scales_dict[name] = torch.tensor(
+                        1.0, device=torch.cuda.current_device()
+                    )
+                    warnings.warn(
+                        f"Not calibrated for {name}. Using default act scale 1.0.",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
             if (
                 getattr(  # noqa: B009
                     self.ptq_hook.observer_dict[sub_layer], "kv_cache_observer"

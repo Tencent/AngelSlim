@@ -74,6 +74,7 @@ class Engine:
         cache_dir=None,
         deploy_backend="vllm",
         using_multi_nodes=False,
+        use_audio_in_video=False,
     ) -> Any:
         """Load pretrained model and tokenizer
         Args:
@@ -117,6 +118,16 @@ class Engine:
                     using_multi_nodes=using_multi_nodes,
                 )
                 self.model_path = model_path
+        elif self.series in ["Omni"]:
+            if not model:
+                self.slim_model.from_pretrained(
+                    model_path,
+                    torch_dtype=torch_dtype,
+                    device_map=device_map,
+                    trust_remote_code=trust_remote_code,
+                    use_audio_in_video=use_audio_in_video,
+                )
+                self.model_path = model_path
         else:
             raise ValueError(f"Unsupported series: {self.series}")
 
@@ -132,6 +143,7 @@ class Engine:
         num_samples=128,
         shuffle=True,
         inference_settings=None,
+        use_audio_in_video=False,
         model_name=None,
     ) -> Optional[Any]:
         """Prepare compression dataset"""
@@ -146,7 +158,7 @@ class Engine:
             data_type=data_type,
             processor=(
                 self.slim_model.processor
-                if self.series == "VLM"
+                if self.series == "VLM" or self.series == "Omni"
                 else self.slim_model.tokenizer
             ),
             device=self.slim_model.model.device,
@@ -156,6 +168,7 @@ class Engine:
             num_samples=num_samples,
             data_source=data_path,
             inference_settings=inference_settings,
+            use_audio_in_video=use_audio_in_video,
             model_name=model_name,
         )
         self.max_seq_length = max_length
@@ -188,7 +201,7 @@ class Engine:
                     f"Compression method '{method_name}' not registered. "
                     f"Available methods: {CompressorFactory.get_available_compressor()}"
                 )
-        if self.series in ["LLM", "VLM"]:
+        if self.series in ["LLM", "VLM", "Omni"]:
             global_config.update(self.model_path, self.max_seq_length)
 
         if default_method:

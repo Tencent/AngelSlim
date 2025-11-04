@@ -12,8 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .diffusion import *  # noqa: F401 F403
-from .llm import *  # noqa: F401 F403
-from .model_factory import SlimModelFactory  # noqa: F401
-from .omni import *  # noqa: F401 F403
-from .vlm import *  # noqa: F401 F403
+
+from .qwen3_omni import Qwen_Omni  # noqa: F401

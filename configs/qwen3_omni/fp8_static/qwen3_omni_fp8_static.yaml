@@ -1,0 +1,32 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output
+
+# Simplified Configuration for LLM compression
+model:
+  name: Qwen_Omni
+  model_path: Qwen/Qwen3-Omni-30B-A3B-Instruct
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+  use_audio_in_video: false
+
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    name: fp8_static
+    bits: 8
+    quant_method:
+      weight: "per-tensor"
+      activation: "per-tensor"
+
+# Dataset for calibration
+dataset:
+  name: OmniDataset
+  data_path: your/data/path
+  max_seq_length: 8192
+  num_samples: 256
+  batch_size: 1

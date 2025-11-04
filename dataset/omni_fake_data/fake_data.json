@@ -1,0 +1,3 @@
+{"messages": [{"role": "user", "content": "What happens after the text disappears from the screen?"}], "video_path": "./videos/0.mp4"}
+{"messages": [{"role": "user", "content": "How many food item is shown in the bar graph?"}], "image_path": "./images/0.png"}
+{"messages": [{"role": "user", "content": "Why is the speech described as rich in frequency content?"}], "audio_path": "./audios/0.png"}

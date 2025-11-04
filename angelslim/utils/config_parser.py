@@ -93,6 +93,12 @@ class GlobalConfig:
         json_data = get_hf_config(model_path)
         if json_data["model_type"] in ["qwen3_vl"]:
             self.hidden_size = json_data["text_config"]["hidden_size"]
+        elif (
+            json_data["architectures"][0]
+            if isinstance(json_data["architectures"], list)
+            else json_data["architectures"]
+        ) == "Qwen3OmniMoeForConditionalGeneration":
+            self.hidden_size = json_data["thinker_config"]["text_config"]["hidden_size"]
         else:
             self.hidden_size = json_data["hidden_size"]
 
@@ -125,6 +131,7 @@ class ModelConfig:
     low_cpu_mem_usage: bool = field(default=True)
     use_cache: bool = field(default=False)
     cache_dir: Optional[str] = field(default=None)
+    use_audio_in_video: bool = field(default=False)
 
 
 @dataclass

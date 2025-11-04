@@ -17,7 +17,7 @@
 </p>
 
 ## 📣最新进展
-- [25/11/03] 我们发布V0.2版本，支持了包括GLM-4.6/Qwen3-VL等更多模型的量化，开源投机采样Eagle3训练框架，更新Diffusion模型量化工具。
+- [25/11/05] 我们发布V0.2版本，支持了包括GLM-4.6/Qwen3-VL/Qwen3-Omni等更多模型的量化，开源投机采样Eagle3训练框架，更新Diffusion模型量化工具。
 - [25/09/30] 我们开源了思考早退新算法 **SpecExit** [[论文]](http://arxiv.org/abs/2509.24248) | [[文档]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html) | [[vLLM代码]](https://github.com/vllm-project/vllm/pull/27192)🔥🔥🔥
 - [25/09/30] 我们发布了三值量化新算法 **Tequila** [[论文]](https://arxiv.org/abs/2509.23809) | [[代码]](https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant)。🔥🔥🔥
 - [25/09/24] 我们支持了Qwen3系列模型的NVFP4的PTQ量化，我们还开源了[Qwen3-32B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-32B_nvfp4)、[Qwen3-235B-A22B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-235B-A22B_nvfp4)权重。
@@ -172,7 +172,7 @@
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
-          <li>建设中</li>
+          <li><a href="https://github.com/Tencent/AngelSlim/blob/main/docs/source/models/qwen3_omni/qwen3_omni_quant.md">FP8-Static/Dynamic</a></li>
         </ul>
       </td>
       <td>
@@ -517,7 +517,40 @@ Qwen2.5VL系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`、`INT4-GPTQ`、`I
 
 </details>
 
-#### 1.5 其他模型
+#### 1.5 Qwen-Omni 系列模型
+
+**Qwen3-Omni Text to Text Benchmark**
+
+Qwen3-Omni系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`在`aime25`、`gpqa_diamond`、`mmlu_redux`上的评测结果如下：
+
+<table>
+  <thead>
+    <tr><th>Model</th><th>Quantization</th><th>aime25</th><th>gpqa_diamond</th><th>mmlu_redux</th></tr>
+  </thead>
+  <tbody>
+    <tr><td rowspan="3">Qwen3-Omni-30B-A3B-Instruct</td><td>BF16</td><td>73.32</td><td>56.77</td><td>88.09</td></tr>
+    <tr><td>FP8-Static</td><td>71.33</td><td>56.57</td><td>87.91</td></tr>
+    <tr><td>FP8-Dynamic</td><td>73.33</td><td>55.15</td><td>88.07</td></tr>
+  </tbody>
+</table>
+
+<details>
+<summary>备注</summary>
+
+> - 以上评测结果使用vllm框架部署测试5次求平均(vllm只支持thinker部分)
+> - 评测时使用的超参如下:
+> ```json
+>{
+>  "top_p": 0.95,
+>  "temperature": 0.6,
+>  "do_sample": true,
+>  "max-model-len 65536": 65536
+>}
+>```
+
+</details>
+
+#### 1.6 其他模型
 
 其他模型比如GLM、Qwen2.5、Seed-OSS等模型利用`FP8-Static`、`FP8-Dynamic`、`INT4-GPTQ`、`INT4-AWQ`量化等策略在`CEVAL`、`MMLU`、`GSM8K`上进行了评测。
 

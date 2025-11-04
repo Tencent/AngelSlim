@@ -17,7 +17,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
 </p>
 
 ## 📣Latest News
-- [25/11/03] We have released v0.2. Quantization support for new models, such as `GLM-4.6` and `Qwen3-VL`, open-sources the Eagle3 speculative decoding training framework, and updates the Diffusion model quantization tools.
+- [25/11/05] We have released v0.2. Quantization support for new models, such as `GLM-4.6`, `Qwen3-VL` and `Qwen3-Omni`, open-sources the Eagle3 speculative decoding training framework, and updates the Diffusion model quantization tools.
 - [25/09/30] We have released **SpecExit**, the reasoning early-exit algorithm: [[Paper]](http://arxiv.org/abs/2509.24248) | [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html) | [[vLLM Code]](https://github.com/vllm-project/vllm/pull/27192)🔥🔥🔥
 - [25/09/26] We have released **TEQUILA**, the ternary quantization algorithm [[Paper]](https://arxiv.org/abs/2509.23809) | [[Code]](https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant)🔥🔥🔥
 - [25/09/24] We now support the PTQ quantification of NVFP4 for the Qwen3 series models. We also opensource [Qwen3-32B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-32B_nvfp4) and [Qwen3-235B-A22B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-235B-A22B_nvfp4) weights.
@@ -171,7 +171,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
-          <li>Under Development</li>
+          <li><a href="https://github.com/Tencent/AngelSlim/blob/main/docs/source/models/qwen3_omni/qwen3_omni_quant.md">FP8-Static/Dynamic</a></li>
         </ul>
       </td>
       <td>
@@ -510,7 +510,40 @@ Benchmark results for Qwen2.5VL series models with `BF16`、`FP8-Static`、`FP8-
 
 </details>
 
-#### 1.5 Other Models
+#### 1.5 Qwen-Omni Series Models
+
+**Qwen3-Omni Text to Text Benchmark**
+
+Benchmark results for Qwen3-Omni series models in BF16, FP8-Static, and FP8-Dynamic on aime25, gpqa_diamond, and mmlu_redux are as follows:
+
+<table>
+  <thead>
+    <tr><th>Model</th><th>Quantization</th><th>aime25</th><th>gpqa_diamond</th><th>mmlu_redux</th></tr>
+  </thead>
+  <tbody>
+    <tr><td rowspan="3">Qwen3-Omni-30B-A3B-Instruct</td><td>BF16</td><td>73.32</td><td>56.77</td><td>88.09</td></tr>
+    <tr><td>FP8-Static</td><td>71.33</td><td>56.57</td><td>87.91</td></tr>
+    <tr><td>FP8-Dynamic</td><td>73.33</td><td>55.15</td><td>88.07</td></tr>
+  </tbody>
+</table>
+
+<details>
+<summary>Note</summary>
+
+> - The above evaluation results were obtained by deploying with the vLLM framework and averaging over 5 runs (vLLM only supports the thinker component).
+> - The hyperparameters used during evaluation are as follows:
+> ```json
+>{
+>  "top_p": 0.95,
+>  "temperature": 0.6,
+>  "do_sample": true,
+>  "max-model-len 65536": 65536
+>}
+>```
+
+</details>
+
+#### 1.6 Other Models
 
 Other models such as GLM-4.6, Qwen2.5, and Seed-OSS have been evaluated on benchmarks like `CEVAL`, `MMLU`, and `GSM8K` using quantization strategies including `FP8-Static`, `FP8-Dynamic`, `INT4-GPTQ`, and `INT4-AWQ`.
 

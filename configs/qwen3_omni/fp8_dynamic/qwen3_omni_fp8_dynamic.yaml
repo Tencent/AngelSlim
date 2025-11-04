@@ -1,0 +1,24 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output
+
+# Simplified Configuration for LLM compression
+model:
+  name: Qwen_Omni
+  model_path: Qwen/Qwen3-Omni-30B-A3B-Instruct
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+  use_audio_in_video: false
+
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    name: fp8_dynamic     # Supported: fp8_static, fp8_dynamic, int4_awq, int4_gptq
+    bits: 8                # Quantization bits (4/8)
+    quant_method:
+      weight: "per-tensor"
+      activation: "per-tensor"
