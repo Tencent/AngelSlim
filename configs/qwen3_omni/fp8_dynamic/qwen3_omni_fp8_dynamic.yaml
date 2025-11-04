@@ -11,6 +11,7 @@ model:
   use_cache: false
   torch_dtype: auto
   device_map: auto
+  use_audio_in_video: false
 
 # Compression configuration
 compression:

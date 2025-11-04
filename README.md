@@ -510,7 +510,40 @@ Benchmark results for Qwen2.5VL series models with `BF16`、`FP8-Static`、`FP8-
 
 </details>
 
-#### 1.5 Other Models
+#### 1.5 Qwen-Omni Series Models
+
+**Qwen3-Omni Text -> Text Benchmark**
+
+Benchmark results for Qwen3-Omni series models in BF16, FP8-Static, and FP8-Dynamic on aime25, gpqa_diamond, and mmlu_redux are as follows:
+
+<table>
+  <thead>
+    <tr><th>Model</th><th>Quantization</th><th>aime25</th><th>gpqa_diamond</th><th>mmlu_redux</th></tr>
+  </thead>
+  <tbody>
+    <tr><td rowspan="3">Qwen3-Omni-30B-A3B-Instruct</td><td>BF16</td><td>73.32</td><td>56.77</td><td>88.09</td></tr>
+    <tr><td>FP8-Static</td><td>71.33</td><td>56.57</td><td>87.91</td></tr>
+    <tr><td>FP8-Dynamic</td><td>73.33</td><td>55.15</td><td>88.07</td></tr>
+  </tbody>
+</table>
+
+<details>
+<summary>Note</summary>
+
+> - The above evaluation results were obtained by deploying with the vLLM framework and averaging over 5 runs (vLLM only supports the thinker component).
+> - The hyperparameters used during evaluation are as follows:
+> ```json
+>{
+>  "top_p": 0.95,
+>  "temperature": 0.6,
+>  "do_sample": true,
+>  "max-model-len 65536": 65536
+>}
+>```
+
+</details>
+
+#### 1.6 Other Models
 
 Other models such as GLM-4.6, Qwen2.5, and Seed-OSS have been evaluated on benchmarks like `CEVAL`, `MMLU`, and `GSM8K` using quantization strategies including `FP8-Static`, `FP8-Dynamic`, `INT4-GPTQ`, and `INT4-AWQ`.
 

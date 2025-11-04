@@ -131,6 +131,7 @@ class ModelConfig:
     low_cpu_mem_usage: bool = field(default=True)
     use_cache: bool = field(default=False)
     cache_dir: Optional[str] = field(default=None)
+    use_audio_in_video: bool = field(default=False)
 
 
 @dataclass
@@ -153,7 +154,6 @@ class DatasetConfig:
     num_samples: int = field(default=256)
     batch_size: int = field(default=1)
     shuffle: bool = field(default=False)
-    use_audio_in_video: bool = field(default=False)
     inference_settings: Optional[Dict[str, Any]] = field(default=None)
 
 

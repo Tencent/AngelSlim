@@ -458,3 +458,26 @@ Qwen3VL系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`在`MMMU_VAL`、`DocV
 ```
 
 FP8-Dynamic采用Block-wise的量化，启动命令：python3 tools/fp8_quant_blockwise.py --block_size --input_path --output_path
+
+
+## Qwen3-Omni
+
+**Qwen3-Omni Text -> Text Benchmark**
+
+Qwen3-Omni模型的`BF16`、`FP8-Static`、`FP8-Dynamic`在`aime25`、`gpqa_diamond`、`mmlu_redux`上的评测结果如下：
+
+```{eval-rst}
+.. table::
+   :align: center
+   :name: table-qwen3-omni-performance
+
+   +-----------------------------+----------------+----------+--------------+------------+
+   | Model                       | Quantization   | aime25   | gpqa_diamond | mmlu_redux |
+   +=============================+================+==========+==============+============+
+   | Qwen3-Omni-30B-A3B-Instruct | BF16           | 73.32    | 56.77        | 88.09      |
+   +                             +----------------+----------+--------------+------------+
+   |                             | FP8-Static     | 71.33    | 56.57        | 87.91      | 
+   +                             +----------------+----------+--------------+------------+
+   |                             | FP8-Dynamic    | 73.33    | 55.15        | 88.07      | 
+   +-----------------------------+----------------+----------+--------------+------------+
+```

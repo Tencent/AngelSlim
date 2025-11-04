@@ -517,7 +517,40 @@ Qwen2.5VL系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`、`INT4-GPTQ`、`I
 
 </details>
 
-#### 1.5 其他模型
+#### 1.5 Qwen-Omni 系列模型
+
+**Qwen3-Omni Text -> Text Benchmark**
+
+Qwen3-Omni系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`在`aime25`、`gpqa_diamond`、`mmlu_redux`上的评测结果如下：
+
+<table>
+  <thead>
+    <tr><th>Model</th><th>Quantization</th><th>aime25</th><th>gpqa_diamond</th><th>mmlu_redux</th></tr>
+  </thead>
+  <tbody>
+    <tr><td rowspan="3">Qwen3-Omni-30B-A3B-Instruct</td><td>BF16</td><td>73.32</td><td>56.77</td><td>88.09</td></tr>
+    <tr><td>FP8-Static</td><td>71.33</td><td>56.57</td><td>87.91</td></tr>
+    <tr><td>FP8-Dynamic</td><td>73.33</td><td>55.15</td><td>88.07</td></tr>
+  </tbody>
+</table>
+
+<details>
+<summary>备注</summary>
+
+> - 以上评测结果使用vllm框架部署测试5次求平均(vllm只支持thinker部分)
+> - 评测时使用的超参如下:
+> ```json
+>{
+>  "top_p": 0.95,
+>  "temperature": 0.6,
+>  "do_sample": true,
+>  "max-model-len 65536": 65536
+>}
+>```
+
+</details>
+
+#### 1.6 其他模型
 
 其他模型比如GLM、Qwen2.5、Seed-OSS等模型利用`FP8-Static`、`FP8-Dynamic`、`INT4-GPTQ`、`INT4-AWQ`量化等策略在`CEVAL`、`MMLU`、`GSM8K`上进行了评测。
 
