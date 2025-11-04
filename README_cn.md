@@ -17,7 +17,7 @@
 </p>
 
 ## 📣最新进展
-- [25/11/03] 我们发布V0.2版本，支持了包括GLM-4.6/Qwen3-VL等更多模型的量化，开源投机采样Eagle3训练框架，更新Diffusion模型量化工具。
+- [25/11/05] 我们发布V0.2版本，支持了包括GLM-4.6/Qwen3-VL等更多模型的量化，开源投机采样Eagle3训练框架，更新Diffusion模型量化工具。
 - [25/09/30] 我们开源了思考早退新算法 **SpecExit** [[论文]](http://arxiv.org/abs/2509.24248) | [[文档]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html) | [[vLLM代码]](https://github.com/vllm-project/vllm/pull/27192)🔥🔥🔥
 - [25/09/30] 我们发布了三值量化新算法 **Tequila** [[论文]](https://arxiv.org/abs/2509.23809) | [[代码]](https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant)。🔥🔥🔥
 - [25/09/24] 我们支持了Qwen3系列模型的NVFP4的PTQ量化，我们还开源了[Qwen3-32B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-32B_nvfp4)、[Qwen3-235B-A22B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-235B-A22B_nvfp4)权重。
@@ -172,7 +172,8 @@
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
-          <li>建设中</li>
+          <li>FP8-Static</li>
+          <li>FP8-Dynamic</li>
         </ul>
       </td>
       <td>
@@ -519,7 +520,7 @@ Qwen2.5VL系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`、`INT4-GPTQ`、`I
 
 #### 1.5 Qwen-Omni 系列模型
 
-**Qwen3-Omni Text -> Text Benchmark**
+**Qwen3-Omni Text to Text Benchmark**
 
 Qwen3-Omni系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`在`aime25`、`gpqa_diamond`、`mmlu_redux`上的评测结果如下：
 

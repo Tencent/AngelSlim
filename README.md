@@ -17,7 +17,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
 </p>
 
 ## 📣Latest News
-- [25/11/03] We have released v0.2. Quantization support for new models, such as `GLM-4.6` and `Qwen3-VL`, open-sources the Eagle3 speculative decoding training framework, and updates the Diffusion model quantization tools.
+- [25/11/05] We have released v0.2. Quantization support for new models, such as `GLM-4.6` and `Qwen3-VL`, open-sources the Eagle3 speculative decoding training framework, and updates the Diffusion model quantization tools.
 - [25/09/30] We have released **SpecExit**, the reasoning early-exit algorithm: [[Paper]](http://arxiv.org/abs/2509.24248) | [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html) | [[vLLM Code]](https://github.com/vllm-project/vllm/pull/27192)🔥🔥🔥
 - [25/09/26] We have released **TEQUILA**, the ternary quantization algorithm [[Paper]](https://arxiv.org/abs/2509.23809) | [[Code]](https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant)🔥🔥🔥
 - [25/09/24] We now support the PTQ quantification of NVFP4 for the Qwen3 series models. We also opensource [Qwen3-32B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-32B_nvfp4) and [Qwen3-235B-A22B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-235B-A22B_nvfp4) weights.
@@ -171,7 +171,8 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
-          <li>Under Development</li>
+          <li>FP8-Static</li>
+          <li>FP8-Dynamic</li>
         </ul>
       </td>
       <td>
@@ -512,7 +513,7 @@ Benchmark results for Qwen2.5VL series models with `BF16`、`FP8-Static`、`FP8-
 
 #### 1.5 Qwen-Omni Series Models
 
-**Qwen3-Omni Text -> Text Benchmark**
+**Qwen3-Omni Text to Text Benchmark**
 
 Benchmark results for Qwen3-Omni series models in BF16, FP8-Static, and FP8-Dynamic on aime25, gpqa_diamond, and mmlu_redux are as follows:
 
