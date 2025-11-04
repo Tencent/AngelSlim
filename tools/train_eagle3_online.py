@@ -5,19 +5,15 @@ from pathlib import Path
 import torch
 import transformers
 
-from angelslim.compressor.speculative.train.data import (
+from angelslim.compressor.speculative import (
     DataCollatorWithPadding,
     DatasetManager,
-)
-from angelslim.compressor.speculative.train.data.chat_templates import (
+    DraftModelConfig,
+    OnlineEagle3Trainer,
+    create_draft_model,
+    create_target_model,
     get_supported_chat_template_type_strings,
 )
-from angelslim.compressor.speculative.train.models.draft import (
-    DraftModelConfig,
-    create_draft_model,
-)
-from angelslim.compressor.speculative.train.models.target import create_target_model
-from angelslim.compressor.speculative.train.trainer import OnlineEagle3Trainer
 from angelslim.utils import rank0_print
 
 

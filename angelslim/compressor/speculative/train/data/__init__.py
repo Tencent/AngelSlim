@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .chat_templates import get_supported_chat_template_type_strings
 from .data_generation import data_generation_work_flow
 from .data_utils import (
     DataCollatorWithPadding,
@@ -26,4 +27,5 @@ __all__ = [
     "convert_sharegpt_data",
     "convert_ultrachat_data",
     "data_generation_work_flow",
+    "get_supported_chat_template_type_strings",
 ]
