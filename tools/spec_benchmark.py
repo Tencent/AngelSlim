@@ -46,6 +46,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--model-id", type=str, required=True, help="Model identifier")
 
+    # Deploy backend
+    parser.add_argument(
+        "--deploy-backend",
+        type=str,
+        choices=["pytorch", "vllm"],
+        default="pytorch",
+        help="Backend for deployment (pytorch or vllm)",
+    )
+
     # Benchmark configuration
     parser.add_argument(
         "--bench-name", type=str, default="mt_bench", help="Benchmark dataset name"
@@ -64,6 +73,12 @@ def parse_args() -> argparse.Namespace:
         "--num-choices", type=int, default=1, help="Number of completion choices"
     )
     parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=200,
+        help="Batch size in vLLM offline generation",
+    )
+    parser.add_argument(
         "--temperature", type=float, default=1.0, help="Sampling temperature"
     )
     parser.add_argument(
@@ -74,6 +89,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--depth", type=int, default=5, help="Tree depth")
     parser.add_argument("--top-k", type=int, default=10, help="Top-k sampling")
+    parser.add_argument("--top-p", type=float, default=1.0, help="Top-p sampling")
 
     # Hardware configuration
     parser.add_argument(
@@ -94,7 +110,16 @@ def parse_args() -> argparse.Namespace:
         "--no-metrics", action="store_true", help="Skip automatic metrics calculation"
     )
     parser.add_argument(
-        "--early-stop-method", type=str, default=None, help="Early stopping method"
+        "--early-stop-method",
+        type=str,
+        default=None,
+        help="Early stopping method (pytorch only)",
+    )
+    parser.add_argument(
+        "--speculative-draft-tensor-parallel-size",
+        type=int,
+        default=1,
+        help="Tensor parallel size for draft model (vllm only)",
     )
 
     return parser.parse_args()
@@ -107,32 +132,45 @@ def main():
     # Set random seed
     setup_seed(args.seed)
 
-    # Create SpecEngine instance
-    engine = SpecEngine()
+    # Create SpecEngine instance with specified backend
+    engine = SpecEngine(deploy_backend=args.deploy_backend)
+
+    # Prepare config dict based on backend
+    config_dict = {
+        "base_model_path": args.base_model_path,
+        "eagle_model_path": args.eagle_model_path,
+        "model_id": args.model_id,
+        "bench_name": args.bench_name,
+        "output_dir": args.output_dir,
+        "num_choices": args.num_choices,
+        "temperature": args.temperature,
+        "max_new_token": args.max_new_token,
+        "num_gpus_per_model": args.num_gpus_per_model,
+        "num_gpus_total": args.num_gpus_total,
+        "batch_size": args.batch_size,
+        "max_gpu_memory": args.max_gpu_memory,
+        "question_begin": args.question_begin,
+        "question_end": args.question_end,
+        "calculate_metrics": not args.no_metrics,
+        "top_p": args.top_p,
+        "top_k": args.top_k,
+        "depth": args.depth,
+    }
+
+    # Add backend-specific parameters
+    if args.deploy_backend == "pytorch":
+        config_dict.update(
+            {
+                "total_token": args.total_token,
+                "early_stop_method": args.early_stop_method,
+            }
+        )
 
     # Setup benchmark configuration
-    config = engine.setup_benchmark(
-        base_model_path=args.base_model_path,
-        eagle_model_path=args.eagle_model_path,
-        model_id=args.model_id,
-        bench_name=args.bench_name,
-        output_dir=args.output_dir,
-        num_choices=args.num_choices,
-        temperature=args.temperature,
-        max_new_token=args.max_new_token,
-        total_token=args.total_token,
-        depth=args.depth,
-        top_k=args.top_k,
-        num_gpus_per_model=args.num_gpus_per_model,
-        num_gpus_total=args.num_gpus_total,
-        max_gpu_memory=args.max_gpu_memory,
-        question_begin=args.question_begin,
-        question_end=args.question_end,
-        calculate_metrics=not args.no_metrics,
-        early_stop_method=args.early_stop_method,
-    )
+    config = engine.setup_benchmark(**config_dict)
 
     print("Starting benchmark with configuration:")
+    print(f"  Backend: {args.deploy_backend}")
     print(f"  Mode: {args.mode}")
     print(f"  Base Model: {args.base_model_path}")
     print(f"  Eagle Model: {args.eagle_model_path}")

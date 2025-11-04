@@ -20,12 +20,13 @@ import time
 from typing import Any, Dict, List
 
 import numpy as np
+import ray
 import shortuuid
 import torch
+from fastchat.llm_judge.common import load_questions
 from tqdm import tqdm
-
-from angelslim.compressor.speculative.inference.models import Eagle3Model
-from angelslim.utils.lazy_imports import fastchat, ray
+from transformers import AutoTokenizer
+from vllm import LLM, SamplingParams
 
 SYSTEM_PROMPT = {
     "role": "system",
@@ -47,20 +48,21 @@ class EvaluationConfig:
 
     def __init__(self, args: argparse.Namespace):
         self.base_model_path = args.base_model_path
-        self.eagle_model_path = args.eagle_model_path
         self.model_id = f"{args.model_id}-temperature-{args.temperature}"
         self.question_file = self._get_question_file_path(args)
         self.answer_file = self._get_answer_file_path(args)
         self.num_choices = args.num_choices
         self.temperature = args.temperature
-        self.total_token = args.total_token
-        self.depth = args.depth
+        self.max_tokens = args.max_new_token
         self.top_k = args.top_k
+        self.top_p = args.top_p
+        self.batch_size = args.batch_size
 
     def _get_question_file_path(self, args: argparse.Namespace) -> str:
-        script_dir = os.path.dirname(__file__)
-        parent_dir = os.path.dirname(os.path.dirname(script_dir))
-        return f"{parent_dir}/data/{args.bench_name}/question.jsonl"
+        """Get question file path"""
+        current_file = os.path.abspath(__file__)
+        project_root = current_file.split("/AngelSlim/")[0] + "/AngelSlim"
+        return os.path.join(project_root, "dataset", args.bench_name, "question.jsonl")
 
     def _get_answer_file_path(self, args: argparse.Namespace) -> str:
         if args.answer_file:
@@ -82,76 +84,55 @@ def setup_seed(seed: int) -> None:
     torch.backends.cudnn.deterministic = True
 
 
-def initialize_model(config: EvaluationConfig) -> Eagle3Model:
-    """Initialize and return the Eagle3 model"""
-    model = Eagle3Model.from_pretrained(
-        base_model_path=config.base_model_path,
-        eagle_model_path=config.eagle_model_path,
-        total_token=config.total_token,
-        depth=config.depth,
-        top_k=config.top_k,
-        device_map="auto",
-        torch_dtype="auto",
+def initialize_model(config: EvaluationConfig, args: argparse.Namespace) -> LLM:
+    """Initialize and return the vLLM model"""
+    llm = LLM(
+        model=config.base_model_path,
+        tensor_parallel_size=args.num_gpus_per_model,
+        trust_remote_code=True,
+        gpu_memory_utilization=0.9,
     )
-    model.eval()
-    print(f"Model training state: {model.training}")
     print(f'CUDA VISIBLE DEVICES: {os.environ.get("CUDA_VISIBLE_DEVICES")}')
-    return model
+    return llm
 
 
 def process_conversation_turn(
-    model: Eagle3Model,
+    llm: LLM,
     tokenizer: Any,
     conv: List[Dict[str, str]],
     qs: str,
-    temperature: float,
+    **kwargs,
 ) -> Dict[str, Any]:
     """Process a single conversation turn"""
     conv.append({"role": "user", "content": qs})
     conversation = tokenizer.apply_chat_template(
-        conv, tokenize=False, add_generation_prompt=False, enable_thinking=False
+        conv, tokenize=False, add_generation_prompt=True
     )
 
-    input_ids = tokenizer(
-        conversation, return_tensors="pt", max_length=2048, add_special_tokens=False
-    ).input_ids
+    sampling_params = SamplingParams(**kwargs)
 
-    torch.cuda.synchronize()
     start_time = time.time()
-
-    output_ids, new_token, idx = model.naive_generate(
-        torch.as_tensor(input_ids).cuda(), temperature=temperature, log=True
-    )
-
-    torch.cuda.synchronize()
+    outputs = llm.generate([conversation], sampling_params)
     total_time = time.time() - start_time
-    output_ids = output_ids[0][len(input_ids[0]) :]
 
-    output = tokenizer.decode(output_ids, spaces_between_special_tokens=False)
-    for special_token in tokenizer.special_tokens_map.values():
-        if isinstance(special_token, list):
-            for special_tok in special_token:
-                output = output.replace(special_tok, "")
-        else:
-            output = output.replace(special_token, "")
-    output = output.strip()
+    output = outputs[0].outputs[0].text.strip()
+    new_token = len(outputs[0].outputs[0].token_ids)
 
     conv.append({"role": "assistant", "content": output})
 
     return {
         "output": output,
-        "idx": int(idx),
-        "new_token": int(new_token),
+        "new_token": new_token,
         "wall_time": total_time,
     }
 
 
 def generate_answer_for_question(
-    model: Eagle3Model,
+    llm: LLM,
     tokenizer: Any,
     question: Dict[str, Any],
     num_choices: int,
-    temperature: float,
+    **kwargs,
 ) -> List[Dict[str, Any]]:
     """Generate answers for a single question with multiple choices"""
     choices = []
@@ -159,14 +140,12 @@ def generate_answer_for_question(
         torch.manual_seed(i)
         conv = [SYSTEM_PROMPT]
         turns = []
-        idxs = []
         new_tokens = []
         wall_time = []
 
         for qs in question["turns"]:
-            result = process_conversation_turn(model, tokenizer, conv, qs, temperature)
+            result = process_conversation_turn(llm, tokenizer, conv, qs, **kwargs)
             turns.append(result["output"])
-            idxs.append(result["idx"])
             new_tokens.append(result["new_token"])
             wall_time.append(result["wall_time"])
 
@@ -174,7 +153,6 @@ def generate_answer_for_question(
             {
                 "index": i,
                 "turns": turns,
-                "idxs": idxs,
                 "new_tokens": new_tokens,
                 "wall_time": wall_time,
             }
@@ -184,14 +162,20 @@ def generate_answer_for_question(
 
 
 def warmup_model(
-    model: Eagle3Model, tokenizer: Any, question: Dict[str, Any], temperature: float
+    llm: LLM,
+    tokenizer: Any,
+    question: Dict[str, Any],
+    temperature: float,
+    max_tokens: int,
 ) -> None:
     """Warm up the model before actual evaluation"""
     for _ in range(3):
         torch.manual_seed(0)
         conv = [SYSTEM_PROMPT]
         for qs in question["turns"]:
-            process_conversation_turn(model, tokenizer, conv, qs, temperature)
+            process_conversation_turn(
+                llm, tokenizer, conv, qs, temperature=temperature, max_tokens=max_tokens
+            )
     print("Warmup done")
 
 
@@ -204,35 +188,126 @@ def get_model_answers(
     temperature: float,
     args: argparse.Namespace,
 ) -> None:
-    """Generate answers for a batch of questions"""
+    """Generate answers for a batch of questions."""
     config = EvaluationConfig(args)
-    model = initialize_model(config)
-    tokenizer = model.get_tokenizer()
+    llm = initialize_model(config, args)
+    tokenizer = AutoTokenizer.from_pretrained(config.base_model_path)
 
     if questions:
-        warmup_model(model, tokenizer, questions[0], temperature)
+        warmup_model(llm, tokenizer, questions[0], temperature, config.max_tokens)
 
     os.makedirs(os.path.dirname(answer_file), exist_ok=True)
+    print(
+        f"Generating {len(questions)} answers to {answer_file}, "
+        f"batch_size={config.batch_size}"
+    )
+    print(
+        f"SamplingParams: "
+        f"temperature={temperature}, "
+        f"max_tokens={config.max_tokens}, "
+        f"top_k={config.top_k}, "
+        f"top_p={config.top_p}"
+    )
 
-    for question in tqdm(questions):
-        choices = generate_answer_for_question(
-            model, tokenizer, question, num_choices, temperature
-        )
+    # Group questions by the number of turns
+    questions_by_turn_count = {}
+    for q in questions:
+        turn_count = len(q["turns"])
+        if turn_count not in questions_by_turn_count:
+            questions_by_turn_count[turn_count] = []
+        questions_by_turn_count[turn_count].append(q)
 
-        with open(os.path.expanduser(answer_file), "a") as fout:
-            ans_json = {
-                "question_id": question["question_id"],
-                "answer_id": shortuuid.uuid(),
-                "model_id": model_id,
-                "choices": choices,
-                "tstamp": time.time(),
-            }
-            fout.write(json.dumps(ans_json) + "\n")
+    for turn_count, turn_questions in questions_by_turn_count.items():
+        conversation_states = [
+            [
+                {
+                    "conv": [SYSTEM_PROMPT],
+                    "turns": [],
+                    "new_tokens": [],
+                    "wall_time": [],
+                }
+                for _ in range(num_choices)
+            ]
+            for _ in turn_questions
+        ]
+
+        for i in range(turn_count):
+            for batch_start in tqdm(
+                range(0, len(turn_questions), args.batch_size),
+                desc=f"Generating answers (turn {i + 1}/{turn_count})",
+            ):
+                batch_end = batch_start + args.batch_size
+                batch_questions = turn_questions[batch_start:batch_end]
+                batch_states = conversation_states[batch_start:batch_end]
+
+                prompts = []
+                for q_idx, question in enumerate(batch_questions):
+                    qs = question["turns"][i]
+                    for c_idx in range(num_choices):
+                        # Set seed for reproducibility of each choice
+                        torch.manual_seed(c_idx)
+                        conv = batch_states[q_idx][c_idx]["conv"]
+                        # Create a temporary conversation to apply the template
+                        temp_conv = conv + [{"role": "user", "content": qs}]
+                        prompt = tokenizer.apply_chat_template(
+                            temp_conv, tokenize=False, add_generation_prompt=True
+                        )
+                        prompts.append(prompt)
+
+                sampling_params = SamplingParams(
+                    temperature=temperature,
+                    max_tokens=config.max_tokens,
+                    top_k=config.top_k,
+                    top_p=config.top_p,
+                )
+
+                start_time = time.time()
+                outputs = llm.generate(prompts, sampling_params)
+                total_time = time.time() - start_time
+
+                output_idx = 0
+                for q_idx, question in enumerate(batch_questions):
+                    qs = question["turns"][i]
+                    for c_idx in range(num_choices):
+                        state = batch_states[q_idx][c_idx]
+                        output = outputs[output_idx].outputs[0].text.strip()
+                        new_token = len(outputs[output_idx].outputs[0].token_ids)
+
+                        state["conv"].append({"role": "user", "content": qs})
+                        state["conv"].append({"role": "assistant", "content": output})
+                        state["turns"].append(output)
+                        state["new_tokens"].append(new_token)
+                        state["wall_time"].append(total_time / len(prompts))
+                        output_idx += 1
+
+        # After all turns, write answers to file
+        for q_idx, question in enumerate(turn_questions):
+            choices = []
+            for c_idx in range(num_choices):
+                state = conversation_states[q_idx][c_idx]
+                choices.append(
+                    {
+                        "index": c_idx,
+                        "turns": state["turns"],
+                        "new_tokens": state["new_tokens"],
+                        "wall_time": state["wall_time"],
+                    }
+                )
+
+            with open(os.path.expanduser(answer_file), "a") as fout:
+                ans_json = {
+                    "question_id": question["question_id"],
+                    "answer_id": shortuuid.uuid(),
+                    "model_id": model_id,
+                    "choices": choices,
+                    "tstamp": time.time(),
+                }
+                fout.write(json.dumps(ans_json) + "\n")
 
 
 def run_evaluation(config: EvaluationConfig, args: argparse.Namespace) -> None:
     """Run the evaluation with optional distributed processing"""
-    questions = fastchat.llm_judge.common.load_questions(
+    questions = load_questions(
         config.question_file, args.question_begin, args.question_end
     )
 
@@ -276,16 +351,7 @@ def reorg_answer_file(answer_file: str) -> None:
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments"""
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--eagle-model-path",
-        type=str,
-        default="down_checkpoints/LC70B",
-        help="Path to the weights (local folder or Hugging Face repo ID)",
-    )
-    parser.add_argument("--base-model-path", type=str, default="")
-    parser.add_argument(
-        "--load-in-8bit", action="store_false", help="Use 8-bit quantization"
-    )
+    parser.add_argument("--base-model-path", type=str, required=True)
     parser.add_argument("--model-id", type=str, default="")
     parser.add_argument(
         "--bench-name", type=str, default="mt_bench", help="Benchmark question set name"
@@ -301,18 +367,18 @@ def parse_args() -> argparse.Namespace:
         "--max-new-token", type=int, default=1024, help="Max new generated tokens"
     )
     parser.add_argument(
-        "--total-token", type=int, default=60, help="Total nodes in draft tree"
-    )
-    parser.add_argument("--depth", type=int, default=5)
-    parser.add_argument("--top-k", type=int, default=10)
-    parser.add_argument(
         "--num-choices", type=int, default=1, help="Number of completion choices"
     )
     parser.add_argument(
         "--num-gpus-per-model", type=int, default=1, help="GPUs per model"
     )
     parser.add_argument("--num-gpus-total", type=int, default=1, help="Total GPUs")
-    parser.add_argument("--max-gpu-memory", type=str, help="Max GPU memory per GPU")
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=200,
+        help="Batch size in vLLM offline generation",
+    )
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args()

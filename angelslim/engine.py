@@ -21,7 +21,8 @@ from typing import Any, Dict, Optional
 import torch
 
 from .compressor import CompressorFactory
-from .compressor.speculative import BenchmarkConfig, BenchmarkEngine, BenchmarkMode
+from .compressor.speculative.benchmark import pytorch as pytorch_benchmark
+from .compressor.speculative.benchmark import vllm as vllm_benchmark
 from .data.dataloader import DataLoaderFactory
 from .models import SlimModelFactory
 from .utils import (
@@ -374,10 +375,29 @@ class SpecEngine:
     Integrates BenchmarkEngine with additional workflow management
     """
 
-    def __init__(self, config: Optional[BenchmarkConfig] = None):
+    def __init__(self, config=None, deploy_backend: str = "pytorch"):
+        """
+        Initialize SpecEngine
+
+        Args:
+            config: BenchmarkConfig instance (optional)
+            deploy_backend: Backend to use ('pytorch' or 'vllm')
+        """
         self.config = config
         self.benchmark_engine = None
         self.results = {}
+        self.deploy_backend = deploy_backend.lower()
+
+        if self.deploy_backend == "pytorch":
+            self.BenchmarkConfig = pytorch_benchmark.BenchmarkConfig
+            self.BenchmarkEngine = pytorch_benchmark.BenchmarkEngine
+            self.BenchmarkMode = pytorch_benchmark.BenchmarkMode
+        elif self.deploy_backend == "vllm":
+            self.BenchmarkConfig = vllm_benchmark.BenchmarkConfig
+            self.BenchmarkEngine = vllm_benchmark.BenchmarkEngine
+            self.BenchmarkMode = vllm_benchmark.BenchmarkMode
+        else:
+            raise ValueError(f"Unsupported deploy_backend: {deploy_backend}")
 
     def setup_benchmark(
         self,
@@ -387,7 +407,7 @@ class SpecEngine:
         bench_name: str = "mt_bench",
         output_dir: Optional[str] = None,
         **kwargs,
-    ) -> BenchmarkConfig:
+    ):
         """
         Setup benchmark configuration
 
@@ -411,8 +431,8 @@ class SpecEngine:
         }
         config_dict.update(kwargs)
 
-        self.config = BenchmarkConfig(**config_dict)
-        self.benchmark_engine = BenchmarkEngine(self.config)
+        self.config = self.BenchmarkConfig(**config_dict)
+        self.benchmark_engine = self.BenchmarkEngine(self.config)
 
         return self.config
 
@@ -423,7 +443,7 @@ class SpecEngine:
                 "Benchmark not configured. Call setup_benchmark() first."
             )
 
-        self.results = self.benchmark_engine.run_benchmark(BenchmarkMode.EAGLE)
+        self.results = self.benchmark_engine.run_benchmark(self.BenchmarkMode.EAGLE)
         return self.results
 
     def run_baseline_benchmark(self) -> Dict[str, Any]:
@@ -433,7 +453,7 @@ class SpecEngine:
                 "Benchmark not configured. Call setup_benchmark() first."
             )
 
-        self.results = self.benchmark_engine.run_benchmark(BenchmarkMode.BASELINE)
+        self.results = self.benchmark_engine.run_benchmark(self.BenchmarkMode.BASELINE)
         return self.results
 
     def run_full_benchmark(self) -> Dict[str, Any]:
@@ -448,7 +468,7 @@ class SpecEngine:
                 "Benchmark not configured. Call setup_benchmark() first."
             )
 
-        self.results = self.benchmark_engine.run_benchmark(BenchmarkMode.BOTH)
+        self.results = self.benchmark_engine.run_benchmark(self.BenchmarkMode.BOTH)
         return self.results
 
     def calculate_acceptance_length(self, eagle_file: Optional[str] = None) -> float:
