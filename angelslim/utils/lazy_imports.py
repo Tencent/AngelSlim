@@ -201,6 +201,8 @@ anthropic = LazyModule("anthropic", "speculative")
 jsonschema_specifications = LazyModule("jsonschema_specifications", "speculative")
 referencing = LazyModule("referencing", "speculative")
 deepspeed = LazyModule("deepspeed", "speculative")
+vllm = LazyModule("vllm", "speculative")
+shortuuid = LazyModule("shortuuid", "speculative")
 
 
 # --- multimodal related lazy imports ---

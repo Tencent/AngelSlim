@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from fastchat.llm_judge.common import load_questions
+from angelslim.utils.lazy_imports import fastchat
 
 from .generate_baseline_answer import get_model_answers as get_baseline_answers
 from .generate_eagle_answer import get_model_answers as get_eagle_answers
@@ -147,7 +147,7 @@ class BenchmarkEngine:
         os.makedirs(os.path.dirname(self.eagle_file), exist_ok=True)
 
         question_file = self._get_question_file_path()
-        questions = load_questions(
+        questions = fastchat.llm_judge.common.load_questions(
             question_file,
             self.config.question_begin,
             self.config.question_end,
@@ -211,7 +211,7 @@ class BenchmarkEngine:
         os.makedirs(os.path.dirname(self.baseline_file), exist_ok=True)
 
         question_file = self._get_question_file_path()
-        questions = load_questions(
+        questions = fastchat.llm_judge.common.load_questions(
             question_file,
             self.config.question_begin,
             self.config.question_end,

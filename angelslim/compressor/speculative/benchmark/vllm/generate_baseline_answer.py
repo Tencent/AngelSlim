@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import argparse
 import json
 import multiprocessing as mp
@@ -21,12 +23,11 @@ import time
 from typing import Any, Dict, List, Optional
 
 import numpy as np
-import shortuuid
 import torch
-from fastchat.llm_judge.common import load_questions
 from tqdm import tqdm
 from transformers import AutoTokenizer
-from vllm import LLM, SamplingParams
+
+from angelslim.utils.lazy_imports import fastchat, shortuuid, vllm
 
 SYSTEM_PROMPT = {
     "role": "system",
@@ -84,9 +85,9 @@ def setup_seed(seed: int) -> None:
     torch.backends.cudnn.deterministic = True
 
 
-def initialize_model(config: EvaluationConfig, args: argparse.Namespace) -> LLM:
+def initialize_model(config: EvaluationConfig, args: argparse.Namespace):
     """Initialize and return the vLLM model"""
-    llm = LLM(
+    llm = vllm.LLM(
         model=config.base_model_path,
         tensor_parallel_size=args.num_gpus_per_model,
         trust_remote_code=True,
@@ -97,7 +98,7 @@ def initialize_model(config: EvaluationConfig, args: argparse.Namespace) -> LLM:
 
 
 def process_conversation_turn(
-    llm: LLM,
+    llm: vllm.LLM,
     tokenizer: Any,
     conv: List[Dict[str, str]],
     qs: str,
@@ -109,7 +110,7 @@ def process_conversation_turn(
         conv, tokenize=False, add_generation_prompt=True
     )
 
-    sampling_params = SamplingParams(**kwargs)
+    sampling_params = vllm.SamplingParams(**kwargs)
 
     start_time = time.time()
     outputs = llm.generate([conversation], sampling_params)
@@ -128,7 +129,7 @@ def process_conversation_turn(
 
 
 def generate_answer_for_question(
-    llm: LLM,
+    llm: vllm.LLM,
     tokenizer: Any,
     question: Dict[str, Any],
     num_choices: int,
@@ -162,7 +163,7 @@ def generate_answer_for_question(
 
 
 def warmup_model(
-    llm: LLM,
+    llm: vllm.LLM,
     tokenizer: Any,
     question: Dict[str, Any],
     temperature: float,
@@ -258,7 +259,7 @@ def get_model_answers(
                         )
                         prompts.append(prompt)
 
-                sampling_params = SamplingParams(
+                sampling_params = vllm.SamplingParams(
                     temperature=temperature,
                     max_tokens=config.max_tokens,
                     top_k=config.top_k,
@@ -317,7 +318,7 @@ def get_model_answers(
 
 def run_evaluation(config: EvaluationConfig, args: argparse.Namespace) -> None:
     """Run the evaluation. Standalone execution is single-process."""
-    questions = load_questions(
+    questions = fastchat.llm_judge.common.load_questions(
         config.question_file, args.question_begin, args.question_end
     )
 
