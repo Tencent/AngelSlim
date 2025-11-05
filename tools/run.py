@@ -91,6 +91,7 @@ def multi_nodes_run(config):
         use_cache=model_config.use_cache,
         cache_dir=model_config.cache_dir,
         use_audio_in_video=model_config.use_audio_in_video,
+        attn_implementation=model_config.attn_implementation,
         deploy_backend=global_config.deploy_backend,
         using_multi_nodes=True,
     )
@@ -151,6 +152,7 @@ def run(config):
         use_cache=model_config.use_cache,
         cache_dir=model_config.cache_dir,
         use_audio_in_video=model_config.use_audio_in_video,
+        attn_implementation=model_config.attn_implementation,
         deploy_backend=global_config.deploy_backend,
     )
 
