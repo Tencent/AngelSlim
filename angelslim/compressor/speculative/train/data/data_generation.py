@@ -7,7 +7,8 @@ from typing import Dict, List, Optional
 
 import tqdm
 from datasets import load_dataset
-from openai import OpenAI
+
+from angelslim.utils.lazy_imports import openai
 
 from .data_utils import convert_sharegpt_data, convert_ultrachat_data
 
@@ -36,7 +37,7 @@ class OpenAIClientPool:
         """Initialize available OpenAI clients."""
         for i in range(max_clients):
             base_url = f"http://localhost:{base_port + i}/v1"
-            client = OpenAI(base_url=base_url, api_key="EMPTY")
+            client = openai.OpenAI(base_url=base_url, api_key="EMPTY")
 
             try:
                 model_id = client.models.list().data[0].id
@@ -51,7 +52,7 @@ class OpenAIClientPool:
 
         logger.info(f"Initialized {len(self.clients)} clients")
 
-    def get_client(self, idx: int) -> OpenAI:
+    def get_client(self, idx: int):
         """Get a client using round-robin load balancing."""
         return self.clients[idx % len(self.clients)]
 
@@ -101,7 +102,7 @@ class DataGenerator:
         return converted_messages, messages
 
     def _generate_response(
-        self, client: OpenAI, messages: List[Dict], **kwargs
+        self, client, messages: List[Dict], **kwargs
     ) -> Optional[str]:
         """
         Generate a response using the OpenAI API.
