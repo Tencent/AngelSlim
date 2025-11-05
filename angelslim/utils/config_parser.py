@@ -121,6 +121,8 @@ class ModelConfig:
         low_cpu_mem_usage: Use low memory loading for large models
         use_cache: Whether to use cache during model loading
         cache_dir: Directory for caching model files
+        use_audio_in_video: Whether to add audio track to a video file
+        attn_implementation: The attention implementation to use in the model
     """
 
     name: str
@@ -132,6 +134,7 @@ class ModelConfig:
     use_cache: bool = field(default=False)
     cache_dir: Optional[str] = field(default=None)
     use_audio_in_video: bool = field(default=False)
+    attn_implementation: str = field(default="default")
 
 
 @dataclass

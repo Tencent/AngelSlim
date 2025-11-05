@@ -75,6 +75,7 @@ class Engine:
         deploy_backend="vllm",
         using_multi_nodes=False,
         use_audio_in_video=False,
+        attn_implementation="default",
     ) -> Any:
         """Load pretrained model and tokenizer
         Args:
@@ -92,6 +93,8 @@ class Engine:
             cache_dir (str, optional): Directory to cache the model.
             deploy_backend (str): Backend for deployment, e.g., "torch", "vllm".
             using_multi_nodes (bool): Whether to use multi-nodes for calibration.
+            use_audio_in_video (bool): Whether to add audio track to a video file.
+            attn_implementation (str): The attention implementation to use in the model.
         """
         assert model_name, "model_name must be specified."
         assert model_path, "model_path must be specified."
@@ -126,6 +129,7 @@ class Engine:
                     device_map=device_map,
                     trust_remote_code=trust_remote_code,
                     use_audio_in_video=use_audio_in_video,
+                    attn_implementation=attn_implementation,
                 )
                 self.model_path = model_path
         else:

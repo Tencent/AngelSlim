@@ -27,7 +27,7 @@ from typing import Literal, Optional, Tuple
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
-from safetensors.torch import load_model, safe_open, save_file
+from safetensors.torch import load_file, load_model, safe_open, save_file
 from torch import nn
 from tqdm import tqdm, trange
 from transformers.generation import GenerationMixin
@@ -1037,12 +1037,28 @@ class DeepseekV3ForCausalLM(DeepseekV3PreTrainedModel, GenerationMixin):
                 dist.barrier()
             with torch.device("cuda"):
                 model = cls(config)
-            load_model(
-                model,
-                os.path.join(
+            try:
+                load_model(
+                    model,
+                    os.path.join(
+                        tp_model_path, f"model{rank}-mp{cls.world_size}.safetensors"
+                    ),
+                )
+            except RuntimeError:
+                file_path = os.path.join(
                     tp_model_path, f"model{rank}-mp{cls.world_size}.safetensors"
-                ),
-            )
+                )
+                file_state_dict = load_file(file_path)
+                model_state_dict = model.state_dict()
+                for key in model_state_dict:
+                    if (
+                        key in file_state_dict
+                        and file_state_dict[key].dtype != model_state_dict[key].dtype
+                    ):
+                        file_state_dict[key] = file_state_dict[key].to(
+                            model_state_dict[key].dtype
+                        )
+                model.load_state_dict(file_state_dict, strict=False)
             return model
         return super().from_pretrained(
             model_path,

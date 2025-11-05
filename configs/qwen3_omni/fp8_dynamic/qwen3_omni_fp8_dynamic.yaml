@@ -12,6 +12,7 @@ model:
   torch_dtype: auto
   device_map: auto
   use_audio_in_video: false
+  attn_implementation: default
 
 # Compression configuration
 compression:

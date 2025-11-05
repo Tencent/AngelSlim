@@ -47,14 +47,22 @@ class Qwen_Omni(BaseLLMModel):
         device_map="auto",
         trust_remote_code=True,
         use_audio_in_video=False,
+        attn_implementation="default",
     ):
         self.use_audio_in_video = use_audio_in_video
-        self.model = Qwen3OmniMoeForConditionalGeneration.from_pretrained(
-            model_path,
-            torch_dtype=torch_dtype,
-            device_map=device_map,
-            attn_implementation="flash_attention_2",
-        )
+        if attn_implementation == "default":
+            self.model = Qwen3OmniMoeForConditionalGeneration.from_pretrained(
+                model_path,
+                torch_dtype=torch_dtype,
+                device_map=device_map,
+            )
+        else:
+            self.model = Qwen3OmniMoeForConditionalGeneration.from_pretrained(
+                model_path,
+                torch_dtype=torch_dtype,
+                device_map=device_map,
+                attn_implementation=attn_implementation,
+            )
 
         # Load tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(
