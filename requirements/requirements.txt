@@ -10,3 +10,4 @@ tiktoken
 datasets
 threadpoolctl
 shortuuid
+accelerate

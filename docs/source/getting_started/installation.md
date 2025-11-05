@@ -10,7 +10,7 @@ AngelSlim支持如下安装方式：
 
 ## pip安装（推荐）
 
-#### 默认安装（LLM & VLM）
+#### 默认安装（LLM）
 
 通过`pip`安装最新AngelSlim稳定发布版：
 
@@ -28,6 +28,12 @@ pip install --upgrade --force-reinstall --no-cache-dir angelslim
 
 ```shell
 pip install angelslim[speculative]
+```
+
+#### 多模态安装
+
+```shell
+pip install angelslim[multimodal]
 ```
 
 #### Diffusion安装
