@@ -17,6 +17,8 @@ from typing import Optional, Tuple
 
 import torch
 
+from angelslim.utils import decide_device_for_distributed, print_with_rank
+
 
 class BaseBackend(ABC):
     """Base class for model backends"""
@@ -49,13 +51,21 @@ class TransformersBackend(BaseBackend):
     def load_model(self):
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
+        # Get device based on environment
+        device = decide_device_for_distributed()
+
+        # Print device information with rank details
+        print_with_rank(f"Loading model to device: {device}")
+
+        # Update kwargs with default values
         default_kwargs = {
             "dtype": torch.bfloat16,
-            "device_map": "auto",
+            "device_map": device,
             "trust_remote_code": True,
         }
         default_kwargs.update(self.kwargs)
 
+        # Load model to specific device based on rank
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_path, **default_kwargs
         )

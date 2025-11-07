@@ -57,6 +57,7 @@ class BenchmarkConfig:
     total_token: int = 60
     depth: int = 5
     top_k: int = 10
+    top_p: float = 1.0
 
     # Hardware settings
     num_gpus_per_model: int = 1
@@ -72,6 +73,9 @@ class BenchmarkConfig:
 
     # SpecExit
     early_stop_method: Optional[str] = None
+
+    # Batch settings
+    batch_size: int = 1
 
 
 class BenchmarkEngine:
