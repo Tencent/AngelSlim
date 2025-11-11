@@ -102,7 +102,11 @@ class TextDataset(BaseDataset):
                             thinking_data = True
                             break
                 if thinking_data:
-                    text = self.processor.bos_token
+                    text = (
+                        self.processor.bos_token
+                        if self.processor.bos_token is not None
+                        else ""
+                    )
                     for dic in messages:
                         if dic["role"] == "system":
                             text += dic["content"]
