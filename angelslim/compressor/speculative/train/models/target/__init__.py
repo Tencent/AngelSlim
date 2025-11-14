@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .target_head import TargetHead
 from .target_model_wrapper import create_target_model
 
-__all__ = ["create_target_model"]
+__all__ = ["create_target_model", "TargetHead"]

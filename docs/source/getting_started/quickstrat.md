@@ -49,13 +49,13 @@ python3 tools/fp8_quant_blockwise.py \
 
 投机采样（Speculative Decoding）是一种加速大语言模型推理的技术，通过使用较小的辅助模型来预测后续token，然后由主模型进行验证，从而提高生成效率。AngelSlim提供了完整的Eagle3训练和基准测试工具。
 
-#### 1. 训练Eagle3模型
+#### 1. 数据生成
 
-Eagle3模型的训练分为两个步骤：数据准备和在线训练。
+数据生成包括：1）为目标模型生成采样数据，2）为Eagle3模型离线生成目标模型的hidden states。
 
-##### 1.1 准备训练数据
+##### 1.1 为目标模型生成采样数据
 
-训练数据的准备分为两个步骤：启动vLLM server和生成采样数据。
+生成采样数据为可选项，当有足够数量以及足够质量的目标模型SFT数据时，此步可略过。当训练数据和目标模型不配套时，则需要为目标模型重新采样生成数据。
 
 **步骤1：启动vLLM server**
 
@@ -97,7 +97,32 @@ bash scripts/speculative/generate_data_for_target_model.sh
 - 确保vLLM服务器已成功启动并正常运行
 - 数据生成过程可能需要较长时间，取决于样本数量和模型规模
 
-##### 1.2 在线训练
+
+##### 1.2 为Eagle3模型生成hidden states
+
+目前仅支持以HF为后端生成hidden states，调用脚本如下：
+```shell
+bash scripts/speculative/generate_hidden_for_draft_model.sh
+```
+
+**脚本参数说明：**
+
+在使用前，需要在脚本中配置以下参数：
+
+- `DATASET_PATH`: 输入数据集的HF名称或本地路径
+- `MODEL_NAME`: 目标模型的HF名称或本地路径
+- `TARGET_BACKEND`: 目标模型后端，目前仅支持HF
+- `MODEL_MAX_LENGTH`: 生成数据的上下文长度
+- `CHAT_TEMPLATE_TYPE`: 目标模型的目标类型，目前支持qwen3/hunyuan
+- `OUTPUT_DIR`: 生成的数据集输出路径
+
+
+#### 2. 训练Eagle3模型
+
+目前支持在线训练和离线训练两种模式：在线训练适合显存足够、目标模型不大、训练上下文长度不要求极长的场景，
+离线训练适合大尺寸目标模型、磁盘空间足够、长上下文训练场景。
+
+##### 2.1 在线训练
 
 使用 `scripts/speculative/train_eagle3_online.sh` 脚本进行Eagle3模型的在线训练：
 
@@ -117,11 +142,36 @@ bash scripts/speculative/train_eagle3_online.sh
 - `MODEL_MAX_LENGTH`: 训练数据的最大长度
 - `CHAT_TEMPLATE_TYPE`: 目标模型的数据模板类型
 
-#### 2. 基准测试
+##### 2.2 离线训练
+
+在离线训练前，必须要完成`1.2` 为Eagle3模型生成hidden states。
+使用 `scripts/speculative/train_eagle3_offline.sh` 脚本进行Eagle3模型的离线训练：
+
+```shell
+bash scripts/speculative/train_eagle3_offline.sh
+```
+
+**脚本参数说明：**
+
+在使用前，需要在脚本中配置以下参数：
+
+- `TARGET_MODEL_NAME_OR_PATH`: 目标模型的HF名称或本地名称
+- `DRAFT_MODEL_CONFIG_PATH`: 草稿模型的config路径
+- `TRAIN_DATA_PATH`: 训练数据路径,.jsonl格式
+- `TRAIN_HIDDEN_PATH`: 训练hidden states数据路径
+- `EVAL_HIDDEN_PATH`: 验证hidden states数据路径
+- `OUTPUT_DIR`: Eagle3模型输出路径
+- `MODEL_MAX_LENGTH`: 训练数据的最大长度
+- `CHAT_TEMPLATE_TYPE`: 目标模型的数据模板类型
+- `LM_HEAD_KEY`: 目标模型lm head的weight key名称，可以在model.safetensors.index.json中查看，默认为lm_head.weight时可不指定这个参数。当为model.embed_tokens.weight时，需要指定。
+- `RUN_NAME`: 当`report_to`设为wand时，可以指定该参数设置wand中的run name。
+
+
+#### 3. 基准测试
 
 AngelSlim提供了完整的Eagle3基准测试工具，用于评估投机采样的性能提升。
 
-##### 2.1 基本用法
+##### 3.1 基本用法
 
 使用 `tools/spec_benchmark.py` 脚本进行投机采样基准测试：
 
@@ -133,7 +183,7 @@ python3 tools/spec_benchmark.py \
     --mode both
 ```
 
-##### 2.2 参数说明
+##### 3.2 参数说明
 
 **模型配置参数：**
 - `--base-model-path`: 基础模型路径（必需）
@@ -163,7 +213,7 @@ python3 tools/spec_benchmark.py \
 - `--question-end`: 问题结束索引（用于调试）
 - `--no-metrics`: 跳过自动指标计算
 
-##### 2.3 使用示例
+##### 3.3 使用示例
 
 **完整基准测试（推荐）：**
 ```shell
@@ -196,7 +246,7 @@ python3 tools/spec_benchmark.py \
     --num-gpus-total 8
 ```
 
-##### 2.4 性能报告
+##### 3.4 性能报告
 
 运行完成后，工具会自动生成性能报告，包括：
 - 投机采样与基线模型的性能对比
