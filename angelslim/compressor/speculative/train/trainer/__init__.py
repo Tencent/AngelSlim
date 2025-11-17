@@ -12,6 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .eagle3_trainer import OnlineEagle3Trainer
+from .eagle3_trainer import OfflineEagle3Trainer, OnlineEagle3Trainer
 
-__all__ = ["OnlineEagle3Trainer"]
+__all__ = ["OnlineEagle3Trainer", "OfflineEagle3Trainer"]

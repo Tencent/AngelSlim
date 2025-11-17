@@ -16,16 +16,16 @@ import argparse
 import os
 from pathlib import Path
 
-import torch
 import transformers
+from transformers import AutoTokenizer
 
 from angelslim.compressor.speculative import (
     DataCollatorWithPadding,
     DatasetManager,
     DraftModelConfig,
-    OnlineEagle3Trainer,
+    OfflineEagle3Trainer,
+    TargetHead,
     create_draft_model,
-    create_target_model,
     get_supported_chat_template_type_strings,
 )
 from angelslim.utils import rank0_print
@@ -33,7 +33,7 @@ from angelslim.utils import rank0_print
 
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="Train EAGLE3 online model")
+    parser = argparse.ArgumentParser(description="Train EAGLE3 offline model")
 
     # Model arguments
     model_group = parser.add_argument_group("Model Arguments")
@@ -69,6 +69,12 @@ def parse_args():
         default=True,
         help="Whether to trust remote code when loading models",
     )
+    model_group.add_argument(
+        "--lm_head_key",
+        type=str,
+        default="lm_head.weight",
+        help="Key for lm head in model config",
+    )
 
     # Data arguments
     data_group = parser.add_argument_group("Data Arguments")
@@ -83,7 +89,19 @@ def parse_args():
         "--eval_data_path",
         type=str,
         default=None,
-        help="Path to evaluation data file (JSON format)",
+        help="Path to evaluation data file",
+    )
+    data_group.add_argument(
+        "--train_hidden_path",
+        type=str,
+        required=True,
+        help="Path to training hidden file",
+    )
+    data_group.add_argument(
+        "--eval_hidden_path",
+        type=str,
+        default=None,
+        help="Path to evaluation hidden file",
     )
     data_group.add_argument(
         "--chat_template_type",
@@ -234,24 +252,6 @@ def parse_args():
 def train():
     args = parse_args()
 
-    # Parse torch dtype
-    dtype_mapping = {
-        "float16": torch.float16,
-        "bfloat16": torch.bfloat16,
-        "float32": torch.float32,
-    }
-    torch_dtype = dtype_mapping.get(args.torch_dtype, torch.bfloat16)
-
-    # Create target model with specified backend using factory function
-    rank0_print(f"Loading target model with {args.target_backend} backend...")
-    target_model = create_target_model(
-        backend=args.target_backend,
-        model_path=args.target_model_name_or_path,
-        torch_dtype=torch_dtype,
-        trust_remote_code=args.trust_remote_code,
-    )
-    rank0_print("Target model loaded successfully")
-
     # Create draft model
     rank0_print("Loading draft model...")
     draft_model_config = DraftModelConfig.from_file(args.draft_model_config_path)
@@ -260,32 +260,57 @@ def train():
     draft_model.freeze_embed_weights()
     rank0_print("Draft model loaded successfully")
 
-    # Create datasets using DatasetManager
-    rank0_print(
-        "Creating training and evaluation datasets "
-        f"with chat template type: {args.chat_template_type}..."
+    # Load target head for computing logits from hidden states
+    rank0_print("Loading target head...")
+    target_head = TargetHead.from_pretrained(
+        args.target_model_name_or_path,
+        lm_head_key=args.lm_head_key,
     )
-    dataset_manager = DatasetManager(
-        data_args=args,
-        tokenizer=target_model.tokenizer,
-        model_max_length=args.model_max_length,
-        chat_template_type=args.chat_template_type,
-        display=args.display,
-    )
-    train_dataset, eval_dataset = dataset_manager.create_online_datasets()
+    rank0_print("Target head loaded successfully")
+
+    # Load tokenizer
+    rank0_print("Loading tokenizer...")
+    tokenizer = AutoTokenizer.from_pretrained(args.target_model_name_or_path)
+
+    # Create all datasets using unified DatasetManager
+    rank0_print("Creating datasets...")
+    rank0_print("- Offline mode: Loading pre-computed hidden states from .ckpt files")
     rank0_print(
-        f"Train dataset size: {len(train_dataset)}, "
-        f"Eval dataset size: {len(eval_dataset) if eval_dataset else 0}"
+        "- Online mode: Processing raw conversation data "
+        f"(chat template: {args.chat_template_type})"
     )
 
-    # Draft model prune target vocab size
-    rank0_print("Building vocabulary mapping for draft model...")
-    cache_path = os.path.join(args.output_dir, "vocab_mapping_cache.pt")
-    draft_model.build_vocab_mapping(
-        dataset=train_dataset,
-        cache_path=cache_path,
+    dataset_manager = DatasetManager(
+        data_args=args,
+        tokenizer=tokenizer,
+        model_max_length=args.model_max_length,
+        chat_template_type=args.chat_template_type,
     )
-    rank0_print("Vocabulary mapping built successfully")
+
+    (offline_train_dataset, offline_eval_dataset, online_train_dataset, _) = (
+        dataset_manager.create_all_datasets()
+    )
+
+    rank0_print(
+        f"Offline train dataset size: {len(offline_train_dataset)}, "
+        "Offline eval dataset size: "
+        f"{len(offline_eval_dataset) if offline_eval_dataset else 0}"
+    )
+
+    # Build vocabulary mapping for draft model using online training dataset
+    rank0_print("Building vocabulary mapping for draft model...")
+    if online_train_dataset is not None:
+        cache_path = os.path.join(args.output_dir, "vocab_mapping_cache.pt")
+        draft_model.build_vocab_mapping(
+            dataset=online_train_dataset,
+            cache_path=cache_path,
+        )
+        rank0_print("Vocabulary mapping built successfully")
+    else:
+        rank0_print(
+            "Warning: No online training dataset available, "
+            "skipping vocab mapping build"
+        )
 
     # Create a TrainingArguments object for the trainer
     # Organize training arguments by category
@@ -338,18 +363,18 @@ def train():
         **checkpoint_args,
         **logging_args,
         **distributed_args,
+        remove_unused_columns=False,
     )
 
-    # Initialize trainer
+    # Initialize trainer with offline datasets
     rank0_print("Initializing trainer...")
-    trainer = OnlineEagle3Trainer(
+    trainer = OfflineEagle3Trainer(
         draft_model=draft_model,
-        target_model=target_model,
+        target_head=target_head,
         length=args.training_time_test_length,
-        draft_model_config=draft_model_config,
         args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=eval_dataset,
+        train_dataset=offline_train_dataset,
+        eval_dataset=offline_eval_dataset,
         data_collator=DataCollatorWithPadding(),
     )
 

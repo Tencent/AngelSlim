@@ -72,12 +72,12 @@ class Eagle3Trainer(Trainer, ABC):
         """
         data_for_draft_model = self.prepare_data_for_draft_model(inputs)
 
-        attention_mask = data_for_draft_model["attention_mask"]
-        position_ids = data_for_draft_model["position_ids"]
-        input_ids = data_for_draft_model["input_ids"]
-        target_logits = data_for_draft_model["target_logits"]
-        loss_mask = data_for_draft_model["loss_mask"]
-        hidden_states = data_for_draft_model["hidden_states"]
+        attention_mask = data_for_draft_model["attention_mask"]  # Batch x Seq
+        position_ids = data_for_draft_model["position_ids"]  # Batch x Seq
+        input_ids = data_for_draft_model["input_ids"]  # Batch x Seq
+        target_logits = data_for_draft_model["target_logits"]  # Batch x Seq x Vocab
+        loss_mask = data_for_draft_model["loss_mask"]  # Batch x Seq x 1
+        hidden_states = data_for_draft_model["hidden_states"]  # Batch x Seq x Hidden
 
         hidden_states = self.down_project_hidden_states(hidden_states)
         attention_mask, position_ids = self.prepare_attention_mask_and_position_ids(
@@ -353,3 +353,80 @@ class OnlineEagle3Trainer(Eagle3Trainer):
             "position_ids": position_ids,
             "attention_mask": attention_mask,
         }
+
+
+class OfflineEagle3Trainer(Eagle3Trainer):
+    """
+    Offline EAGLE3 Trainer for speculative decoding training.
+
+    Uses pre-computed hidden states and logits from offline processing,
+    avoiding the need for online target model inference.
+    """
+
+    def __init__(
+        self, draft_model: nn.Module, target_head: nn.Module, length: int, **kwargs
+    ):
+        """
+        Initialize the OnlineEagle3Trainer.
+
+        Args:
+            draft_model: Draft model for token prediction
+            length: Number of speculative decoding steps
+            **kwargs: Additional arguments passed to parent Trainer
+        """
+        super().__init__(draft_model=draft_model, length=length, **kwargs)
+        self.target_head = target_head
+
+    def prepare_data_for_draft_model(
+        self, inputs: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Prepare data for draft model training from offline-generated inputs.
+
+        Args:
+            inputs: Dictionary containing:
+                - input_ids: Token IDs
+                - target_hiddens: Pre-computed last hidden states from target model
+                - hidden_states: Pre-computed aux hidden states from target model
+                - attention_mask: Attention mask
+                - loss_mask: Mask for loss computation
+                - position_ids (optional): Position IDs
+
+        Returns:
+            Dictionary with prepared data for draft model training
+        """
+        #
+        inputs_fields = [
+            "input_ids",
+            "target_hiddens",
+            "hidden_states",
+            "attention_mask",
+            "loss_mask",
+        ]
+        output_fields = [
+            "input_ids",
+            "target_logits",
+            "hidden_states",
+            "attention_mask",
+            "loss_mask",
+            "position_ids",
+        ]
+
+        #
+        target_logits = self.target_head(inputs["target_hiddens"])
+        position_ids = inputs.get("position_ids", None)
+        loss_mask = inputs["loss_mask"]
+        input_ids = inputs["input_ids"]
+
+        # Apply right padding and move tensors to correct device
+        target_logits = padding(target_logits, left=False).to(input_ids.device)
+        input_ids = padding(input_ids, left=False)
+        loss_mask = loss_mask[..., None].to(input_ids.device)
+
+        outputs = {k: inputs[k] for k in inputs_fields if k in output_fields}
+        outputs["target_logits"] = target_logits
+        outputs["position_ids"] = position_ids
+        outputs["loss_mask"] = loss_mask
+        outputs["input_ids"] = input_ids
+
+        return outputs

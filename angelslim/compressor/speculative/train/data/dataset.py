@@ -13,7 +13,9 @@
 # limitations under the License.
 
 import re
-from typing import Any, Dict, List, Optional, Tuple, Union
+import warnings
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union
 
 import torch
 from datasets import load_dataset
@@ -112,11 +114,18 @@ class DatasetBuilder:
         rank0_print(conversation)
         rank0_print("=" * 80 + "\n")
 
-    def build_dataset(self, datapath: str, num_proc: int = 8) -> Dataset:
+    def build_dataset(
+        self, datapath: str, num_proc: int = 8, shuffle: bool = True
+    ) -> Dataset:
         try:
-            # Load and shuffle dataset
+            # Load dataset
             ds = load_dataset("json", data_files=datapath)
-            ds = ds["train"].shuffle(seed=self.shuffle_seed)
+
+            # Conditionally shuffle dataset
+            if shuffle:
+                ds = ds["train"].shuffle(seed=self.shuffle_seed)
+            else:
+                ds = ds["train"]
 
             # Store original columns for removal
             original_columns = ds.column_names
@@ -282,97 +291,122 @@ class DatasetBuilder:
         return messages if len(messages) > 1 else []
 
 
-class DataCollatorWithPadding:
-    def paddingtensor(self, intensors, N):
-        B, n, S = intensors.shape
-        # padding_tensor = torch.zeros(B, N - n, S,dtype=intensors.dtype)
-        padding_tensor = torch.zeros(B, N - n, S, dtype=intensors.dtype)
-        outtensors = torch.cat((intensors, padding_tensor), dim=1)
-        return outtensors
-
-    def paddingtensor2D(self, intensors, N):
-        B, n = intensors.shape
-        padding_tensor = torch.zeros(B, N - n, dtype=intensors.dtype)
-        outtensors = torch.cat((intensors, padding_tensor), dim=1)
-        return outtensors
-
-    def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, Any]:
-        max_length = max(item["input_ids"].shape[1] for item in features)
-        batch_input_ids = torch.cat(
-            [self.paddingtensor2D(item["input_ids"], max_length) for item in features]
-        )
-        batch_attention_mask = torch.cat(
-            [
-                self.paddingtensor2D(item["attention_mask"], max_length)
-                for item in features
-            ]
-        )
-        batch_loss_mask = torch.cat(
-            [self.paddingtensor2D(item["loss_mask"], max_length) for item in features]
-        )
-
-        batch = {
-            "input_ids": batch_input_ids,
-            "attention_mask": batch_attention_mask,
-            "loss_mask": batch_loss_mask,
-        }
-        return batch
-
-
 class DatasetManager:
     """
-    Simplified DatasetManager for train_eagle3_online.py.
+    Unified DatasetManager for EAGLE3 training.
 
-    This manager is designed to work with DataArguments from train_eagle3_online.py
-    and provides a simple interface to create train and eval datasets.
+    This manager supports creating datasets for:
+    - Offline mode: Loads pre-computed hidden states from .ckpt files for training
+    - Online mode: Processes raw conversation data on-the-fly
+
+    Can create both types of datasets simultaneously when needed.
     """
 
     def __init__(
         self,
         data_args,
-        tokenizer: AutoTokenizer,
+        tokenizer: Optional[AutoTokenizer] = None,
         model_max_length: int = 2048,
         chat_template_type: Optional[Union[str, ChatTemplateType]] = None,
         display: bool = False,
+        cache_in_memory: bool = False,
     ):
         """
         Initialize DatasetManager with DataArguments.
 
         Args:
-            data_args: DataArguments object from train_eagle3_online.py
-            tokenizer: Tokenizer for the model
+            data_args: DataArguments object containing data paths and configurations
+            tokenizer: Tokenizer for the model (required for online dataset processing)
             model_max_length: Maximum sequence length
-            chat_template_type: Chat template type. Can be:
+            chat_template_type: Chat template type for conversation formatting. Can be:
                 - ChatTemplateType enum value (e.g., ChatTemplateType.QWEN3)
                 - String (e.g., "llama", "qwen")
-                - None (will default to LLAMA)
+                - None (will default to QWEN3)
             display: Whether to display loss mask visualization for the first sample
+            cache_in_memory: Whether to cache all data in memory for offline datasets
         """
         self.data_args = data_args
         self.tokenizer = tokenizer
         self.model_max_length = model_max_length
         self.display = display
+        self.cache_in_memory = cache_in_memory
 
         # Convert chat_template_type to ChatTemplateType enum
         if chat_template_type is None:
-            # Default to QWEN3
             chat_template_type = ChatTemplateType.QWEN3
         elif isinstance(chat_template_type, str):
-            # Convert string to enum
             chat_template_type = string_to_chat_template_type(chat_template_type)
 
-        # Create dataset builder
-        self.dataset_builder = DatasetBuilder(
-            tokenizer=tokenizer,
-            max_length=model_max_length,
-            shuffle_seed=data_args.shuffle_seed,
-            chat_template_type=chat_template_type,
-            display=display,
+        self.chat_template_type = chat_template_type
+
+        # Create dataset builder for online processing
+        self.dataset_builder = None
+        if tokenizer is not None:
+            self.dataset_builder = DatasetBuilder(
+                tokenizer=tokenizer,
+                max_length=model_max_length,
+                shuffle_seed=data_args.shuffle_seed,
+                chat_template_type=chat_template_type,
+                display=display,
+            )
+
+    def create_all_datasets(
+        self,
+    ) -> Tuple[Dataset, Optional[Dataset], Dataset, Optional[Dataset]]:
+        """
+        Create all required datasets: offline and online datasets.
+
+        Returns:
+            Tuple of (offline_train_dataset, offline_eval_dataset,
+                online_train_dataset, online_eval_dataset)
+            - offline_train_dataset: Offline training dataset from .ckpt files
+            - offline_eval_dataset: Offline evaluation dataset (None if not provided)
+            - online_train_dataset: Online training dataset from raw conversation data
+            - online_eval_dataset: Online evaluation dataset (None if not provided)
+
+        Raises:
+            ValueError: If required paths are not provided
+        """
+        # Create offline datasets (from .ckpt files)
+        offline_train_dataset, offline_eval_dataset = self._create_offline_datasets()
+
+        # Create online datasets (from raw JSON data) if tokenizer is provided
+        online_train_dataset, online_eval_dataset = None, None
+        if self.tokenizer is not None and self.dataset_builder is not None:
+            online_train_dataset, online_eval_dataset = self._create_online_datasets()
+
+        return (
+            offline_train_dataset,
+            offline_eval_dataset,
+            online_train_dataset,
+            online_eval_dataset,
         )
 
-    def create_datasets(self) -> Tuple[Dataset, Optional[Dataset]]:
+    def create_offline_datasets(self) -> Tuple[Dataset, Optional[Dataset]]:
         """
-        Create train and eval datasets based on DataArguments.
+        Create offline datasets only.
+
+        Returns:
+            Tuple of (train_dataset, eval_dataset)
+            eval_dataset will be None if eval_hidden_path is not provided
+        """
+        return self._create_offline_datasets()
+
+    def create_online_datasets(self) -> Tuple[Optional[Dataset], Optional[Dataset]]:
+        """
+        Create online datasets only.
+
+        Returns:
+            Tuple of (train_dataset, eval_dataset)
+            Both will be None if tokenizer not provided
+        """
+        if self.tokenizer is None or self.dataset_builder is None:
+            return None, None
+        return self._create_online_datasets()
+
+    def _create_online_datasets(self) -> Tuple[Optional[Dataset], Optional[Dataset]]:
+        """
+        Create online datasets from raw conversation data.
 
         Returns:
             Tuple of (train_dataset, eval_dataset)
@@ -383,16 +417,217 @@ class DatasetManager:
         if self.display:
             num_proc = None
 
+        # Create training dataset
+        train_dataset = None
+        if self.data_args.train_data_path is not None:
+            train_dataset = self.dataset_builder.build_dataset(
+                self.data_args.train_data_path, num_proc=num_proc, shuffle=True
+            )
+
+        # Create evaluation dataset
+        eval_dataset = None
+        if self.data_args.eval_data_path is not None:
+            eval_dataset = self.dataset_builder.build_dataset(
+                self.data_args.eval_data_path, num_proc=num_proc, shuffle=False
+            )
+
+        return train_dataset, eval_dataset
+
+    def _create_offline_datasets(self) -> Tuple[Dataset, Optional[Dataset]]:
+        """
+        Create offline datasets from pre-computed .ckpt files.
+
+        Returns:
+            Tuple of (train_dataset, eval_dataset)
+        """
         # Create train dataset
-        train_dataset = self.dataset_builder.build_dataset(
-            self.data_args.train_data_path, num_proc=num_proc
+        train_dataset = OfflineEagle3Dataset(
+            data_dir=self.data_args.train_hidden_path,
+            file_pattern="*.ckpt",
+            cache_in_memory=self.cache_in_memory,
         )
 
         # Create eval dataset if path is provided
         eval_dataset = None
-        if self.data_args.eval_data_path is not None:
-            eval_dataset = self.dataset_builder.build_dataset(
-                self.data_args.eval_data_path, num_proc=num_proc
+        if self.data_args.eval_hidden_path is not None:
+            eval_dataset = OfflineEagle3Dataset(
+                data_dir=self.data_args.eval_hidden_path,
+                file_pattern="*.ckpt",
+                cache_in_memory=self.cache_in_memory,
             )
 
         return train_dataset, eval_dataset
+
+
+class OfflineEagle3Dataset(Dataset):
+    """
+    Offline Dataset for EAGLE3 training.
+
+    Loads pre-computed hidden states, logits, and other data from .ckpt files.
+    Each .ckpt file contains a dictionary with keys: input_ids, target_logits,
+    hidden_states, and loss_mask.
+    """
+
+    def __init__(
+        self, data_dir: str, file_pattern: str = "*.ckpt", cache_in_memory: bool = False
+    ):
+        """
+        Initialize the OfflineEagle3Dataset.
+
+        Args:
+            data_dir: Directory containing .ckpt files
+                (will search recursively in subdirectories)
+            file_pattern: Pattern to match checkpoint files (default: "*.ckpt")
+            cache_in_memory: Whether to cache all data in memory (default: False)
+        """
+        self.data_dir = Path(data_dir)
+        self.cache_in_memory = cache_in_memory
+
+        if not self.data_dir.exists():
+            raise ValueError(f"Data directory does not exist: {data_dir}")
+
+        # Recursively find all checkpoint files in subdirectories
+        self.ckpt_files = sorted(list(self.data_dir.rglob(file_pattern)))
+
+        if len(self.ckpt_files) == 0:
+            raise ValueError(
+                f"No checkpoint files found in {data_dir} "
+                f"(including subdirectories) with pattern {file_pattern}"
+            )
+
+        rank0_print(
+            f"Found {len(self.ckpt_files)} checkpoint files "
+            f"in {data_dir} (including subdirectories)"
+        )
+
+        # Track valid indices (files that can be loaded successfully)
+        self.valid_indices = list(range(len(self.ckpt_files)))
+
+        # Cache data in memory if requested
+        self.cached_data: Optional[List[Dict[str, torch.Tensor]]] = None
+        if self.cache_in_memory:
+            rank0_print("Caching all data in memory...")
+            self.cached_data = []
+            failed_count = 0
+            for i in range(len(self.ckpt_files)):
+                data = self._load_ckpt(i)
+                if data is not None:
+                    self.cached_data.append(data)
+                else:
+                    failed_count += 1
+
+            # Update valid indices based on successful loads
+            self.valid_indices = list(range(len(self.cached_data)))
+
+            if failed_count > 0:
+                rank0_print(
+                    f"Data caching completed. "
+                    f"Successfully loaded {len(self.cached_data)} files, "
+                    f"failed to load {failed_count} files"
+                )
+            else:
+                rank0_print("Data caching completed")
+
+    def _load_ckpt(self, idx: int) -> Optional[Dict[str, torch.Tensor]]:
+        """
+        Load a checkpoint file.
+
+        Args:
+            idx: Index of the checkpoint file
+
+        Returns:
+            Dictionary containing input_ids, target_hiddens,
+                hidden_states, and loss_mask, or None if loading fails
+        """
+        ckpt_path = self.ckpt_files[idx]
+
+        try:
+            data = torch.load(ckpt_path, map_location="cpu")
+        except Exception as e:
+            warnings.warn(
+                f"Failed to load checkpoint {ckpt_path}: {e}. Skipping this file.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return None
+
+        # Validate required keys
+        required_keys = [
+            "input_ids",  # B, N
+            "target_hiddens",  # B, N, D
+            "hidden_states",  # B, N, 3*D
+            "loss_mask",  # B, N
+        ]
+        missing_keys = [key for key in required_keys if key not in data]
+
+        if missing_keys:
+            warnings.warn(
+                f"Checkpoint {ckpt_path} is missing required keys: {missing_keys}. "
+                f"Skipping this file.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return None
+
+        # Validate tensor types
+        for key in required_keys:
+            if not isinstance(data[key], torch.Tensor):
+                warnings.warn(
+                    f"Value for key '{key}' in {ckpt_path} is not a torch.Tensor. "
+                    f"Skipping this file.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                return None
+
+        attention_mask = torch.ones_like(data["input_ids"])
+        data["attention_mask"] = attention_mask  # B, N
+        return data
+
+    def __len__(self) -> int:
+        """Return the number of valid samples in the dataset."""
+        if self.cached_data is not None:
+            return len(self.cached_data)
+        return len(self.valid_indices)
+
+    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+        """
+        Get a sample from the dataset.
+
+        Args:
+            idx: Index of the sample
+
+        Returns:
+            Dictionary containing:
+                - input_ids: Token IDs (torch.Tensor)
+                - target_logits: Pre-computed logits from target
+                    model (torch.Tensor)
+                - hidden_states: Pre-computed hidden states from
+                    target model (torch.Tensor)
+                - loss_mask: Mask for loss computation (torch.Tensor)
+        """
+        if self.cached_data is not None:
+            return self.cached_data[idx]
+        else:
+            # Try to load the checkpoint, retry with next valid index if fails
+            max_retries = len(self.valid_indices)
+            for _attempt in range(max_retries):
+                actual_idx = self.valid_indices[idx % len(self.valid_indices)]
+                data = self._load_ckpt(actual_idx)
+                if data is not None:
+                    return data
+                else:
+                    # Remove failed index from valid_indices
+                    self.valid_indices.remove(actual_idx)
+                    if len(self.valid_indices) == 0:
+                        raise RuntimeError(
+                            "All checkpoint files failed to load. "
+                            "Cannot continue training."
+                        )
+                    # Try next index
+                    idx += 1
+
+            # If all retries failed, raise error
+            raise RuntimeError(
+                f"Failed to load any valid checkpoint after {max_retries} attempts"
+            )
