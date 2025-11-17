@@ -131,7 +131,7 @@ class HiddenStateGenerator:
             data_point = {
                 "input_ids": row["input_ids"].cpu(),  # B, N
                 "loss_mask": row["loss_mask"].cpu(),  # B, N
-                "hidden_states": aux_hiddens.cpu(),  # B, N, D
+                "hidden_states": aux_hiddens.cpu(),  # B, N, 3*D
                 "target_hiddens": target_hiddens.cpu(),  # B, N, D
             }
 

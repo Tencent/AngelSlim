@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import re
+import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -499,14 +500,35 @@ class OfflineEagle3Dataset(Dataset):
             f"in {data_dir} (including subdirectories)"
         )
 
+        # Track valid indices (files that can be loaded successfully)
+        self.valid_indices = list(range(len(self.ckpt_files)))
+
         # Cache data in memory if requested
         self.cached_data: Optional[List[Dict[str, torch.Tensor]]] = None
         if self.cache_in_memory:
             rank0_print("Caching all data in memory...")
-            self.cached_data = [self._load_ckpt(i) for i in range(len(self.ckpt_files))]
-            rank0_print("Data caching completed")
+            self.cached_data = []
+            failed_count = 0
+            for i in range(len(self.ckpt_files)):
+                data = self._load_ckpt(i)
+                if data is not None:
+                    self.cached_data.append(data)
+                else:
+                    failed_count += 1
 
-    def _load_ckpt(self, idx: int) -> Dict[str, torch.Tensor]:
+            # Update valid indices based on successful loads
+            self.valid_indices = list(range(len(self.cached_data)))
+
+            if failed_count > 0:
+                rank0_print(
+                    f"Data caching completed. "
+                    f"Successfully loaded {len(self.cached_data)} files, "
+                    f"failed to load {failed_count} files"
+                )
+            else:
+                rank0_print("Data caching completed")
+
+    def _load_ckpt(self, idx: int) -> Optional[Dict[str, torch.Tensor]]:
         """
         Load a checkpoint file.
 
@@ -515,14 +537,19 @@ class OfflineEagle3Dataset(Dataset):
 
         Returns:
             Dictionary containing input_ids, target_hiddens,
-                hidden_states, and loss_mask
+                hidden_states, and loss_mask, or None if loading fails
         """
         ckpt_path = self.ckpt_files[idx]
 
         try:
             data = torch.load(ckpt_path, map_location="cpu")
         except Exception as e:
-            raise RuntimeError(f"Failed to load checkpoint {ckpt_path}: {e}")
+            warnings.warn(
+                f"Failed to load checkpoint {ckpt_path}: {e}. Skipping this file.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return None
 
         # Validate required keys
         required_keys = [
@@ -534,24 +561,34 @@ class OfflineEagle3Dataset(Dataset):
         missing_keys = [key for key in required_keys if key not in data]
 
         if missing_keys:
-            raise ValueError(
-                f"Checkpoint {ckpt_path} is missing required keys: {missing_keys}"
+            warnings.warn(
+                f"Checkpoint {ckpt_path} is missing required keys: {missing_keys}. "
+                f"Skipping this file.",
+                RuntimeWarning,
+                stacklevel=2,
             )
+            return None
 
         # Validate tensor types
         for key in required_keys:
             if not isinstance(data[key], torch.Tensor):
-                raise TypeError(
-                    f"Value for key '{key}' in {ckpt_path} is not a torch.Tensor"
+                warnings.warn(
+                    f"Value for key '{key}' in {ckpt_path} is not a torch.Tensor. "
+                    f"Skipping this file.",
+                    RuntimeWarning,
+                    stacklevel=2,
                 )
+                return None
 
         attention_mask = torch.ones_like(data["input_ids"])
         data["attention_mask"] = attention_mask  # B, N
         return data
 
     def __len__(self) -> int:
-        """Return the number of samples in the dataset."""
-        return len(self.ckpt_files)
+        """Return the number of valid samples in the dataset."""
+        if self.cached_data is not None:
+            return len(self.cached_data)
+        return len(self.valid_indices)
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         """
@@ -572,4 +609,25 @@ class OfflineEagle3Dataset(Dataset):
         if self.cached_data is not None:
             return self.cached_data[idx]
         else:
-            return self._load_ckpt(idx)
+            # Try to load the checkpoint, retry with next valid index if fails
+            max_retries = len(self.valid_indices)
+            for _attempt in range(max_retries):
+                actual_idx = self.valid_indices[idx % len(self.valid_indices)]
+                data = self._load_ckpt(actual_idx)
+                if data is not None:
+                    return data
+                else:
+                    # Remove failed index from valid_indices
+                    self.valid_indices.remove(actual_idx)
+                    if len(self.valid_indices) == 0:
+                        raise RuntimeError(
+                            "All checkpoint files failed to load. "
+                            "Cannot continue training."
+                        )
+                    # Try next index
+                    idx += 1
+
+            # If all retries failed, raise error
+            raise RuntimeError(
+                f"Failed to load any valid checkpoint after {max_retries} attempts"
+            )
