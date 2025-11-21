@@ -32,34 +32,74 @@ AngelSlim是腾讯自研的，致力于打造更易用、更全面和更高效�
 
 目前支持的模型及压缩策略：
 
-.. table::
+```{eval-rst}
+.. list-table:: AngelSlim 支持的场景、模型和技术
+   :header-rows: 1
+   :name: index-overall
    :align: center
+   :widths: 20 20 25 15 20
 
-   +-------------------+-----------------+----------------------+------------+-----------------+
-   | 场景              | 模型            | 量化                 | 投机采样   | 其他技术        |
-   +===================+=================+======================+============+=================+
-   | **文生文(LLM)**   | Hunyuan-Dense   | FP8-Static/Dynamic   | Eagle3     | **稀疏注意力**  |
-   |                   | Hunyuan-MoE     | INT8-Dynamic         | SpecExit   | Minference(建设中) |
-   |                   | Qwen3           | INT4-GPTQ/AWQ/GPTAQ  |            |                 |
-   |                   | DeepSeek-V3/R1  | LeptoQuant           |            |                 |
-   |                   | GLM-4.6         | Tequila              |            |                 |
-   |                   | Qwen2.5         |                      |            |                 |
-   +-------------------+-----------------+----------------------+------------+-----------------+
-   | **图/视频生文(VLM)** | Hunyuan-VL   | FP8-Static/Dynamic   | Eagle3     | **Token剪枝**   |
-   |                   | Qwen3-VL        | INT8-Dynamic         |            | 建设中          |
-   |                   | Qwen2.5-VL      | INT4-GPTQ/AWQ/GPTAQ  |            |                 |
-   +-------------------+-----------------+----------------------+------------+-----------------+
-   | **文生图/视频/3D** | Hunyuan-Image  | FP8-Dynamic          | -          | **Cache技术**   |
-   |  **(Diffusion)** | Hunyuan-Video   | FP8-Weight-Only      |            | DeepCache       |
-   |                   | Hunyuan-3D      |                      |            | TeaCache        |
-   |                   | Qwen-Image      |                      |            |                 |
-   |                   | FLUX            |                      |            | **稀疏注意力**   |
-   |                   | Wan             |                      |            | 建设中          |
-   |                   | SDXL            |                      |            |                 |
-   +-------------------+-----------------+----------------------+------------+-----------------+
-   | **语音(TTS/ASR)** | Qwen3-Omni      | FP8-Static/Dynamic    | 建设中     | **Token剪枝**   |
-   |                   |                 |                      |            | 建设中          |
-   +-------------------+-----------------+----------------------+------------+-----------------+
+   * - 场景
+     - 模型
+     - 量化
+     - 投机采样
+     - 其他技术
+   * - **文生文(LLM)**
+     - - Hunyuan-Dense
+       - Hunyuan-MoE
+       - Qwen3
+       - DeepSeek-V3/R1
+       - GLM-4.6
+       - Qwen2.5
+     - - FP8-Static/Dynamic
+       - INT8-Dynamic
+       - INT4-GPTQ/AWQ/GPTAQ
+       - NVFP4
+       - LeptoQuant
+       - Tequila
+     - - Eagle3
+       - SpecExit
+     - - **稀疏注意力**
+
+         - Minference(建设中)
+   * - **图/视频生文(VLM)**
+     - - Hunyuan-VL
+       - Qwen3-VL
+       - Qwen2.5-VL
+     - - FP8-Static/Dynamic
+       - INT8-Dynamic
+       - INT4-GPTQ/AWQ/GPTAQ
+     - - Eagle3
+     - - **Token剪枝**
+
+         - 建设中
+   * - **文生图/视频/3D**
+     - - Hunyuan-Image
+       - Hunyuan-Video
+       - Hunyuan-3D
+       - Qwen-Image
+       - FLUX
+       - Wan
+       - SDXL
+     - - FP8-Dynamic
+       - FP8-Weight-Only
+     - \-
+     - - **Cache技术**
+
+         - DeepCache
+         - TeaCache
+       - **稀疏注意力**
+
+         - 建设中
+   * - **语音(TTS/ASR)**
+     - - Qwen3-Omni
+     - - FP8-Static/Dynamic
+     - - 建设中
+     - - **Token剪枝**
+
+         - 建设中
+
+```
 
 ## 文档
 
