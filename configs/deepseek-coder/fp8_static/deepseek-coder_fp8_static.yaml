@@ -1,0 +1,34 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output
+
+# Simplified Configuration for LLM compression
+model:
+  name: Llama
+  model_path: deepseek-ai/deepseek-coder-6.7b-instruct
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    name: fp8_static     # Supported: fp8_static, fp8_dynamic
+    bits: 8                # Quantization bits (4/8)
+    quant_method:
+      weight: "per-tensor"
+      activation: "per-tensor"
+    ignore_layers:         # Skip quantization for these layers
+      - "lm_head"
+      - "model.embed_tokens"
+
+# Dataset for calibration
+dataset:
+  name: TextDataset
+  data_path: your/data/path
+  max_seq_length: 8192
+  num_samples: 512
+  batch_size: 1
