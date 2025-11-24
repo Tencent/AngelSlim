@@ -114,11 +114,19 @@ class Eagle3BaseDraftModel(PreTrainedModel, ABC):
             with open(index_file, "r") as f:
                 index_json = json.load(f)
 
-            emb_path = index_json["weight_map"]["model.embed_tokens.weight"]
+            if "model.embed_tokens.weight" in index_json["weight_map"]:
+                tensor_name = "model.embed_tokens.weight"
+                emb_path = index_json["weight_map"][tensor_name]
+            elif "model.language_model.embed_tokens.weight" in index_json["weight_map"]:
+                tensor_name = "model.language_model.embed_tokens.weight"
+                emb_path = index_json["weight_map"][tensor_name]
+            else:
+                raise KeyError("Embedding weights key not found in index.")
+
             safetensors_file = os.path.join(model_path, emb_path)
 
             with safe_open(safetensors_file, framework="pt", device="cpu") as f:
-                tensor_slice = f.get_slice("model.embed_tokens.weight")
+                tensor_slice = f.get_slice(tensor_name)
                 _, hidden_dim = tensor_slice.get_shape()
                 tensor = tensor_slice[:, :hidden_dim].float()
 
@@ -137,11 +145,19 @@ class Eagle3BaseDraftModel(PreTrainedModel, ABC):
             with open(index_file, "r") as f:
                 index_json = json.load(f)
 
-            emb_path = index_json["weight_map"]["model.embed_tokens.weight"]
+            if "model.embed_tokens.weight" in index_json["weight_map"]:
+                tensor_name = "model.embed_tokens.weight"
+                emb_path = index_json["weight_map"][tensor_name]
+            elif "model.language_model.embed_tokens.weight" in index_json["weight_map"]:
+                tensor_name = "model.language_model.embed_tokens.weight"
+                emb_path = index_json["weight_map"][tensor_name]
+            else:
+                raise KeyError("Embedding weights key not found in index.")
+
             bin_file = os.path.join(model_path, emb_path)
 
             weights = torch.load(bin_file, map_location="cpu")
-            tensor = weights["model.embed_tokens.weight"].float()
+            tensor = weights[tensor_name].float()
 
             return tensor
         except Exception as e:

@@ -123,16 +123,19 @@ class HiddenStateGenerator:
         try:
             # Generate aux and target hiddens
             device = decide_device_for_distributed()
-            aux_hiddens, target_hiddens = self.target_model.get_aux_and_target_hiddens(
+            results = self.target_model.get_aux_and_target_hiddens(
                 input_ids=row["input_ids"].to(device),
             )
+            # hidden_states: B, N, 3*D
+            # target_hiddens: B, N, D
+            for k, v in results.items():
+                results[k] = v.cpu()
 
             # Prepare data point
             data_point = {
                 "input_ids": row["input_ids"].cpu(),  # B, N
                 "loss_mask": row["loss_mask"].cpu(),  # B, N
-                "hidden_states": aux_hiddens.cpu(),  # B, N, 3*D
-                "target_hiddens": target_hiddens.cpu(),  # B, N, D
+                **results,
             }
 
             # Save to disk
@@ -236,6 +239,20 @@ def parse_arguments() -> argparse.Namespace:
         help="Backend for target model",
     )
     parser.add_argument(
+        "--modal_type",
+        type=str,
+        default="LLM",
+        choices=["LLM", "VLM"],
+        help="Modal type: LLM for language models, VLM for vision-language models",
+    )
+    parser.add_argument(
+        "--training_mode",
+        type=str,
+        default="offline",
+        choices=["online", "offline"],
+        help="Training mode: online or offline",
+    )
+    parser.add_argument(
         "--torch_dtype",
         type=str,
         default="bfloat16",
@@ -268,6 +285,12 @@ def parse_arguments() -> argparse.Namespace:
         type=int,
         default=16,
         help="Number of processes for data preprocessing",
+    )
+    parser.add_argument(
+        "--sample_num",
+        type=int,
+        default=None,
+        help="Number of max samples for data preprocessing",
     )
     parser.add_argument(
         "--shuffle_seed", type=int, default=42, help="Random seed for shuffling dataset"
@@ -321,7 +344,7 @@ def load_dataset(args: argparse.Namespace, tokenizer, rank: int):
         display=display,
     )
 
-    _, dataset = dataset_manager.create_online_datasets()
+    _, dataset, _ = dataset_manager.create_online_datasets()
     logger.info(f"Dataset loaded: {len(dataset)} samples", extra={"rank": rank})
 
     return dataset
@@ -396,6 +419,7 @@ def main():
         torch_dtype = get_torch_dtype(args.torch_dtype)
         target_model = create_target_model(
             backend=args.target_backend,
+            modal_type=args.modal_type,
             model_path=args.target_model_name_or_path or args.model_name,
             torch_dtype=torch_dtype,
             trust_remote_code=args.trust_remote_code,

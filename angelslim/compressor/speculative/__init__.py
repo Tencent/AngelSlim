@@ -14,11 +14,9 @@
 
 from .benchmark import BenchmarkConfig, BenchmarkEngine, BenchmarkMode
 from .train import (
-    DataCollatorWithPadding,
     DatasetManager,
     DraftModelConfig,
-    OfflineEagle3Trainer,
-    OnlineEagle3Trainer,
+    Eagle3TrainerFactory,
     TargetHead,
     convert_sharegpt_data,
     convert_ultrachat_data,
@@ -35,10 +33,8 @@ __all__ = [
     "create_draft_model",
     "DraftModelConfig",
     "create_target_model",
-    "OnlineEagle3Trainer",
-    "OfflineEagle3Trainer",
+    "Eagle3TrainerFactory",
     "data_generation_work_flow",
-    "DataCollatorWithPadding",
     "convert_sharegpt_data",
     "convert_ultrachat_data",
     "DatasetManager",

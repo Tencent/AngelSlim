@@ -57,7 +57,7 @@ class BaseBackend(ABC):
         input_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         **kwargs,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, ...]:
         """
         Extract hidden states and logits from the model.
 
@@ -80,7 +80,7 @@ class BaseBackend(ABC):
         input_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         **kwargs,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> dict[str, torch.Tensor]:
         """
         Extract auxiliary and target hidden states from the model.
 
@@ -237,7 +237,7 @@ class TransformersBackend(BaseBackend):
         input_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         **kwargs,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> dict[str, torch.Tensor]:
         """
         Extract auxiliary and final layer hidden states.
 
@@ -266,7 +266,178 @@ class TransformersBackend(BaseBackend):
         # Get final layer hidden states
         target_hidden_states = outputs.hidden_states[-1]
 
-        return aux_hidden_states, target_hidden_states
+        # hidden_states: B, N, 3*D
+        # target_hiddens: B, N, D
+        return {
+            "hidden_states": aux_hidden_states,
+            "target_hiddens": target_hidden_states,
+        }
+
+
+class VLMForwardWrapper(torch.nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+
+    def forward(self, *args, **kwargs):
+        inputs_embeds = None
+        if "inputs_embeds" in kwargs and kwargs["inputs_embeds"] is not None:
+            inputs_embeds = kwargs["inputs_embeds"]
+        elif len(args) > 2 and args[2] is not None:
+            inputs_embeds = args[2]
+
+        outputs = self.model.forward(*args, **kwargs)
+        return outputs, inputs_embeds
+
+
+class VLMTransformersBackend(BaseBackend):
+    """VLM HuggingFace Transformers backend"""
+
+    def load_model(self):
+        from transformers import AutoModelForImageTextToText, AutoProcessor
+
+        default_kwargs = {
+            "dtype": torch.bfloat16,
+            "device_map": "auto",
+            "trust_remote_code": True,
+        }
+        default_kwargs.update(self.kwargs)
+
+        self.model = AutoModelForImageTextToText.from_pretrained(
+            self.model_path, **default_kwargs
+        )
+        # self.model = VLMForwardWrapper(self.model)
+
+        # Freeze the base model
+        for param in self.model.parameters():
+            param.requires_grad = False
+        self.model.eval()
+
+        self.tokenizer = AutoProcessor.from_pretrained(
+            self.model_path, trust_remote_code=True
+        )
+
+    def get_hidden_states_and_logits(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        **kwargs,
+    ) -> Tuple[torch.Tensor, ...]:
+        """
+        Extract hidden states and logits using Transformers backend.
+
+        Args:
+            input_ids: Input token IDs
+            attention_mask: Attention mask
+            **kwargs: May contain 'aux_hidden_states_layer_ids' to specify custom layers
+
+        Returns:
+            Tuple of (concatenated_hidden_states, logits)
+        """
+        inputs_embeds_list, position_ids_list = [], []
+
+        def hook(module, args, kwargs):
+            if "inputs_embeds" in kwargs and kwargs["inputs_embeds"] is not None:
+                inputs_embeds_list.append(
+                    kwargs["inputs_embeds"].clone().detach().cpu()
+                )
+            if "position_ids" in kwargs and kwargs["position_ids"] is not None:
+                position_ids_list.append(kwargs["position_ids"].clone().detach().cpu())
+            return args, kwargs
+
+        handle = self.model.language_model.register_forward_pre_hook(
+            hook, with_kwargs=True
+        )
+
+        with torch.no_grad():
+            outputs = self.model(
+                input_ids,
+                attention_mask=attention_mask,
+                output_hidden_states=True,
+                output_logits=True,
+            )
+
+        handle.remove()
+        inputs_embeds = inputs_embeds_list[0].to(input_ids.device)
+        position_ids = position_ids_list[0].to(input_ids.device)
+
+        # Extract auxiliary hidden states
+        aux_layer_ids = kwargs.get("aux_hidden_states_layer_ids", None)
+        hidden_states = self._extract_auxiliary_hidden_states(
+            outputs.hidden_states, aux_layer_ids
+        )
+
+        # Return hidden states and logits on the same device as input
+        return (
+            hidden_states,
+            outputs.logits.to(input_ids.device),
+            inputs_embeds,
+            position_ids,
+        )
+
+    def get_aux_and_target_hiddens(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        **kwargs,
+    ) -> dict[str, torch.Tensor]:
+        """
+        Extract auxiliary and final layer hidden states.
+
+        Args:
+            input_ids: Input token IDs
+            attention_mask: Attention mask
+            **kwargs: May contain 'aux_hidden_states_layer_ids' to specify custom layers
+
+        Returns:
+            Tuple of (auxiliary_hidden_states, final_hidden_states)
+        """
+        inputs_embeds_list, position_ids_list = [], []
+
+        def hook(module, args, kwargs):
+            if "inputs_embeds" in kwargs and kwargs["inputs_embeds"] is not None:
+                inputs_embeds_list.append(
+                    kwargs["inputs_embeds"].clone().detach().cpu()
+                )
+            if "position_ids" in kwargs and kwargs["position_ids"] is not None:
+                position_ids_list.append(kwargs["position_ids"].clone().detach().cpu())
+            return args, kwargs
+
+        handle = self.model.language_model.register_forward_pre_hook(
+            hook, with_kwargs=True
+        )
+
+        with torch.no_grad():
+            outputs = self.model(
+                input_ids,
+                attention_mask=attention_mask,
+                output_hidden_states=True,
+                output_logits=True,
+            )
+
+        handle.remove()
+        inputs_embeds = inputs_embeds_list[0].to(input_ids.device)
+        position_ids = position_ids_list[0].to(input_ids.device)
+
+        # Extract auxiliary hidden states
+        aux_layer_ids = kwargs.get("aux_hidden_states_layer_ids", None)
+        aux_hidden_states = self._extract_auxiliary_hidden_states(
+            outputs.hidden_states, aux_layer_ids
+        )
+
+        # Get final layer hidden states
+        target_hidden_states = outputs.hidden_states[-1]
+
+        # hidden_states: B, N, 3*D
+        # target_hiddens: B, N, D
+        # inputs_embeds: B, N, D
+        # position_ids: 3, N
+        return {
+            "hidden_states": aux_hidden_states,
+            "target_hiddens": target_hidden_states,
+            "inputs_embeds": inputs_embeds,
+            "position_ids": position_ids,
+        }
 
 
 class TargetModelWrapper:
@@ -279,10 +450,14 @@ class TargetModelWrapper:
 
     Supported backends:
         - hf: HuggingFace Transformers (AutoModelForCausalLM)
+    Supported modal types:
+        - LLM: Large Language Models
+        - VLM: Vision-Language Models
 
     Example:
         >>> wrapper = TargetModelWrapper(
         ...     backend="hf",
+        ...     modal_type="LLM",
         ...     model_path="/path/to/model",
         ...     dtype=torch.bfloat16
         ... )
@@ -290,63 +465,48 @@ class TargetModelWrapper:
     """
 
     BACKENDS = {
-        "hf": TransformersBackend,
+        ("hf", "LLM"): TransformersBackend,
+        ("hf", "VLM"): VLMTransformersBackend,
     }
 
-    def __init__(self, backend: str, model_path: str, **kwargs):
+    def __init__(
+        self, model_path: str, modal_type: str = "LLM", backend: str = "hf", **kwargs
+    ):
         """
-        Initialize TargetModelWrapper with specified backend.
+        Initialize TargetModel with specified backend
 
         Args:
-            backend: Backend identifier, one of ["hf"]
-            model_path: Path to model checkpoint or serving endpoint
-            **kwargs: Backend-specific configuration parameters
-
-        Raises:
-            ValueError: If backend is not supported
+            backend: One of ["hf"]
+            model_path: Path to model
+            **kwargs: Additional arguments for backend initialization
         """
-        self._validate_backend(backend)
+        if (backend, modal_type) not in self.BACKENDS:
+            raise ValueError(
+                f"Unsupported backend: {(backend, modal_type)}. "
+                f"Available backends: {list(self.BACKENDS.keys())}"
+            )
 
         self.backend_name = backend
-        self.backend = self.BACKENDS[backend](model_path, **kwargs)
+        self.backend = self.BACKENDS[(backend, modal_type)](model_path, **kwargs)
         self.backend.load_model()
-
-    def _validate_backend(self, backend: str) -> None:
-        """
-        Validate that the requested backend is supported.
-
-        Args:
-            backend: Backend identifier to validate
-
-        Raises:
-            ValueError: If backend is not in BACKENDS
-        """
-        if backend not in self.BACKENDS:
-            available = ", ".join(self.BACKENDS.keys())
-            raise ValueError(
-                f"Unsupported backend: '{backend}'. "
-                f"Available backends: [{available}]"
-            )
 
     def get_hidden_states_and_logits(
         self,
         input_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         **kwargs,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, ...]:
         """
-        Get hidden states and logits from target model.
+        Get hidden states and logits from target model
 
         Args:
-            input_ids: Input token IDs, shape [batch_size, seq_len]
+            input_ids: Input token ids, shape [batch_size, seq_len]
             attention_mask: Attention mask, shape [batch_size, seq_len]
-            **kwargs: Additional backend-specific arguments
 
         Returns:
-            Tuple of (hidden_states, logits):
-                - hidden_states: Concatenated auxiliary hidden states,
-                  shape [batch_size, seq_len, hidden_size * num_aux_layers]
-                - logits: Model output logits, shape [batch_size, seq_len, vocab_size]
+            Tuple of (hidden_states, logits)
+            - hidden_states: shape [batch_size, seq_len, hidden_size]
+            - logits: shape [batch_size, seq_len, vocab_size]
         """
         return self.backend.get_hidden_states_and_logits(
             input_ids=input_ids,
@@ -359,7 +519,7 @@ class TargetModelWrapper:
         input_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         **kwargs,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> dict[str, torch.Tensor]:
         """
         Get auxiliary and target hidden states from model.
 

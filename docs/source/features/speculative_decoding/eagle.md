@@ -58,7 +58,10 @@ bash scripts/speculative/generate_data_for_target_model.sh
 
 目前仅支持以HF为后端生成hidden states，调用脚本如下：
 ```shell
+# For LLMs
 bash scripts/speculative/generate_hidden_for_draft_model.sh
+# For VLMs
+bash scripts/speculative/generate_vlm_hidden_for_draft_model.sh
 ```
 
 **脚本参数说明：**
@@ -80,10 +83,13 @@ bash scripts/speculative/generate_hidden_for_draft_model.sh
 
 ### 2.1 在线训练
 
-使用 `scripts/speculative/train_eagle3_online.sh` 脚本进行Eagle3模型的在线训练：
+使用下面的脚本进行Eagle3模型的在线训练：
 
 ```shell
+# For LLMs
 bash scripts/speculative/train_eagle3_online.sh
+# For VLMs
+bash scripts/speculative/train_eagle3_vlm_online.sh
 ```
 
 **脚本参数说明：**
@@ -101,10 +107,13 @@ bash scripts/speculative/train_eagle3_online.sh
 ### 2.2 离线训练
 
 在离线训练前，必须要完成`1.2` 为Eagle3模型生成hidden states。
-使用 `scripts/speculative/train_eagle3_offline.sh` 脚本进行Eagle3模型的离线训练：
+使用下面的脚本进行Eagle3模型的离线训练：
 
 ```shell
+# For LLMs
 bash scripts/speculative/train_eagle3_offline.sh
+# For VLMs
+bash scripts/speculative/train_eagle3_vlm_offline.sh
 ```
 
 **脚本参数说明：**

@@ -12,16 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .offline_eagle3_trainer import OfflineEagle3Trainer
-from .offline_vlm_eagle3_trainer import OfflineVLMEagle3Trainer
-from .online_eagle3_trainer import OnlineEagle3Trainer
-from .online_vlm_eagle3_trainer import OnlineVLMEagle3Trainer
-from .trainer_factory import Eagle3TrainerFactory
+from .dataset_builder_factory import DatasetBuilderFactory
+from .offline_llm_dataset_builder import OfflineLLMDatasetBuilder
+from .offline_vlm_dataset_builder import OfflineVLMDatasetBuilder
+from .online_llm_dataset_builder import OnlineLLMDatasetBuilder
+from .online_vlm_dataset_builder import OnlineVLMDatasetBuilder
 
 __all__ = [
-    "Eagle3TrainerFactory",
-    "OnlineEagle3Trainer",
-    "OnlineVLMEagle3Trainer",
-    "OfflineEagle3Trainer",
-    "OfflineVLMEagle3Trainer",
+    "OnlineLLMDatasetBuilder",
+    "OnlineVLMDatasetBuilder",
+    "OfflineLLMDatasetBuilder",
+    "OfflineVLMDatasetBuilder",
+    "DatasetBuilderFactory",
 ]

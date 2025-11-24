@@ -64,7 +64,10 @@ class TargetHead(nn.Module):
 
     @classmethod
     def from_pretrained(
-        cls, model_name_or_path: str, lm_head_key: str = "lm_head.weight"
+        cls,
+        model_name_or_path: str,
+        lm_head_key: str = "lm_head.weight",
+        sub_config_name=None,
     ):
         """
         Load TargetHead from a pretrained model efficiently.
@@ -82,6 +85,12 @@ class TargetHead(nn.Module):
         """
         # Load model config to get architecture info
         config = AutoConfig.from_pretrained(model_name_or_path, trust_remote_code=True)
+        if hasattr(config, sub_config_name):
+            config = getattr(config, sub_config_name)
+        else:
+            raise ValueError(
+                f"Config {config} has no sub-config named {sub_config_name}"
+            )
 
         # Get model dimensions
         hidden_size = config.hidden_size

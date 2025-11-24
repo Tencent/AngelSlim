@@ -21,6 +21,7 @@ __all__ = [
     "convert_sharegpt_data",
     "convert_ultrachat_data",
     "DataCollatorWithPadding",
+    "VLMDataCollatorWithPadding",
 ]
 
 
@@ -100,33 +101,58 @@ def process_token_dict_to_mappings(
     return d2t, t2d
 
 
-class DataCollatorWithPadding:
-    def paddingtensor(self, intensors, N):
-        B, n, S = intensors.shape
-        # padding_tensor = torch.zeros(B, N - n, S,dtype=intensors.dtype)
-        padding_tensor = torch.zeros(B, N - n, S, dtype=intensors.dtype)
-        outtensors = torch.cat((intensors, padding_tensor), dim=1)
-        return outtensors
+def paddingtensor(intensors, N):
+    B, n, S = intensors.shape
+    # padding_tensor = torch.zeros(B, N - n, S,dtype=intensors.dtype)
+    padding_tensor = torch.zeros(B, N - n, S, dtype=intensors.dtype)
+    outtensors = torch.cat((intensors, padding_tensor), dim=1)
+    return outtensors
 
-    def paddingtensor2D(self, intensors, N):
-        B, n = intensors.shape
-        padding_tensor = torch.zeros(B, N - n, dtype=intensors.dtype)
-        outtensors = torch.cat((intensors, padding_tensor), dim=1)
-        return outtensors
+
+def paddingtensor2D(intensors, N):
+    B, n = intensors.shape
+    padding_tensor = torch.zeros(B, N - n, dtype=intensors.dtype)
+    outtensors = torch.cat((intensors, padding_tensor), dim=1)
+    return outtensors
+
+
+def paddingtensor3D_CBN(tensor_list):
+    N = max(tensor.shape[-1] for tensor in tensor_list)
+    out_tensor_list = []
+    for tensor in tensor_list:
+        c, b, n = tensor.shape
+        outtensor = torch.zeros(c, b, N, dtype=tensor_list[0].dtype)
+        outtensor[:, :, :n] = tensor
+        out_tensor_list.append(outtensor)
+    return torch.cat(out_tensor_list, dim=1)
+
+
+def paddingtensor3D_BHW(tensor_list):
+    max_h = max(tensor.shape[-2] for tensor in tensor_list)
+    max_w = max(tensor.shape[-1] for tensor in tensor_list)
+    out_tensor_list = []
+    for tensor in tensor_list:
+        if tensor.ndim == 2:
+            tensor = tensor.unsqueeze(0)
+        b, h, w = tensor.shape
+        outtensor = torch.zeros(b, max_h, max_w, dtype=tensor.dtype)
+        outtensor[:, :h, :w] = tensor
+        out_tensor_list.append(outtensor)
+    return torch.cat(out_tensor_list)
+
+
+class DataCollatorWithPadding:
 
     def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, Any]:
         max_length = max(item["input_ids"].shape[1] for item in features)
         batch_input_ids = torch.cat(
-            [self.paddingtensor2D(item["input_ids"], max_length) for item in features]
+            [paddingtensor2D(item["input_ids"], max_length) for item in features]
         )
         batch_attention_mask = torch.cat(
-            [
-                self.paddingtensor2D(item["attention_mask"], max_length)
-                for item in features
-            ]
+            [paddingtensor2D(item["attention_mask"], max_length) for item in features]
         )
         batch_loss_mask = torch.cat(
-            [self.paddingtensor2D(item["loss_mask"], max_length) for item in features]
+            [paddingtensor2D(item["loss_mask"], max_length) for item in features]
         )
 
         batch = {
@@ -142,15 +168,70 @@ class DataCollatorWithPadding:
             "hidden_states" in item and "target_hiddens" in item for item in features
         ):
             batch["hidden_states"] = torch.cat(
-                [
-                    self.paddingtensor(item["hidden_states"], max_length)
-                    for item in features
-                ]
+                [paddingtensor(item["hidden_states"], max_length) for item in features]
             )
             batch["target_hiddens"] = torch.cat(
-                [
-                    self.paddingtensor(item["target_hiddens"], max_length)
-                    for item in features
-                ]
+                [paddingtensor(item["target_hiddens"], max_length) for item in features]
             )
+        return batch
+
+
+class VLMDataCollatorWithPadding:
+
+    def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, Any]:
+        max_length = max(item["input_ids"].shape[1] for item in features)
+        batch_input_ids = torch.cat(
+            [paddingtensor2D(item["input_ids"], max_length) for item in features]
+        )
+        batch_attention_mask = torch.cat(
+            [paddingtensor2D(item["attention_mask"], max_length) for item in features]
+        )
+        batch_loss_mask = torch.cat(
+            [paddingtensor2D(item["loss_mask"], max_length) for item in features]
+        )
+
+        batch = {
+            "input_ids": batch_input_ids,
+            "attention_mask": batch_attention_mask,
+            "loss_mask": batch_loss_mask,
+            "hidden_states": None,
+            "target_hiddens": None,
+            "inputs_embeds": None,
+            "position_ids": None,
+        }
+
+        if "pixel_values" in features[0]:
+            batch["pixel_values"] = paddingtensor3D_BHW(
+                [item["pixel_values"] for item in features]
+            )
+        if "video_pixel_values" in features[0]:
+            batch["video_pixel_values"] = paddingtensor3D_BHW(
+                [item["video_pixel_values"] for item in features]
+            )
+        if "image_grid_thw" in features[0]:
+            batch["image_grid_thw"] = paddingtensor3D_BHW(
+                [item["image_grid_thw"] for item in features]
+            )
+        if "video_grid_thw" in features[0]:
+            batch["video_grid_thw"] = paddingtensor3D_BHW(
+                [item["video_grid_thw"] for item in features]
+            )
+
+        # Check if both hidden_states and target_hiddens exist in all features
+        if all(
+            "hidden_states" in item and "target_hiddens" in item for item in features
+        ):
+            batch["hidden_states"] = torch.cat(
+                [paddingtensor(item["hidden_states"], max_length) for item in features]
+            )
+            batch["target_hiddens"] = torch.cat(
+                [paddingtensor(item["target_hiddens"], max_length) for item in features]
+            )
+            batch["inputs_embeds"] = torch.cat(
+                [paddingtensor(item["inputs_embeds"], max_length) for item in features]
+            )
+            batch["position_ids"] = paddingtensor3D_CBN(
+                [item["position_ids"] for item in features]
+            )
+
         return batch

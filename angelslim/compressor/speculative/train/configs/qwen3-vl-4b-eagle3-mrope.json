@@ -1,0 +1,42 @@
+{
+  "architectures": [
+    "Eagle3LlamaForCausalLM"
+  ],
+  "model_type": "llama",
+  "attention_bias": false,
+  "attention_dropout": 0.0,
+  "bos_token_id": 151643,
+  "dtype": "bfloat16",
+  "eos_token_id": 151645,
+  "head_dim": 128,
+  "hidden_act": "silu",
+  "hidden_size": 2560,
+  "initializer_range": 0.02,
+  "intermediate_size": 9728,
+  "max_position_embeddings": 262144,
+  "num_attention_heads": 32,
+  "num_hidden_layers": 1,
+  "num_key_value_heads": 8,
+  "rms_norm_eps": 1e-06,
+  "rope_scaling": {
+    "type": "default",
+    "rope_type": "default",
+    "mrope_interleaved": true,
+    "mrope_section": [
+      24,
+      20,
+      20
+    ]
+  },
+  "rope_theta": 5000000,
+  "use_cache": true,
+  "vocab_size": 151936,
+  "tie_word_embeddings": true,
+  "transformers_version": "4.57.1",
+  "image_token_id": 151655,
+  "video_token_id": 151656,
+  "vision_end_token_id": 151653,
+  "vision_start_token_id": 151652,
+  "draft_vocab_size": 32000,
+  "modal_type": "VLM"
+}

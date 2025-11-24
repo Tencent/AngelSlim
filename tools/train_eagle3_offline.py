@@ -17,13 +17,12 @@ import os
 from pathlib import Path
 
 import transformers
-from transformers import AutoTokenizer
+from transformers import AutoProcessor, AutoTokenizer
 
 from angelslim.compressor.speculative import (
-    DataCollatorWithPadding,
     DatasetManager,
     DraftModelConfig,
-    OfflineEagle3Trainer,
+    Eagle3TrainerFactory,
     TargetHead,
     create_draft_model,
     get_supported_chat_template_type_strings,
@@ -37,6 +36,20 @@ def parse_args():
 
     # Model arguments
     model_group = parser.add_argument_group("Model Arguments")
+    model_group.add_argument(
+        "--modal_type",
+        type=str,
+        default="LLM",
+        choices=["LLM", "VLM"],
+        help="Modal type: LLM for language models, VLM for vision-language models",
+    )
+    model_group.add_argument(
+        "--training_mode",
+        type=str,
+        default="offline",
+        choices=["online", "offline"],
+        help="Training mode: online or offline",
+    )
     model_group.add_argument(
         "--target_model_name_or_path",
         type=str,
@@ -74,6 +87,12 @@ def parse_args():
         type=str,
         default="lm_head.weight",
         help="Key for lm head in model config",
+    )
+    model_group.add_argument(
+        "--sub_config_name",
+        type=str,
+        default=None,
+        help="Usually used for VLMs to specify sub-config name (e.g., 'text_config')",
     )
 
     # Data arguments
@@ -117,6 +136,12 @@ def parse_args():
         type=int,
         default=16,
         help="Number of processes for data preprocessing",
+    )
+    data_group.add_argument(
+        "--sample_num",
+        type=int,
+        default=None,
+        help="Number of max samples for data preprocessing",
     )
     data_group.add_argument(
         "--shuffle_seed", type=int, default=42, help="Random seed for shuffling dataset"
@@ -265,12 +290,16 @@ def train():
     target_head = TargetHead.from_pretrained(
         args.target_model_name_or_path,
         lm_head_key=args.lm_head_key,
+        sub_config_name=args.sub_config_name,
     )
     rank0_print("Target head loaded successfully")
 
     # Load tokenizer
     rank0_print("Loading tokenizer...")
-    tokenizer = AutoTokenizer.from_pretrained(args.target_model_name_or_path)
+    if args.modal_type == "LLM":
+        tokenizer = AutoTokenizer.from_pretrained(args.target_model_name_or_path)
+    else:
+        tokenizer = AutoProcessor.from_pretrained(args.target_model_name_or_path)
 
     # Create all datasets using unified DatasetManager
     rank0_print("Creating datasets...")
@@ -287,9 +316,13 @@ def train():
         chat_template_type=args.chat_template_type,
     )
 
-    (offline_train_dataset, offline_eval_dataset, online_train_dataset, _) = (
-        dataset_manager.create_all_datasets()
-    )
+    (
+        offline_train_dataset,
+        offline_eval_dataset,
+        online_train_dataset,
+        online_eval_dataset,
+        data_collator,
+    ) = dataset_manager.create_all_datasets()
 
     rank0_print(
         f"Offline train dataset size: {len(offline_train_dataset)}, "
@@ -368,14 +401,16 @@ def train():
 
     # Initialize trainer with offline datasets
     rank0_print("Initializing trainer...")
-    trainer = OfflineEagle3Trainer(
+    trainer = Eagle3TrainerFactory.create(
+        training_mode=args.training_mode,
+        modal_type=args.modal_type,
         draft_model=draft_model,
         target_head=target_head,
         length=args.training_time_test_length,
         args=training_args,
         train_dataset=offline_train_dataset,
         eval_dataset=offline_eval_dataset,
-        data_collator=DataCollatorWithPadding(),
+        data_collator=data_collator,
     )
 
     # Start training
