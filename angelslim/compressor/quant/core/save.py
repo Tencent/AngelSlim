@@ -621,11 +621,10 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
         filename = "model-" + "{:0>{}}".format(model_save_ind, 5) + ".safetensors"
         model_save_ind += 1
         for _, k in enumerate(ori_state_dicts[0].keys()):
-            if "norm.weight" in k:
+            if "model.norm.weight" in k:
                 param: torch.Tensor = ori_state_dicts[0].get_tensor(k)
-                new_k = "model.norm.weight"
-                new_save_dict[new_k] = param
-                index_dict["weight_map"][new_k] = str(filename)
+                new_save_dict[k] = param
+                index_dict["weight_map"][k] = str(filename)
         safe_save(new_save_dict, os.path.join(save_model_path, filename))
 
         # process model.encoder
