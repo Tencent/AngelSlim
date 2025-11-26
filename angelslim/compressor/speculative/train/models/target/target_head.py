@@ -85,12 +85,15 @@ class TargetHead(nn.Module):
         """
         # Load model config to get architecture info
         config = AutoConfig.from_pretrained(model_name_or_path, trust_remote_code=True)
-        if hasattr(config, sub_config_name):
-            config = getattr(config, sub_config_name)
-        else:
-            raise ValueError(
-                f"Config {config} has no sub-config named {sub_config_name}"
-            )
+
+        if sub_config_name is not None:
+            # now sub_config_name is only for VLM models to get language_model config
+            if hasattr(config, sub_config_name):
+                config = getattr(config, sub_config_name)
+            else:
+                raise ValueError(
+                    f"Config {config} has no sub-config named {sub_config_name}"
+                )
 
         # Get model dimensions
         hidden_size = config.hidden_size

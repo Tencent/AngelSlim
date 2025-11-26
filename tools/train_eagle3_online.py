@@ -275,7 +275,7 @@ def train():
     # Create draft model
     rank0_print("Loading draft model...")
     draft_model_config = DraftModelConfig.from_file(args.draft_model_config_path)
-    print(f"draft_model_config: {draft_model_config}")
+    rank0_print(f"draft_model_config: {draft_model_config}")
     draft_model = create_draft_model(draft_model_config)
     draft_model.load_embed_weights(args.target_model_name_or_path)
     draft_model.freeze_embed_weights()

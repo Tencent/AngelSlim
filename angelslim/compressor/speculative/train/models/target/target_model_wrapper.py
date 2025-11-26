@@ -274,22 +274,6 @@ class TransformersBackend(BaseBackend):
         }
 
 
-class VLMForwardWrapper(torch.nn.Module):
-    def __init__(self, model):
-        super().__init__()
-        self.model = model
-
-    def forward(self, *args, **kwargs):
-        inputs_embeds = None
-        if "inputs_embeds" in kwargs and kwargs["inputs_embeds"] is not None:
-            inputs_embeds = kwargs["inputs_embeds"]
-        elif len(args) > 2 and args[2] is not None:
-            inputs_embeds = args[2]
-
-        outputs = self.model.forward(*args, **kwargs)
-        return outputs, inputs_embeds
-
-
 class VLMTransformersBackend(BaseBackend):
     """VLM HuggingFace Transformers backend"""
 
@@ -306,7 +290,6 @@ class VLMTransformersBackend(BaseBackend):
         self.model = AutoModelForImageTextToText.from_pretrained(
             self.model_path, **default_kwargs
         )
-        # self.model = VLMForwardWrapper(self.model)
 
         # Freeze the base model
         for param in self.model.parameters():
