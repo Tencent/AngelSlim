@@ -150,8 +150,9 @@
           <li>
             <strong>Cache技术</strong>
             <ul style="padding-left: 1.5rem">
-              <li>DeepCache</li>
-              <li>TeaCache</li>
+              <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/diffusion/cache.html">DeepCache</a></li>
+              <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/diffusion/cache.html">TeaCache</a></li>
+              <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/diffusion/cache.html">TaylorCache</a></li>
             </ul>
           </li>
           <li>

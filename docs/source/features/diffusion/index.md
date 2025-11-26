@@ -7,4 +7,5 @@
 :maxdepth: 1
 
 quantization
+cache
 :::
