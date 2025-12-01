@@ -29,12 +29,14 @@ class ChatTemplateType(Enum):
     QWEN3 = "qwen3"
     HUNYUAN = "hunyuan"
     QWEN3_VL = "qwen3_vl"
+    HUNYUAN_7B = "hunyuan_7b"
 
 
 # String to ChatTemplateType mapping
 CHAT_TEMPLATE_TYPE_MAPPING = {
     "qwen3": ChatTemplateType.QWEN3,
     "hunyuan": ChatTemplateType.HUNYUAN,
+    "hunyuan_7b": ChatTemplateType.HUNYUAN_7B,
     "qwen3_vl": ChatTemplateType.QWEN3_VL,
 }
 
@@ -83,6 +85,21 @@ class ChatTemplateManager:
             ChatTemplateType.HUNYUAN: ChatTemplate(
                 user_header="<｜hy_User｜>",
                 assistant_header="<｜hy_Assistant｜>",
+                system_prompt=(
+                    "You are a helpful, respectful and honest assistant. "
+                    "Always answer as helpfully as possible, while being safe. "
+                    "Your answers should not include any harmful, unethical, racist, "
+                    "sexist, toxic, dangerous, or illegal content. Please ensure that "
+                    "your responses are socially unbiased and positive in nature.\n\n"
+                    "If a question does not make any sense, or is not factually "
+                    "coherent, explain why instead of answering something not "
+                    "correct. If you don't know the answer to a question, "
+                    "please don't share false information."
+                ),
+            ),
+            ChatTemplateType.HUNYUAN_7B: ChatTemplate(
+                user_header="<|startoftext|>",
+                assistant_header="<|extra_0|>",
                 system_prompt=(
                     "You are a helpful, respectful and honest assistant. "
                     "Always answer as helpfully as possible, while being safe. "
