@@ -487,7 +487,7 @@ class Eagle3LlamaForCausalLM(Eagle3BaseDraftModel):
         self,
         inputs_embeds: torch.Tensor,
         hidden_states: torch.Tensor,
-        cache_hidden: torch.Tensor,  # TODO: cache hidden is torch.Tensor?
+        cache_hidden: Optional[Tuple[List[torch.Tensor], List[torch.Tensor]]],
         attention_mask: torch.Tensor,
         position_ids: torch.Tensor,
         use_cache: bool,
@@ -498,7 +498,9 @@ class Eagle3LlamaForCausalLM(Eagle3BaseDraftModel):
             cache_hidden,
             attention_mask,
             position_ids,
-            use_cache,
+            past_key_value=None,
+            output_attentions=False,
+            use_cache=use_cache,
         )
         hidden_states_out = layer_outputs[0]
         return hidden_states_out, cache_hidden
