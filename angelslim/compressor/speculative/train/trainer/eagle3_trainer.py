@@ -166,7 +166,7 @@ class Eagle3Trainer(Trainer, ABC):
                 inputs_embeds.requires_grad = True
 
             # Step 7.2: Encode through draft model layers
-            hidden_states = self.draft_model.encode_layers(
+            hidden_states, cache_hidden = self.draft_model.encode_layers(
                 inputs_embeds=inputs_embeds,
                 hidden_states=hidden_states,
                 cache_hidden=cache_hidden,
