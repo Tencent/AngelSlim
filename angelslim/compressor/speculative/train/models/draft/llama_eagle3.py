@@ -578,7 +578,7 @@ class Eagle3LlamaForCausalLM(Eagle3BaseDraftModel):
             use_cache=use_cache,
         )
         hidden_states_out = layer_outputs[0]
-        return hidden_states_out
+        return hidden_states_out, cache_hidden
 
     def compute_logits(self, hidden_states: torch.Tensor) -> torch.Tensor:
         norm_hidden_states = self.norm(hidden_states)
