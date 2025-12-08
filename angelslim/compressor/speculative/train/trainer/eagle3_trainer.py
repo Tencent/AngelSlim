@@ -209,12 +209,6 @@ class Eagle3Trainer(Trainer, ABC):
                 target_logits = padding(target_logits, left=False)
                 loss_mask = padding(loss_mask, left=False)
 
-                # Update attention mask to prevent attending to future positions
-                ind = torch.arange(seq_length, device=attention_mask.device)
-                attention_mask[:, :, ind[idx:], ind[: seq_length - idx]] = torch.finfo(
-                    attention_mask.dtype
-                ).min
-
         # Step 8: Compute weighted loss
         ploss_weight = [0.8**i for i in range(len(plosses))]
         ploss = sum([ploss_weight[i] * plosses[i] for i in range(len(plosses))])
