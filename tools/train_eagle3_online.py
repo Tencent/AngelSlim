@@ -82,6 +82,12 @@ def parse_args():
         default=True,
         help="Whether to trust remote code when loading models",
     )
+    model_group.add_argument(
+        "--embed_weight_key",
+        type=str,
+        default="model.embed_tokens.weight",
+        help="Key for embedding weights in model config",
+    )
 
     # Data arguments
     data_group = parser.add_argument_group("Data Arguments")
@@ -189,6 +195,12 @@ def parse_args():
         "--weight_decay", type=float, default=0.0, help="Weight decay to apply"
     )
     training_group.add_argument(
+        "--max_grad_norm",
+        type=float,
+        default=1.0,
+        help="Maximum gradient norm for clipping",
+    )
+    training_group.add_argument(
         "--warmup_steps", type=int, default=0, help="Number of steps for warmup"
     )
     training_group.add_argument(
@@ -223,6 +235,9 @@ def parse_args():
     )
     training_group.add_argument(
         "--save_strategy", type=str, default="no", help="Save strategy for checkpoints"
+    )
+    training_group.add_argument(
+        "--eval_strategy", type=str, default="no", help="Save strategy for checkpoints"
     )
     training_group.add_argument(
         "--lr_scheduler_type",
@@ -277,7 +292,9 @@ def train():
     draft_model_config = DraftModelConfig.from_file(args.draft_model_config_path)
     rank0_print(f"draft_model_config: {draft_model_config}")
     draft_model = create_draft_model(draft_model_config)
-    draft_model.load_embed_weights(args.target_model_name_or_path)
+    draft_model.load_embed_weights(
+        args.target_model_name_or_path, args.embed_weight_key
+    )
     draft_model.freeze_embed_weights()
     rank0_print("Draft model loaded successfully")
 
@@ -328,8 +345,10 @@ def train():
         "learning_rate": args.learning_rate,
         "weight_decay": args.weight_decay,
         "warmup_steps": args.warmup_steps,
+        "warmup_ratio": args.warmup_ratio,
         "optim": args.optim,
         "lr_scheduler_type": args.lr_scheduler_type,
+        "max_grad_norm": args.max_grad_norm,
     }
 
     precision_args = {
@@ -338,6 +357,7 @@ def train():
     }
 
     checkpoint_args = {
+        "eval_strategy": args.eval_strategy,
         "save_strategy": args.save_strategy,
         "save_steps": args.save_steps,
         "save_total_limit": args.save_total_limit,

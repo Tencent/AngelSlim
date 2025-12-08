@@ -117,26 +117,32 @@ def paddingtensor2D(intensors, N):
 
 
 def paddingtensor3D_CBN(tensor_list):
-    N = max(tensor.shape[-1] for tensor in tensor_list)
+    if all(tensor is None for tensor in tensor_list):
+        return None
+    N = max(tensor.shape[-1] for tensor in tensor_list if tensor is not None)
     out_tensor_list = []
     for tensor in tensor_list:
         c, b, n = tensor.shape
         outtensor = torch.zeros(c, b, N, dtype=tensor_list[0].dtype)
-        outtensor[:, :, :n] = tensor
+        if tensor is not None:
+            outtensor[:, :, :n] = tensor
         out_tensor_list.append(outtensor)
     return torch.cat(out_tensor_list, dim=1)
 
 
 def paddingtensor3D_BHW(tensor_list):
-    max_h = max(tensor.shape[-2] for tensor in tensor_list)
-    max_w = max(tensor.shape[-1] for tensor in tensor_list)
+    if all(tensor is None for tensor in tensor_list):
+        return None
+    max_h = max(tensor.shape[-2] for tensor in tensor_list if tensor is not None)
+    max_w = max(tensor.shape[-1] for tensor in tensor_list if tensor is not None)
     out_tensor_list = []
     for tensor in tensor_list:
         if tensor.ndim == 2:
             tensor = tensor.unsqueeze(0)
         b, h, w = tensor.shape
         outtensor = torch.zeros(b, max_h, max_w, dtype=tensor.dtype)
-        outtensor[:, :h, :w] = tensor
+        if tensor is not None:
+            outtensor[:, :h, :w] = tensor
         out_tensor_list.append(outtensor)
     return torch.cat(out_tensor_list)
 

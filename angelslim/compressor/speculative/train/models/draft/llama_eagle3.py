@@ -349,10 +349,21 @@ class LlamaAttention(nn.Module):
         k0 = cache_k[0]
         v0 = cache_v[0]
 
+        lck = len(cache_k)
+
+        if lck == 1:
+            attn_output = torch.nn.functional.scaled_dot_product_attention(
+                query_states, k0, v0, attn_mask=attention_mask
+            )
+            attn_output = attn_output.transpose(1, 2).contiguous()
+            attn_output = attn_output.reshape(bsz, q_len, -1)
+            attn_output = self.o_proj(attn_output)
+            new_past_key_value = [local_cache_k, local_cache_v]
+            return attn_output, new_past_key_value
+
         attn_weights = torch.matmul(query_states, k0.transpose(2, 3)) / math.sqrt(
             self.head_dim
         )
-        lck = len(cache_k)
 
         attn_weights = attn_weights + attention_mask
 
@@ -600,6 +611,7 @@ class Eagle3LlamaForCausalLM(Eagle3BaseDraftModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         loss_mask: Optional[torch.Tensor] = None,
+        **kwargs,
     ):
         # This forward function is not used actually
 

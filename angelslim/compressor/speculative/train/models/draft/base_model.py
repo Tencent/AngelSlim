@@ -20,7 +20,6 @@ from collections import Counter
 import torch
 from huggingface_hub import snapshot_download
 from safetensors import safe_open
-from tqdm import tqdm
 from transformers import PreTrainedModel
 
 from ...data.data_utils import process_token_dict_to_mappings
@@ -75,13 +74,14 @@ class Eagle3BaseDraftModel(PreTrainedModel, ABC):
 
         return combined_attention_mask
 
-    def load_embed_weights(self, target_model_name_or_path):
+    def load_embed_weights(self, target_model_name_or_path, embed_weight_key):
         """
         Load embedding weights from pretrained model.
 
         Args:
             target_model_name_or_path: Local path or
             HuggingFace model identifier (e.g., 'Qwen/Qwen2-7B')
+            embed_weight_key: Key for the embedding weights in the model file
         """
         # Handle HuggingFace model identifier
         if not os.path.exists(target_model_name_or_path):
@@ -91,9 +91,13 @@ class Eagle3BaseDraftModel(PreTrainedModel, ABC):
             )
 
         # Try loading embedding weights
-        tensor = self._load_from_safetensors(target_model_name_or_path)
+        tensor = self._load_from_safetensors(
+            target_model_name_or_path, embed_weight_key
+        )
         if tensor is None:
-            tensor = self._load_from_pytorch_bin(target_model_name_or_path)
+            tensor = self._load_from_pytorch_bin(
+                target_model_name_or_path, embed_weight_key
+            )
 
         if tensor is None:
             raise FileNotFoundError(
@@ -104,7 +108,9 @@ class Eagle3BaseDraftModel(PreTrainedModel, ABC):
         with torch.no_grad():
             self.embed_tokens.weight.copy_(tensor)
 
-    def _load_from_safetensors(self, model_path):
+    def _load_from_safetensors(
+        self, model_path, embed_weight_key="model.embed_tokens.weight"
+    ):
         """Load embedding weights from safetensors format."""
         try:
             index_file = os.path.join(model_path, "model.safetensors.index.json")
@@ -114,19 +120,15 @@ class Eagle3BaseDraftModel(PreTrainedModel, ABC):
             with open(index_file, "r") as f:
                 index_json = json.load(f)
 
-            if "model.embed_tokens.weight" in index_json["weight_map"]:
-                tensor_name = "model.embed_tokens.weight"
-                emb_path = index_json["weight_map"][tensor_name]
-            elif "model.language_model.embed_tokens.weight" in index_json["weight_map"]:
-                tensor_name = "model.language_model.embed_tokens.weight"
-                emb_path = index_json["weight_map"][tensor_name]
+            if embed_weight_key in index_json["weight_map"]:
+                emb_path = index_json["weight_map"][embed_weight_key]
             else:
                 raise KeyError("Embedding weights key not found in index.")
 
             safetensors_file = os.path.join(model_path, emb_path)
 
             with safe_open(safetensors_file, framework="pt", device="cpu") as f:
-                tensor_slice = f.get_slice(tensor_name)
+                tensor_slice = f.get_slice(embed_weight_key)
                 _, hidden_dim = tensor_slice.get_shape()
                 tensor = tensor_slice[:, :hidden_dim].float()
 
@@ -135,7 +137,9 @@ class Eagle3BaseDraftModel(PreTrainedModel, ABC):
             print(f"Failed to load from safetensors: {e}")
             return None
 
-    def _load_from_pytorch_bin(self, model_path):
+    def _load_from_pytorch_bin(
+        self, model_path, embed_weight_key="model.embed_tokens.weight"
+    ):
         """Load embedding weights from pytorch_model.bin format."""
         try:
             index_file = os.path.join(model_path, "pytorch_model.bin.index.json")
@@ -145,19 +149,15 @@ class Eagle3BaseDraftModel(PreTrainedModel, ABC):
             with open(index_file, "r") as f:
                 index_json = json.load(f)
 
-            if "model.embed_tokens.weight" in index_json["weight_map"]:
-                tensor_name = "model.embed_tokens.weight"
-                emb_path = index_json["weight_map"][tensor_name]
-            elif "model.language_model.embed_tokens.weight" in index_json["weight_map"]:
-                tensor_name = "model.language_model.embed_tokens.weight"
-                emb_path = index_json["weight_map"][tensor_name]
+            if embed_weight_key in index_json["weight_map"]:
+                emb_path = index_json["weight_map"][embed_weight_key]
             else:
                 raise KeyError("Embedding weights key not found in index.")
 
             bin_file = os.path.join(model_path, emb_path)
 
             weights = torch.load(bin_file, map_location="cpu")
-            tensor = weights[tensor_name].float()
+            tensor = weights[embed_weight_key].float()
 
             return tensor
         except Exception as e:
@@ -177,7 +177,10 @@ class Eagle3BaseDraftModel(PreTrainedModel, ABC):
         if not os.path.exists(cache_path):
             # we first count the frequency of effective tokens in the dataset
             token_dict = Counter()
-            for item in tqdm(dataset, desc="Counting tokens for vocab mapping"):
+            print(f"vocab len(dataset)={len(dataset)} type(dataset)={type(dataset)}")
+            # for item in tqdm(dataset, desc=f"Counting tokens for vocab mapping"):
+
+            for _, item in enumerate(dataset):
                 input_ids = item["input_ids"]
                 loss_mask = item["loss_mask"]
                 masked_ids = input_ids[loss_mask == 1]

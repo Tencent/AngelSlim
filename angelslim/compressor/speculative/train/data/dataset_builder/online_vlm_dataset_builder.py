@@ -15,6 +15,8 @@
 from typing import Any, Dict, List, Optional, Union
 
 import torch
+from datasets import Features, Value, load_dataset
+from torch.utils.data import Dataset
 from transformers import AutoProcessor, AutoTokenizer
 
 from angelslim.utils import rank0_print
@@ -44,6 +46,71 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
             display,
         )
 
+    def build_dataset(
+        self,
+        datapath: str,
+        num_proc: int = 8,
+        shuffle: bool = True,
+        sample_num: Optional[int] = None,
+    ) -> Dataset:
+        try:
+            # Load dataset
+            features = Features(
+                {
+                    "id": Value("string"),
+                    "conversations": [
+                        {
+                            "role": Value("string"),
+                            "content": [
+                                {
+                                    "type": Value("string"),
+                                    "text": Value("string"),
+                                    "image": Value("string"),
+                                    "video": Value("string"),
+                                }
+                            ],
+                        }
+                    ],
+                }
+            )
+            ds = load_dataset("json", data_files=datapath, features=features)
+
+            # Conditionally shuffle dataset
+            if shuffle:
+                ds = ds["train"].shuffle(seed=self.shuffle_seed)
+            else:
+                ds = ds["train"]
+
+            if sample_num is not None and 0 < sample_num < len(ds):
+                ds = ds.select(range(sample_num))
+
+            # Store original columns for removal
+            original_columns = ds.column_names
+
+            # Apply preprocessing
+            processed_ds = ds.map(
+                self._preprocess_function,
+                batched=True,
+                num_proc=num_proc,
+                remove_columns=original_columns,
+                load_from_cache_file=False,
+                desc="Processing conversations",
+            )
+
+            # Filter out None results with multiprocessing support
+            processed_ds = processed_ds.filter(
+                lambda batch: [ids is not None for ids in batch["input_ids"]],
+                batched=True,
+                num_proc=num_proc,
+                desc="Filtering empty input_ids",
+            )
+            processed_ds.set_format(type="torch")
+
+            return processed_ds
+
+        except Exception as e:
+            raise RuntimeError(f"Dataset building failed for {datapath}") from e
+
     def get_data_collator(self) -> Any:
         return VLMDataCollatorWithPadding()
 
@@ -65,9 +132,11 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
                 )
 
                 if processed_example is not None:
-                    for key, value in processed_example.items():
-                        if key in new_examples and value is not None:
-                            new_examples[key].append(value)
+                    for key in new_examples.keys():
+                        if key not in processed_example:
+                            new_examples[key].append(None)
+                        else:
+                            new_examples[key].append(processed_example[key])
 
             except Exception as e:
                 rank0_print(f"Error processing example: {e}")
@@ -75,13 +144,10 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
                 for key in new_examples:
                     new_examples[key].append(None)
 
-        new_examples = {
-            name: array for name, array in new_examples.items() if len(array) > 0
-        }
-
-        rank0_print("Preprocessed example sizes:")
-        for name, array in new_examples.items():
-            rank0_print(f"{name}: {len(array)}")
+        cleaned_new_examples = {}
+        for key, value in new_examples.items():
+            if any(v is not None for v in value):
+                cleaned_new_examples[key] = value
 
         return new_examples
 

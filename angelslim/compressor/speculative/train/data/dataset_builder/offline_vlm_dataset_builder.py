@@ -125,7 +125,7 @@ class OfflineVLMEagle3Dataset(Dataset):
             "hidden_states",  # B, N, 3*D
             "loss_mask",  # B, N
             "inputs_embeds",  # B, N, D
-            "position_ids",  # B, N
+            "position_ids",  # 3, B, N
         ]
         missing_keys = [key for key in required_keys if key not in data]
 
@@ -185,16 +185,13 @@ class OfflineVLMEagle3Dataset(Dataset):
                 data = self._load_ckpt(actual_idx)
                 if data is not None:
                     return data
-                else:
-                    # Remove failed index from valid_indices
-                    self.valid_indices.remove(actual_idx)
-                    if len(self.valid_indices) == 0:
-                        raise RuntimeError(
-                            "All checkpoint files failed to load. "
-                            "Cannot continue training."
-                        )
-                    # Try next index
-                    idx += 1
+
+            # Remove failed index from valid_indices
+            self.valid_indices.remove(actual_idx)
+            if len(self.valid_indices) == 0:
+                raise RuntimeError(
+                    "All checkpoint files failed to load. " "Cannot continue training."
+                )
 
             # If all retries failed, raise error
             raise RuntimeError(

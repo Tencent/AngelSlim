@@ -89,6 +89,12 @@ def parse_args():
         help="Key for lm head in model config",
     )
     model_group.add_argument(
+        "--embed_weight_key",
+        type=str,
+        default="model.embed_tokens.weight",
+        help="Key for embedding weights in model config",
+    )
+    model_group.add_argument(
         "--sub_config_name",
         type=str,
         default=None,
@@ -281,7 +287,9 @@ def train():
     rank0_print("Loading draft model...")
     draft_model_config = DraftModelConfig.from_file(args.draft_model_config_path)
     draft_model = create_draft_model(draft_model_config)
-    draft_model.load_embed_weights(args.target_model_name_or_path)
+    draft_model.load_embed_weights(
+        args.target_model_name_or_path, args.embed_weight_key
+    )
     draft_model.freeze_embed_weights()
     rank0_print("Draft model loaded successfully")
 

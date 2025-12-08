@@ -71,16 +71,20 @@ class OnlineVLMEagle3Trainer(Eagle3Trainer):
         input_ids = padding(input_ids, left=False)
         loss_mask = loss_mask[..., None].to(input_ids.device)
 
-        return {
-            "hidden_states": hidden_states,
-            "target_logits": target_logits,
-            "input_ids": input_ids,
-            "inputs_embeds": inputs_embeds,
-            "position_ids": position_ids,
-            "loss_mask": loss_mask,
-            "attention_mask": attention_mask,
-            **kwargs,
-        }
+        result_dict = {}
+        result_dict.update(kwargs)
+        result_dict.update(
+            {
+                "hidden_states": hidden_states,
+                "target_logits": target_logits,
+                "input_ids": input_ids,
+                "inputs_embeds": inputs_embeds,
+                "position_ids": position_ids,
+                "loss_mask": loss_mask,
+                "attention_mask": attention_mask,
+            }
+        )
+        return result_dict
 
     def compute_loss(
         self,
@@ -135,6 +139,7 @@ class OnlineVLMEagle3Trainer(Eagle3Trainer):
         target_logits,
         loss_mask,
         inputs_embeds,
+        log_prefix="",
     ):
         _, seq_length, _ = hidden_states.shape
 
@@ -195,18 +200,22 @@ class OnlineVLMEagle3Trainer(Eagle3Trainer):
 
                 # Update attention mask to prevent attending to future positions
                 ind = torch.arange(seq_length, device=attention_mask.device)
-                attention_mask[:, :, ind[idx:], ind[: seq_length - idx]] = torch.finfo(
-                    attention_mask.dtype
-                ).min
+                new_attention_mask = attention_mask.clone()
+                new_attention_mask[:, :, ind[idx:], ind[: seq_length - idx]] = (
+                    torch.finfo(attention_mask.dtype).min
+                )
+                attention_mask = new_attention_mask
 
         # Compute weighted loss
         ploss_weight = [0.8**i for i in range(len(plosses))]
         ploss = sum([ploss_weight[i] * plosses[i] for i in range(len(plosses))])
 
-        log = {f"train/acc_{i}": round(float(acces[i]), 3) for i in range(len(acces))}
+        log = {
+            f"{log_prefix}acc_{i}": round(float(acces[i]), 3) for i in range(len(acces))
+        }
         log.update(
             {
-                f"train/ploss_{i}": round(float(plosses[i].item()), 3)
+                f"{log_prefix}ploss_{i}": round(float(plosses[i].item()), 3)
                 for i in range(len(plosses))
             }
         )
@@ -214,3 +223,40 @@ class OnlineVLMEagle3Trainer(Eagle3Trainer):
 
         # Return loss
         return ploss
+
+    def prediction_step(
+        self,
+        model: nn.Module,
+        inputs: Dict[str, torch.Tensor],
+        prediction_loss_only: bool,
+        ignore_keys: Optional[List[str]] = None,
+    ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor]]:
+        """
+        Perform an evaluation step on `model` using `inputs`.
+        """
+        data_for_draft_model = self.prepare_data_for_draft_model(**inputs)
+
+        attention_mask = data_for_draft_model["attention_mask"]
+        inputs_embeds = data_for_draft_model["inputs_embeds"]
+        position_ids = data_for_draft_model.get("position_ids", None)
+        input_ids = data_for_draft_model["input_ids"]
+        target_logits = data_for_draft_model["target_logits"]
+        loss_mask = data_for_draft_model["loss_mask"]
+        hidden_states = data_for_draft_model["hidden_states"]
+
+        with torch.no_grad():
+            hidden_states = self.down_project_hidden_states(hidden_states)
+            attention_mask, position_ids = self.prepare_attention_mask_and_position_ids(
+                hidden_states, attention_mask, position_ids
+            )
+            loss = self.draft_model_training_time_test(
+                input_ids,
+                hidden_states,
+                attention_mask,
+                position_ids,
+                target_logits,
+                loss_mask,
+                inputs_embeds,
+                log_prefix="eval_",
+            )
+        return (loss, None, None)

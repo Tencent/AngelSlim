@@ -151,6 +151,7 @@ class Eagle3Trainer(Trainer, ABC):
         position_ids,
         target_logits,
         loss_mask,
+        log_prefix="",
     ):
         _, seq_length, _ = hidden_states.shape
 
@@ -218,10 +219,13 @@ class Eagle3Trainer(Trainer, ABC):
         ploss_weight = [0.8**i for i in range(len(plosses))]
         ploss = sum([ploss_weight[i] * plosses[i] for i in range(len(plosses))])
 
-        log = {f"train/acc_{i}": round(float(acces[i]), 3) for i in range(len(acces))}
+        log = {
+            f"{log_prefix}/acc_{i}": round(float(acces[i]), 3)
+            for i in range(len(acces))
+        }
         log.update(
             {
-                f"train/ploss_{i}": round(float(plosses[i].item()), 3)
+                f"{log_prefix}/ploss_{i}": round(float(plosses[i].item()), 3)
                 for i in range(len(plosses))
             }
         )
