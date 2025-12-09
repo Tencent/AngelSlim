@@ -314,6 +314,7 @@ class GPTQ:
         self.model.model.config.save_pretrained(
             save_dir, state_dict=EmptyModule().state_dict()
         )
+        self.model.model.generation_config.save_pretrained(save_dir)
 
         # Remove empty state dict
         default_paths = [

@@ -1,0 +1,36 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output
+
+# Simplified Configuration for LLM compression
+model:
+  name: HunyuanVL
+  model_path: tencent/HunyuanOCR
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: cpu
+
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    name: int4_awq
+    bits: 4
+    quant_method:
+      weight: "per-group"
+      group_size: 128
+      zero_point: true
+      mse_range: false
+    ignore_layers:         # Skip quantization for these layers
+      - "lm_head"
+    quant_vit: false
+
+# Dataset for calibration
+dataset:
+  name: MultiModalDataset
+  data_path: HuggingFaceM4/ChartQA
+  max_seq_length: 8192
+  num_samples: 256
+  batch_size: 1

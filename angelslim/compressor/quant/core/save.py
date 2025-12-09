@@ -29,9 +29,8 @@ from tqdm import tqdm
 from transformers.models.deepseek_v3 import DeepseekV3Config
 
 from ....utils import print_info
-from ..modules import QDQSingleModule
 from .packing_utils import pack_weight_to_int8
-from .quant_func import fake_quant_dequant, tensor_quant, weight_dequant
+from .quant_func import fake_quant_dequant, weight_dequant
 
 __all__ = ["PTQvLLMSaveHF"]
 
@@ -79,28 +78,100 @@ class PTQVLMSaveVllmHF(PTQSaveBase):
         super().__init__(quant_model=quant_model)
 
     def save(self, save_path):
+        save_name = self.quant_model.quant_config.save_name
+        ignore_field = (
+            "ignore" if save_name == "compressed-tensors" else "ignored_layers"
+        )
+
+        w_quant_algo = self.quant_model.quant_config.quant_algo_info["w"]
         a_quant_algo = self.quant_model.quant_config.quant_algo_info["a"]
+        is_dynamic = "dynamic" in a_quant_algo
         ignored_layers = self.quant_model.skip_layer_names()
 
-        static_q_dict = {
-            "quantization_config": {
-                "quant_method": "fp8",
-                "activation_scheme": (
-                    "dynamic" if "dynamic" in a_quant_algo else "static"
-                ),
-                "ignored_layers": ignored_layers,
+        trtllm_config = {
+            "quantization": {
+                "exclude_modules": ignored_layers,
+                "kv_cache_quant_algo": None,
             }
         }
-        self.quant_model.get_model().config.update(static_q_dict)
+        if "fp8" in self.quant_model.quant_config.quant_algo:
+            quant_format = "naive-quantized"
+            trtllm_config["quantization"]["quant_algo"] = "FP8"
+            act_config = {
+                "num_bits": 8,
+                "strategy": re.search(r"per-([a-zA-Z]+)", a_quant_algo).group(1),
+                "dynamic": is_dynamic,
+                "type": "float",
+            }
+            weight_config = {
+                "num_bits": 8,
+                "strategy": re.search(r"per-([a-zA-Z]+)", w_quant_algo).group(1),
+                "dynamic": False,
+                "type": "float",
+            }
+        elif "int8" in self.quant_model.quant_config.quant_algo:
+            quant_format = "int-quantized"
+            trtllm_config["quantization"]["quant_algo"] = "INT8"
+            act_config = {
+                "num_bits": 8,
+                "strategy": re.search(r"per-([a-zA-Z]+)", a_quant_algo).group(1),
+                "dynamic": is_dynamic,
+                "type": "int",
+            }
+            weight_config = {
+                "num_bits": 8,
+                "strategy": re.search(r"per-([a-zA-Z]+)", w_quant_algo).group(1),
+                "dynamic": False,
+                "type": "int",
+            }
+        elif "nvfp4" in self.quant_model.quant_config.quant_algo:
+            quant_format = "naive-quantized"
+            group_size = self.quant_model.quant_config.quant_algo_info["block_size"]
+            trtllm_config["quantization"]["quant_algo"] = "NVFP4"
+            trtllm_config["quantization"]["group_size"] = group_size
+            act_config = {
+                "num_bits": 4,
+                "group_size": group_size,
+                "dynamic": is_dynamic,
+                "type": "float",
+            }
+            weight_config = {
+                "num_bits": 4,
+                "group_size": group_size,
+                "dynamic": False,
+                "type": "float",
+            }
+        else:
+            raise ValueError(
+                f"{self.quant_model.quant_config.quant_algo} not supported"
+            )
+        quantization_config = {"quant_method": save_name, ignore_field: ignored_layers}
+        if save_name == "compressed-tensors":
+            quantization_config.update(
+                {
+                    "config_groups": {
+                        "group_0": {
+                            "weights": weight_config,
+                            "input_activations": act_config,
+                            "output_activations": None,
+                            "targets": ["Linear"],
+                        }
+                    },
+                    "kv_cache_scheme": None,
+                    "format": quant_format,
+                    "quantization_status": "compressed",
+                }
+            )
+        else:
+            quantization_config["activation_scheme"] = (
+                "dynamic" if is_dynamic else "static"
+            )
+
+        quant_dict = {"quantization_config": quantization_config}
+        self.quant_model.get_model().config.update(quant_dict)
+        print_info("Save quantization_config: {}".format(quant_dict))
 
         os.makedirs(save_path, exist_ok=True)
-
-        if self.quant_model.quant_config.quant_algo == "int8":
-            for _, sub_layer in self.quant_model.quant_config.quant_layers_dict.items():
-                if isinstance(sub_layer, QDQSingleModule):
-                    sub_layer.weight = tensor_quant(
-                        sub_layer.weight, sub_layer.weight_scales
-                    )
 
         self.quant_model.get_model().save_pretrained(save_path)
         self.quant_model.processor.save_pretrained(save_path)
