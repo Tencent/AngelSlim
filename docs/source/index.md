@@ -64,6 +64,7 @@ AngelSlim是腾讯自研的，致力于打造更易用、更全面和更高效�
          - Minference(建设中)
    * - **图/视频生文(VLM)**
      - - Hunyuan-VL
+       - HunyuanOCR
        - Qwen3-VL
        - Qwen2.5-VL
      - - FP8-Static/Dynamic
@@ -131,6 +132,7 @@ features/diffusion/index
 :maxdepth: 1
 
 models/hunyuan/hunyuan_quant
+models/hunyuan_ocr/hunyuan_ocr_quant
 models/deepseek/deepseek_quant
 models/qwen/qwen_quant
 models/qwenvl/qwenvl_quant
