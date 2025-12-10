@@ -97,8 +97,9 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
           <li><a href="">Hunyuan-VL</a></li>
-          <li><a href="https://huggingface.co/collections/AngelSlim/qwen25vl-quant">Qwen3-VL</a></li>
-          <li><a href="https://huggingface.co/collections/AngelSlim/qwen25vl-quant">Qwen2.5-VL</a></li>
+          <li><a href="https://huggingface.co/tencent/HunyuanOCR">HunyuanOCR</a></li>
+          <li><a href="https://huggingface.co/collections/Qwen/qwen3-vl">Qwen3-VL</a></li>
+          <li><a href="https://huggingface.co/collections/Qwen/qwen25-vl">Qwen2.5-VL</a></li>
         </ul>
       </td>
       <td>

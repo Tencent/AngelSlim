@@ -114,7 +114,25 @@ class MultiModalDataset(BaseDataset):
                 tokenize=True,
                 add_generation_prompt=True,
                 return_dict=True,
+                padding="max_length",
+                truncation=True,
                 return_tensors="pt",
+                max_length=self.max_length,
+            )
+        elif self.model_name in ["HunyuanVL"]:
+            text = self.processor.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+            image_inputs, _ = self._extract_vision_info(messages)
+
+            # Process inputs
+            inputs = self.processor(
+                text=[text],
+                images=image_inputs,
+                padding="max_length",
+                truncation=True,
+                return_tensors="pt",
+                max_length=self.max_length,
             )
         else:
             text = self.processor.apply_chat_template(

@@ -605,6 +605,7 @@ class QDQModule(torch.nn.Module):
             quant_weight, weight_scale = quantize_weight_int(
                 weight, weight_scale, bits=8
             )
+            quant_weight = quant_weight.to(torch.int8)
         else:
             raise ValueError(f"Unsupported quantization algorithm: {self.quant_algo}")
 

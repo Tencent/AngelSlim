@@ -123,6 +123,8 @@ class AWQ:
         for _, module in pre_transformer_modules_dict.items():
             module.cpu()
         layer_kwargs = layers[0].layer_kwargs
+        if self.model.model.config.model_type == "hunyuan_vl":
+            layer_kwargs["position_embeddings"] = None
         for k, v in layer_kwargs.items():
             # position embeddings
             if isinstance(v, tuple):
@@ -272,6 +274,7 @@ class AWQ:
         self.model.model.config.save_pretrained(
             save_dir, state_dict=EmptyModule().state_dict()
         )
+        self.model.model.generation_config.save_pretrained(save_dir)
 
         # Remove empty state dict
         default_paths = [

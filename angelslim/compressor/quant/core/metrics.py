@@ -95,6 +95,7 @@ class LossFilter:
         self.filter_tokens_map = {
             "QwenVL": [151643, 151654, 151655, 151656],
             "Qwen3VL": [151643, 151654, 151655, 151656],
+            "HunyuanVL": [120000, 120020, 120118, 120119, 120120, 120121],
             "default": [],  # default: do not filter any tokens
         }
 
