@@ -15,10 +15,11 @@
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-from transformers import AutoProcessor, AutoTokenizer, HunYuanVLForConditionalGeneration
+from transformers import AutoProcessor, AutoTokenizer
 
 from ...compressor.quant.core import LossFilter, PTQVLMSaveVllmHF
 from ...utils import find_layers, print_info
+from ...utils.lazy_imports import HunYuanVLForConditionalGeneration
 from ..base_model import BaseLLMModel
 from ..model_factory import SlimModelFactory
 

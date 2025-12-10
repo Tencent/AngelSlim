@@ -208,3 +208,8 @@ shortuuid = LazyModule("shortuuid", "speculative")
 # --- multimodal related lazy imports ---
 qwen_vl_utils = LazyModule("qwen_vl_utils", "multimodal")
 qwen_omni_utils = LazyModule("qwen_omni_utils", "multimodal")
+
+# --- HunyuanVL related lazy imports ---
+HunYuanVLForConditionalGeneration = LazyAttribute(
+    "transformers", "HunYuanVLForConditionalGeneration"
+)
