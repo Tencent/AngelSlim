@@ -6,4 +6,5 @@ referencing
 jsonschema_specifications
 deepspeed
 wandb
+shortuuid
 vllm>=0.11.0
