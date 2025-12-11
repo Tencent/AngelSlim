@@ -23,12 +23,14 @@ import tqdm
 from .modules import FP8DynamicLinear, FP8WeightOnlyLinear
 from .quant_func import (
     fp8_per_block_quant,
+    fp8_per_channel_quant,
     fp8_per_tensor_quant,
     fp8_per_token_group_quant,
 )
 from .utils import (
     QuantType,
     _ensure_deep_gemm,
+    _ensure_sgl_kernel,
     cleanup_memory,
     load_fp8_scales,
     load_quantized_model,
@@ -106,6 +108,10 @@ class DynamicDiTQuantizer:
                 linear.weight, linear.weight.shape[-1]
             )
             weight_scale = weight_scale.t()
+        elif self.quant_type == QuantType.FP8_PER_TOKEN_SGL:
+            if self.native_fp8_support:
+                _ensure_sgl_kernel()
+            quant_weight, weight_scale = fp8_per_channel_quant(linear.weight)
         elif self.quant_type == QuantType.FP8_PER_BLOCK:
             if self.native_fp8_support:
                 _ensure_deep_gemm()

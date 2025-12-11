@@ -10,6 +10,27 @@ AngelSlim 支持以下四种 FP8 量化策略：
 - **fp8-per-tensor-weight-only**：仅对权重量化（权重：FP8，激活仍为 BF16/FP16），适合对精度有更高要求的场景
 - **fp8-per-block**：支持 per-block 量化，适用于 NVIDIA Hopper (SM90+) 架构，block_size目前只支持128
 - **fp8-per-token**：精细的 per-token 量化，对多样输入有更强适应性
+- **fp8-per-token-sgl**：基于 SGL kernel 的 per-token 量化，使用优化的 CUDA kernel 实现更高效的 per-token 量化和矩阵乘法运算
+
+## 可选依赖安装
+### deep_gemm（用于 fp8-per-block）
+
+`fp8-per-block` 量化在启用 `native_fp8_support` 时需要安装 `deep_gemm`：
+
+```shell
+git clone --recursive https://github.com/deepseek-ai/DeepGEMM.git 
+cd DeepGEMM
+./develop.sh
+./install.sh
+```
+
+### sgl_kernel（用于 fp8-per-token-sgl）
+
+`fp8-per-token-sgl` 量化需要安装 `sgl_kernel`：
+
+```shell
+pip install sgl-kernel==0.3.18
+```
 
 ## 配置
 
@@ -17,7 +38,7 @@ DynamicDiTQuantizer 类提供灵活的配置选项，您可以通过以下参数
 
 ### 构造函数参数
 
-- `quant_type`（str）：量化类型，可选值 "fp8-per-tensor"、"fp8-per-tensor-weight-only"、"fp8-per-block"、"fp8-per-token"
+- `quant_type`（str）：量化类型，可选值 "fp8-per-tensor"、"fp8-per-tensor-weight-only"、"fp8-per-block"、"fp8-per-token"、"fp8-per-token-sgl"
 - `include_patterns`（List[str|re.Pattern], 可选）：指定需要量化的层名称模式，支持字符串或正则表达式
 - `exclude_patterns`（List[str|re.Pattern], 可选）：指定需要排除的层名称模式，支持字符串或正则表达式
 - `layer_filter`（Callable, 可选）：自定义层筛选函数（高级自定义场景专用）
@@ -166,6 +187,3 @@ quantizer.export_quantized_weight(pipe.transformer, save_path="/path/to/save/qua
 - `fp8_scales.safetensors`：FP8 缩放因子文件
 
 导出后可通过上述"加载预量化模型和缩放因子"的方式加载使用。
-
-
-

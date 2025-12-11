@@ -19,6 +19,7 @@ from ..quant_func import (
     fp8_per_block_quant,
     fp8_per_tensor_quant,
     fp8_per_token_group_quant,
+    fp8_per_token_quant_sgl,
     fp8_weight_only_gemm,
 )
 
@@ -61,6 +62,10 @@ class FP8DynamicLinear(torch.nn.Module):
             origin_shape = None
             x_2d = x.view(-1, x.shape[-1])
             qinput, x_scale = fp8_per_token_group_quant(x_2d, x_2d.shape[-1])
+        elif self.quant_type == "fp8-per-token-sgl" and self.native_fp8_support:
+            origin_shape = x.shape
+            x_2d = x.view(-1, x.shape[-1])
+            qinput, x_scale = fp8_per_token_quant_sgl(x_2d)
         elif self.quant_type == "fp8-per-block" and self.native_fp8_support:
             origin_shape = x.shape
             x = x.view(-1, x.shape[-1])
@@ -85,7 +90,11 @@ class FP8DynamicLinear(torch.nn.Module):
             origin_shape=origin_shape,
         )
 
-        if self.quant_type == "fp8-per-token" and x.dim() == 3 and output.dim() == 2:
+        if (
+            self.quant_type in ["fp8-per-token", "fp8-per-token-sgl"]
+            and x.dim() == 3
+            and output.dim() == 2
+        ):
             output = output.unsqueeze(0)
 
         return output

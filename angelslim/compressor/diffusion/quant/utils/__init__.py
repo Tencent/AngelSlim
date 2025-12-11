@@ -17,6 +17,7 @@ from .utils import (
     QuantType,
     _compile_pattern,
     _ensure_deep_gemm,
+    _ensure_sgl_kernel,
     cleanup_memory,
     replace_module,
     should_quantize_layer,
@@ -32,4 +33,5 @@ __all__ = [
     "cleanup_memory",
     "replace_module",
     "should_quantize_layer",
+    "_ensure_sgl_kernel",
 ]
