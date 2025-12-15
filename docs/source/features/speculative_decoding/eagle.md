@@ -134,9 +134,11 @@ bash scripts/speculative/train_eagle3_vlm_offline.sh
 
 ## 3. 基准测试
 
-AngelSlim提供了完整的Eagle3基准测试工具，用于评估投机采样的性能提升。
+AngelSlim提供了HF和vLLM两种backend的Eagle3基准测试脚本，用于评估投机采样的性能提升。
 
-### 3.1 基本用法
+### 3.1 HF基准测试
+
+#### 3.1.1 基本用法
 
 使用 `tools/spec_benchmark.py` 脚本进行投机采样基准测试：
 
@@ -148,7 +150,7 @@ python3 tools/spec_benchmark.py \
     --mode both
 ```
 
-### 3.2 参数说明
+#### 3.1.2 参数说明
 
 **模型配置参数：**
 - `--base-model-path`: 基础模型路径（必需）
@@ -178,7 +180,7 @@ python3 tools/spec_benchmark.py \
 - `--question-end`: 问题结束索引（用于调试）
 - `--no-metrics`: 跳过自动指标计算
 
-### 3.3 使用示例
+#### 3.1.3 使用示例
 
 **完整基准测试（推荐）：**
 ```shell
@@ -211,7 +213,7 @@ python3 tools/spec_benchmark.py \
     --num-gpus-total 8
 ```
 
-### 3.4 性能报告
+#### 3.1.4 性能报告
 
 运行完成后，工具会自动生成性能报告，包括：
 - 投机采样与基线模型的性能对比
@@ -219,3 +221,20 @@ python3 tools/spec_benchmark.py \
 - 生成质量指标（如果启用）
 
 结果将保存在指定的输出目录中，便于后续分析和比较。
+
+### 3.2 vLLM基准测试
+
+使用 `tools/vllm_spec_benchmark.py` 脚本进行投机采样基准测试：
+
+```shell
+python3 vllm_spec_benchmark.py \
+    --model-dir "$MODEL_DIR" \
+    --eagle-dir "$EAGLE_DIR" \
+    --benchmark-name "$BENCHMARK_NAME" \
+    --stats-output-file "$OUTPUT_FILE" \
+    --method eagle3 \
+    --output-len 1024 \
+    --max-num-seqs "$BATCH_SIZE"
+```
+
+完整的vLLM benchmark结果可见[Benchmark](../../performance/speculative_decoding/benchmarks.md)。

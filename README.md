@@ -694,24 +694,6 @@ All experiments were conducted on a single NVIDIA H20 GPU with the configuration
       <td>142.45</td><td>1.74</td>
       <td>145.33</td><td>1.79</td>
     </tr>
-    <!-- Qwen3-30B-A3B -->
-    <tr>
-      <td rowspan="2">Qwen3-30B-A3B</td>
-      <td>Vanilla</td>
-      <td>311.84</td><td>1</td>
-      <td>320.43</td><td>1</td>
-      <td>325.77</td><td>1</td>
-      <td>325.42</td><td>1</td>
-      <td>320.87</td><td>1</td>
-    </tr>
-    <tr>
-      <td>Eagle3</td>
-      <td>453.97</td><td>2.1</td>
-      <td>432.45</td><td>2.04</td>
-      <td>428.81</td><td>2.02</td>
-      <td>437.06</td><td>2.01</td>
-      <td>438.07</td><td>2.04</td>
-    </tr>
     <!-- Qwen3-32B -->
     <tr>
       <td rowspan="2">Qwen3-32B</td>
@@ -729,6 +711,24 @@ All experiments were conducted on a single NVIDIA H20 GPU with the configuration
       <td>71.57</td><td>1.86</td>
       <td>74.1</td><td>1.86</td>
       <td>74.1</td><td>1.91</td>
+    </tr>
+    <!-- Qwen3-30B-A3B -->
+    <tr>
+      <td rowspan="2">Qwen3-30B-A3B</td>
+      <td>Vanilla</td>
+      <td>311.84</td><td>1</td>
+      <td>320.43</td><td>1</td>
+      <td>325.77</td><td>1</td>
+      <td>325.42</td><td>1</td>
+      <td>320.87</td><td>1</td>
+    </tr>
+    <tr>
+      <td>Eagle3</td>
+      <td>453.97</td><td>2.1</td>
+      <td>432.45</td><td>2.04</td>
+      <td>428.81</td><td>2.02</td>
+      <td>437.06</td><td>2.01</td>
+      <td>438.07</td><td>2.04</td>
     </tr>
 
   </tbody>
