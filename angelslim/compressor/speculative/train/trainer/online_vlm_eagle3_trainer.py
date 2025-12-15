@@ -150,13 +150,12 @@ class OnlineVLMEagle3Trainer(Eagle3Trainer):
         # Iterative speculative decoding training loop
         for idx in range(self.length):
             # Get input embeddings with gradient tracking
-            if inputs_embeds is None:
-                inputs_embeds = self.draft_model.get_input_embeddings(input_ids)
+            inputs_embeds = self.draft_model.get_input_embeddings(input_ids)
             if not inputs_embeds.requires_grad:
                 inputs_embeds.requires_grad = True
 
             # Encode through draft model layers
-            hidden_states = self.draft_model.encode_layers(
+            hidden_states, cache_hidden = self.draft_model.encode_layers(
                 inputs_embeds=inputs_embeds,
                 hidden_states=hidden_states,
                 cache_hidden=cache_hidden,
@@ -197,14 +196,6 @@ class OnlineVLMEagle3Trainer(Eagle3Trainer):
                 input_ids = padding(input_ids, left=False)
                 target_logits = padding(target_logits, left=False)
                 loss_mask = padding(loss_mask, left=False)
-
-                # Update attention mask to prevent attending to future positions
-                ind = torch.arange(seq_length, device=attention_mask.device)
-                new_attention_mask = attention_mask.clone()
-                new_attention_mask[:, :, ind[idx:], ind[: seq_length - idx]] = (
-                    torch.finfo(attention_mask.dtype).min
-                )
-                attention_mask = new_attention_mask
 
         # Compute weighted loss
         ploss_weight = [0.8**i for i in range(len(plosses))]

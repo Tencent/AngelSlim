@@ -280,15 +280,14 @@ class VLMTransformersBackend(BaseBackend):
     def load_model(self):
         from transformers import AutoModelForImageTextToText, AutoProcessor
 
-        default_kwargs = {
-            "dtype": torch.bfloat16,
-            "device_map": "auto",
-            "trust_remote_code": True,
-        }
-        default_kwargs.update(self.kwargs)
+        device = decide_device_for_distributed()
+        print_with_rank(f"Loading model to device: {device}")
+
+        # Prepare model loading configuration
+        model_kwargs = self._prepare_model_kwargs(device)
 
         self.model = AutoModelForImageTextToText.from_pretrained(
-            self.model_path, **default_kwargs
+            self.model_path, **model_kwargs
         )
 
         # Freeze the base model
@@ -299,6 +298,24 @@ class VLMTransformersBackend(BaseBackend):
         self.tokenizer = AutoProcessor.from_pretrained(
             self.model_path, trust_remote_code=True
         )
+
+    def _prepare_model_kwargs(self, device: str) -> dict:
+        """
+        Prepare keyword arguments for model loading.
+
+        Args:
+            device: Target device for model placement
+
+        Returns:
+            Dictionary of model loading arguments
+        """
+        default_kwargs = {
+            "dtype": torch.bfloat16,
+            "device_map": device,
+            "trust_remote_code": True,
+        }
+        default_kwargs.update(self.kwargs)
+        return default_kwargs
 
     def get_hidden_states_and_logits(
         self,
@@ -317,6 +334,12 @@ class VLMTransformersBackend(BaseBackend):
         Returns:
             Tuple of (concatenated_hidden_states, logits)
         """
+        pixel_values = None
+        image_grid_thw = None
+        if "pixel_values" in kwargs:
+            pixel_values = kwargs["pixel_values"].squeeze(0)
+        if "image_grid_thw" in kwargs:
+            image_grid_thw = kwargs["image_grid_thw"].squeeze(0)
         inputs_embeds_list, position_ids_list = [], []
 
         def hook(module, args, kwargs):
@@ -336,6 +359,8 @@ class VLMTransformersBackend(BaseBackend):
             outputs = self.model(
                 input_ids,
                 attention_mask=attention_mask,
+                pixel_values=pixel_values,
+                image_grid_thw=image_grid_thw,
                 output_hidden_states=True,
                 output_logits=True,
             )
@@ -375,6 +400,12 @@ class VLMTransformersBackend(BaseBackend):
         Returns:
             Tuple of (auxiliary_hidden_states, final_hidden_states)
         """
+        pixel_values = None
+        image_grid_thw = None
+        if "pixel_values" in kwargs:
+            pixel_values = kwargs["pixel_values"].squeeze(0)
+        if "image_grid_thw" in kwargs:
+            image_grid_thw = kwargs["image_grid_thw"].squeeze(0)
         inputs_embeds_list, position_ids_list = [], []
 
         def hook(module, args, kwargs):
@@ -393,6 +424,8 @@ class VLMTransformersBackend(BaseBackend):
         with torch.no_grad():
             outputs = self.model(
                 input_ids,
+                pixel_values=pixel_values,
+                image_grid_thw=image_grid_thw,
                 attention_mask=attention_mask,
                 output_hidden_states=True,
                 output_logits=True,
