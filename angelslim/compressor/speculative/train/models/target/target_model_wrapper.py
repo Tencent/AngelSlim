@@ -334,12 +334,6 @@ class VLMTransformersBackend(BaseBackend):
         Returns:
             Tuple of (concatenated_hidden_states, logits)
         """
-        pixel_values = None
-        image_grid_thw = None
-        if "pixel_values" in kwargs:
-            pixel_values = kwargs["pixel_values"].squeeze(0)
-        if "image_grid_thw" in kwargs:
-            image_grid_thw = kwargs["image_grid_thw"].squeeze(0)
         inputs_embeds_list, position_ids_list = [], []
 
         def hook(module, args, kwargs):
@@ -355,6 +349,8 @@ class VLMTransformersBackend(BaseBackend):
             hook, with_kwargs=True
         )
 
+        pixel_values = kwargs.get("pixel_values", None)
+        image_grid_thw = kwargs.get("image_grid_thw", None)
         with torch.no_grad():
             outputs = self.model(
                 input_ids,
@@ -400,12 +396,6 @@ class VLMTransformersBackend(BaseBackend):
         Returns:
             Tuple of (auxiliary_hidden_states, final_hidden_states)
         """
-        pixel_values = None
-        image_grid_thw = None
-        if "pixel_values" in kwargs:
-            pixel_values = kwargs["pixel_values"].squeeze(0)
-        if "image_grid_thw" in kwargs:
-            image_grid_thw = kwargs["image_grid_thw"].squeeze(0)
         inputs_embeds_list, position_ids_list = [], []
 
         def hook(module, args, kwargs):
@@ -421,6 +411,8 @@ class VLMTransformersBackend(BaseBackend):
             hook, with_kwargs=True
         )
 
+        pixel_values = kwargs.get("pixel_values", None)
+        image_grid_thw = kwargs.get("image_grid_thw", None)
         with torch.no_grad():
             outputs = self.model(
                 input_ids,

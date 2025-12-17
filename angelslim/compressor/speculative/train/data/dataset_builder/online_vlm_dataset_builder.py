@@ -252,9 +252,9 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
                     "video_pixel_values"
                 ].unsqueeze(0)
             if "image_grid_thw" in encoding:
-                result_dict["image_grid_thw"] = encoding["image_grid_thw"].unsqueeze(0)
+                result_dict["image_grid_thw"] = encoding["image_grid_thw"]
             if "video_grid_thw" in encoding:
-                result_dict["video_grid_thw"] = encoding["video_grid_thw"].unsqueeze(0)
+                result_dict["video_grid_thw"] = encoding["video_grid_thw"]
 
             return result_dict
 
