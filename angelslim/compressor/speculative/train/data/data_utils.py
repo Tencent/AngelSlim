@@ -214,13 +214,20 @@ class VLMDataCollatorWithPadding:
             batch["video_pixel_values"] = paddingtensor3D_BHW(
                 [item["video_pixel_values"] for item in features]
             )
-        if "image_grid_thw" in features[0]:
-            batch["image_grid_thw"] = paddingtensor3D_BHW(
-                [item["image_grid_thw"] for item in features]
+
+        if all(
+            "image_grid_thw" in item and item["image_grid_thw"] is not None
+            for item in features
+        ):
+            batch["image_grid_thw"] = torch.cat(
+                [item["image_grid_thw"] for item in features], dim=0
             )
-        if "video_grid_thw" in features[0]:
-            batch["video_grid_thw"] = paddingtensor3D_BHW(
-                [item["video_grid_thw"] for item in features]
+        if all(
+            "video_grid_thw" in item and item["video_grid_thw"] is not None
+            for item in features
+        ):
+            batch["video_grid_thw"] = torch.cat(
+                [item["video_grid_thw"] for item in features], dim=0
             )
 
         # Check if both hidden_states and target_hiddens exist in all features
