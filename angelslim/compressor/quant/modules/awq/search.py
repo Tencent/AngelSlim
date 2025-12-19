@@ -63,6 +63,7 @@ class AWQSearch:
         best_ratio = -1
         best_scales = None
         dev = get_best_device()
+        block.to(dev)
         with torch.no_grad():
             if cache is not None:
                 origin_out = torch.ones_like(act)
