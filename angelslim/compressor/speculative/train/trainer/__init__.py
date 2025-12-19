@@ -12,10 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .offline_eagle3_trainer import OfflineEagle3Trainer
-from .offline_vlm_eagle3_trainer import OfflineVLMEagle3Trainer
-from .online_eagle3_trainer import OnlineEagle3Trainer
-from .online_vlm_eagle3_trainer import OnlineVLMEagle3Trainer
+from .offline_eagle3_trainer import OfflineEagle3Trainer, OfflineVLMEagle3Trainer
+from .online_eagle3_trainer import OnlineEagle3Trainer, OnlineVLMEagle3Trainer
 from .trainer_factory import Eagle3TrainerFactory
 
 __all__ = [

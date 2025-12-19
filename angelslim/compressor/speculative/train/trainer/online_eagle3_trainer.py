@@ -81,3 +81,68 @@ class OnlineEagle3Trainer(Eagle3Trainer):
             "position_ids": position_ids,
             "attention_mask": attention_mask,
         }
+
+
+@Eagle3TrainerFactory.register("online", "VLM")
+class OnlineVLMEagle3Trainer(Eagle3Trainer):
+    """
+    Online EAGLE3 Trainer for speculative decoding training.
+    Implements training logic for EAGLE3 model using a draft model to predict
+    tokens based on hidden states from a target model.
+    """
+
+    def __init__(
+        self,
+        draft_model: nn.Module,
+        target_model: nn.Module,
+        length: int,
+        draft_model_config: Dict[str, Any],
+        **kwargs,
+    ):
+        """
+        Initialize the OnlineEagle3Trainer.
+        Args:
+            draft_model: Draft model for token prediction
+            target_model: Target model for generating hidden states
+            length: Number of speculative decoding steps
+            draft_model_config: Configuration dictionary for draft model
+            **kwargs: Additional arguments passed to parent Trainer
+        """
+        super().__init__(draft_model=draft_model, length=length, **kwargs)
+        self.target_model = target_model
+        self._aux_hidden_states_layer_ids = getattr(
+            draft_model_config, "aux_hidden_states_layer_ids", None
+        )
+
+    def prepare_data_for_draft_model(
+        self, input_ids, attention_mask, loss_mask, **kwargs
+    ):
+        # Get hidden states and logits from target model
+        hidden_states, target_logits, inputs_embeds, position_ids = (
+            self.target_model.get_hidden_states_and_logits(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                aux_hidden_states_layer_ids=self._aux_hidden_states_layer_ids,
+                **kwargs,
+            )
+        )
+
+        # Apply right padding and move tensors to correct device
+        target_logits = padding(target_logits, left=False).to(input_ids.device)
+        input_ids = padding(input_ids, left=False)
+        loss_mask = loss_mask[..., None].to(input_ids.device)
+
+        result_dict = {}
+        result_dict.update(kwargs)
+        result_dict.update(
+            {
+                "hidden_states": hidden_states,
+                "target_logits": target_logits,
+                "input_ids": input_ids,
+                "inputs_embeds": inputs_embeds,
+                "position_ids": position_ids,
+                "loss_mask": loss_mask,
+                "attention_mask": attention_mask,
+            }
+        )
+        return result_dict
