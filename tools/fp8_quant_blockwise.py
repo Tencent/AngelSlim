@@ -63,12 +63,16 @@ def create_quantized_param(param, weight_block_size=(128, 128)):
 
     block_size_m, block_size_n = weight_block_size
     rows, cols = param.shape[-2:]
+    original_device = param.device
 
     # Tensor-wise
     if block_size_m == -1 or block_size_m > rows:
         block_size_m = rows
     if block_size_n == -1 or block_size_n > cols:
         block_size_n = cols
+
+    # Move to CPU for padding to save GPU memory
+    param = param.cpu()
 
     if rows % block_size_m != 0:
         pad = torch.zeros(
@@ -86,6 +90,7 @@ def create_quantized_param(param, weight_block_size=(128, 128)):
         param = torch.concat([param, pad], dim=-1)
     param_value_shape = param.shape
 
+    # Convert to float on CPU first
     param_value = (
         param.float()
         .reshape(
@@ -98,6 +103,11 @@ def create_quantized_param(param, weight_block_size=(128, 128)):
         .permute(0, 1, 3, 2, 4)
     )
 
+    # Move back to GPU for quantization
+    param_value = param_value.to(original_device)
+    del param  # Free CPU memory
+    torch.cuda.empty_cache()
+
     # Calculate scaling factor for each block
     max_abs = torch.amax(torch.abs(param_value), dim=(-1, -2))
     scale_inv = fp8_max / max_abs
@@ -108,6 +118,9 @@ def create_quantized_param(param, weight_block_size=(128, 128)):
     quantized_param = torch.clamp(param_value * scale_inv, min=fp8_min, max=fp8_max).to(
         torch.float8_e4m3fn
     )
+    del param_value  # Free GPU memory
+    torch.cuda.empty_cache()
+
     quantized_param = quantized_param.permute(0, 1, 3, 2, 4)
     quantized_param = quantized_param.reshape(param_value_shape)[..., :rows, :cols]
 
@@ -120,26 +133,36 @@ def process_safetensor(rank, file_name, input_path, output_path, block_size=(128
     state_dict = {}
     index = {}
     count = 0
+
+    # Load tensors on CPU first to avoid GPU memory issues
     with safe_open(
-        os.path.join(input_path, file_name), framework="pt", device=f"cuda:{rank}"
+        os.path.join(input_path, file_name), framework="pt", device="cpu"
     ) as f:
         print(f"Processing {file_name} with {len(f.keys())} weights")
         for weight_name in f.keys():
             weight = f.get_tensor(weight_name)
             if any(weight_name.endswith(suffix) for suffix in SUFFIX_TO_QUANT):
+                # Move to GPU only for quantization
+                weight = weight.to(f"cuda:{rank}")
                 quant_weight, scale = create_quantized_param(weight, block_size)
-                state_dict[weight_name] = quant_weight
+
+                # Move back to CPU for saving
+                state_dict[weight_name] = quant_weight.cpu()
                 index[weight_name] = file_name
 
                 # Reference: https://github.com/vllm-project/vllm/blob/v0.10.1/vllm/model_executor/layers/quantization/fp8.py#L295  # noqa: E501
                 if block_size[0] == -1 and block_size[1] == -1:
                     # Tensor-wise
-                    state_dict[f"{weight_name}_scale"] = scale
+                    state_dict[f"{weight_name}_scale"] = scale.cpu()
                     index[f"{weight_name}_scale"] = file_name
                 else:
                     # Block-wise
-                    state_dict[f"{weight_name}_scale_inv"] = scale
+                    state_dict[f"{weight_name}_scale_inv"] = scale.cpu()
                     index[f"{weight_name}_scale_inv"] = file_name
+
+                # Clean up GPU memory after each weight
+                del weight, quant_weight, scale
+                torch.cuda.empty_cache()
             else:
                 state_dict[weight_name] = weight
                 index[weight_name] = file_name
@@ -147,6 +170,11 @@ def process_safetensor(rank, file_name, input_path, output_path, block_size=(128
 
     new_safetensor_file = os.path.join(output_path, file_name)
     save_file(state_dict, new_safetensor_file)
+
+    # Final cleanup
+    del state_dict
+    torch.cuda.empty_cache()
+
     return index
 
 
