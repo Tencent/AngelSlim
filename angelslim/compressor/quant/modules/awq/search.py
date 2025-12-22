@@ -98,7 +98,7 @@ class AWQSearch:
                     if layer.weight.dtype == torch.float8_e4m3fn:
                         w = weight_dequant(layer.weight, layer.weight_scale_inv)
                         layer.weight.data = w
-                    # Fix for low_memory mode: ensure scales is on same device as weights
+                    # Fix low_memory mode: ensure scales is on same device as weights
                     layer.weight.mul_(scales.to(layer.weight.device).view(1, -1))
                     if type(layer) in self.observer_layer_classes:
                         quant_dequant_weight = pseudo_quantize_tensor(

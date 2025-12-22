@@ -111,7 +111,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
-          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle.html">Eagle3(ing)</a></li>
+          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle.html">Eagle3</a></li>
         </ul>
       </td>
       <td>
@@ -148,7 +148,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
           <li>
-            <strong>Cache Technology</strong>
+            <strong>Cache</strong>
             <ul style="padding-left: 1.5rem">
               <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/diffusion/cache.html">DeepCache</a></li>
               <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/diffusion/cache.html">TeaCache</a></li>
@@ -287,7 +287,7 @@ To test offline inference with a quantized model loaded via `transformers`, run 
 python scripts/deploy/offline.py $MODEL_PATH "Hello, my name is"
 ```
 
-Where `MODEL_PATH` is the path to the quantized model output. please set the `deploy_backend: huggingface` in the `global` configuration before quantizing the model, or manually modify the `ignored_layers` field in the `config.json` file located in the quantized model output directory to `ignore`.
+Where `MODEL_PATH` is the path to the quantized model output.
 
 #### 3.2 API Service Deployment
 
