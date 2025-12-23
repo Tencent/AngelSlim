@@ -114,16 +114,17 @@ class OnlineVLMEagle3Trainer(Eagle3Trainer):
             draft_model_config, "aux_hidden_states_layer_ids", None
         )
 
-    def prepare_data_for_draft_model(
-        self, input_ids, attention_mask, loss_mask, **kwargs
-    ):
+    def prepare_data_for_draft_model(self, inputs):
+        input_ids = inputs["input_ids"]
+        attention_mask = inputs["attention_mask"]
+        loss_mask = inputs["loss_mask"]
+
         # Get hidden states and logits from target model
-        hidden_states, target_logits, inputs_embeds, position_ids = (
+        hidden_states, target_logits, _, position_ids = (
             self.target_model.get_hidden_states_and_logits(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 aux_hidden_states_layer_ids=self._aux_hidden_states_layer_ids,
-                **kwargs,
             )
         )
 
@@ -132,17 +133,11 @@ class OnlineVLMEagle3Trainer(Eagle3Trainer):
         input_ids = padding(input_ids, left=False)
         loss_mask = loss_mask[..., None].to(input_ids.device)
 
-        result_dict = {}
-        result_dict.update(kwargs)
-        result_dict.update(
-            {
-                "hidden_states": hidden_states,
-                "target_logits": target_logits,
-                "input_ids": input_ids,
-                "inputs_embeds": inputs_embeds,
-                "position_ids": position_ids,
-                "loss_mask": loss_mask,
-                "attention_mask": attention_mask,
-            }
-        )
-        return result_dict
+        return {
+            "hidden_states": hidden_states,
+            "target_logits": target_logits,
+            "input_ids": input_ids,
+            "loss_mask": loss_mask,
+            "position_ids": position_ids,
+            "attention_mask": attention_mask,
+        }

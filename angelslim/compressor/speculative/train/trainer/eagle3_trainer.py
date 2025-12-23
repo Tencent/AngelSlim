@@ -90,6 +90,7 @@ class Eagle3Trainer(Trainer, ABC):
             position_ids,
             target_logits,
             loss_mask,
+            log_prefix="train",
         )
 
         return loss
@@ -323,6 +324,6 @@ class Eagle3Trainer(Trainer, ABC):
                 position_ids,
                 target_logits,
                 loss_mask,
-                log_prefix="eval_",
+                log_prefix="eval",
             )
         return (loss, None, None)

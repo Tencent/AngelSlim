@@ -22,9 +22,32 @@ from transformers import AutoProcessor, AutoTokenizer
 from angelslim.utils import rank0_print
 
 from ..chat_templates import ChatTemplateType
-from ..data_utils import VLMDataCollatorWithPadding
+from ..data_utils import DataCollatorWithPadding, VLMDataCollatorWithPadding
 from .base_dataset_builder import OnlineDatasetBuilder
 from .dataset_builder_factory import DatasetBuilderFactory
+
+
+@DatasetBuilderFactory.register("online", "LLM")
+class OnlineLLMDatasetBuilder(OnlineDatasetBuilder):
+    def __init__(
+        self,
+        tokenizer: Union[AutoTokenizer, AutoProcessor],
+        max_length: int = 2048,
+        shuffle_seed: int = 42,
+        chat_template_type: ChatTemplateType = ChatTemplateType.QWEN3,
+        display: bool = False,
+        **kwargs: Any,
+    ):
+        super().__init__(
+            tokenizer,
+            max_length,
+            shuffle_seed,
+            chat_template_type,
+            display,
+        )
+
+    def get_data_collator(self) -> Any:
+        return DataCollatorWithPadding()
 
 
 @DatasetBuilderFactory.register("online", "VLM")
