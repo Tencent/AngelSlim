@@ -259,6 +259,7 @@ def main(input_path, output_path, block_size):
             or file.endswith(".json")
             or file.endswith(".md")
             or file.endswith(".txt")
+            or file.endswith(".jinja")
         ):
             src_path = os.path.join(input_path, file)
             dst_path = os.path.join(output_path, file)
