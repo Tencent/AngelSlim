@@ -21,7 +21,7 @@ from torch.utils.data import Dataset
 
 from angelslim.utils import rank0_print
 
-from ..data_utils import DataCollatorWithPadding
+from ..data_utils import DataCollatorWithPadding, VLMDataCollatorWithPadding
 from .base_dataset_builder import DatasetBuilder
 from .dataset_builder_factory import DatasetBuilderFactory
 
@@ -200,6 +200,66 @@ class OfflineEagle3Dataset(Dataset):
             )
 
 
+class OfflineVLMEagle3Dataset(OfflineEagle3Dataset):
+    def _load_ckpt(self, idx: int) -> Optional[Dict[str, torch.Tensor]]:
+        """
+        Load a checkpoint file.
+
+        Args:
+            idx: Index of the checkpoint file
+
+        Returns:
+            Dictionary containing input_ids, target_hiddens,
+                hidden_states, and loss_mask, or None if loading fails
+        """
+        ckpt_path = self.ckpt_files[idx]
+
+        try:
+            data = torch.load(ckpt_path, map_location="cpu")
+        except Exception as e:
+            warnings.warn(
+                f"Failed to load checkpoint {ckpt_path}: {e}. Skipping this file.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return None
+
+        # Validate required keys
+        required_keys = [
+            "input_ids",  # B, N
+            "target_hiddens",  # B, N, D
+            "hidden_states",  # B, N, 3*D
+            "loss_mask",  # B, N
+            "inputs_embeds",  # B, N, D
+            "position_ids",  # 3, B, N
+        ]
+        missing_keys = [key for key in required_keys if key not in data]
+
+        if missing_keys:
+            warnings.warn(
+                f"Checkpoint {ckpt_path} is missing required keys: {missing_keys}. "
+                f"Skipping this file.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return None
+
+        # Validate tensor types
+        for key in required_keys:
+            if not isinstance(data[key], torch.Tensor):
+                warnings.warn(
+                    f"Value for key '{key}' in {ckpt_path} is not a torch.Tensor. "
+                    f"Skipping this file.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                return None
+
+        attention_mask = torch.ones_like(data["input_ids"])
+        data["attention_mask"] = attention_mask  # B, N
+        return data
+
+
 @DatasetBuilderFactory.register("offline", "LLM")
 class OfflineLLMDatasetBuilder(DatasetBuilder):
     def __init__(
@@ -220,3 +280,25 @@ class OfflineLLMDatasetBuilder(DatasetBuilder):
 
     def get_data_collator(self) -> Any:
         return DataCollatorWithPadding()
+
+
+@DatasetBuilderFactory.register("offline", "VLM")
+class OfflineVLMDatasetBuilder(DatasetBuilder):
+    def __init__(
+        self, file_pattern: str = "*.ckpt", cache_in_memory: bool = False, **kwargs: Any
+    ):
+        self.file_pattern = file_pattern
+        self.cache_in_memory = cache_in_memory
+
+    def build_dataset(self, datapath: str, **kwargs: Any) -> Dataset:
+        """
+        Create offline datasets from pre-computed .ckpt files.
+        """
+        return OfflineVLMEagle3Dataset(
+            data_dir=datapath,
+            file_pattern=self.file_pattern,
+            cache_in_memory=self.cache_in_memory,
+        )
+
+    def get_data_collator(self) -> Any:
+        return VLMDataCollatorWithPadding()

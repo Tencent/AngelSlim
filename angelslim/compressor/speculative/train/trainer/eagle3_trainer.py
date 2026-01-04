@@ -73,7 +73,7 @@ class Eagle3Trainer(Trainer, ABC):
         data_for_draft_model = self.prepare_data_for_draft_model(inputs)
 
         attention_mask = data_for_draft_model["attention_mask"]  # Batch x Seq
-        position_ids = data_for_draft_model["position_ids"]  # Batch x Seq
+        position_ids = data_for_draft_model["position_ids"]
         input_ids = data_for_draft_model["input_ids"]  # Batch x Seq
         target_logits = data_for_draft_model["target_logits"]  # Batch x Seq x Vocab
         loss_mask = data_for_draft_model["loss_mask"]  # Batch x Seq x 1
@@ -90,6 +90,7 @@ class Eagle3Trainer(Trainer, ABC):
             position_ids,
             target_logits,
             loss_mask,
+            log_prefix="train",
         )
 
         return loss
@@ -290,3 +291,39 @@ class Eagle3Trainer(Trainer, ABC):
 
         # Wait for all processes
         self.accelerator.wait_for_everyone()
+
+    def prediction_step(
+        self,
+        model: nn.Module,
+        inputs: Dict[str, torch.Tensor],
+        prediction_loss_only: bool,
+        ignore_keys: Optional[List[str]] = None,
+    ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor]]:
+        """
+        Perform an evaluation step on `model` using `inputs`.
+        """
+        data_for_draft_model = self.prepare_data_for_draft_model(**inputs)
+
+        attention_mask = data_for_draft_model["attention_mask"]
+        # inputs_embeds = data_for_draft_model["inputs_embeds"]
+        position_ids = data_for_draft_model.get("position_ids", None)
+        input_ids = data_for_draft_model["input_ids"]
+        target_logits = data_for_draft_model["target_logits"]
+        loss_mask = data_for_draft_model["loss_mask"]
+        hidden_states = data_for_draft_model["hidden_states"]
+
+        with torch.no_grad():
+            hidden_states = self.down_project_hidden_states(hidden_states)
+            attention_mask, position_ids = self.prepare_attention_mask_and_position_ids(
+                hidden_states, attention_mask, position_ids
+            )
+            loss = self.draft_model_training_time_test(
+                input_ids,
+                hidden_states,
+                attention_mask,
+                position_ids,
+                target_logits,
+                loss_mask,
+                log_prefix="eval",
+            )
+        return (loss, None, None)
