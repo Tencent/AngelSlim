@@ -32,6 +32,20 @@ from .auto_scale import AutoLayerScale
 __all__ = ["AWQ"]
 
 
+def _remove_accelerate_hooks(module):
+    for submodule in module.modules():
+        if hasattr(submodule, "_hf_hook"):
+            try:
+                from accelerate.hooks import remove_hook_from_module
+                remove_hook_from_module(submodule)
+            except ImportError:
+                # Should not happen if _hf_hook is present
+                delattr(submodule, "_hf_hook")
+                if hasattr(submodule, "_old_forward"):
+                     submodule.forward = submodule._old_forward
+                     delattr(submodule, "_old_forward")
+
+
 class AWQ:
     def __init__(
         self,
@@ -156,6 +170,7 @@ class AWQ:
                     f"GPU Memory: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB"
                 )
 
+            _remove_accelerate_hooks(layers[i])
             layer = layers[i].to(dev)
             if not self.low_memory:
                 outs = outs.to(dev)
@@ -232,6 +247,10 @@ class AWQ:
             )
 
             self.scale_function.apply_scale(layer, scales_list, input_feat)
+
+            # Fix: Ensure all submodules are on the same device after apply_scale
+            # In low_memory mode, apply_scale may move weights to different devices
+            layer = layer.to(dev)
             for scales in scales_list:
                 name = "language_model.encoder.layers.{}.{}.scale".format(i, scales[0])
                 self.scales_dict[name] = scales[2]
@@ -239,6 +258,9 @@ class AWQ:
             if self.mse_range:
                 clip_list = self.clip_function.auto_clip(layer, input_feat)
                 self.clip_function.apply_clip(layer, clip_list)
+
+                # Fix: Ensure all submodules are on the same device after apply_clip
+                layer = layer.to(dev)
 
                 for j in range(min(self.inps.shape[1], nsamples)):
                     with torch.no_grad():
