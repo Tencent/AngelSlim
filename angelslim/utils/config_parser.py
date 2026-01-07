@@ -93,6 +93,8 @@ class GlobalConfig:
         json_data = get_hf_config(model_path)
         if json_data["model_type"] in ["qwen3_vl"]:
             self.hidden_size = json_data["text_config"]["hidden_size"]
+        elif json_data["model_type"] in ["qwen2_audio"]:
+            self.hidden_size = 4096
         elif (
             json_data["architectures"][0]
             if isinstance(json_data["architectures"], list)
@@ -247,9 +249,6 @@ class CompressionConfig:
         for method in self.name:
             # PTQ/QAT usually need calibration dataset
             if method in ["PTQ", "QAT"]:
-                # Check if dynamic quantization (usually doesn't need dataset)
-                if self.quantization and "dynamic" in self.quantization.name:
-                    continue
                 # Check if specific quantization helpers need dataset
                 if (
                     self.quantization
@@ -257,6 +256,9 @@ class CompressionConfig:
                     and "smooth" in self.quantization.quant_helpers
                 ):
                     return True
+                # Check if dynamic quantization (usually doesn't need dataset)
+                if self.quantization and "dynamic" in self.quantization.name:
+                    continue
                 # Default PTQ/QAT needs dataset
                 return True
         return False

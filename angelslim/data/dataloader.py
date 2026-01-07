@@ -18,6 +18,7 @@ from typing import Dict, Union
 from torch.utils.data import DataLoader
 from transformers import ProcessorMixin
 
+from .audio_dataset import AudioDataset
 from .base_dataset import BaseDataset
 from .multimodal_dataset import MultiModalDataset
 from .omni_dataset import OmniDataset
@@ -109,6 +110,16 @@ class DataLoaderFactory:
                 data_source=data_source,
                 is_hf_dataset=not os.path.isfile(data_source),
                 use_audio_in_video=use_audio_in_video,
+            )
+        elif data_type == "AudioDataset":
+            dataset = AudioDataset(
+                processor=processor,
+                device=device,
+                max_length=max_length,
+                num_samples=num_samples,
+                data_source=data_source,
+                is_hf_dataset=not os.path.isfile(data_source),
+                model_name=model_name,
             )
         else:
             raise ValueError(f"Unsupported data type: {data_type}")
