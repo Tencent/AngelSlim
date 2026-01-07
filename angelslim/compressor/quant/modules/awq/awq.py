@@ -37,13 +37,14 @@ def _remove_accelerate_hooks(module):
         if hasattr(submodule, "_hf_hook"):
             try:
                 from accelerate.hooks import remove_hook_from_module
+
                 remove_hook_from_module(submodule)
             except ImportError:
                 # Should not happen if _hf_hook is present
                 delattr(submodule, "_hf_hook")
                 if hasattr(submodule, "_old_forward"):
-                     submodule.forward = submodule._old_forward
-                     delattr(submodule, "_old_forward")
+                    submodule.forward = submodule._old_forward
+                    delattr(submodule, "_old_forward")
 
 
 class AWQ:

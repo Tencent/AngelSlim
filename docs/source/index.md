@@ -23,6 +23,10 @@ AngelSlim是腾讯自研的，致力于打造更易用、更全面和更高效�
 
 (AngelSlim, developed by Tencent, is a large language model compression toolkit engineered for enhanced usability, comprehensiveness, and efficiency. We will open-source compression algorithms including quantization, speculative decoding, pruning, and distillation. Supporting cutting-edge mainstream LLMs, the toolkit streamlines the complete end-to-end workflow from compression to deployment.)
 
+:::{image} /assets/angelslim_arch.png
+:alt: AngelSlim architecture
+:::
+
 
 🌟AngelSlim主要特性有：
 
