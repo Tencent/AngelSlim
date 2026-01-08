@@ -60,7 +60,7 @@ class GlobalConfig:
     save_path: str = field(default="./output")
     # Shared max_seq_length configuration
     max_seq_length: int = field(default=2048)
-    hidden_size: int = field(default=2048)
+    hidden_size: int = field(default=4096)
     model_arch_type: str = field(default=None)
     absolute_model_path: str = field(default=None)
     deploy_backend: str = field(default="vllm")
@@ -91,16 +91,24 @@ class GlobalConfig:
 
     def set_model_hidden_size(self, model_path) -> int:
         json_data = get_hf_config(model_path)
-        if json_data["model_type"] in ["qwen3_vl"]:
-            self.hidden_size = json_data["text_config"]["hidden_size"]
-        elif (
-            json_data["architectures"][0]
-            if isinstance(json_data["architectures"], list)
-            else json_data["architectures"]
-        ) == "Qwen3OmniMoeForConditionalGeneration":
-            self.hidden_size = json_data["thinker_config"]["text_config"]["hidden_size"]
-        else:
-            self.hidden_size = json_data["hidden_size"]
+        try:
+            if json_data["model_type"] in ["qwen3_vl"]:
+                self.hidden_size = json_data["text_config"]["hidden_size"]
+            elif (
+                json_data["architectures"][0]
+                if isinstance(json_data["architectures"], list)
+                else json_data["architectures"]
+            ) == "Qwen3OmniMoeForConditionalGeneration":
+                self.hidden_size = json_data["thinker_config"]["text_config"][
+                    "hidden_size"
+                ]
+            else:
+                self.hidden_size = json_data["hidden_size"]
+        except KeyError:
+            print(
+                "Warning: Failed to set model hidden size from config.json. "
+                f"Using default hidden size {self.hidden_size}."
+            )
 
     def set_model_arch_type(self, model_path) -> str:
         json_data = get_hf_config(model_path)
@@ -247,9 +255,6 @@ class CompressionConfig:
         for method in self.name:
             # PTQ/QAT usually need calibration dataset
             if method in ["PTQ", "QAT"]:
-                # Check if dynamic quantization (usually doesn't need dataset)
-                if self.quantization and "dynamic" in self.quantization.name:
-                    continue
                 # Check if specific quantization helpers need dataset
                 if (
                     self.quantization
@@ -257,6 +262,9 @@ class CompressionConfig:
                     and "smooth" in self.quantization.quant_helpers
                 ):
                     return True
+                # Check if dynamic quantization (usually doesn't need dataset)
+                if self.quantization and "dynamic" in self.quantization.name:
+                    continue
                 # Default PTQ/QAT needs dataset
                 return True
         return False

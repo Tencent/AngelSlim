@@ -169,11 +169,13 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
           <li><a href="https://huggingface.co/collections/Qwen/qwen3-omni">Qwen3-Omni</a></li>
+          <li><a href="https://huggingface.co/collections/Qwen/qwen2-audio">Qwen2-Audio</a></li>
         </ul>
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
           <li><a href="https://github.com/Tencent/AngelSlim/blob/main/docs/source/models/qwen3_omni/qwen3_omni_quant.md">FP8-Static/Dynamic</a></li>
+          <li><a href="https://github.com/Tencent/AngelSlim/tree/main/configs/qwen2_audio">INT8-Dynamic</a></li>
         </ul>
       </td>
       <td>
