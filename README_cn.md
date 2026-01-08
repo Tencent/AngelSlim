@@ -171,6 +171,7 @@
         <ul style="padding-left: 0; list-style-position: inside;">
           <li><a href="https://huggingface.co/collections/Qwen/qwen3-omni">Qwen3-Omni</a></li>
           <li><a href="https://huggingface.co/collections/Qwen/qwen2-audio">Qwen2-Audio</a></li>
+          <li><a href="https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512">Fun-CosyVoice3</a></li>
         </ul>
       </td>
       <td>
@@ -345,7 +346,8 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
 
 ### 1、投机采样
 
-我们使用vLLM在代码、数学、指令跟随、文本生成、多模态理解等任务上评测了AngelSlim所训练的Eagle3模型，设置num_speculative_tokens=2 or 4 下我们所训的模型加速和接收长度表现如下所示。
+我们使用vLLM在代码、数学、指令跟随、文本生成、多模态理解等任务上评测了AngelSlim所训练的Eagle3模型，设置num_speculative_tokens=2 or 4 下我们所训的模型加速和接收长度表现如下所示，接收长度在1.8-3.5，最高加速可达1.4-1.9倍。
+
 
 <p align="center">
   <picture>
@@ -640,13 +642,11 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
 
 我们使用(v0.13.0)评测了HunyuanOCR Eagle3模型在 **OCR-Bench** 上的接收长度和吞吐。结果是在单张H20上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
 
-
 <table><thead>
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th>OCR-Bench-Internal</th>
-    <th></th>
+    <th colspan="2">OCR-Bench-Internal</th>
   </tr></thead>
 <tbody>
   <tr>
@@ -656,13 +656,12 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
     <td>accept length</td>
   </tr>
   <tr>
-    <td>Hunyuan-OCR</td>
+    <td rowspan="2">Hunyuan-OCR</td>
     <td>Vanilla</td>
     <td>71.21</td>
     <td>1</td>
   </tr>
   <tr>
-    <td></td>
     <td>Eagle3</td>
     <td>120.75</td>
     <td>2.2</td>
@@ -690,13 +689,12 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
     <td>accept length</td>
   </tr>
   <tr>
-    <td>Qwen2-Audio-7B-Instruct</td>
+    <td rowspan="2">Qwen2_Audio</td>
     <td>Vanilla</td>
     <td>78.76</td>
     <td>1</td>
   </tr>
   <tr>
-    <td></td>
     <td>Eagle3</td>
     <td>146.66</td>
     <td>3.51</td>
@@ -711,7 +709,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th colspan="2">LibriTTS</a></th>
+    <th colspan="2">LibriTTS</th>
   </tr></thead>
 <tbody>
   <tr>
@@ -721,13 +719,12 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
     <td>accept length</td>
   </tr>
   <tr>
-    <td>Fun-CosyVoice3</td>
+    <td rowspan="2">Fun-CosyVoice3</td>
     <td>Vanilla</td>
     <td>-</td>
     <td>1</td>
   </tr>
   <tr>
-    <td></td>
     <td>Eagle3</td>
     <td>-</td>
     <td>1.96</td>
@@ -735,7 +732,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
 </tbody>
 </table>
 
-> Adapted for Transformers backend inference, only displays accept length.
+> Adapted for Transformers backend inference, only displays accept length. vLLM speedup ~1.6×, estimated from baseline LLM speedup.
 
 ### 2、量化
 

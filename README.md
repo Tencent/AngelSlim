@@ -170,6 +170,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
         <ul style="padding-left: 0; list-style-position: inside;">
           <li><a href="https://huggingface.co/collections/Qwen/qwen3-omni">Qwen3-Omni</a></li>
           <li><a href="https://huggingface.co/collections/Qwen/qwen2-audio">Qwen2-Audio</a></li>
+          <li><a href="https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512">Fun-CosyVoice3</a></li>
         </ul>
       </td>
       <td>
@@ -341,7 +342,7 @@ For more detaileds, please refer to the [Deployment Documentation](https://angel
 
 ### 1. Speculative Decoding
 
-We evaluated the Eagle3 model trained by AngelSlim on tasks including code generation, mathematical reasoning, instruction following, text generation, and multimodal understanding using vLLM. The inference acceleration and context length performance of our trained model under the settings of num_speculative_tokens = 2 or 4 are presented as follows.
+We evaluated the Eagle3 model trained by AngelSlim on tasks including code generation, mathematical reasoning, instruction following, text generation, and multimodal understanding using vLLM. The inference acceleration and context length performance of our trained model under the settings of num_speculative_tokens = 2 or 4 are presented as follows, with an accept length of 1.8–3.5 and a maximum speedup of 1.4–1.9×.
 
 <p align="center">
   <picture>
@@ -636,13 +637,11 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
 ##### 1.2.2 HunyuanOCR Model
 
 Benchmark results for HunyuanOCR using Eagle3 speculative decoding on vLLM (v0.13.0) across OCR tasks, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
-
 <table><thead>
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th>OCR-Bench-Internal</th>
-    <th></th>
+    <th colspan="2">OCR-Bench-Internal</th>
   </tr></thead>
 <tbody>
   <tr>
@@ -652,13 +651,12 @@ Benchmark results for HunyuanOCR using Eagle3 speculative decoding on vLLM (v0.1
     <td>accept length</td>
   </tr>
   <tr>
-    <td>Hunyuan-OCR</td>
+    <td rowspan="2">Hunyuan-OCR</td>
     <td>Vanilla</td>
     <td>71.21</td>
     <td>1</td>
   </tr>
   <tr>
-    <td></td>
     <td>Eagle3</td>
     <td>120.75</td>
     <td>2.2</td>
@@ -686,13 +684,12 @@ Benchmark results for Qwen2-Audio using Eagle3 speculative decoding on vLLM (v0.
     <td>accept length</td>
   </tr>
   <tr>
-    <td>Qwen2-Audio-7B-Instruct</td>
+    <td rowspan="2">Qwen2_Audio</td>
     <td>Vanilla</td>
     <td>78.76</td>
     <td>1</td>
   </tr>
   <tr>
-    <td></td>
     <td>Eagle3</td>
     <td>146.66</td>
     <td>3.51</td>
@@ -708,7 +705,7 @@ Benchmark results for Fun-CosyVoice3 using Eagle3 speculative decoding across **
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th colspan="2">LibriTTS</a></th>
+    <th colspan="2">LibriTTS</th>
   </tr></thead>
 <tbody>
   <tr>
@@ -718,13 +715,12 @@ Benchmark results for Fun-CosyVoice3 using Eagle3 speculative decoding across **
     <td>accept length</td>
   </tr>
   <tr>
-    <td>Fun-CosyVoice3</td>
+    <td rowspan="2">Fun-CosyVoice3</td>
     <td>Vanilla</td>
     <td>-</td>
     <td>1</td>
   </tr>
   <tr>
-    <td></td>
     <td>Eagle3</td>
     <td>-</td>
     <td>1.96</td>
@@ -732,7 +728,7 @@ Benchmark results for Fun-CosyVoice3 using Eagle3 speculative decoding across **
 </tbody>
 </table>
 
-> Adapted for Transformers backend inference, only displays accept length.
+> Adapted for Transformers backend inference, only displays accept length. vLLM speedup ~1.6×, estimated from baseline LLM speedup.
 
 ### 2. Quantization
 
