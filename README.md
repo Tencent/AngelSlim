@@ -180,7 +180,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
-          <li>Under Development</li>
+          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle.html">Eagle3</a></li>
         </ul>
       </td>
       <td>
@@ -341,13 +341,19 @@ For more detaileds, please refer to the [Deployment Documentation](https://angel
 
 ### 1. Speculative Decoding
 
+We evaluated the Eagle3 model trained by AngelSlim on tasks including code generation, mathematical reasoning, instruction following, text generation, and multimodal understanding using vLLM. The inference acceleration and context length performance of our trained model under the settings of num_speculative_tokens = 2 or 4 are presented as follows.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./docs/source/assets/speculative_decoding/eagle3_speedup_and_accepted_length.png">
+    <img alt="AngelSlim" src="./docs/source/assets/speculative_decoding/eagle3_speedup_and_accepted_length.png" width=100%>
+  </picture>
+</p>
+
+
 #### 1.1 Qwen3 Series Models
 
-**vLLM v0.11.2 Benchmark Results**
-
-We report benchmark results of the Qwen3 series models using the Eagle3 speculative decoding algorithm across multiple evaluation suites, including **MT-bench**, **HumanEval**, **GSM8K**, and **Alpaca**.
-All experiments were conducted on a single NVIDIA H20 GPU with the configuration:
-**tp=1, ep=1, num_speculative_tokens=2, batch_size=1, output_len=1024**.
+Benchmark results for Qwen3 series models using Eagle3 speculative decoding on vLLM (v0.11.2) across **MT-bench**, **HumanEval**, **GSM8K** and **Alpaca**, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=2, batch_size=1, output_len=1024**).
 
 <table>
   <thead>
@@ -379,7 +385,7 @@ All experiments were conducted on a single NVIDIA H20 GPU with the configuration
       <td>378.86</td><td>1</td>
       <td>378.38</td><td>1</td>
       <td>390.53</td><td>1</td>
-      <td>318.05</td><td>1</td>
+      <td>381.05</td><td>1</td>
     </tr>
     <tr>
       <td>Eagle3</td>
@@ -387,7 +393,7 @@ All experiments were conducted on a single NVIDIA H20 GPU with the configuration
       <td>653.29</td><td>2.19</td>
       <td>680.1</td><td>2.2</td>
       <td>621.44</td><td>2.17</td>
-      <td>642.93</td><td>2.18</td>
+      <td>642.93</td><td>2.17</td>
     </tr>
     <!-- Qwen3-4B -->
     <tr>
@@ -482,6 +488,251 @@ All experiments were conducted on a single NVIDIA H20 GPU with the configuration
 
   </tbody>
 </table>
+
+#### 1.2 VLM Models
+
+##### 1.2.1 Qwen3-VL Series Models
+
+Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding on vLLM (v0.12.0) across language and multimodal tasks, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
+
+<table><thead>
+  <tr>
+    <th>Model</th>
+    <th>Method</th>
+    <th colspan="2">GSM8K</th>
+    <th colspan="2">Alpaca</th>
+    <th colspan="2">HumanEval</th>
+    <th colspan="2">MT-bench</th>
+    <th colspan="2">MATH-500</th>
+    <th colspan="2">MMMU</th>
+    <th colspan="2">MMStar</th>
+  </tr></thead>
+<tbody>
+  <tr>
+    <td></td>
+    <td></td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+  </tr>
+  <tr>
+    <td rowspan="2">Qwen3-VL-2B-Instruct</td>
+    <td>Vanilla</td>
+    <td>348.55</td>
+    <td>1</td>
+    <td>350.9</td>
+    <td>1</td>
+    <td>346.07</td>
+    <td>1</td>
+    <td>346.31</td>
+    <td>1</td>
+    <td>82.96</td>
+    <td>1</td>
+    <td>83.27</td>
+    <td>1</td>
+    <td>81.63</td>
+    <td>1</td>
+  </tr>
+  <tr>
+    <td>Eagle3</td>
+    <td>511.52</td>
+    <td>2.11</td>
+    <td>560.55</td>
+    <td>2.26</td>
+    <td>826.01</td>
+    <td>3.39</td>
+    <td>555.22</td>
+    <td>2.29</td>
+    <td>163.09</td>
+    <td>2.57</td>
+    <td>154.18</td>
+    <td>2.55</td>
+    <td>139.73</td>
+    <td>2.31</td>
+  </tr>
+  <tr>
+    <td rowspan="2">Qwen3-VL-4B-Instruct</td>
+    <td>Vanilla</td>
+    <td>212.87</td>
+    <td>1</td>
+    <td>213.24</td>
+    <td>1</td>
+    <td>211.69</td>
+    <td>1</td>
+    <td>212.1</td>
+    <td>1</td>
+    <td>67.96</td>
+    <td>1</td>
+    <td>65.88</td>
+    <td>1</td>
+    <td>67.75</td>
+    <td>1</td>
+  </tr>
+  <tr>
+    <td>Eagle3</td>
+    <td>415.29</td>
+    <td>2.57</td>
+    <td>372.89</td>
+    <td>2.26</td>
+    <td>459.37</td>
+    <td>2.82</td>
+    <td>382.33</td>
+    <td>2.34</td>
+    <td>141.87</td>
+    <td>2.72</td>
+    <td>104.44</td>
+    <td>2.05</td>
+    <td>107.07</td>
+    <td>2.1</td>
+  </tr>
+  <tr>
+    <td rowspan="2">Qwen3-VL-30B-A3B-Instruct</td>
+    <td>Vanilla</td>
+    <td>179.94</td>
+    <td>1</td>
+    <td>184.6</td>
+    <td>1</td>
+    <td>168.68</td>
+    <td>1</td>
+    <td>180.57</td>
+    <td>1</td>
+    <td>31.08</td>
+    <td>1</td>
+    <td>31.51</td>
+    <td>1</td>
+    <td>30.93</td>
+    <td>1</td>
+  </tr>
+  <tr>
+    <td>Eagle3</td>
+    <td>281.93</td>
+    <td>2.82</td>
+    <td>241.42</td>
+    <td>2.13</td>
+    <td>223.05</td>
+    <td>2.57</td>
+    <td>240.47</td>
+    <td>2.19</td>
+    <td>75.31</td>
+    <td>2.79</td>
+    <td>48.47</td>
+    <td>1.78</td>
+    <td>52.57</td>
+    <td>1.94</td>
+  </tr>
+</tbody></table>
+
+##### 1.2.2 HunyuanOCR Model
+
+Benchmark results for HunyuanOCR using Eagle3 speculative decoding on vLLM (v0.13.0) across OCR tasks, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
+
+<table><thead>
+  <tr>
+    <th>Model</th>
+    <th>Method</th>
+    <th>OCR-Bench-Internal</th>
+    <th></th>
+  </tr></thead>
+<tbody>
+  <tr>
+    <td></td>
+    <td></td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+  </tr>
+  <tr>
+    <td>Hunyuan-OCR</td>
+    <td>Vanilla</td>
+    <td>71.21</td>
+    <td>1</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Eagle3</td>
+    <td>120.75</td>
+    <td>2.2</td>
+  </tr>
+</tbody>
+</table>
+
+#### 1.3 Audio Models
+
+##### 1.3.1 Qwen2-Audio Model
+
+Benchmark results for Qwen2-Audio using Eagle3 speculative decoding on vLLM (v0.12.0) across **[LibriSpeech](https://www.openslr.org/12)** dataset, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
+
+<table><thead>
+  <tr>
+    <th>Model</th>
+    <th>Method</th>
+    <th colspan="2">LibriSpeech</th>
+  </tr></thead>
+<tbody>
+  <tr>
+    <td></td>
+    <td></td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+  </tr>
+  <tr>
+    <td>Qwen2-Audio-7B-Instruct</td>
+    <td>Vanilla</td>
+    <td>78.76</td>
+    <td>1</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Eagle3</td>
+    <td>146.66</td>
+    <td>3.51</td>
+  </tr>
+</tbody>
+</table>
+
+##### 1.3.2 Fun-CosyVoice3 Model
+
+Benchmark results for Fun-CosyVoice3 using Eagle3 speculative decoding across **[LibriTTS](https://www.openslr.org/60/)** dataset, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
+
+<table><thead>
+  <tr>
+    <th>Model</th>
+    <th>Method</th>
+    <th colspan="2">LibriTTS</a></th>
+  </tr></thead>
+<tbody>
+  <tr>
+    <td></td>
+    <td></td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+  </tr>
+  <tr>
+    <td>Fun-CosyVoice3</td>
+    <td>Vanilla</td>
+    <td>-</td>
+    <td>1</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Eagle3</td>
+    <td>-</td>
+    <td>1.96</td>
+  </tr>
+</tbody>
+</table>
+
+> Adapted for Transformers backend inference, only displays accept length.
 
 ### 2. Quantization
 

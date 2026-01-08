@@ -181,7 +181,7 @@
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
-          <li>建设中</li>
+          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle.html">Eagle3</a></li>
         </ul>
       </td>
       <td>
@@ -345,6 +345,15 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
 
 ### 1、投机采样
 
+我们使用vLLM在代码、数学、指令跟随、文本生成、多模态理解等任务上评测了AngelSlim所训练的Eagle3模型，设置num_speculative_tokens=2 or 4 下我们所训的模型加速和接收长度表现如下所示。
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./docs/source/assets/speculative_decoding/eagle3_speedup_and_accepted_length.png">
+    <img alt="AngelSlim" src="./docs/source/assets/speculative_decoding/eagle3_speedup_and_accepted_length.png" width=100%>
+  </picture>
+</p>
+
 #### 1.1 Qwen3系列模型
 
 我们使用vLLM(v0.11.2)评测了Qwen3系列Eagle3模型在**MT-bench**、 **HumanEval**、 **GSM8K**、**Alpaca**等数据集上的接收长度和吞吐。全部结果都是在单张H20上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=2, batch_size=1, output_len=1024**。
@@ -379,7 +388,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
       <td>378.86</td><td>1</td>
       <td>378.38</td><td>1</td>
       <td>390.53</td><td>1</td>
-      <td>318.05</td><td>1</td>
+      <td>381.05</td><td>1</td>
     </tr>
     <tr>
       <td>Eagle3</td>
@@ -387,7 +396,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
       <td>653.29</td><td>2.19</td>
       <td>680.1</td><td>2.2</td>
       <td>621.44</td><td>2.17</td>
-      <td>642.93</td><td>2.18</td>
+      <td>642.93</td><td>2.17</td>
     </tr>
     <!-- Qwen3-4B -->
     <tr>
@@ -482,6 +491,251 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
 
   </tbody>
 </table>
+
+#### 1.2 多模态理解模型
+
+##### 1.2.1 Qwen3-VL系列模型
+
+我们使用(v0.12.0)评测了Qwen3-VL系列Eagle3模型在语言理解任务和多模态理解任务上的接收长度和吞吐。全部结果都是在单张H20上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
+
+<table><thead>
+  <tr>
+    <th>Model</th>
+    <th>Method</th>
+    <th colspan="2">GSM8K</th>
+    <th colspan="2">Alpaca</th>
+    <th colspan="2">HumanEval</th>
+    <th colspan="2">MT-bench</th>
+    <th colspan="2">MATH-500</th>
+    <th colspan="2">MMMU</th>
+    <th colspan="2">MMStar</th>
+  </tr></thead>
+<tbody>
+  <tr>
+    <td></td>
+    <td></td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+  </tr>
+  <tr>
+    <td rowspan="2">Qwen3-VL-2B-Instruct</td>
+    <td>Vanilla</td>
+    <td>348.55</td>
+    <td>1</td>
+    <td>350.9</td>
+    <td>1</td>
+    <td>346.07</td>
+    <td>1</td>
+    <td>346.31</td>
+    <td>1</td>
+    <td>82.96</td>
+    <td>1</td>
+    <td>83.27</td>
+    <td>1</td>
+    <td>81.63</td>
+    <td>1</td>
+  </tr>
+  <tr>
+    <td>Eagle3</td>
+    <td>511.52</td>
+    <td>2.11</td>
+    <td>560.55</td>
+    <td>2.26</td>
+    <td>826.01</td>
+    <td>3.39</td>
+    <td>555.22</td>
+    <td>2.29</td>
+    <td>163.09</td>
+    <td>2.57</td>
+    <td>154.18</td>
+    <td>2.55</td>
+    <td>139.73</td>
+    <td>2.31</td>
+  </tr>
+  <tr>
+    <td rowspan="2">Qwen3-VL-4B-Instruct</td>
+    <td>Vanilla</td>
+    <td>212.87</td>
+    <td>1</td>
+    <td>213.24</td>
+    <td>1</td>
+    <td>211.69</td>
+    <td>1</td>
+    <td>212.1</td>
+    <td>1</td>
+    <td>67.96</td>
+    <td>1</td>
+    <td>65.88</td>
+    <td>1</td>
+    <td>67.75</td>
+    <td>1</td>
+  </tr>
+  <tr>
+    <td>Eagle3</td>
+    <td>415.29</td>
+    <td>2.57</td>
+    <td>372.89</td>
+    <td>2.26</td>
+    <td>459.37</td>
+    <td>2.82</td>
+    <td>382.33</td>
+    <td>2.34</td>
+    <td>141.87</td>
+    <td>2.72</td>
+    <td>104.44</td>
+    <td>2.05</td>
+    <td>107.07</td>
+    <td>2.1</td>
+  </tr>
+  <tr>
+    <td rowspan="2">Qwen3-VL-30B-A3B-Instruct</td>
+    <td>Vanilla</td>
+    <td>179.94</td>
+    <td>1</td>
+    <td>184.6</td>
+    <td>1</td>
+    <td>168.68</td>
+    <td>1</td>
+    <td>180.57</td>
+    <td>1</td>
+    <td>31.08</td>
+    <td>1</td>
+    <td>31.51</td>
+    <td>1</td>
+    <td>30.93</td>
+    <td>1</td>
+  </tr>
+  <tr>
+    <td>Eagle3</td>
+    <td>281.93</td>
+    <td>2.82</td>
+    <td>241.42</td>
+    <td>2.13</td>
+    <td>223.05</td>
+    <td>2.57</td>
+    <td>240.47</td>
+    <td>2.19</td>
+    <td>75.31</td>
+    <td>2.79</td>
+    <td>48.47</td>
+    <td>1.78</td>
+    <td>52.57</td>
+    <td>1.94</td>
+  </tr>
+</tbody></table>
+
+##### 1.2.2 HunyuanOCR模型
+
+我们使用(v0.13.0)评测了HunyuanOCR Eagle3模型在 **OCR-Bench** 上的接收长度和吞吐。结果是在单张H20上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
+
+
+<table><thead>
+  <tr>
+    <th>Model</th>
+    <th>Method</th>
+    <th>OCR-Bench-Internal</th>
+    <th></th>
+  </tr></thead>
+<tbody>
+  <tr>
+    <td></td>
+    <td></td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+  </tr>
+  <tr>
+    <td>Hunyuan-OCR</td>
+    <td>Vanilla</td>
+    <td>71.21</td>
+    <td>1</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Eagle3</td>
+    <td>120.75</td>
+    <td>2.2</td>
+  </tr>
+</tbody>
+</table>
+
+#### 1.3 语音模型
+
+##### 1.3.1 Qwen2-Audio模型
+
+我们使用(v0.12.0)评测了Qwen2-Audio Eagle3模型在[LibriSpeech](https://www.openslr.org/12)数据集上的接收长度和吞吐。结果是在单张H20上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
+
+<table><thead>
+  <tr>
+    <th>Model</th>
+    <th>Method</th>
+    <th colspan="2">LibriSpeech</th>
+  </tr></thead>
+<tbody>
+  <tr>
+    <td></td>
+    <td></td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+  </tr>
+  <tr>
+    <td>Qwen2-Audio-7B-Instruct</td>
+    <td>Vanilla</td>
+    <td>78.76</td>
+    <td>1</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Eagle3</td>
+    <td>146.66</td>
+    <td>3.51</td>
+  </tr>
+</tbody>
+</table>
+
+##### 1.3.2 Fun-CosyVoice3模型
+我们评测了Fun-CosyVoice3 Eagle3模型在[LibriTTS](https://www.openslr.org/60/)数据集上的接收长度。结果是在单张H20上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
+
+<table><thead>
+  <tr>
+    <th>Model</th>
+    <th>Method</th>
+    <th colspan="2">LibriTTS</a></th>
+  </tr></thead>
+<tbody>
+  <tr>
+    <td></td>
+    <td></td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+  </tr>
+  <tr>
+    <td>Fun-CosyVoice3</td>
+    <td>Vanilla</td>
+    <td>-</td>
+    <td>1</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Eagle3</td>
+    <td>-</td>
+    <td>1.96</td>
+  </tr>
+</tbody>
+</table>
+
+> Adapted for Transformers backend inference, only displays accept length.
 
 ### 2、量化
 
