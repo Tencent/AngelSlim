@@ -170,6 +170,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
         <ul style="padding-left: 0; list-style-position: inside;">
           <li><a href="https://huggingface.co/collections/Qwen/qwen3-omni">Qwen3-Omni</a></li>
           <li><a href="https://huggingface.co/collections/Qwen/qwen2-audio">Qwen2-Audio</a></li>
+          <li><a href="https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512">Fun-CosyVoice3</a></li>
         </ul>
       </td>
       <td>
