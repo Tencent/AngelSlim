@@ -699,7 +699,7 @@ We report benchmark results of the HunyuanOCR using the Eagle3 speculative decod
     <td>accept length</td>
   </tr>
   <tr>
-    <td>Qwen2_Audio</td>
+    <td>Qwen2-Audio-7B-Instruct</td>
     <td>Vanilla</td>
     <td>78.76</td>
     <td>1</td>

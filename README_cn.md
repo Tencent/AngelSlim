@@ -686,7 +686,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
     <td>accept length</td>
   </tr>
   <tr>
-    <td>Qwen2_Audio</td>
+    <td>Qwen2-Audio-7B-Instruct</td>
     <td>Vanilla</td>
     <td>78.76</td>
     <td>1</td>
