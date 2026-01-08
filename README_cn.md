@@ -711,7 +711,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th colspan="2"><a href="https://www.openslr.org/60/">LibriTTS</a></th>
+    <th colspan="2">LibriTTS</a></th>
   </tr></thead>
 <tbody>
   <tr>

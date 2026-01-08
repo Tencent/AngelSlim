@@ -708,7 +708,7 @@ Benchmark results for Fun-CosyVoice3 using Eagle3 speculative decoding across **
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th colspan="2"><a href="https://www.openslr.org/60/">LibriTTS</a></th>
+    <th colspan="2">LibriTTS</a></th>
   </tr></thead>
 <tbody>
   <tr>
