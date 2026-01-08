@@ -353,11 +353,7 @@ We evaluated the Eagle3 model trained by AngelSlim on tasks including code gener
 
 #### 1.1 Qwen3 Series Models
 
-**vLLM v0.11.2 Benchmark Results**
-
-We report benchmark results of the Qwen3 series models using the Eagle3 speculative decoding algorithm across multiple evaluation suites, including **MT-bench**, **HumanEval**, **GSM8K**, and **Alpaca**.
-All experiments were conducted on a single NVIDIA H20 GPU with the configuration:
-**tp=1, ep=1, num_speculative_tokens=2, batch_size=1, output_len=1024**.
+Benchmark results for Qwen3 series models using Eagle3 speculative decoding on vLLM (v0.11.2) across **MT-bench**, **HumanEval**, **GSM8K** and **Alpaca**, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=2, batch_size=1, output_len=1024**).
 
 <table>
   <thead>
@@ -493,15 +489,11 @@ All experiments were conducted on a single NVIDIA H20 GPU with the configuration
   </tbody>
 </table>
 
-#### 1.2 VLM & Audio Models
+#### 1.2 VLM Models
 
 ##### 1.2.1 Qwen3-VL Series Models
 
-vLLM v0.12.0 Benchmark Results
-
-We report benchmark results of the Qwen3-VL series models using the Eagle3 speculative decoding algorithm across multiple evaluation suites, including **MT-bench**, **HumanEval**, **GSM8K**, **Alpaca**, **MATH-500**, and multimodal understanding tasks, including **MMMU**, **MMStar**. All experiments were conducted on a single NVIDIA H20 GPU with the configuration:
-**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**.
-
+Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding on vLLM (v0.12.0) across language and multimodal tasks, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
 
 <table><thead>
   <tr>
@@ -643,11 +635,7 @@ We report benchmark results of the Qwen3-VL series models using the Eagle3 specu
 
 ##### 1.2.2 HunyuanOCR Model
 
-vLLM v0.13.0 Benchmark Results
-
-We report benchmark results of the HunyuanOCR using the Eagle3 speculative decoding algorithm across **OCR-Bench**. All experiments were conducted on a single NVIDIA H20 GPU with the configuration:
-**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**.
-
+Benchmark results for HunyuanOCR using Eagle3 speculative decoding on vLLM (v0.13.0) across OCR tasks, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
 
 <table><thead>
   <tr>
@@ -678,18 +666,17 @@ We report benchmark results of the HunyuanOCR using the Eagle3 speculative decod
 </tbody>
 </table>
 
-##### 1.2.3 Qwen2-Audio Model
+#### 1.3 Audio Models
 
-vLLM v0.12.0 Benchmark Results
+##### 1.3.1 Qwen2-Audio Model
 
-We report benchmark results of the HunyuanOCR using the Eagle3 speculative decoding algorithm across **[librispeech_dev](https://www.openslr.org/12)** dataset. All experiments were conducted on a single NVIDIA H20 GPU with the configuration:
-**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**.
+Benchmark results for Qwen2-Audio using Eagle3 speculative decoding on vLLM (v0.12.0) across **[LibriSpeech](https://www.openslr.org/12)** dataset, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
 
 <table><thead>
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th colspan="2">librispeech_dev</th>
+    <th colspan="2">LibriSpeech</th>
   </tr></thead>
 <tbody>
   <tr>
@@ -712,6 +699,40 @@ We report benchmark results of the HunyuanOCR using the Eagle3 speculative decod
   </tr>
 </tbody>
 </table>
+
+##### 1.3.2 Fun-CosyVoice3 Model
+
+Benchmark results for Fun-CosyVoice3 using Eagle3 speculative decoding across **[LibriTTS](https://www.openslr.org/60/)** dataset, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
+
+<table><thead>
+  <tr>
+    <th>Model</th>
+    <th>Method</th>
+    <th colspan="2"><a href="https://www.openslr.org/60/">LibriTTS</a></th>
+  </tr></thead>
+<tbody>
+  <tr>
+    <td></td>
+    <td></td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+  </tr>
+  <tr>
+    <td>Fun-CosyVoice3</td>
+    <td>Vanilla</td>
+    <td>-</td>
+    <td>1</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Eagle3</td>
+    <td>-</td>
+    <td>1.96</td>
+  </tr>
+</tbody>
+</table>
+
+> Adapted for Transformers backend inference, only displays accept length.
 
 ### 2. Quantization
 

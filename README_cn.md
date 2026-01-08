@@ -492,10 +492,11 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
   </tbody>
 </table>
 
-#### 1.2 多模态理解 & 语音模型
+#### 1.2 多模态理解模型
 
 ##### 1.2.1 Qwen3-VL系列模型
-我们使用(v0.12.0)评测了Qwen3-VL系列Eagle3模型在语言理解任务: **MT-bench**、 **HumanEval**、 **GSM8K**、**Alpaca**、**MATH-500** 和多模态理解任务: **MMMU**、**MMStar** 等数据集上的接收长度和吞吐。全部结果都是在单张H20上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
+
+我们使用(v0.12.0)评测了Qwen3-VL系列Eagle3模型在语言理解任务和多模态理解任务上的接收长度和吞吐。全部结果都是在单张H20上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
 
 <table><thead>
   <tr>
@@ -636,6 +637,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
 </tbody></table>
 
 ##### 1.2.2 HunyuanOCR模型
+
 我们使用(v0.13.0)评测了HunyuanOCR Eagle3模型在 **OCR-Bench** 上的接收长度和吞吐。结果是在单张H20上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
 
 
@@ -668,15 +670,17 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
 </tbody>
 </table>
 
-##### 1.2.3 Qwen2-Audio模型
+#### 1.3 语音模型
 
-我们使用(v0.12.0)评测了Qwen2-Audio Eagle3模型在[librispeech_dev](https://www.openslr.org/12)数据集上的接收长度和吞吐。结果是在单张H20上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
+##### 1.3.1 Qwen2-Audio模型
+
+我们使用(v0.12.0)评测了Qwen2-Audio Eagle3模型在[LibriSpeech](https://www.openslr.org/12)数据集上的接收长度和吞吐。结果是在单张H20上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
 
 <table><thead>
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th colspan="2">librispeech_dev</th>
+    <th colspan="2">LibriSpeech</th>
   </tr></thead>
 <tbody>
   <tr>
@@ -699,6 +703,39 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
   </tr>
 </tbody>
 </table>
+
+##### 1.3.2 Fun-CosyVoice3模型
+我们评测了Fun-CosyVoice3 Eagle3模型在[LibriTTS](https://www.openslr.org/60/)数据集上的接收长度。结果是在单张H20上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
+
+<table><thead>
+  <tr>
+    <th>Model</th>
+    <th>Method</th>
+    <th colspan="2"><a href="https://www.openslr.org/60/">LibriTTS</a></th>
+  </tr></thead>
+<tbody>
+  <tr>
+    <td></td>
+    <td></td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
+  </tr>
+  <tr>
+    <td>Fun-CosyVoice3</td>
+    <td>Vanilla</td>
+    <td>-</td>
+    <td>1</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Eagle3</td>
+    <td>-</td>
+    <td>1.96</td>
+  </tr>
+</tbody>
+</table>
+
+> Adapted for Transformers backend inference, only displays accept length.
 
 ### 2、量化
 
