@@ -15,17 +15,17 @@
 import os
 import json
 import warnings
-import numpy as np
 from tqdm import tqdm
-from typing import Any, Dict, List, Optional, Union
 from pathlib import Path
 from functools import partial
+from typing import Any, Dict, List, Optional, Union
 
 import torch
-from datasets import load_dataset
-from huggingface_hub import snapshot_download
+import numpy as np
+from datasets import Features, Value, load_dataset
 from torch.utils.data import Dataset
 from transformers import AutoProcessor, AutoTokenizer
+from huggingface_hub import snapshot_download
 
 from angelslim.utils import rank0_print
 
@@ -33,9 +33,268 @@ from ......utils.utils import decide_device_for_distributed
 from ......utils.lazy_imports import torchaudio, whisper, onnxruntime
 from ....inference.models.eagle3.target.modeling_cosyvoice3_kv import mel_spectrogram
 from ..chat_templates import ChatTemplateType
-from ..data_utils import CosyVoice3DataCollatorWithPadding
+from ..data_utils import DataCollatorWithPadding, VLMDataCollatorWithPadding, CosyVoice3DataCollatorWithPadding
 from .base_dataset_builder import OnlineDatasetBuilder
 from .dataset_builder_factory import DatasetBuilderFactory
+
+
+@DatasetBuilderFactory.register("online", "LLM")
+class OnlineLLMDatasetBuilder(OnlineDatasetBuilder):
+    def __init__(
+        self,
+        tokenizer: Union[AutoTokenizer, AutoProcessor],
+        max_length: int = 2048,
+        shuffle_seed: int = 42,
+        chat_template_type: ChatTemplateType = ChatTemplateType.QWEN3,
+        display: bool = False,
+        **kwargs: Any,
+    ):
+        super().__init__(
+            tokenizer,
+            max_length,
+            shuffle_seed,
+            chat_template_type,
+            display,
+        )
+
+    def get_data_collator(self) -> Any:
+        return DataCollatorWithPadding()
+
+
+@DatasetBuilderFactory.register("online", "VLM")
+class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
+    def __init__(
+        self,
+        tokenizer: Union[AutoTokenizer, AutoProcessor],
+        max_length: int = 2048,
+        shuffle_seed: int = 42,
+        chat_template_type: ChatTemplateType = ChatTemplateType.QWEN3,
+        display: bool = False,
+        **kwargs: Any,
+    ):
+        super().__init__(
+            tokenizer,
+            max_length,
+            shuffle_seed,
+            chat_template_type,
+            display,
+        )
+
+    def build_dataset(
+        self,
+        datapath: str,
+        num_proc: int = 8,
+        shuffle: bool = True,
+        sample_num: Optional[int] = None,
+    ) -> Dataset:
+        try:
+            # Load dataset
+            features = Features(
+                {
+                    "id": Value("string"),
+                    "conversations": [
+                        {
+                            "role": Value("string"),
+                            "content": [
+                                {
+                                    "type": Value("string"),
+                                    "text": Value("string"),
+                                    "image": Value("string"),
+                                    "video": Value("string"),
+                                }
+                            ],
+                        }
+                    ],
+                }
+            )
+            ds = load_dataset("json", data_files=datapath, features=features)
+
+            # Conditionally shuffle dataset
+            if shuffle:
+                ds = ds["train"].shuffle(seed=self.shuffle_seed)
+            else:
+                ds = ds["train"]
+
+            if sample_num is not None and 0 < sample_num < len(ds):
+                ds = ds.select(range(sample_num))
+
+            # Store original columns for removal
+            original_columns = ds.column_names
+
+            # Apply preprocessing
+            processed_ds = ds.map(
+                self._preprocess_function,
+                batched=True,
+                num_proc=num_proc,
+                remove_columns=original_columns,
+                load_from_cache_file=False,
+                desc="Processing conversations",
+            )
+
+            # Filter out None results with multiprocessing support
+            processed_ds = processed_ds.filter(
+                lambda batch: [ids is not None for ids in batch["input_ids"]],
+                batched=True,
+                num_proc=num_proc,
+                desc="Filtering empty input_ids",
+            )
+            processed_ds.set_format(type="torch")
+
+            return processed_ds
+
+        except Exception as e:
+            raise RuntimeError(f"Dataset building failed for {datapath}") from e
+
+    def get_data_collator(self) -> Any:
+        return VLMDataCollatorWithPadding()
+
+    def _preprocess_function(self, examples: Dict[str, List]) -> Dict[str, List]:
+        new_examples = {
+            "input_ids": [],
+            "attention_mask": [],
+            "loss_mask": [],
+            "pixel_values": [],
+            "video_pixel_values": [],
+            "image_grid_thw": [],
+            "video_grid_thw": [],
+        }
+
+        for i in range(len(examples["id"])):
+            try:
+                processed_example = self._process_single_conversation(
+                    examples["conversations"][i]
+                )
+
+                if processed_example is not None:
+                    for key in new_examples.keys():
+                        if key not in processed_example:
+                            new_examples[key].append(None)
+                        else:
+                            new_examples[key].append(processed_example[key])
+
+            except Exception as e:
+                rank0_print(f"Error processing example: {e}")
+                # Add None placeholders to maintain batch consistency
+                for key in new_examples:
+                    new_examples[key].append(None)
+
+        cleaned_new_examples = {}
+        for key, value in new_examples.items():
+            if any(v is not None for v in value):
+                cleaned_new_examples[key] = value
+
+        return new_examples
+
+    def _visualize_loss_mask(
+        self, input_ids: torch.Tensor, loss_mask: torch.Tensor, conversation: str
+    ) -> None:
+        """
+        Visualize loss_mask with color-coded output.
+
+        Args:
+            input_ids: Token IDs
+            loss_mask: Loss mask tensor (1 for training, 0 for ignoring)
+            conversation: Original conversation text
+        """
+        input_ids = input_ids.view(-1)
+        return super()._visualize_loss_mask(input_ids, loss_mask, conversation)
+
+    def _create_loss_mask_from_offsets(
+        self, conversation: str, offsets: torch.Tensor
+    ) -> torch.Tensor:
+        if offsets.ndim == 3:
+            offsets = offsets[0]
+        return super()._create_loss_mask_from_offsets(conversation, offsets)
+
+    def _process_single_conversation(
+        self, conversation_data: List[Dict]
+    ) -> Optional[Dict]:
+        if not conversation_data or not isinstance(conversation_data, list):
+            return None
+
+        try:
+            # Build messages with system prompt
+            messages = self._build_messages(conversation_data)
+            if not messages:
+                return None
+
+            # Apply chat template
+            assert isinstance(
+                messages, list
+            ), f"type(messages)={type(messages)} is not list"
+            for message in messages:
+                if isinstance(message["content"], str):
+                    continue
+                assert isinstance(
+                    message["content"], list
+                ), f"content={type(message['content'])} is not str or list"
+                new_content = []
+                for item in message["content"]:
+                    new_item = {"type": item["type"], item["type"]: item[item["type"]]}
+                    new_content.append(new_item)
+                del message["content"]
+                message["content"] = new_content
+
+            encoding = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=True,
+                add_generation_prompt=False,
+                return_dict=True,
+                return_tensors="pt",
+                return_offsets_mapping=True,
+                max_length=self.max_length,
+                truncation=True,
+                padding=False,
+            )
+
+            input_ids = encoding["input_ids"]
+            offsets = encoding["offset_mapping"]
+
+            conversation = self.tokenizer.decode(
+                input_ids[0], skip_special_tokens=False
+            )
+
+            # Create loss mask for assistant responses
+            try:
+                loss_mask = self._create_loss_mask_from_offsets(conversation, offsets)
+            except Exception as e:
+                rank0_print(f"Error creating loss mask: {e}")
+                rank0_print(f"offsets: {offsets}")
+                raise e
+            attention_mask = torch.ones_like(input_ids)
+
+            # Visualize loss mask if display mode is enabled
+            if self.display and self.display_count == 0:
+                try:
+                    self._visualize_loss_mask(input_ids, loss_mask, conversation)
+                except Exception as e:
+                    rank0_print(f"Error visualizing loss mask: {e}")
+                    rank0_print(f"input_ids: {input_ids}, loss_mask: {loss_mask}")
+                    raise e
+                self.display_count += 1
+
+            result_dict = {
+                "input_ids": input_ids.view(1, -1),
+                "attention_mask": attention_mask.view(1, -1),
+                "loss_mask": loss_mask.view(1, -1),
+            }
+
+            if "pixel_values" in encoding:
+                result_dict["pixel_values"] = encoding["pixel_values"].unsqueeze(0)
+            if "video_pixel_values" in encoding:
+                result_dict["video_pixel_values"] = encoding[
+                    "video_pixel_values"
+                ].unsqueeze(0)
+            if "image_grid_thw" in encoding:
+                result_dict["image_grid_thw"] = encoding["image_grid_thw"]
+            if "video_grid_thw" in encoding:
+                result_dict["video_grid_thw"] = encoding["video_grid_thw"]
+
+            return result_dict
+
+        except Exception as e:
+            rank0_print(f"Error processing conversation: {e}")
+            return None
 
 
 @DatasetBuilderFactory.register("online", "TTS")
@@ -81,9 +340,7 @@ class OnlineTTSDatasetBuilder(OnlineDatasetBuilder):
 
     def _init_audio_tokenizer_cosyvoice3(self, onnx_path) -> None:
         option = onnxruntime.SessionOptions()
-        option.graph_optimization_level = (
-            onnxruntime.GraphOptimizationLevel.ORT_ENABLE_ALL
-        )
+        option.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_ENABLE_ALL
         option.intra_op_num_threads = 1
         providers = ["CUDAExecutionProvider"]
         self.speech_tokenizer_session = onnxruntime.InferenceSession(
@@ -131,9 +388,7 @@ class OnlineTTSDatasetBuilder(OnlineDatasetBuilder):
             for path in datapath:
                 data_name += os.path.basename(path)[:-6]
             os.makedirs(self.output_dir, exist_ok=True)
-            cache_path = os.path.join(
-                self.output_dir, f"processed{data_name}_merged_cache.jsonl"
-            )
+            cache_path = os.path.join(self.output_dir, f"processed{data_name}_merged_cache.jsonl")
 
             if not os.path.exists(cache_path):
                 raw_data = self.read_jsonl_file(datapath)
@@ -152,10 +407,7 @@ class OnlineTTSDatasetBuilder(OnlineDatasetBuilder):
                     desc=f"Rank {self.global_rank} process data",
                     disable=self.global_rank > 0,
                 ):
-                    if (
-                        sample_num is not None
-                        and count == sample_num // self.world_size
-                    ):
+                    if (sample_num is not None and count == sample_num // self.world_size):
                         break
                     text = item.get("text", "")
                     audio_tokens = item.get("audio_tokens", None)
@@ -210,12 +462,8 @@ class OnlineTTSDatasetBuilder(OnlineDatasetBuilder):
                             f.write(json.dumps(item, ensure_ascii=True) + "\n")
 
                     for rank in range(self.world_size):
-                        rank_tmp_file = os.path.join(
-                            self.output_dir, f"processed{data_name}_rank_{rank}.jsonl"
-                        )
-                        rank_done_file = os.path.join(
-                            self.output_dir, f"processed{data_name}_rank_{rank}.done"
-                        )
+                        rank_tmp_file = os.path.join(self.output_dir, f"processed{data_name}_rank_{rank}.jsonl")
+                        rank_done_file = os.path.join(self.output_dir, f"processed{data_name}_rank_{rank}.done")
                         if os.path.exists(rank_tmp_file):
                             os.remove(rank_tmp_file)
                         if os.path.exists(rank_done_file):
@@ -281,9 +529,7 @@ class OnlineTTSDatasetBuilder(OnlineDatasetBuilder):
         while not all_done:
             done_count = 0
             for rank in range(world_size):
-                done_file = os.path.join(
-                    output_dir, f"processed{data_name}_rank_{rank}.done"
-                )
+                done_file = os.path.join(output_dir, f"processed{data_name}_rank_{rank}.done")
                 if os.path.exists(done_file):
                     done_count += 1
 
@@ -307,26 +553,26 @@ class OnlineTTSDatasetBuilder(OnlineDatasetBuilder):
 
         if audio_tokens is not None:
             return {
+                    "text": text_token,
+                    "text_len": len(text_token),
+                    "speech_token": audio_tokens,
+                    "speech_token_len": len(audio_tokens),
+                    "prompt_speech_token": prompt_speech_token.squeeze(0).tolist(),
+                    "prompt_speech_token_len": prompt_speech_token_len.item(),
+                    "prompt_text": instruct_token,
+                    "prompt_text_len": len(instruct_token),
+                }
+        
+        speech_token, speech_token_len = self._extract_speech_token(audio_path)
+        return {
                 "text": text_token,
                 "text_len": len(text_token),
-                "speech_token": audio_tokens,
-                "speech_token_len": len(audio_tokens),
+                "speech_token": speech_token.squeeze(0).tolist(),
+                "speech_token_len": speech_token_len.item(),
                 "prompt_speech_token": prompt_speech_token.squeeze(0).tolist(),
                 "prompt_speech_token_len": prompt_speech_token_len.item(),
                 "prompt_text": instruct_token,
                 "prompt_text_len": len(instruct_token),
-            }
-        
-        speech_token, speech_token_len = self._extract_speech_token(audio_path)
-        return {
-            "text": text_token,
-            "text_len": len(text_token),
-            "speech_token": speech_token.squeeze(0).tolist(),
-            "speech_token_len": speech_token_len.item(),
-            "prompt_speech_token": prompt_speech_token.squeeze(0).tolist(),
-            "prompt_speech_token_len": prompt_speech_token_len.item(),
-            "prompt_text": instruct_token,
-            "prompt_text_len": len(instruct_token),
             }
     
     def _extract_speech_token(self, wav):

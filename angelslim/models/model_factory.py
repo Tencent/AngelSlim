@@ -22,7 +22,7 @@ class SlimModelFactory:
     registry: Dict[str, Type] = {}
     series_registry: Dict[str, str] = {}
 
-    ALLOWED_SERIES = ("LLM", "VLM", "Diffusion", "Omni")
+    ALLOWED_SERIES = ("LLM", "VLM", "Diffusion", "Omni", "Audio")
 
     @classmethod
     def register(cls, model_class: Type) -> Type:
@@ -41,6 +41,8 @@ class SlimModelFactory:
             series = "Diffusion"
         elif "omni" in module_path:
             series = "Omni"
+        elif "audio" in module_path:
+            series = "Audio"
         else:
             raise ValueError(
                 f"model_class '{class_name}' is not in a valid series: {cls.ALLOWED_SERIES}"  # noqa: E501

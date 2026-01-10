@@ -106,7 +106,7 @@ class Engine:
 
         self.series = SlimModelFactory.get_series_by_models(model_name)
 
-        if self.series in ["LLM", "VLM"]:
+        if self.series in ["LLM", "VLM", "Audio"]:
             if model:
                 assert tokenizer, " If model is set, tokenizer must be also set."
                 self.slim_model.tokenizer = tokenizer
@@ -162,7 +162,7 @@ class Engine:
             data_type=data_type,
             processor=(
                 self.slim_model.processor
-                if self.series == "VLM" or self.series == "Omni"
+                if self.series in ["VLM", "Omni", "Audio"]
                 else self.slim_model.tokenizer
             ),
             device=self.slim_model.model.device,
@@ -205,7 +205,7 @@ class Engine:
                     f"Compression method '{method_name}' not registered. "
                     f"Available methods: {CompressorFactory.get_available_compressor()}"
                 )
-        if self.series in ["LLM", "VLM", "Omni"]:
+        if self.series in ["LLM", "VLM", "Omni", "Audio"]:
             global_config.update(self.model_path, self.max_seq_length)
 
         if default_method:

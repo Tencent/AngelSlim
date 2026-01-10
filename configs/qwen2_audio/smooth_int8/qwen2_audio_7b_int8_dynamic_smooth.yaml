@@ -1,0 +1,35 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output
+
+# Simplified Configuration for LLM compression
+model:
+  name: Qwen2_Audio
+  model_path: Qwen/Qwen2-Audio-7B
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    name: int8_dynamic
+    bits: 8
+    quant_method:
+      weight: "per-channel"
+      activation: "per-token"
+    quant_helpers:
+      - "smooth"
+    ignore_layers:
+      - "lm_head"
+
+# Dataset for calibration
+dataset:
+  name: AudioDataset
+  data_path: ./dataset/audio_fake_data/fake_data.json
+  max_seq_length: 4096
+  num_samples: 256
+  batch_size: 1

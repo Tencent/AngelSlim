@@ -209,20 +209,38 @@ class OnlineDatasetBuilder(DatasetBuilder):
                 add_generation_prompt=False,
             )
 
-            # Tokenize conversation
-            encoding = self.tokenizer(
-                conversation,
-                return_offsets_mapping=True,
-                max_length=self.max_length,
-                truncation=True,
-                padding=False,
+            # Check if tokenizer supports offset_mapping
+            is_fast_tokenizer = (
+                hasattr(self.tokenizer, "is_fast") and self.tokenizer.is_fast
             )
 
-            input_ids = encoding.input_ids
-            offsets = encoding.offset_mapping
+            # Tokenize conversation
+            if is_fast_tokenizer:
+                encoding = self.tokenizer(
+                    conversation,
+                    return_offsets_mapping=True,
+                    max_length=self.max_length,
+                    truncation=True,
+                    padding=False,
+                )
+                input_ids = encoding.input_ids
+                offsets = encoding.offset_mapping
+                # Create loss mask for assistant responses
+                loss_mask = self._create_loss_mask_from_offsets(conversation, offsets)
+            else:
+                # For Python tokenizers, use alternative approach
+                encoding = self.tokenizer(
+                    conversation,
+                    max_length=self.max_length,
+                    truncation=True,
+                    padding=False,
+                )
+                input_ids = torch.tensor(encoding.input_ids)
+                # Create loss mask without offsets (alternative implementation needed)
+                loss_mask = self._create_loss_mask_without_offsets(
+                    conversation, input_ids
+                )
 
-            # Create loss mask for assistant responses
-            loss_mask = self._create_loss_mask_from_offsets(conversation, offsets)
             input_ids = torch.tensor(input_ids)
             attention_mask = torch.ones_like(input_ids)
 
@@ -240,6 +258,37 @@ class OnlineDatasetBuilder(DatasetBuilder):
         except Exception as e:
             rank0_print(f"Error processing conversation: {e}")
             return None
+
+    def _create_loss_mask_without_offsets(self, conversation, input_ids):
+        # Implement alternative loss mask creation logic for Python tokenizers
+        loss_mask = torch.ones_like(input_ids)
+
+        turns = conversation.split(self.user_header)
+        if len(turns) == 1:
+            # Handle single-turn conversations
+            parts = turns[0].split(self.assistant_header)
+            instruction_part = parts[0] + self.assistant_header
+            instruction_len = len(self.tokenizer(instruction_part).input_ids)
+            loss_mask[:instruction_len] = 0
+        else:
+            # Handle multi-turn conversations
+            cur_len = 0
+            user_header_len = len((self.tokenizer(self.user_header)).input_ids)
+
+            for _, turn in enumerate(turns):
+                parts = turn.split(self.assistant_header)
+                instruction_part = parts[0] + self.assistant_header
+
+                instruction_len = len(self.tokenizer(instruction_part).input_ids)
+                loss_mask[cur_len : cur_len + instruction_len] = 0
+
+                turn_len = len(self.tokenizer(turn).input_ids)
+                cur_len += turn_len
+                cur_len += user_header_len
+
+                loss_mask[cur_len - user_header_len : cur_len] = 0
+
+        return loss_mask
 
     # Copied from https://github.com/NickL77/BaldEagle/blob/master/generate_data/generate_data.py # noqa: E501
     def _create_loss_mask_from_offsets(

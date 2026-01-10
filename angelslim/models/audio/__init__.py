@@ -12,15 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .offline_eagle3_trainer import OfflineEagle3Trainer, OfflineVLMEagle3Trainer
-from .online_eagle3_trainer import OnlineEagle3Trainer, OnlineVLMEagle3Trainer, OnlineTTSEagle3Trainer
-from .trainer_factory import Eagle3TrainerFactory
 
-__all__ = [
-    "Eagle3TrainerFactory",
-    "OnlineEagle3Trainer",
-    "OnlineVLMEagle3Trainer",
-    "OnlineTTSEagle3Trainer",
-    "OfflineEagle3Trainer",
-    "OfflineVLMEagle3Trainer",
-]
+from .qwen2_audio import Qwen2_Audio  # noqa: F401

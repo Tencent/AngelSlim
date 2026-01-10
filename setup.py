@@ -52,6 +52,7 @@ setup(
             get_requirements("requirements/requirements_speculative.txt")
             + get_requirements("requirements/requirements_diffusion.txt")
             + get_requirements("requirements/requirements_multimodal.txt")
+            + get_requirements("requirements/requirements_benchmark.txt")
         ),
         # Install speculative sampling functionality: pip install angelslim[speculative]
         "speculative": get_requirements("requirements/requirements_speculative.txt"),
@@ -59,6 +60,8 @@ setup(
         "diffusion": get_requirements("requirements/requirements_diffusion.txt"),
         # Install multimodal functionality: pip install angelslim[multimodal]
         "multimodal": get_requirements("requirements/requirements_multimodal.txt"),
+        # Install benchmark functionality: pip install angelslim[benchmark]
+        "benchmark": get_requirements("requirements/requirements_benchmark.txt"),
     },
     packages=find_packages(),
     python_requires=">=3.0",

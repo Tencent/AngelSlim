@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# Modified from https://github.com/FunAudioLLM/CosyVoice for AngelSlim project
 
 import os
 import re
@@ -619,9 +620,6 @@ class CosyVoice3LM(torch.nn.Module):
         logp = self.llm_decoder(y_pred[:, -1]).log_softmax(dim=-1)
 
         if return_first_token:
-            # top_ids = self.sampling_ids(logp.squeeze(dim=0), out_tokens, sampling, ignore_eos=True)
-            # out_tokens.append(top_ids)
-            # TODO 对比首token采样方式对效果的影响
             probs = torch.nn.functional.softmax(logp.squeeze(dim=0), dim=-1)
             input_id = torch.multinomial(probs, 1)
             out_tokens.append(input_id.item())
@@ -712,7 +710,6 @@ class CosyVoice3:
             from cosyvoice.flow.DiT.dit import DiT
             from cosyvoice.transformer.upsample_encoder import PreLookaheadLayer
             from omegaconf import DictConfig
-
             from cosyvoice.hifigan.generator import CausalHiFTGenerator
             from cosyvoice.hifigan.f0_predictor import CausalConvRNNF0Predictor
 
