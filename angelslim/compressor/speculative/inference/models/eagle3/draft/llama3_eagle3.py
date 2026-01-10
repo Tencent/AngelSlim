@@ -12,13 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import math
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Any
 
 import torch
 import torch.nn.functional as F
-from torch import nn
+from torch import nn, Tensor
 from transformers.activations import ACT2FN
+from huggingface_hub import snapshot_download
 
 from .base_model import BaseEagle3Drafter
 
@@ -710,3 +712,294 @@ class Llama3Eagle3Drafter(BaseEagle3Drafter):
         hidden_states = layer_outputs[0]
 
         return hidden_states, next_decoder_cache, early_stop_signal
+
+
+class CosyVoice3Llama3Eagle3Drafter(Llama3Eagle3Drafter):
+
+    def load_embed(self, path: str) -> None:
+        # Handle HuggingFace model identifier
+        if not os.path.exists(path):
+            path = snapshot_download(
+                repo_id=path
+            )
+
+        # Try loading embedding weights
+        tensor = torch.load('{}/llm.pt'.format(path))
+        embed_tokens_weight = tensor["speech_embedding.weight"]
+
+        with torch.no_grad():
+            self.embed_tokens.weight.copy_(embed_tokens_weight)
+
+    def _get_initial_hidden(
+        self, hidden_states: Tensor, input_ids: Tensor, inputs_embeds: Tensor
+    ) -> Tuple[Tensor, Any]:
+        """Get initial hidden states and past key values."""
+        if hasattr(self, "stable_kv") and self.stable_kv is not None:
+            kv_len = self.stable_kv[0][0].shape[2]
+            outputs = self(
+                hidden_states,
+                input_ids=input_ids[:, kv_len:],
+                inputs_embeds=inputs_embeds[:, kv_len:],
+                past_key_values=self.stable_kv,
+                use_cache=True,
+            )
+        else:
+            outputs = self(hidden_states, input_ids=input_ids, inputs_embeds=inputs_embeds, use_cache=True)
+        out_hidden, past_key_values = outputs
+
+        return out_hidden[:, -1], past_key_values
+        
+    @torch.no_grad()
+    def topK_genrate(
+        self,
+        hidden_states: Tensor,
+        input_ids: Tensor,
+        inputs_embeddings: Tensor,
+        logits_processor: Optional[Any] = None,
+    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+        """
+        Generate tokens using top-K speculative decoding.
+
+        Args:
+            hidden_states: Hidden states from the target model
+            input_ids: Input token IDs
+            logits_processor: Optional logits processor
+
+        Returns:
+            Tuple containing:
+            - draft_tokens: Generated draft tokens
+            - retrieve_indices: Indices for retrieving tokens from tree
+            - tree_mask: Mask for tree attention
+            - tree_position_ids: Position IDs in the tree
+        """
+        # Initialize data structures
+        scores_list = []
+        parents_list = []
+        ss_token = []
+
+        # Prepare input and initialize tree
+        input_ids = input_ids.to(hidden_states.device)
+        sample_token = input_ids[:, -1]
+        input_ids = input_ids[:, 1:]
+        inputs_embeddings = inputs_embeddings[:, 1:]
+        self.initial_position_id = input_ids.shape[1]
+
+        assert input_ids.shape[1] == inputs_embeddings.shape[1]
+
+        self.reset()
+
+        # Generate initial hidden states and tokens
+        last_hidden, past_key_values = self._get_initial_hidden(
+            hidden_states, input_ids, inputs_embeddings
+        )
+        self.stable_kv = past_key_values
+
+        # Generate first level of tokens
+        topk_index, scores = self._get_topk_tokens(last_hidden)
+        scores_list.append(scores)
+        parents_list.append(torch.zeros(1, dtype=torch.long, device=scores.device))
+
+
+        # Handle vocabulary mapping if needed
+        if self.config.vocab_size == self.config.draft_vocab_size:
+            ss_token.append(topk_index)
+            input_ids = topk_index
+        else:
+            mapped_tokens = topk_index + self.d2t[topk_index]
+            ss_token.append(mapped_tokens)
+            input_ids = mapped_tokens
+
+        # Prepare for tree traversal
+        input_hidden = last_hidden[None].repeat(1, self.top_k, 1)
+        tree_mask = self.tree_mask_init
+        topk_cs_index = torch.arange(self.top_k, device=self.embed_tokens.weight.device)
+
+        # Traverse the tree depth levels
+        for i in range(self.depth):
+            (
+                tree_mask,
+                input_hidden,
+                input_ids,
+                scores,
+                topk_cs_index,
+                past_key_values,
+            ) = self._process_tree_level(
+                i,
+                tree_mask,
+                input_hidden,
+                input_ids,
+                scores,
+                topk_cs_index,
+                scores_list,
+                parents_list,
+                ss_token,
+                past_key_values,
+            )
+        # Process the final results
+        draft_tokens, retrieve_indices, tree_mask, tree_position_ids = (
+            self._finalize_results(
+                scores_list, ss_token, sample_token, parents_list, logits_processor
+            )
+        )
+
+        # Delete some used lists and variables to free memory
+        del scores_list, parents_list, ss_token
+
+        return (
+            draft_tokens,
+            retrieve_indices,
+            tree_mask,
+            tree_position_ids,
+        )
+    
+    def forward(
+        self,
+        hidden_states,
+        input_ids,
+        inputs_embeds: Optional[torch.Tensor],
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        past_key_values: Optional[List[torch.FloatTensor]] = None,
+        use_cache: Optional[bool] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+    ):
+        batch_size, seq_length, _ = hidden_states.shape
+        seq_length_with_past = seq_length
+        past_key_values_length = 0
+
+        if inputs_embeds is None:
+            with torch.no_grad():
+                inputs_embeds = self.embed_tokens.weight[input_ids.squeeze(0).tolist()].unsqueeze(0)
+
+        if past_key_values is not None:
+            past_key_values_length = past_key_values[0][0].shape[2]
+            seq_length_with_past = seq_length_with_past + past_key_values_length
+        if position_ids is None:
+            device = (
+                hidden_states.device
+                if hidden_states is not None
+                else inputs_embeds.device
+            )
+            position_ids = torch.arange(
+                past_key_values_length,
+                seq_length + past_key_values_length,
+                dtype=torch.long,
+                device=device,
+            )
+            position_ids = position_ids.unsqueeze(0).view(-1, seq_length)
+        else:
+            position_ids = position_ids.view(-1, seq_length).long()
+
+        if attention_mask is None:
+            attention_mask = torch.ones(
+                (batch_size, seq_length_with_past),
+                dtype=torch.bool,
+                device=hidden_states.device,
+            )
+        attention_mask = self._prepare_decoder_attention_mask(
+            attention_mask,
+            (batch_size, seq_length),
+            hidden_states,
+            past_key_values_length,
+        )
+
+        dtype = self.fc.weight.dtype
+        inputs_embeds = inputs_embeds.to(dtype)
+        hidden_states = hidden_states.to(dtype)
+        if hidden_states.shape[-1] != inputs_embeds.shape[-1]:
+            hidden_states = self.fc(hidden_states)
+
+        next_decoder_cache = () if use_cache else None
+
+        past_key_value = past_key_values[0] if past_key_values is not None else None
+        layer_outputs = self.midlayer(
+            input_emb=inputs_embeds,
+            hidden_states=hidden_states,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_value=past_key_value,
+            output_attentions=output_attentions,
+            use_cache=True,
+        )
+        if use_cache:
+            next_decoder_cache += (layer_outputs[2 if output_attentions else 1],)
+        hidden_states = layer_outputs[0]
+
+        return hidden_states, next_decoder_cache
+    
+    def _get_topk_tokens(self, hidden: Tensor) -> Tuple[Tensor, Tensor]:
+        """Get top-k tokens from hidden states."""
+        logits = self.lm_head(self.norm(hidden))
+        probs = self.logsoftmax(logits)
+        topk = torch.topk(probs, self.top_k, dim=-1)
+        return topk.indices, topk.values
+    
+    def _process_tree_level(
+        self,
+        level: int,
+        tree_mask: Tensor,
+        input_hidden: Tensor,
+        input_ids: Tensor,
+        scores: Tensor,
+        topk_cs_index: Tensor,
+        scores_list: list,
+        parents_list: list,
+        ss_token: list,
+        past_key_values,
+    ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+        """Process one level of the speculative decoding tree."""
+        self.tree_mask = tree_mask
+        position_ids = self.position_ids + self.initial_position_id
+
+        # Get next level hidden states
+        out_hidden, past_key_values = self(
+            input_hidden,
+            input_ids=input_ids,
+            inputs_embeds=None,
+            past_key_values=past_key_values,
+            position_ids=position_ids,
+            use_cache=True,
+        )
+        self.initial_position_id += 1
+
+        # Calculate parent indices
+        bias1 = self.top_k if level > 0 else 0
+        bias2 = max(0, level - 1)
+        bias = 1 + self.top_k**2 * bias2 + bias1
+        parents = topk_cs_index + bias
+        parents_list.append(parents)
+
+        # Get top-k tokens for this level
+        topk_index, topk_p = self._get_topk_tokens(out_hidden[0])
+        if len(scores.shape) == 2:
+            scores = scores.squeeze(0)
+        cu_scores = topk_p + scores[:, None]
+
+        # Select best candidates
+        topk_cs = torch.topk(cu_scores.view(-1), self.top_k, dim=-1)
+        topk_cs_index, scores = topk_cs.indices, topk_cs.values
+
+        # Update data structures
+        out_ids = topk_cs_index // self.top_k
+        input_hidden = out_hidden[:, out_ids]
+        input_ids = topk_index.view(-1)[topk_cs_index][None]
+
+        # Handle vocabulary mapping if needed
+        if self.config.vocab_size == self.config.draft_vocab_size:
+            ss_token.append(topk_index)
+        else:
+            input_ids = input_ids + self.d2t[input_ids]
+            ss_token.append(topk_index + self.d2t[topk_index])
+
+        scores_list.append(cu_scores)
+        tree_mask = torch.cat((tree_mask[:, :, out_ids], self.tree_mask_init), dim=3)
+
+        return (
+            tree_mask,
+            input_hidden,
+            input_ids,
+            scores,
+            topk_cs_index,
+            past_key_values,
+        )

@@ -17,10 +17,12 @@ from .offline_llm_dataset_builder import OfflineLLMDatasetBuilder
 from .offline_vlm_dataset_builder import OfflineVLMDatasetBuilder
 from .online_llm_dataset_builder import OnlineLLMDatasetBuilder
 from .online_vlm_dataset_builder import OnlineVLMDatasetBuilder
+from .online_tts_dataset_builder import OnlineTTSDatasetBuilder
 
 __all__ = [
     "OnlineLLMDatasetBuilder",
     "OnlineVLMDatasetBuilder",
+    "OnlineTTSDatasetBuilder",
     "OfflineLLMDatasetBuilder",
     "OfflineVLMDatasetBuilder",
     "DatasetBuilderFactory",
