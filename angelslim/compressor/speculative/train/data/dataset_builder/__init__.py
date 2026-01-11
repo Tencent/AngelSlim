@@ -15,6 +15,7 @@
 from .dataset_builder_factory import DatasetBuilderFactory
 from .offline_dataset_builder import (
     OfflineLLMDatasetBuilder,
+    OfflineVLMDatasetBuilder,
     OfflineVLMHunyuanVLDatasetBuilder,
 )
 from .online_dataset_builder import (
