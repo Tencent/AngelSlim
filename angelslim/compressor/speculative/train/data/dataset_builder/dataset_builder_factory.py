@@ -26,34 +26,44 @@ class DatasetBuilderFactory:
 
     @classmethod
     def register(
-        cls, training_mode: str = "online", modal_type: str = "LLM"
+        cls,
+        training_mode: str = "online",
+        modal_type: str = "LLM",
+        target_model_type: str = None,
     ) -> Callable[[Type[DatasetBuilder]], Type[DatasetBuilder]]:
         """Decorator to register dataset builders."""
 
         def decorator(builder_cls: Type[DatasetBuilder]) -> Type[DatasetBuilder]:
-            if (training_mode, modal_type) in cls._builders:
+            if (training_mode, modal_type, target_model_type) in cls._builders:
                 print(
                     f"DatasetBuilder for training_mode '{training_mode}'"
                     f" modal_type '{modal_type}' already exists."
+                    f" target_model_type '{target_model_type}' already exists."
                 )
-            cls._builders[(training_mode, modal_type)] = builder_cls
+            cls._builders[(training_mode, modal_type, target_model_type)] = builder_cls
             return builder_cls
 
         return decorator
 
     @classmethod
     def create(
-        cls, training_mode: str = "online", modal_type: str = "LLM", **kwargs: Any
+        cls,
+        training_mode: str = "online",
+        modal_type: str = "LLM",
+        target_model_type: str = None,
+        **kwargs: Any,
     ) -> DatasetBuilder:
         """Create a dataset builder instance based on training_mode and modal_type."""
-        if (training_mode, modal_type) not in cls._builders:
+        if (training_mode, modal_type, target_model_type) not in cls._builders:
             available = list(cls._builders.keys())
             raise ValueError(
-                f"Unknown training_mode '{training_mode}'"
-                f" modal_type '{modal_type}'. Available: {available}"
+                f"Unknown training_mode '{training_mode}' "
+                f"modal_type '{modal_type}' "
+                f"target_model_type '{target_model_type}'. "
+                f"Available: {available}"
             )
 
-        builder_class = cls._builders[(training_mode, modal_type)]
+        builder_class = cls._builders[(training_mode, modal_type, target_model_type)]
         return builder_class(**kwargs)
 
     @classmethod

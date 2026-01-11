@@ -13,13 +13,22 @@
 # limitations under the License.
 
 from .dataset_builder_factory import DatasetBuilderFactory
-from .offline_dataset_builder import OfflineLLMDatasetBuilder, OfflineVLMDatasetBuilder
-from .online_dataset_builder import OnlineLLMDatasetBuilder, OnlineVLMDatasetBuilder
+from .offline_dataset_builder import (
+    OfflineLLMDatasetBuilder,
+    OfflineVLMHunyuanVLDatasetBuilder,
+)
+from .online_dataset_builder import (
+    OnlineLLMDatasetBuilder,
+    OnlineVLMDatasetBuilder,
+    OnlineVLMHunyuanVLDatasetBuilder,
+)
 
 __all__ = [
     "OnlineLLMDatasetBuilder",
     "OnlineVLMDatasetBuilder",
+    "OnlineVLMHunyuanVLDatasetBuilder",
     "OfflineLLMDatasetBuilder",
     "OfflineVLMDatasetBuilder",
+    "OfflineVLMHunyuanVLDatasetBuilder",
     "DatasetBuilderFactory",
 ]

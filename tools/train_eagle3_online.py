@@ -276,6 +276,10 @@ def train():
     }
     torch_dtype = dtype_mapping.get(args.torch_dtype, torch.bfloat16)
 
+    rank0_print("Loading draft model config...")
+    draft_model_config = DraftModelConfig.from_file(args.draft_model_config_path)
+    target_model_type = getattr(draft_model_config, "target_model_type", None)
+
     # Create target model with specified backend using factory function
     rank0_print(f"Loading target model with {args.target_backend} backend...")
     target_model = create_target_model(
@@ -284,12 +288,12 @@ def train():
         modal_type=args.modal_type,
         torch_dtype=torch_dtype,
         trust_remote_code=args.trust_remote_code,
+        target_model_type=target_model_type,
     )
     rank0_print("Target model loaded successfully")
 
     # Create draft model
     rank0_print("Loading draft model...")
-    draft_model_config = DraftModelConfig.from_file(args.draft_model_config_path)
     rank0_print(f"draft_model_config: {draft_model_config}")
     draft_model = create_draft_model(draft_model_config)
     draft_model.load_embed_weights(
@@ -309,6 +313,7 @@ def train():
         model_max_length=args.model_max_length,
         chat_template_type=args.chat_template_type,
         display=args.display,
+        target_model_type=target_model_type,
     )
     train_dataset, eval_dataset, data_collator = (
         dataset_manager.create_online_datasets()

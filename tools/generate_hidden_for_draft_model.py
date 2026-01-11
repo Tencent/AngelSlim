@@ -15,6 +15,7 @@
 import argparse
 import logging
 import os
+from datetime import timedelta
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
@@ -46,7 +47,7 @@ def setup_distributed():
         local_rank = int(os.environ["LOCAL_RANK"])
 
         # Initialize process group
-        dist.init_process_group(backend="nccl")
+        dist.init_process_group(backend="nccl", timeout=timedelta(minutes=60))
         torch.cuda.set_device(local_rank)
 
         return rank, world_size, local_rank
@@ -123,13 +124,14 @@ class HiddenStateGenerator:
         try:
             # Generate aux and target hiddens
             device = decide_device_for_distributed()
-            results = self.target_model.get_aux_and_target_hiddens(
-                input_ids=row["input_ids"].to(device),
-            )
+            for k, v in row.items():
+                if isinstance(v, torch.Tensor) and v is not None:
+                    row[k] = v.to(device)
+            results = self.target_model.get_aux_and_target_hiddens(**row)
             # hidden_states: B, N, 3*D
             # target_hiddens: B, N, D
             for k, v in results.items():
-                results[k] = v.cpu()
+                results[k] = v.cpu() if isinstance(v, torch.Tensor) else v
 
             # Prepare data point
             data_point = {
@@ -229,6 +231,12 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--target_model_name_or_path",
         type=str,
+        help="Target model name or path (if different from model_name)",
+    )
+    parser.add_argument(
+        "--target_model_type",
+        type=str,
+        default=None,
         help="Target model name or path (if different from model_name)",
     )
     parser.add_argument(
@@ -339,6 +347,7 @@ def load_dataset(args: argparse.Namespace, tokenizer, rank: int):
     dataset_manager = DatasetManager(
         data_args=args,
         tokenizer=tokenizer,
+        target_model_type=args.target_model_type,
         model_max_length=args.model_max_length,
         chat_template_type=args.chat_template_type,
         display=display,
@@ -423,6 +432,7 @@ def main():
             model_path=args.target_model_name_or_path or args.model_name,
             torch_dtype=torch_dtype,
             trust_remote_code=args.trust_remote_code,
+            target_model_type=args.target_model_type,
         )
 
         # Load dataset

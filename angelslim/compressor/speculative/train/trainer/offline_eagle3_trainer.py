@@ -148,7 +148,7 @@ class OfflineVLMEagle3Trainer(Eagle3Trainer):
             "hidden_states",
             "attention_mask",
             "loss_mask",
-            "inputs_embeds",
+            # "inputs_embeds",
             "position_ids",
         ]
         output_fields = [
@@ -157,11 +157,13 @@ class OfflineVLMEagle3Trainer(Eagle3Trainer):
             "hidden_states",
             "attention_mask",
             "loss_mask",
-            "inputs_embeds",
+            # "inputs_embeds",
             "position_ids",
         ]
 
-        target_logits = self.target_head(inputs["target_hiddens"])
+        target_logits = self.target_head(
+            inputs["target_hiddens"].to(self.target_head.lm_head.weight.dtype)
+        )
         loss_mask = inputs["loss_mask"]
         input_ids = inputs["input_ids"]
         # inputs_embeds = inputs.get("inputs_embeds", None)

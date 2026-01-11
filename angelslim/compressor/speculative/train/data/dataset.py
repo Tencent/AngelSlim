@@ -40,6 +40,7 @@ class DatasetManager:
         chat_template_type: Optional[Union[str, ChatTemplateType]] = None,
         display: bool = False,
         cache_in_memory: bool = False,
+        target_model_type: Optional[str] = None,
     ):
         """
         Initialize DatasetManager with DataArguments.
@@ -60,6 +61,7 @@ class DatasetManager:
         self.model_max_length = model_max_length
         self.display = display
         self.cache_in_memory = cache_in_memory
+        self.target_model_type = target_model_type
 
         # Convert chat_template_type to ChatTemplateType enum
         if chat_template_type is None:
@@ -76,6 +78,7 @@ class DatasetManager:
             self.online_dataset_builder = DatasetBuilderFactory.create(
                 training_mode="online",
                 modal_type=data_args.modal_type,
+                target_model_type=self.target_model_type,
                 tokenizer=tokenizer,
                 max_length=model_max_length,
                 shuffle_seed=data_args.shuffle_seed,
@@ -86,6 +89,7 @@ class DatasetManager:
             self.offline_dataset_builder = DatasetBuilderFactory.create(
                 training_mode="offline",
                 modal_type=data_args.modal_type,
+                target_model_type=self.target_model_type,
                 cache_in_memory=cache_in_memory,
             )
 

@@ -119,12 +119,18 @@ class OnlineVLMEagle3Trainer(Eagle3Trainer):
         attention_mask = inputs["attention_mask"]
         loss_mask = inputs["loss_mask"]
 
+        kwargs = {
+            k: v
+            for k, v in inputs.items()
+            if k not in ["input_ids", "attention_mask", "loss_mask"]
+        }
         # Get hidden states and logits from target model
         hidden_states, target_logits, _, position_ids = (
             self.target_model.get_hidden_states_and_logits(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 aux_hidden_states_layer_ids=self._aux_hidden_states_layer_ids,
+                **kwargs,
             )
         )
 

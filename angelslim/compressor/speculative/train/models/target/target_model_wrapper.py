@@ -132,7 +132,16 @@ class BaseBackend(ABC):
             Concatenated hidden states, shape [batch_size, seq_len, hidden_size * 3]
         """
         if aux_layer_ids is None:
-            aux_layer_ids = self._get_default_aux_layer_ids(len(hidden_states))
+            if hasattr(self.model.config, "num_hidden_layers"):
+                num_layers = self.model.config.num_hidden_layers
+            elif hasattr(self.model.config.text_config, "num_hidden_layers"):
+                num_layers = self.model.config.text_config.num_hidden_layers
+            else:
+                raise ValueError(
+                    "Failed to set aux hidden states layers as model config. "
+                    f"{self.model.config} does not have num_hidden_layers"
+                )
+            aux_layer_ids = self._get_default_aux_layer_ids(num_layers)
 
         # Offset by 1 to skip embedding layer
         embed_offset = 1
@@ -278,26 +287,47 @@ class VLMTransformersBackend(BaseBackend):
     """VLM HuggingFace Transformers backend"""
 
     def load_model(self):
-        from transformers import AutoModelForImageTextToText, AutoProcessor
+        if self.target_model_type == "hunyuan_vl":
+            from transformers import AutoProcessor, HunYuanVLForConditionalGeneration
 
-        device = decide_device_for_distributed()
-        print_with_rank(f"Loading model to device: {device}")
+            device = decide_device_for_distributed()
+            print_with_rank(f"Loading model to device: {device}")
 
-        # Prepare model loading configuration
-        model_kwargs = self._prepare_model_kwargs(device)
+            # Prepare model loading configuration
+            model_kwargs = self._prepare_model_kwargs(device)
 
-        self.model = AutoModelForImageTextToText.from_pretrained(
-            self.model_path, **model_kwargs
-        )
+            self.model = HunYuanVLForConditionalGeneration.from_pretrained(
+                self.model_path, **model_kwargs
+            )
+            self.model.eval()
 
-        # Freeze the base model
-        for param in self.model.parameters():
-            param.requires_grad = False
-        self.model.eval()
+            # Load processor
+            self.tokenizer = AutoProcessor.from_pretrained(
+                self.model_path, trust_remote_code=True
+            )
+        else:
+            from transformers import AutoModelForImageTextToText, AutoProcessor
 
-        self.tokenizer = AutoProcessor.from_pretrained(
-            self.model_path, trust_remote_code=True
-        )
+            device = decide_device_for_distributed()
+            print_with_rank(f"Loading model to device: {device}")
+
+            # Prepare model loading configuration
+            model_kwargs = self._prepare_model_kwargs(device)
+
+            self.model = AutoModelForImageTextToText.from_pretrained(
+                self.model_path, **model_kwargs
+            )
+
+            # Freeze the base model
+            for param in self.model.parameters():
+                param.requires_grad = False
+            self.model.eval()
+
+            # Load processor
+            self.tokenizer = AutoProcessor.from_pretrained(
+                self.model_path,
+                trust_remote_code=True,
+            )
 
     def _prepare_model_kwargs(self, device: str) -> dict:
         """
@@ -345,16 +375,24 @@ class VLMTransformersBackend(BaseBackend):
                 position_ids_list.append(kwargs["position_ids"].clone().detach().cpu())
             return args, kwargs
 
-        handle = self.model.language_model.register_forward_pre_hook(
-            hook, with_kwargs=True
-        )
-
+        if self.target_model_type == "qwen3_vl":
+            handle = self.model.language_model.register_forward_pre_hook(
+                hook, with_kwargs=True
+            )
+        elif self.target_model_type == "hunyuan_vl":
+            handle = self.model.model.register_forward_pre_hook(hook, with_kwargs=True)
+        else:
+            raise ValueError(f"Unsupported target model type: {self.target_model_type}")
         pixel_values = kwargs.get("pixel_values", None)
+        if pixel_values is not None:
+            pixel_values = pixel_values.squeeze(0)
         image_grid_thw = kwargs.get("image_grid_thw", None)
+        input_position_ids = kwargs.get("input_position_ids", None)
         with torch.no_grad():
             outputs = self.model(
                 input_ids,
                 attention_mask=attention_mask,
+                position_ids=input_position_ids,
                 pixel_values=pixel_values,
                 image_grid_thw=image_grid_thw,
                 output_hidden_states=True,
@@ -362,8 +400,20 @@ class VLMTransformersBackend(BaseBackend):
             )
 
         handle.remove()
-        inputs_embeds = inputs_embeds_list[0].to(input_ids.device)
-        position_ids = position_ids_list[0].to(input_ids.device)
+        inputs_embeds = (
+            inputs_embeds_list[0].to(input_ids.device) if inputs_embeds_list else None
+        )
+
+        if self.target_model_type == "hunyuan_vl":
+            position_ids = (
+                position_ids_list[0][:, 0, :].to(input_ids.device)
+                if position_ids_list
+                else None
+            )
+        else:
+            position_ids = (
+                position_ids_list[0].to(input_ids.device) if position_ids_list else None
+            )
 
         # Extract auxiliary hidden states
         aux_layer_ids = kwargs.get("aux_hidden_states_layer_ids", None)
@@ -407,16 +457,25 @@ class VLMTransformersBackend(BaseBackend):
                 position_ids_list.append(kwargs["position_ids"].clone().detach().cpu())
             return args, kwargs
 
-        handle = self.model.language_model.register_forward_pre_hook(
-            hook, with_kwargs=True
-        )
+        if self.target_model_type == "qwen3_vl":
+            handle = self.model.language_model.register_forward_pre_hook(
+                hook, with_kwargs=True
+            )
+        elif self.target_model_type == "hunyuan_vl":
+            handle = self.model.model.register_forward_pre_hook(hook, with_kwargs=True)
+        else:
+            raise ValueError(f"Unsupported target model type: {self.target_model_type}")
 
         pixel_values = kwargs.get("pixel_values", None)
+        if pixel_values is not None:
+            pixel_values = pixel_values.squeeze(0)
         image_grid_thw = kwargs.get("image_grid_thw", None)
+        input_position_ids = kwargs.get("input_position_ids", None)
         with torch.no_grad():
             outputs = self.model(
                 input_ids,
                 pixel_values=pixel_values,
+                position_ids=input_position_ids,
                 image_grid_thw=image_grid_thw,
                 attention_mask=attention_mask,
                 output_hidden_states=True,
@@ -424,9 +483,19 @@ class VLMTransformersBackend(BaseBackend):
             )
 
         handle.remove()
-        inputs_embeds = inputs_embeds_list[0].to(input_ids.device)
-        position_ids = position_ids_list[0].to(input_ids.device)
-
+        inputs_embeds = (
+            inputs_embeds_list[0].to(input_ids.device) if inputs_embeds_list else None
+        )
+        if self.target_model_type == "hunyuan_vl":
+            position_ids = (
+                position_ids_list[0][:, 0, :].to(input_ids.device)
+                if position_ids_list
+                else None
+            )
+        else:
+            position_ids = (
+                position_ids_list[0].to(input_ids.device) if position_ids_list else None
+            )
         # Extract auxiliary hidden states
         aux_layer_ids = kwargs.get("aux_hidden_states_layer_ids", None)
         aux_hidden_states = self._extract_auxiliary_hidden_states(
@@ -478,7 +547,12 @@ class TargetModelWrapper:
     }
 
     def __init__(
-        self, model_path: str, modal_type: str = "LLM", backend: str = "hf", **kwargs
+        self,
+        model_path: str,
+        modal_type: str = "LLM",
+        backend: str = "hf",
+        target_model_type: str = None,
+        **kwargs,
     ):
         """
         Initialize TargetModel with specified backend
@@ -496,6 +570,7 @@ class TargetModelWrapper:
 
         self.backend_name = backend
         self.backend = self.BACKENDS[(backend, modal_type)](model_path, **kwargs)
+        self.backend.target_model_type = target_model_type
         self.backend.load_model()
 
     def get_hidden_states_and_logits(
@@ -583,6 +658,7 @@ def create_target_model(
     model_path: str,
     torch_dtype: torch.dtype = torch.bfloat16,
     trust_remote_code: bool = True,
+    target_model_type: str = None,
     **extra_kwargs,
 ) -> TargetModelWrapper:
     """
@@ -626,4 +702,9 @@ def create_target_model(
             f"Use one of: {list(TargetModelWrapper.BACKENDS.keys())}"
         )
 
-    return TargetModelWrapper(backend=backend, model_path=model_path, **kwargs)
+    return TargetModelWrapper(
+        backend=backend,
+        model_path=model_path,
+        target_model_type=target_model_type,
+        **kwargs,
+    )

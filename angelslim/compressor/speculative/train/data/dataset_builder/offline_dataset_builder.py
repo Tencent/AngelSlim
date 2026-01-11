@@ -21,7 +21,11 @@ from torch.utils.data import Dataset
 
 from angelslim.utils import rank0_print
 
-from ..data_utils import DataCollatorWithPadding, VLMDataCollatorWithPadding
+from ..data_utils import (
+    DataCollatorWithPadding,
+    VLMDataCollatorWithPadding,
+    VLMHunyuanDataCollatorWithPadding,
+)
 from .base_dataset_builder import DatasetBuilder
 from .dataset_builder_factory import DatasetBuilderFactory
 
@@ -230,7 +234,7 @@ class OfflineVLMEagle3Dataset(OfflineEagle3Dataset):
             "target_hiddens",  # B, N, D
             "hidden_states",  # B, N, 3*D
             "loss_mask",  # B, N
-            "inputs_embeds",  # B, N, D
+            # "inputs_embeds",  # B, N, D
             "position_ids",  # 3, B, N
         ]
         missing_keys = [key for key in required_keys if key not in data]
@@ -282,7 +286,7 @@ class OfflineLLMDatasetBuilder(DatasetBuilder):
         return DataCollatorWithPadding()
 
 
-@DatasetBuilderFactory.register("offline", "VLM")
+@DatasetBuilderFactory.register("offline", "VLM", "qwen3_vl")
 class OfflineVLMDatasetBuilder(DatasetBuilder):
     def __init__(
         self, file_pattern: str = "*.ckpt", cache_in_memory: bool = False, **kwargs: Any
@@ -302,3 +306,25 @@ class OfflineVLMDatasetBuilder(DatasetBuilder):
 
     def get_data_collator(self) -> Any:
         return VLMDataCollatorWithPadding()
+
+
+@DatasetBuilderFactory.register("offline", "VLM", "hunyuan_vl")
+class OfflineVLMHunyuanVLDatasetBuilder(DatasetBuilder):
+    def __init__(
+        self, file_pattern: str = "*.ckpt", cache_in_memory: bool = False, **kwargs: Any
+    ):
+        self.file_pattern = file_pattern
+        self.cache_in_memory = cache_in_memory
+
+    def build_dataset(self, datapath: str, **kwargs: Any) -> Dataset:
+        """
+        Create offline datasets from pre-computed .ckpt files.
+        """
+        return OfflineVLMEagle3Dataset(
+            data_dir=datapath,
+            file_pattern=self.file_pattern,
+            cache_in_memory=self.cache_in_memory,
+        )
+
+    def get_data_collator(self) -> Any:
+        return VLMHunyuanDataCollatorWithPadding()
