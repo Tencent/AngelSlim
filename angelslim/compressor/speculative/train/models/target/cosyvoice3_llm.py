@@ -16,6 +16,7 @@
 
 import os
 from typing import Optional
+
 import torch
 from torch import nn
 from torch.nn.utils.rnn import pad_sequence, unpad_sequence
@@ -45,10 +46,7 @@ def make_pad_mask(lengths: torch.Tensor, max_len: int = 0) -> torch.Tensor:
     """
     batch_size = lengths.size(0)
     max_len = max_len if max_len > 0 else lengths.max().item()
-    seq_range = torch.arange(0,
-                             max_len,
-                             dtype=torch.int64,
-                             device=lengths.device)
+    seq_range = torch.arange(0, max_len, dtype=torch.int64, device=lengths.device)
     seq_range_expand = seq_range.unsqueeze(0).expand(batch_size, max_len)
     seq_length_expand = lengths.unsqueeze(-1)
     mask = seq_range_expand >= seq_length_expand
@@ -56,12 +54,12 @@ def make_pad_mask(lengths: torch.Tensor, max_len: int = 0) -> torch.Tensor:
 
 
 def get_qwen_tokenizer(
-    token_path: str,
-    skip_special_tokens: bool,
-    version: str = 'cosyvoice3'
+    token_path: str, skip_special_tokens: bool, version: str = "cosyvoice3"
 ):
-    if version == 'cosyvoice3':
-        return CosyVoice3Tokenizer(token_path=token_path, skip_special_tokens=skip_special_tokens)
+    if version == "cosyvoice3":
+        return CosyVoice3Tokenizer(
+            token_path=token_path, skip_special_tokens=skip_special_tokens
+        )
     else:
         raise ValueError
 
@@ -71,7 +69,9 @@ class Qwen2Encoder(torch.nn.Module):
         super().__init__()
         self.model = Qwen2ForCausalLM.from_pretrained(pretrain_path)
 
-    def forward(self, xs: torch.Tensor, xs_lens: torch.Tensor, output_hidden_states: bool):
+    def forward(
+        self, xs: torch.Tensor, xs_lens: torch.Tensor, output_hidden_states: bool
+    ):
         T = xs.size(1)
         masks = ~make_pad_mask(xs_lens, T)
         outs = self.model(
@@ -83,9 +83,11 @@ class Qwen2Encoder(torch.nn.Module):
         return outs, masks.unsqueeze(1)
 
 
-class CosyVoice3Tokenizer():
+class CosyVoice3Tokenizer:
     def __init__(self, token_path, skip_special_tokens=True):
         # NOTE: non-chat model, all these special tokens keep randomly initialized.
+        # fmt: off
+        # flake8: noqa
         special_tokens = {
             'eos_token': '<|endoftext|>',
             'pad_token': '<|endoftext|>',
@@ -119,6 +121,7 @@ class CosyVoice3Tokenizer():
                 "[ǎn]", "[ǎng]", "[ǎo]", "[ǐ]", "[ǐn]", "[ǐng]", "[ǒ]", "[ǒng]", "[ǒu]", "[ǔ]", "[ǔn]", "[ǘ]", "[ǚ]", "[ǜ]"
             ]
         }
+        # fmt: on
         self.special_tokens = special_tokens
         self.tokenizer = AutoTokenizer.from_pretrained(token_path)
         self.tokenizer.add_special_tokens(special_tokens)
@@ -131,17 +134,19 @@ class CosyVoice3Tokenizer():
 
     def decode(self, tokens):
         tokens = torch.tensor(tokens, dtype=torch.int64)
-        text = self.tokenizer.batch_decode([tokens], skip_special_tokens=self.skip_special_tokens)[0]
+        text = self.tokenizer.batch_decode(
+            [tokens], skip_special_tokens=self.skip_special_tokens
+        )[0]
         return text
 
 
 class CosyVoice3LM(torch.nn.Module):
     def __init__(
-            self,
-            model_path,
-            llm_input_size: int,
-            llm_output_size: int,
-            speech_token_size: int,
+        self,
+        model_path,
+        llm_input_size: int,
+        llm_output_size: int,
+        speech_token_size: int,
     ):
         super().__init__()
         self.llm_input_size = llm_input_size
@@ -154,28 +159,34 @@ class CosyVoice3LM(torch.nn.Module):
         self.fill_token = speech_token_size + 3
 
         self.llm = Qwen2Encoder(os.path.join(model_path, "CosyVoice-BlankEN"))
-        self.llm_decoder = nn.Linear(llm_output_size, speech_token_size + 200, bias=False)
+        self.llm_decoder = nn.Linear(
+            llm_output_size, speech_token_size + 200, bias=False
+        )
 
         # [Optional] build speech token related modules
-        self.speech_embedding = torch.nn.Embedding(speech_token_size + 200, llm_input_size)
+        self.speech_embedding = torch.nn.Embedding(
+            speech_token_size + 200, llm_input_size
+        )
         self.stop_token_ids = [speech_token_size + i for i in range(200)]
 
         # tokenizer
-        self.tokenizer = get_qwen_tokenizer(os.path.join(model_path, "CosyVoice-BlankEN"), skip_special_tokens=True)
+        self.tokenizer = get_qwen_tokenizer(
+            os.path.join(model_path, "CosyVoice-BlankEN"), skip_special_tokens=True
+        )
 
     def forward(
-            self,
-            text: torch.Tensor,
-            text_len: torch.Tensor,
-            speech_token: torch.Tensor,
-            speech_token_len: torch.Tensor,
-            prompt_text: torch.Tensor,
-            prompt_text_len: torch.Tensor,
-            prompt_speech_token: torch.Tensor,
-            prompt_speech_token_len: torch.Tensor,
-            hidden_states: Optional[torch.Tensor],
-            output_hidden_states: bool = False,
-            **kwargs,
+        self,
+        text: torch.Tensor,
+        text_len: torch.Tensor,
+        speech_token: torch.Tensor,
+        speech_token_len: torch.Tensor,
+        prompt_text: torch.Tensor,
+        prompt_text_len: torch.Tensor,
+        prompt_speech_token: torch.Tensor,
+        prompt_speech_token_len: torch.Tensor,
+        hidden_states: Optional[torch.Tensor],
+        output_hidden_states: bool = False,
+        **kwargs,
     ):
         device = text.device
         text_token = torch.concat([prompt_text, text], dim=1)
@@ -188,42 +199,80 @@ class CosyVoice3LM(torch.nn.Module):
         if prompt_speech_token_len != 0:
             prompt_speech_token_emb = self.speech_embedding(prompt_speech_token)
         else:
-            prompt_speech_token_emb = torch.zeros(1, 0, self.llm_input_size, dtype=text_emb.dtype).to(device)
+            prompt_speech_token_emb = torch.zeros(
+                1, 0, self.llm_input_size, dtype=text_emb.dtype
+            ).to(device)
         speech_token_emb = self.speech_embedding(speech_token)
-        
+
         # prepare llm_input/target
         lm_input, lm_input_len, loss_mask = self.prepare_lm_input_target(
-            sos_emb, text_token, text_emb, text_len, task_id_emb, prompt_speech_token, prompt_speech_token_emb, prompt_speech_token_len, speech_token, speech_token_emb, speech_token_len)
+            sos_emb,
+            text_token,
+            text_emb,
+            text_len,
+            task_id_emb,
+            prompt_speech_token,
+            prompt_speech_token_emb,
+            prompt_speech_token_len,
+            speech_token,
+            speech_token_emb,
+            speech_token_len,
+        )
 
         # run lm forward
-        outputs, lm_output_mask = self.llm(lm_input, lm_input_len.to(device), output_hidden_states)
+        outputs, lm_output_mask = self.llm(
+            lm_input, lm_input_len.to(device), output_hidden_states
+        )
         lm_output = outputs.hidden_states[-1]
         logits = self.llm_decoder(lm_output)
         hidden_states = torch.cat(outputs.hidden_states[:-1], dim=-1)
         return hidden_states, logits, lm_input, loss_mask, lm_output_mask
-    
-    def prepare_lm_input_target(self,
-                                sos_emb,
-                                text_token,
-                                text_emb,
-                                text_len,
-                                task_id_emb,
-                                prompt_speech_token,
-                                prompt_speech_token_emb,
-                                prompt_speech_token_len,
-                                speech_token,
-                                speech_token_emb,
-                                speech_token_len):
+
+    def prepare_lm_input_target(
+        self,
+        sos_emb,
+        text_token,
+        text_emb,
+        text_len,
+        task_id_emb,
+        prompt_speech_token,
+        prompt_speech_token_emb,
+        prompt_speech_token_len,
+        speech_token,
+        speech_token_emb,
+        speech_token_len,
+    ):
         lm_target, lm_input = [], []
         text_token = unpad_sequence(text_token, text_len.cpu(), batch_first=True)
         text_emb = unpad_sequence(text_emb, text_len.cpu(), batch_first=True)
-        prompt_speech_token = unpad_sequence(prompt_speech_token, prompt_speech_token_len.cpu(), batch_first=True)
-        prompt_speech_token_emb = unpad_sequence(prompt_speech_token_emb, prompt_speech_token_len.cpu(), batch_first=True)
-        speech_token = unpad_sequence(speech_token, speech_token_len.cpu(), batch_first=True)
-        speech_token_emb = unpad_sequence(speech_token_emb, speech_token_len.cpu(), batch_first=True)
+        prompt_speech_token = unpad_sequence(
+            prompt_speech_token, prompt_speech_token_len.cpu(), batch_first=True
+        )
+        prompt_speech_token_emb = unpad_sequence(
+            prompt_speech_token_emb, prompt_speech_token_len.cpu(), batch_first=True
+        )
+        speech_token = unpad_sequence(
+            speech_token, speech_token_len.cpu(), batch_first=True
+        )
+        speech_token_emb = unpad_sequence(
+            speech_token_emb, speech_token_len.cpu(), batch_first=True
+        )
         for i in range(len(text_token)):
-            this_lm_target = torch.tensor([IGNORE_ID] * (1 + text_len[i] + prompt_speech_token_len[i]) + speech_token[i].tolist() + [self.eos_token])
-            this_lm_input = torch.concat([sos_emb.squeeze(dim=0), text_emb[i], task_id_emb.squeeze(dim=0), prompt_speech_token_emb[i], speech_token_emb[i]], dim=0)
+            this_lm_target = torch.tensor(
+                [IGNORE_ID] * (1 + text_len[i] + prompt_speech_token_len[i])
+                + speech_token[i].tolist()
+                + [self.eos_token]
+            )
+            this_lm_input = torch.concat(
+                [
+                    sos_emb.squeeze(dim=0),
+                    text_emb[i],
+                    task_id_emb.squeeze(dim=0),
+                    prompt_speech_token_emb[i],
+                    speech_token_emb[i],
+                ],
+                dim=0,
+            )
             lm_input.append(this_lm_input)
             lm_target.append(this_lm_target)
         lm_input_len = torch.tensor([i.size(0) for i in lm_input], dtype=torch.int32)

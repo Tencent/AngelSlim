@@ -17,14 +17,17 @@ import json
 import os
 import random
 import time
-from typing import Any, Dict, List, Generator
+from typing import Any, Dict, Generator, List
 
 import numpy as np
 import shortuuid
 import torch
 from tqdm import tqdm
 
-from angelslim.compressor.speculative.inference.models import Eagle3Model, CosyVoice3Eagle3Model
+from angelslim.compressor.speculative.inference.models import (
+    CosyVoice3Eagle3Model,
+    Eagle3Model,
+)
 from angelslim.utils.lazy_imports import fastchat, ray, torchaudio
 
 SYSTEM_PROMPT = {
@@ -174,13 +177,25 @@ def process_tts_conversation_turn(
 ) -> Dict[str, Any]:
     """Process a single question"""
     if "cosyvoice3" in model_id:
-        prompt_text = model.base_model.frontend.text_normalize(qs["prompt_text"], split=False, text_frontend=True)
+        prompt_text = model.base_model.frontend.text_normalize(
+            qs["prompt_text"], split=False, text_frontend=True
+        )
         prompt_wav = os.path.normpath(os.path.join(path, qs["prompt_wav"]))
-        for i in tqdm(model.base_model.frontend.text_normalize(qs["tts_text"], split=True, text_frontend=True)):
+        for i in tqdm(
+            model.base_model.frontend.text_normalize(
+                qs["tts_text"], split=True, text_frontend=True
+            )
+        ):
             if (not isinstance(i, Generator)) and len(i) < 0.5 * len(prompt_text):
-                print('synthesis text {} too short than prompt text {}, this may lead to bad performance'.format(i, prompt_text))
-            model_input = model.base_model.frontend.frontend_zero_shot(i, prompt_text, prompt_wav, model.base_model.sample_rate, '')
-            
+                print(
+                    "synthesis text {} too short than prompt text {}, this may lead to bad performance".format(  # noqa: E501
+                        i, prompt_text
+                    )
+                )
+            model_input = model.base_model.frontend.frontend_zero_shot(
+                i, prompt_text, prompt_wav, model.base_model.sample_rate, ""
+            )
+
             torch.cuda.synchronize()
             start_time = time.time()
 
@@ -189,7 +204,7 @@ def process_tts_conversation_turn(
                 prompt_text=model_input["prompt_text"],
                 llm_prompt_speech_token=model_input["llm_prompt_speech_token"],
                 temperature=temperature,
-                log=True
+                log=True,
             )
 
             torch.cuda.synchronize()
@@ -257,7 +272,9 @@ def generate_answer_for_question_tts(
     for i in range(num_choices):
         torch.manual_seed(i)
 
-        result = process_tts_conversation_turn(model, model_id, question, temperature, path)
+        result = process_tts_conversation_turn(
+            model, model_id, question, temperature, path
+        )
 
         choices.append(
             {
@@ -288,7 +305,11 @@ def warmup_model(
 
 
 def warmup_tts_lm(
-    model: Eagle3Model, model_id: str, question: Dict[str, Any], temperature: float, path: str
+    model: Eagle3Model,
+    model_id: str,
+    question: Dict[str, Any],
+    temperature: float,
+    path: str,
 ) -> None:
     """Warm up the model before actual evaluation"""
     for _ in range(3):
@@ -349,14 +370,25 @@ def get_tts_answers(
     if questions:
         current_file = os.path.abspath(__file__)
         project_root = current_file.split("/AngelSlim/")[0] + "/AngelSlim"
-        warmup_tts_lm(model, model_id, questions[0], temperature, os.path.join(project_root, "dataset", args.bench_name))
+        warmup_tts_lm(
+            model,
+            model_id,
+            questions[0],
+            temperature,
+            os.path.join(project_root, "dataset", args.bench_name),
+        )
 
     os.makedirs(os.path.dirname(answer_file), exist_ok=True)
 
     i = 0
     for question in tqdm(questions):
         choices = generate_answer_for_question_tts(
-            model, model_id, question, num_choices, temperature, os.path.join(project_root, "dataset", args.bench_name)
+            model,
+            model_id,
+            question,
+            num_choices,
+            temperature,
+            os.path.join(project_root, "dataset", args.bench_name),
         )
 
         with open(os.path.expanduser(answer_file), "a") as fout:
@@ -368,7 +400,7 @@ def get_tts_answers(
                 "tstamp": time.time(),
             }
             fout.write(json.dumps(ans_json) + "\n")
-        
+
         i += 1
 
 
@@ -383,29 +415,41 @@ def get_tts_audios(
         model = initialize_cosycoice3_model(config)
 
         for answer in tqdm(answers):
-            prompt_text = model.base_model.frontend.text_normalize(answer['choices'][0]["prompt_text"], split=False, text_frontend=True)
-            prompt_wav = answer['choices'][0]["prompt_wav"]
-            for i in tqdm(model.base_model.frontend.text_normalize(answer['choices'][0]["tts_text"], split=True, text_frontend=True)):
-                if (not isinstance(i, Generator)) and len(i) < 0.5 * len(prompt_text):
-                    print('synthesis text {} too short than prompt text {}, this may lead to bad performance'.format(i, prompt_text))
-                model_input = model.base_model.frontend.frontend_zero_shot(i, prompt_text, prompt_wav, model.base_model.sample_rate, '')
+            prompt_text = model.base_model.frontend.text_normalize(
+                answer["choices"][0]["prompt_text"], split=False, text_frontend=True
+            )
+            prompt_wav = answer["choices"][0]["prompt_wav"]
+            for i in tqdm(
+                model.base_model.frontend.text_normalize(
+                    answer["choices"][0]["tts_text"], split=True, text_frontend=True
+                )
+            ):
+                model_input = model.base_model.frontend.frontend_zero_shot(
+                    i, prompt_text, prompt_wav, model.base_model.sample_rate, ""
+                )
 
-            tts_speech_token = answer['choices'][0]['output_audio_tokens']
+            tts_speech_token = answer["choices"][0]["output_audio_tokens"]
             while tts_speech_token[-1] == model.base_model.model.llm.eos_token:
                 del tts_speech_token[-1]
             this_tts_speech_token = torch.tensor(tts_speech_token).unsqueeze(dim=0)
-            this_tts_speech = model.base_model.model.token2wav(token=this_tts_speech_token,
-                                                prompt_token=model_input["flow_prompt_speech_token"],
-                                                prompt_feat=model_input["prompt_speech_feat"],
-                                                embedding=model_input["flow_embedding"],
-                                                token_offset=0,
-                                                uuid='',
-                                                finalize=True,
-                                                speed=1.0)
+            this_tts_speech = model.base_model.model.token2wav(
+                token=this_tts_speech_token,
+                prompt_token=model_input["flow_prompt_speech_token"],
+                prompt_feat=model_input["prompt_speech_feat"],
+                embedding=model_input["flow_embedding"],
+                token_offset=0,
+                uuid="",
+                finalize=True,
+                speed=1.0,
+            )
             this_tts_speech = this_tts_speech.cpu()
             directory = os.path.dirname(answer_file)
             os.makedirs(f"{directory}/baseline", exist_ok=True)
-            torchaudio.save(f'{directory}/baseline/eval_{answer['question_id']}.wav', this_tts_speech, model.base_model.sample_rate)
+            torchaudio.save(
+                f"{directory}/baseline/eval_{answer['question_id']}.wav",
+                this_tts_speech,
+                model.base_model.sample_rate,
+            )
     else:
         raise NotImplementedError("Model not supported")
 
