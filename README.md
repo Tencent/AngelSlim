@@ -636,12 +636,12 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
 
 ##### 1.2.2 HunyuanOCR Model
 
-Benchmark results for HunyuanOCR using Eagle3 speculative decoding on vLLM (v0.13.0) across OCR tasks, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
+Benchmark results for HunyuanOCR using Eagle3 speculative decoding on vLLM (v0.13.0) across **[OmniDocBench](https://huggingface.co/datasets/opendatalab/OmniDocBench)** dataset, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
 <table><thead>
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th colspan="2">OCR-Bench-Internal</th>
+    <th colspan="2">OmniDocBench</th>
   </tr></thead>
 <tbody>
   <tr>
@@ -653,13 +653,13 @@ Benchmark results for HunyuanOCR using Eagle3 speculative decoding on vLLM (v0.1
   <tr>
     <td rowspan="2">Hunyuan-OCR</td>
     <td>Vanilla</td>
-    <td>71.21</td>
+    <td>70.12</td>
     <td>1</td>
   </tr>
   <tr>
     <td>Eagle3</td>
-    <td>120.75</td>
-    <td>2.2</td>
+    <td>108.1</td>
+    <td>2.08</td>
   </tr>
 </tbody>
 </table>
