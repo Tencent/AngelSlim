@@ -96,7 +96,7 @@ def save_stats_to_jsonl(stats, output_file):
 
     # Append stats to jsonl file
     with open(output_file, "a", encoding="utf-8") as f:
-        json.dump(stats, f, ensure_ascii=False)
+        json.dump(stats, f, indent=2, ensure_ascii=False)
         f.write("\n")
 
     print(f"Stats saved to: {output_file}")

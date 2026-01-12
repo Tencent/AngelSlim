@@ -26,18 +26,22 @@ __all__ = [
 class ChatTemplateType(Enum):
     """Supported chat template types."""
 
+    QWEN2_AUDIO = "qwen2_audio"
     QWEN3 = "qwen3"
     HUNYUAN = "hunyuan"
     QWEN3_VL = "qwen3_vl"
     HUNYUAN_7B = "hunyuan_7b"
+    HUNYUAN_VL = "hunyuan_vl"
 
 
 # String to ChatTemplateType mapping
 CHAT_TEMPLATE_TYPE_MAPPING = {
+    "qwen2_audio": ChatTemplateType.QWEN2_AUDIO,
     "qwen3": ChatTemplateType.QWEN3,
     "hunyuan": ChatTemplateType.HUNYUAN,
     "hunyuan_7b": ChatTemplateType.HUNYUAN_7B,
     "qwen3_vl": ChatTemplateType.QWEN3_VL,
+    "hunyuan_vl": ChatTemplateType.HUNYUAN_VL,
 }
 
 
@@ -130,6 +134,26 @@ class ChatTemplateManager:
                             "don't know the answer to a question, please don't share "
                             "false information."
                         ),
+                    }
+                ],
+            ),
+            ChatTemplateType.QWEN2_AUDIO: ChatTemplate(
+                user_header="<|im_start|>user\n",
+                assistant_header="<|im_start|>assistant\n",
+                system_prompt=[
+                    {
+                        "type": "text",
+                        "text": ("You are a helpful assistant."),
+                    }
+                ],
+            ),
+            ChatTemplateType.HUNYUAN_VL: ChatTemplate(
+                user_header="<｜hy_Assistant｜>",
+                assistant_header="<｜hy_User｜>",
+                system_prompt=[
+                    {
+                        "type": "text",
+                        "text": "",
                     }
                 ],
             ),

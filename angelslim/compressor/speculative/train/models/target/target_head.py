@@ -96,8 +96,12 @@ class TargetHead(nn.Module):
                 )
 
         # Get model dimensions
-        hidden_size = config.hidden_size
-        vocab_size = config.vocab_size
+        if config.model_type in ["qwen3_vl", "qwen3_vl_moe"]:
+            hidden_size = config.text_config.hidden_size
+            vocab_size = config.text_config.vocab_size
+        else:
+            hidden_size = config.hidden_size
+            vocab_size = config.vocab_size
 
         # Initialize lm_head
         lm_head = nn.Linear(hidden_size, vocab_size, bias=False)
@@ -105,24 +109,29 @@ class TargetHead(nn.Module):
         # Load lm_head weights from safetensors
         try:
             # Read safetensors index to locate lm_head weights
-            index_path = os.path.join(
-                model_name_or_path, "model.safetensors.index.json"
-            )
-
-            if not os.path.exists(index_path):
-                raise FileNotFoundError(
-                    f"model.safetensors.index.json not found in {model_name_or_path}. "
-                    "Please ensure the model is saved in safetensors "
-                    "format with sharding."
+            try:
+                index_path = os.path.join(
+                    model_name_or_path, "model.safetensors.index.json"
                 )
 
-            # Model is sharded, use index to find lm_head
-            with open(index_path, "r") as f:
-                index_json = json.loads(f.read())
-                head_path = index_json["weight_map"][lm_head_key]
+                if not os.path.exists(index_path):
+                    raise FileNotFoundError(
+                        "model.safetensors.index.json"
+                        f"not found in {model_name_or_path}. "
+                        "Please ensure the model is saved in safetensors "
+                        "format with sharding."
+                    )
 
-            # Load lm_head weights using safetensors
-            safetensors_file = os.path.join(model_name_or_path, head_path)
+                # Model is sharded, use index to find lm_head
+                with open(index_path, "r") as f:
+                    index_json = json.loads(f.read())
+                    head_path = index_json["weight_map"][lm_head_key]
+
+                # Load lm_head weights using safetensors
+                safetensors_file = os.path.join(model_name_or_path, head_path)
+            except Exception:
+                safetensors_file = os.path.join(model_name_or_path, "model.safetensors")
+
             with safe_open(safetensors_file, framework="pt", device="cpu") as f:
                 tensor_slice = f.get_slice(lm_head_key)
                 _, hidden_dim = tensor_slice.get_shape()

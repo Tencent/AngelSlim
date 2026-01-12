@@ -255,6 +255,9 @@ def parse_args():
         "--save_strategy", type=str, default="no", help="Save strategy for checkpoints"
     )
     training_group.add_argument(
+        "--eval_strategy", type=str, default="no", help="Eval strategy for checkpoints"
+    )
+    training_group.add_argument(
         "--lr_scheduler_type",
         type=str,
         default="constant",
@@ -317,11 +320,14 @@ def train():
         f"(chat template: {args.chat_template_type})"
     )
 
+    target_model_type = getattr(draft_model_config, "target_model_type", None)
+
     dataset_manager = DatasetManager(
         data_args=args,
         tokenizer=tokenizer,
         model_max_length=args.model_max_length,
         chat_template_type=args.chat_template_type,
+        target_model_type=target_model_type,
     )
 
     (
@@ -380,6 +386,7 @@ def train():
     }
 
     checkpoint_args = {
+        "eval_strategy": args.eval_strategy,
         "save_strategy": args.save_strategy,
         "save_steps": args.save_steps,
         "save_total_limit": args.save_total_limit,

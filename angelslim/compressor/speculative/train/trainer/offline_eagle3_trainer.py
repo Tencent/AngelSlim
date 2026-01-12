@@ -136,7 +136,6 @@ class OfflineVLMEagle3Trainer(Eagle3Trainer):
                 - hidden_states: Pre-computed aux hidden states from target model
                 - attention_mask: Attention mask
                 - loss_mask: Mask for loss computation
-                - inputs_embeds: Input embeddings (text and visual)
                 - position_ids (optional): Position IDs (3D for VLMs mrope)
 
         Returns:
@@ -148,7 +147,6 @@ class OfflineVLMEagle3Trainer(Eagle3Trainer):
             "hidden_states",
             "attention_mask",
             "loss_mask",
-            "inputs_embeds",
             "position_ids",
         ]
         output_fields = [
@@ -157,14 +155,14 @@ class OfflineVLMEagle3Trainer(Eagle3Trainer):
             "hidden_states",
             "attention_mask",
             "loss_mask",
-            "inputs_embeds",
             "position_ids",
         ]
 
-        target_logits = self.target_head(inputs["target_hiddens"])
+        target_logits = self.target_head(
+            inputs["target_hiddens"].to(self.target_head.lm_head.weight.dtype)
+        )
         loss_mask = inputs["loss_mask"]
         input_ids = inputs["input_ids"]
-        # inputs_embeds = inputs.get("inputs_embeds", None)
         position_ids = inputs.get("position_ids", None)
 
         # Apply right padding and move tensors to correct device
@@ -176,7 +174,6 @@ class OfflineVLMEagle3Trainer(Eagle3Trainer):
         outputs["target_logits"] = target_logits
         outputs["loss_mask"] = loss_mask
         outputs["input_ids"] = input_ids
-        # outputs["inputs_embeds"] = inputs_embeds
         outputs["position_ids"] = position_ids
 
         return outputs

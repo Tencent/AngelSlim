@@ -113,19 +113,19 @@ class Eagle3BaseDraftModel(PreTrainedModel, ABC):
     ):
         """Load embedding weights from safetensors format."""
         try:
-            index_file = os.path.join(model_path, "model.safetensors.index.json")
-            if not os.path.exists(index_file):
-                return None
-
-            with open(index_file, "r") as f:
-                index_json = json.load(f)
-
-            if embed_weight_key in index_json["weight_map"]:
-                emb_path = index_json["weight_map"][embed_weight_key]
-            else:
-                raise KeyError("Embedding weights key not found in index.")
-
-            safetensors_file = os.path.join(model_path, emb_path)
+            try:
+                index_file = os.path.join(model_path, "model.safetensors.index.json")
+                if not os.path.exists(index_file):
+                    raise KeyError("no model.safetensors.index.json !")
+                with open(index_file, "r") as f:
+                    index_json = json.load(f)
+                if embed_weight_key in index_json["weight_map"]:
+                    emb_path = index_json["weight_map"][embed_weight_key]
+                else:
+                    raise KeyError("Embedding weights key not found in index.")
+                safetensors_file = os.path.join(model_path, emb_path)
+            except Exception:
+                safetensors_file = os.path.join(model_path, "model.safetensors")
 
             with safe_open(safetensors_file, framework="pt", device="cpu") as f:
                 tensor_slice = f.get_slice(embed_weight_key)
@@ -142,19 +142,22 @@ class Eagle3BaseDraftModel(PreTrainedModel, ABC):
     ):
         """Load embedding weights from pytorch_model.bin format."""
         try:
-            index_file = os.path.join(model_path, "pytorch_model.bin.index.json")
-            if not os.path.exists(index_file):
-                return None
+            try:
+                index_file = os.path.join(model_path, "pytorch_model.bin.index.json")
+                if not os.path.exists(index_file):
+                    raise KeyError("no pytorch_model.bin.index.json !")
+                with open(index_file, "r") as f:
+                    index_json = json.load(f)
 
-            with open(index_file, "r") as f:
-                index_json = json.load(f)
+                if embed_weight_key in index_json["weight_map"]:
+                    emb_path = index_json["weight_map"][embed_weight_key]
+                else:
+                    raise KeyError("Embedding weights key not found in index.")
 
-            if embed_weight_key in index_json["weight_map"]:
-                emb_path = index_json["weight_map"][embed_weight_key]
-            else:
-                raise KeyError("Embedding weights key not found in index.")
+                bin_file = os.path.join(model_path, emb_path)
 
-            bin_file = os.path.join(model_path, emb_path)
+            except Exception:
+                bin_file = os.path.join(model_path, "pytorch_model.bin")
 
             weights = torch.load(bin_file, map_location="cpu")
             tensor = weights[embed_weight_key].float()
