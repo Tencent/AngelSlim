@@ -83,51 +83,17 @@ def parse_args():
     return parser.parse_args()
 
 
-CAT_SHORT2LONG = {
-    "acc": "Accounting",
-    "agri": "Agriculture",
-    "arch": "Architecture_and_Engineering",
-    "art": "Art",
-    "art_theory": "Art_Theory",
-    "bas_med": "Basic_Medical_Science",
-    "bio": "Biology",
-    "chem": "Chemistry",
-    "cli_med": "Clinical_Medicine",
-    "cs": "Computer_Science",
-    "design": "Design",
-    "diag_med": "Diagnostics_and_Laboratory_Medicine",
-    "econ": "Economics",
-    "elec": "Electronics",
-    "ep": "Energy_and_Power",
-    "fin": "Finance",
-    "geo": "Geography",
-    "his": "History",
-    "liter": "Literature",
-    "manage": "Manage",
-    "mark": "Marketing",
-    "mate": "Materials",
-    "math": "Math",
-    "mech": "Mechanical_Engineering",
-    "music": "Music",
-    "phar": "Pharmacy",
-    "phys": "Physics",
-    "psy": "Psychology",
-    "pub_health": "Public_Health",
-    "socio": "Sociology",
-}
-
-
 def main():
     args = parse_args()
 
     # Load dataset
     print(f"Loading {args.dataset} dataset...")
     if args.dataset == "MMMU/MMMU":
-        ds = load_dataset("args.dataset", split="test", trust_remote_code=True)
+        ds = load_dataset(args.dataset, "History", split="test", trust_remote_code=True)
     elif args.dataset == "Lin-Chen/MMStar":
         ds = load_dataset(args.dataset, split="val", trust_remote_code=True)
     elif args.dataset == "hunyuan-ocr":
-        ds = load_dataset("./dataset/hunyuan-ocr", split="test", trust_remote_code=True)
+        ds = load_dataset("./dataset/hunyuan-ocr", split="test")
     else:
         ds = load_dataset(args.dataset, split="test", trust_remote_code=True)
     if args.num_prompts is not None:
@@ -189,9 +155,7 @@ def main():
     elif args.dataset == "hunyuan-ocr":
         for item in ds:
             image_url = pil_to_base64(
-                Image.open(
-                    os.path.join("./dataset/hunyuan-ocr/images", item["img_path"])
-                )
+                Image.open(os.path.join("./dataset/hunyuan-ocr", item["img_path"]))
             )
             prompts.append(
                 [

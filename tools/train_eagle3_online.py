@@ -40,7 +40,7 @@ def parse_args():
         "--modal_type",
         type=str,
         default="LLM",
-        choices=["LLM", "VLM"],
+        choices=["LLM", "VLM", "Audio"],
         help="Modal type: LLM for language models, VLM for vision-language models",
     )
     model_group.add_argument(

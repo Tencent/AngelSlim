@@ -286,7 +286,15 @@ class TransformersBackend(BaseBackend):
 class VLMTransformersBackend(BaseBackend):
     """VLM HuggingFace Transformers backend"""
 
+    SUPPORT_MODEL_TYPE = ["hunyuan_vl", "qwen3_vl"]
+
     def load_model(self):
+        if (
+            self.target_model_type is None
+            or self.target_model_type not in self.SUPPORT_MODEL_TYPE
+        ):
+            raise ValueError(f"{self.target_model_type} is not supported now!")
+
         if self.target_model_type == "hunyuan_vl":
             from transformers import AutoProcessor, HunYuanVLForConditionalGeneration
 
@@ -305,7 +313,7 @@ class VLMTransformersBackend(BaseBackend):
             self.tokenizer = AutoProcessor.from_pretrained(
                 self.model_path, trust_remote_code=True
             )
-        else:
+        elif self.target_model_type == "qwen3_vl":
             from transformers import AutoModelForImageTextToText, AutoProcessor
 
             device = decide_device_for_distributed()
@@ -328,6 +336,8 @@ class VLMTransformersBackend(BaseBackend):
                 self.model_path,
                 trust_remote_code=True,
             )
+        else:
+            raise ValueError(f"Unsupported target model type: {self.target_model_type}")
 
     def _prepare_model_kwargs(self, device: str) -> dict:
         """
@@ -517,6 +527,201 @@ class VLMTransformersBackend(BaseBackend):
         }
 
 
+class AudioTransformersBackend(BaseBackend):
+    """Audio HuggingFace Transformers backend"""
+
+    SUPPORT_MODEL_TYPE = ["qwen2_audio"]
+
+    def load_model(self):
+        if (
+            self.target_model_type is None
+            or self.target_model_type not in self.SUPPORT_MODEL_TYPE
+        ):
+            raise ValueError(f"{self.target_model_type} is not supported now!")
+
+        if self.target_model_type == "qwen2_audio":
+            from transformers import (
+                Qwen2AudioForConditionalGeneration,
+                Qwen2AudioProcessor,
+            )
+
+            device = decide_device_for_distributed()
+            print_with_rank(f"Loading model to device: {device}")
+
+            # Prepare model loading configuration
+            model_kwargs = self._prepare_model_kwargs(device)
+
+            self.model = Qwen2AudioForConditionalGeneration.from_pretrained(
+                self.model_path, **model_kwargs
+            )
+
+            # Freeze the base model
+            for param in self.model.parameters():
+                param.requires_grad = False
+            self.model.eval()
+
+            self.tokenizer = Qwen2AudioProcessor.from_pretrained(
+                self.model_path, trust_remote_code=True
+            )
+        else:
+            raise ValueError(f"Unsupported target model type: {self.target_model_type}")
+
+    def _prepare_model_kwargs(self, device: str) -> dict:
+        """
+        Prepare keyword arguments for model loading.
+
+        Args:
+            device: Target device for model placement
+
+        Returns:
+            Dictionary of model loading arguments
+        """
+        default_kwargs = {
+            "dtype": torch.bfloat16,
+            "device_map": device,
+            "trust_remote_code": True,
+        }
+        default_kwargs.update(self.kwargs)
+        return default_kwargs
+
+    def get_hidden_states_and_logits(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        **kwargs,
+    ) -> Tuple[torch.Tensor, ...]:
+        """
+        Extract hidden states and logits using Transformers backend.
+
+        Args:
+            input_ids: Input token IDs
+            attention_mask: Attention mask
+            **kwargs: May contain 'aux_hidden_states_layer_ids' to specify custom layers
+
+        Returns:
+            Tuple of (concatenated_hidden_states, logits)
+        """
+        inputs_embeds_list, position_ids_list = [], []
+
+        def hook(module, args, kwargs):
+            if "inputs_embeds" in kwargs and kwargs["inputs_embeds"] is not None:
+                inputs_embeds_list.append(
+                    kwargs["inputs_embeds"].clone().detach().cpu()
+                )
+            if "position_ids" in kwargs and kwargs["position_ids"] is not None:
+                position_ids_list.append(kwargs["position_ids"].clone().detach().cpu())
+            return args, kwargs
+
+        handle = self.model.language_model.register_forward_pre_hook(
+            hook, with_kwargs=True
+        )
+        input_features = kwargs.get("input_features", None)
+        feature_attention_mask = kwargs.get("feature_attention_mask", None)
+        with torch.no_grad():
+            outputs = self.model(
+                input_ids,
+                attention_mask=attention_mask,
+                input_features=input_features,
+                feature_attention_mask=feature_attention_mask,
+                output_hidden_states=True,
+                return_dict=True,
+            )
+
+        handle.remove()
+
+        inputs_embeds = (
+            inputs_embeds_list[0].to(input_ids.device) if inputs_embeds_list else None
+        )
+        position_ids = (
+            position_ids_list[0].to(input_ids.device) if position_ids_list else None
+        )
+
+        # Extract auxiliary hidden states
+        aux_layer_ids = kwargs.get("aux_hidden_states_layer_ids", None)
+        hidden_states = self._extract_auxiliary_hidden_states(
+            outputs.hidden_states, aux_layer_ids
+        )
+
+        # Return hidden states and logits on the same device as input
+        return (
+            hidden_states,
+            outputs.logits.to(input_ids.device),
+            inputs_embeds,
+            position_ids,
+        )
+
+    def get_aux_and_target_hiddens(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        **kwargs,
+    ) -> dict[str, torch.Tensor]:
+        """
+        Extract auxiliary and final layer hidden states.
+
+        Args:
+            input_ids: Input token IDs
+            attention_mask: Attention mask
+            **kwargs: May contain 'aux_hidden_states_layer_ids' to specify custom layers
+
+        Returns:
+            Tuple of (auxiliary_hidden_states, final_hidden_states)
+        """
+        inputs_embeds_list, position_ids_list = [], []
+
+        def hook(module, args, kwargs):
+            if "inputs_embeds" in kwargs and kwargs["inputs_embeds"] is not None:
+                inputs_embeds_list.append(
+                    kwargs["inputs_embeds"].clone().detach().cpu()
+                )
+            if "position_ids" in kwargs and kwargs["position_ids"] is not None:
+                position_ids_list.append(kwargs["position_ids"].clone().detach().cpu())
+            return args, kwargs
+
+        handle = self.model.language_model.register_forward_pre_hook(
+            hook, with_kwargs=True
+        )
+        input_features = kwargs.get("input_features", None)
+        feature_attention_mask = kwargs.get("feature_attention_mask", None)
+        with torch.no_grad():
+            outputs = self.model(
+                input_ids,
+                attention_mask=attention_mask,
+                input_features=input_features,
+                feature_attention_mask=feature_attention_mask,
+                output_hidden_states=True,
+                return_dict=True,
+            )
+
+        handle.remove()
+        inputs_embeds = (
+            inputs_embeds_list[0].to(input_ids.device) if inputs_embeds_list else None
+        )
+        position_ids = (
+            position_ids_list[0].to(input_ids.device) if position_ids_list else None
+        )
+
+        # Extract auxiliary hidden states
+        aux_layer_ids = kwargs.get("aux_hidden_states_layer_ids", None)
+        aux_hidden_states = self._extract_auxiliary_hidden_states(
+            outputs.hidden_states, aux_layer_ids
+        )
+
+        # Get final layer hidden states
+        target_hidden_states = outputs.hidden_states[-1]
+
+        # hidden_states: B, N, 3*D
+        # target_hiddens: B, N, D
+        # inputs_embeds: B, N, D
+        # position_ids: 3, N
+        return {
+            "hidden_states": aux_hidden_states,
+            "target_hiddens": target_hidden_states,
+            "inputs_embeds": inputs_embeds,
+            "position_ids": position_ids,
+        }
+
+
 class TargetModelWrapper:
     """
     Unified wrapper for target models in Eagle3 training.
@@ -544,6 +749,7 @@ class TargetModelWrapper:
     BACKENDS = {
         ("hf", "LLM"): TransformersBackend,
         ("hf", "VLM"): VLMTransformersBackend,
+        ("hf", "Audio"): AudioTransformersBackend,
     }
 
     def __init__(
