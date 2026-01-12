@@ -1,2 +1,3 @@
 qwen_vl_utils==0.0.11
 qwen_omni_utils
+mistral_common

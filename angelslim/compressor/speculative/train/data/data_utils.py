@@ -341,3 +341,71 @@ class VLMHunyuanDataCollatorWithPadding:
                 [paddingtensor2D(item["position_ids"], max_length) for item in features]
             )
         return batch
+
+
+class AudioDataCollatorWithPadding:
+
+    def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, Any]:
+        max_length = max(item["input_ids"].shape[1] for item in features)
+        batch_input_ids = torch.cat(
+            [paddingtensor2D(item["input_ids"], max_length) for item in features]
+        )
+        batch_attention_mask = torch.cat(
+            [paddingtensor2D(item["attention_mask"], max_length) for item in features]
+        )
+        batch_loss_mask = torch.cat(
+            [paddingtensor2D(item["loss_mask"], max_length) for item in features]
+        )
+
+        batch = {
+            "input_ids": batch_input_ids,
+            "attention_mask": batch_attention_mask,
+            "loss_mask": batch_loss_mask,
+            "feature_attention_mask": None,
+            "input_features": None,
+            "hidden_states": None,
+            "target_hiddens": None,
+            "inputs_embeds": None,
+            "position_ids": None,
+        }
+
+        # Check if both hidden_states and target_hiddens exist in all features
+        if all(
+            "hidden_states" in item and "target_hiddens" in item for item in features
+        ):
+            batch["hidden_states"] = torch.cat(
+                [paddingtensor(item["hidden_states"], max_length) for item in features]
+            )
+            batch["target_hiddens"] = torch.cat(
+                [paddingtensor(item["target_hiddens"], max_length) for item in features]
+            )
+        if all(
+            "inputs_embeds" in item and item["inputs_embeds"] is not None
+            for item in features
+        ):
+            batch["inputs_embeds"] = torch.cat(
+                [paddingtensor(item["inputs_embeds"], max_length) for item in features]
+            )
+        if all(
+            "position_ids" in item and item["position_ids"] is not None
+            for item in features
+        ):
+            batch["position_ids"] = torch.cat(
+                [paddingtensor2D(item["position_ids"], max_length) for item in features]
+            )
+        if all(
+            "feature_attention_mask" in item
+            and item["feature_attention_mask"] is not None
+            for item in features
+        ):
+            batch["feature_attention_mask"] = torch.cat(
+                [(item["feature_attention_mask"]) for item in features]
+            )
+        if all(
+            "input_features" in item and item["input_features"] is not None
+            for item in features
+        ):
+            batch["input_features"] = torch.cat(
+                [(item["input_features"]) for item in features]
+            )
+        return batch

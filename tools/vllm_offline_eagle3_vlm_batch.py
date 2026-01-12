@@ -37,7 +37,6 @@ import time
 from io import BytesIO
 
 from datasets import load_dataset
-from PIL import Image
 from vllm import LLM, SamplingParams
 
 
@@ -83,51 +82,17 @@ def parse_args():
     return parser.parse_args()
 
 
-CAT_SHORT2LONG = {
-    "acc": "Accounting",
-    "agri": "Agriculture",
-    "arch": "Architecture_and_Engineering",
-    "art": "Art",
-    "art_theory": "Art_Theory",
-    "bas_med": "Basic_Medical_Science",
-    "bio": "Biology",
-    "chem": "Chemistry",
-    "cli_med": "Clinical_Medicine",
-    "cs": "Computer_Science",
-    "design": "Design",
-    "diag_med": "Diagnostics_and_Laboratory_Medicine",
-    "econ": "Economics",
-    "elec": "Electronics",
-    "ep": "Energy_and_Power",
-    "fin": "Finance",
-    "geo": "Geography",
-    "his": "History",
-    "liter": "Literature",
-    "manage": "Manage",
-    "mark": "Marketing",
-    "mate": "Materials",
-    "math": "Math",
-    "mech": "Mechanical_Engineering",
-    "music": "Music",
-    "phar": "Pharmacy",
-    "phys": "Physics",
-    "psy": "Psychology",
-    "pub_health": "Public_Health",
-    "socio": "Sociology",
-}
-
-
 def main():
     args = parse_args()
 
     # Load dataset
     print(f"Loading {args.dataset} dataset...")
     if args.dataset == "MMMU/MMMU":
-        ds = load_dataset("args.dataset", split="test", trust_remote_code=True)
+        ds = load_dataset(args.dataset, "History", split="test", trust_remote_code=True)
     elif args.dataset == "Lin-Chen/MMStar":
         ds = load_dataset(args.dataset, split="val", trust_remote_code=True)
-    elif args.dataset == "hunyuan-ocr":
-        ds = load_dataset("./dataset/hunyuan-ocr", split="test", trust_remote_code=True)
+    elif args.dataset == "opendatalab/OmniDocBench":
+        ds = load_dataset(args.dataset, split="train", trust_remote_code=True)
     else:
         ds = load_dataset(args.dataset, split="test", trust_remote_code=True)
     if args.num_prompts is not None:
@@ -186,20 +151,16 @@ def main():
     elif args.dataset == "HuggingFaceH4/MATH-500":
         for item in ds:
             prompts.append([{"role": "user", "content": item["problem"]}])
-    elif args.dataset == "hunyuan-ocr":
+    elif args.dataset == "opendatalab/OmniDocBench":
         for item in ds:
-            image_url = pil_to_base64(
-                Image.open(
-                    os.path.join("./dataset/hunyuan-ocr/images", item["img_path"])
-                )
-            )
+            image_url = pil_to_base64(item["image"])
             prompts.append(
                 [
                     {
                         "role": "user",
                         "content": [
                             {"type": "image_url", "image_url": {"url": image_url}},
-                            {"type": "text", "text": item["question"]},
+                            {"type": "text", "text": "提取并识别图片中的文本。"},
                         ],
                     }
                 ]
@@ -290,12 +251,10 @@ def main():
                     "answer": ds[i]["answer"],
                 }
             )
-        elif args.dataset == "hunyuan-ocr":
+        elif args.dataset == "opendatalab/OmniDocBench":
             results_data.append(
                 {
-                    "question": ds[i]["question"],
                     "generated_text": generated_text,
-                    "answer": ds[i]["answer"],
                 }
             )
 
@@ -303,11 +262,12 @@ def main():
         len(output.outputs[0].token_ids) for output in outputs
     )
 
+    output_throughput = total_num_output_tokens / total_time
     metrics_info = {
         "total_time": total_time,
         "avg_time_per_sample": total_time / len(prompts) if prompts else 0,
         "use_eagle": args.use_eagle,
-        "output_throughput": total_num_output_tokens / total_time,
+        "output_throughput": output_throughput,
     }
 
     if args.use_eagle and speculative_config:
@@ -345,6 +305,7 @@ def main():
             metrics_info["acceptance_rates"] = acceptance_rates
 
             print(f"Mean acceptance length: {acceptance_length:.2f}")
+            print(f"output_throughput: {output_throughput:.2f} tokens/s")
             print(f"acceptance rates: {acceptance_rates}")
         except Exception as e:
             print(f"Error getting metrics: {e}")
