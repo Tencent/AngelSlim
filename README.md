@@ -233,6 +233,8 @@ bash scripts/speculative/train_eagle3_online.sh
 
 For detailed training configurations and vLLM performance benchmarks of Eagle3, please refer to the [Quick Start Guide for Speculative Sampling](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html#id5).
 
+Training and Deployment Guide for Multimodal Model Eagle3—Supporting LLM, VLM, and Audio (ASR & TTS) Models: [Qwen3 series](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/eagle.html) | [Qwen3-VL series & HunyuanOCR](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/vlm_eagle.html) | [Qwen2Audio](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_eagle.html) | [Fun-CosyVoice3](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_tts_eagle.html).
+
 #### 2.2 LLM/VLM Model Quantization
 
 After installing `AngelSlim`, you can launch static FP8 quantization for the Qwen3-1.7B model with the following one-command script:

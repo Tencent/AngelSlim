@@ -6,6 +6,6 @@
 :caption: Contents
 :maxdepth: 1
 
-eagle
+eagle/index
 spec_exit
 :::

@@ -234,6 +234,8 @@ bash scripts/speculative/train_eagle3_online.sh
 
 详细训练配置，以及`Eagle3`的vLLM性能测试，详情请参考投机采样[快速开始文档](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html#id5)。
 
+多模态模型 Eagle3 训练与部署指南，支持LLM / VLM / Audio (ASR & TTS) 模型：[Qwen3 series](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/eagle.html) | [Qwen3-VL series & HunyuanOCR](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/vlm_eagle.html) | [Qwen2Audio](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_eagle.html) | [Fun-CosyVoice3](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_tts_eagle.html)。
+
 #### 2.2 LLM/VLM模型量化
 完成安装`AngelSlim`后，您可以通过以下脚本快速开始，完成`Qwen3-1.7B`模型的静态`FP8`量化：
 
