@@ -12,6 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .benchmark_engine import BenchmarkConfig, BenchmarkEngine, BenchmarkMode
+from .benchmark_engine import (
+    BenchmarkConfig,
+    BenchmarkEngine,
+    BenchmarkMode,
+    TTSBenchmarkEngine,
+)
 
-__all__ = ["BenchmarkEngine", "BenchmarkConfig", "BenchmarkMode"]
+__all__ = ["BenchmarkEngine", "TTSBenchmarkEngine", "BenchmarkConfig", "BenchmarkMode"]

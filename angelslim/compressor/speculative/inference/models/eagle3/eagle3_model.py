@@ -30,13 +30,17 @@ from ....utils import (
     evaluate_posterior,
     initialize_past_key_values,
     initialize_tree,
+    initialize_tree_cosyvoice3,
     prepare_logits_processor,
     reset_tree_mode,
     tree_decoding,
+    tree_decoding_cosyvoice3,
     update_inference_inputs,
+    update_inference_inputs_cosyvoice3,
 )
 from .configuration_eagle3_model import Eagle3Config
-from .draft import Llama3Eagle3Drafter
+from .draft import CosyVoice3Llama3Eagle3Drafter, Llama3Eagle3Drafter
+from .target import CosyVoice3 as KVCosyVoice3
 from .target import LlamaForCausalLM as KVLlamaForCausalLM
 from .target import Qwen3ForCausalLM as KVQwen3ForCausalLM
 
@@ -72,20 +76,30 @@ class ModelLoader:
     SUPPORTED_ARCHITECTURES = {
         "LlamaForCausalLM": KVLlamaForCausalLM,
         "Qwen3ForCausalLM": KVQwen3ForCausalLM,
+        "CosyVoice3": KVCosyVoice3,
     }
 
     @classmethod
     def load_base_model(cls, base_model_path: str, **kwargs) -> nn.Module:
         """Load base model based on architecture"""
-        config = AutoConfig.from_pretrained(base_model_path)
-        if not getattr(config, "architectures", None):
-            raise ValueError("Base model config missing 'architectures' field")
+        try:
+            config = AutoConfig.from_pretrained(base_model_path)
+            if not getattr(config, "architectures", None):
+                raise ValueError("Base model config missing 'architectures' field")
+            arch = config.architectures[0]
+        except ValueError:
+            if os.path.exists(os.path.join(base_model_path, "cosyvoice3.yaml")):
+                arch = "CosyVoice3"
+            else:
+                raise ValueError
 
-        arch = config.architectures[0]
         if arch not in cls.SUPPORTED_ARCHITECTURES:
             raise NotImplementedError(f"Model {arch} not supported")
 
         model_class = cls.SUPPORTED_ARCHITECTURES[arch]
+        if arch == "CosyVoice3":
+            model = model_class(base_model_path, kwargs["generate_audio"])
+            return model
         return model_class.from_pretrained(base_model_path, **kwargs)
 
     @classmethod
@@ -194,6 +208,48 @@ class GenerationManager:
             input_len=input_ids.shape[1],
         )
 
+    def prepare_generation_cosyvoice3(
+        self, model: "Eagle3Model", input_ids: torch.Tensor, config: GenerationConfig
+    ) -> GenerationState:
+        """Prepare all necessary components for generation"""
+        stop_token_id = model.base_model.model.llm.stop_token_ids
+
+        logits_processor = (
+            prepare_logits_processor(
+                temperature=config.temperature, top_p=config.top_p, top_k=config.top_k
+            )
+            if config.temperature > 1e-5
+            else None
+        )
+
+        input_ids = input_ids.clone()
+        model.eagle_layer.reset_kv()
+
+        if hasattr(model, "past_key_values"):
+            past_key_values = model.past_key_values
+            model.current_length_data.zero_()
+        else:
+            past_key_values, past_key_values_data, current_length_data = (
+                initialize_past_key_values(
+                    model.base_model.model.llm.llm.model, max_length=config.max_length
+                )
+            )
+            model.past_key_values = past_key_values
+            model.past_key_values_data = past_key_values_data
+            model.current_length_data = current_length_data
+
+        # reset_tree_mode(model)
+        model.base_model.model.llm.llm.model.model.tree_mask = None
+        model.base_model.model.llm.llm.model.model.tree_mode = None
+
+        return GenerationState(
+            stop_token_id=stop_token_id,
+            logits_processor=logits_processor,
+            input_ids=input_ids,
+            past_key_values=past_key_values,
+            input_len=input_ids.shape[1],
+        )
+
     def should_stop(
         self,
         input_ids: torch.Tensor,
@@ -209,6 +265,28 @@ class GenerationManager:
 
         if torch.any(input_ids[0, input_len:] == self.tokenizer.eos_token_id):
             return True
+
+        if new_token > config.max_new_tokens:
+            return True
+
+        if input_ids.shape[1] > config.max_length:
+            return True
+
+        return False
+
+    def should_stop_cosyvoice3(
+        self,
+        input_ids: torch.Tensor,
+        input_len: int,
+        new_token: int,
+        config: GenerationConfig,
+        stop_token_id: Optional[int],
+    ) -> bool:
+        """Check if generation should stop"""
+        if stop_token_id is not None:
+            stop_tensor = torch.tensor(stop_token_id, device=input_ids.device)
+            if torch.any(torch.isin(input_ids[0, input_len:], stop_tensor)):
+                return True
 
         if new_token > config.max_new_tokens:
             return True
@@ -553,6 +631,358 @@ class Eagle3Model(nn.Module):
             state.new_token += 1
 
             if self.generation_manager.should_stop(
+                state.input_ids,
+                state.input_len,
+                state.new_token,
+                config,
+                state.stop_token_id,
+            ):
+                break
+
+        return (state.input_ids, state.new_token, step) if log else state.input_ids
+
+
+class CosyVoice3Eagle3Model(nn.Module):
+    """
+    CosyVoice3 EAGLE3 Model for speculative decoding
+    """
+
+    def __init__(
+        self,
+        base_model: nn.Module,
+        eagle_layer: nn.Module,
+    ):
+        super().__init__()
+        self.base_model = base_model
+        self.eagle_layer = eagle_layer
+        self.generation_manager = GenerationManager(None)
+
+    @classmethod
+    def from_pretrained(
+        cls,
+        base_model_path: Optional[str] = None,
+        eagle_model_path: Optional[str] = None,
+        total_token: int = 60,
+        depth: int = 7,
+        top_k: int = 10,
+        threshold: float = 1.0,
+        enable_benchmark: bool = False,
+        **kwargs,
+    ) -> "CosyVoice3Eagle3Model":
+        """Create CosyVoice3Eagle3Model from pretrained components"""
+        # Load base model and tokenizer
+        base_model = ModelLoader.load_base_model(base_model_path, **kwargs)
+        # Load configuration
+        config_path = ModelLoader.ensure_config_path(eagle_model_path)
+        config = Eagle3Config.from_pretrained(config_path)
+
+        # Initialize EAGLE layer
+        device = next(base_model.model.llm.parameters()).device
+        eagle_state_dict = ModelLoader.load_eagle_state_dict(eagle_model_path, device)
+
+        # TODO: Implement factory pattern for different drafter types
+        eagle_layer = CosyVoice3Llama3Eagle3Drafter(
+            config,
+            total_tokens=total_token,
+            depth=depth,
+            top_k=top_k,
+            threshold=threshold,
+            path=base_model_path,
+            load_emb=True,
+        )
+
+        # Clean up unused components
+        if config.vocab_size == config.draft_vocab_size:
+            del eagle_layer.d2t
+            del eagle_layer.t2d
+
+        eagle_layer.load_state_dict(eagle_state_dict, strict=False)
+        eagle_layer.to(device=device, dtype=base_model.dtype)
+        eagle_layer.init_tree()
+
+        # Auto-select optimal token count if needed
+        if total_token == -1 and enable_benchmark:
+            total_token = PerformanceBenchmark.auto_select_total_token(
+                base_model, config.vocab_size
+            )
+            eagle_layer.total_tokens = total_token - 1
+
+        return cls(base_model, eagle_layer)
+
+    def forward(
+        self,
+        text: torch.Tensor,
+        prompt_text: torch.Tensor,
+        llm_prompt_speech_token: torch.Tensor,
+        past_key_values: Optional[Any] = None,
+    ) -> Union[Tuple[Any, torch.Tensor], Tuple[Any, torch.Tensor, torch.Tensor]]:
+        """Forward pass through the model"""
+        device = self.base_model.model.device
+        first_token, hidden_states, inputs_embeddings = self.base_model.model.llm(
+            text=text.to(device),
+            text_len=torch.tensor([text.shape[1]], dtype=torch.int32).to(device),
+            prompt_text=prompt_text.to(device),
+            prompt_text_len=torch.tensor([prompt_text.shape[1]], dtype=torch.int32).to(
+                device
+            ),
+            prompt_speech_token=llm_prompt_speech_token.to(device),
+            prompt_speech_token_len=torch.tensor(
+                [llm_prompt_speech_token.shape[1]], dtype=torch.int32
+            ).to(device),
+            past_key_values=past_key_values,
+        )
+        first_token = torch.tensor(first_token).unsqueeze(dim=0)
+
+        return first_token, hidden_states, inputs_embeddings
+
+    def tree_decoding_forward(
+        self,
+        input_ids: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        past_key_values: Optional[Any] = None,
+        position_ids: Optional[torch.Tensor] = None,
+    ) -> Union[Tuple[Any, torch.Tensor], Tuple[Any, torch.Tensor, torch.Tensor]]:
+        """Forward pass through the model"""
+        logits, hidden_states = self.base_model.model.llm.inference_one_step(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            past_key_values=past_key_values,
+            position_ids=position_ids,
+        )
+
+        return logits, hidden_states
+
+    @torch.no_grad()
+    def eagle_generate(
+        self,
+        text: Optional[torch.Tensor] = None,
+        prompt_text: Optional[torch.Tensor] = None,
+        llm_prompt_speech_token: Optional[torch.Tensor] = None,
+        temperature: float = 0.0,
+        top_p: float = 0.0,
+        top_k: float = 0.0,
+        max_new_tokens: int = 512,
+        max_length: int = 2048,
+        log: bool = False,
+        is_llama3: bool = False,
+        **kwargs,
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, int, int, List[int]]]:
+        """Generate text using EAGLE speculative decoding"""
+        config = GenerationConfig(
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            max_new_tokens=max_new_tokens,
+            max_length=max_length,
+            log=log,
+            is_llama3=is_llama3,
+        )
+
+        input_ids = torch.concat(
+            [
+                self.base_model.model.llm.sos_id.unsqueeze(dim=0)
+                .to(text.dtype)
+                .to(text.device),
+                prompt_text,
+                text,
+                self.base_model.model.llm.task_token.unsqueeze(dim=0)
+                .to(text.dtype)
+                .to(text.device),
+                llm_prompt_speech_token,
+            ],
+            dim=1,
+        )
+        state = self.generation_manager.prepare_generation_cosyvoice3(
+            self, input_ids, config
+        )
+        padding = self.generation_manager.get_padding_token(text.device)
+
+        # Prefill phase
+        (
+            draft_tokens,
+            retrieve_indices,
+            tree_mask,
+            tree_position_ids,
+            logits,
+            inputs_embeddings,
+            first_token,
+        ) = initialize_tree_cosyvoice3(
+            text,
+            prompt_text,
+            llm_prompt_speech_token,
+            input_ids,
+            self,
+            state.past_key_values,
+            state.logits_processor,
+        )
+
+        accept_length_list = []
+        max_decode_steps = config.max_length - self.eagle_layer.total_tokens - 10
+
+        out_tokens = []
+        out_tokens.append(first_token.item())
+
+        for step in range(max_decode_steps):  # noqa: B007
+            # Ensure tensors are on correct device
+            draft_tokens = draft_tokens.to(input_ids.device)
+            tree_position_ids = tree_position_ids.to(input_ids.device)
+
+            self.base_model.model.llm.llm.model.model.tree_mask = tree_mask
+
+            # Target model forward pass
+            logits, hidden_state_new = tree_decoding_cosyvoice3(
+                self,
+                draft_tokens,
+                state.past_key_values,
+                tree_position_ids,
+                state.input_ids,
+                retrieve_indices,
+            )
+
+            draft_tokens = torch.cat((draft_tokens, padding), dim=1)
+            candidates = draft_tokens[0, retrieve_indices]
+
+            # Verification phase
+            best_candidate, accept_length, sample_token = evaluate_posterior(
+                logits, candidates, state.logits_processor
+            )
+
+            accept_length_list.append(
+                accept_length.item()
+                if torch.is_tensor(accept_length)
+                else accept_length
+            )
+
+            out_tokens.extend(candidates[best_candidate, : accept_length + 1].tolist())
+            out_tokens.append(sample_token.item())
+
+            # Update inference inputs
+            (
+                state.input_ids,
+                inputs_embeddings,
+                draft_tokens,
+                retrieve_indices,
+                tree_mask,
+                tree_position_ids,
+                state.new_token,
+            ) = update_inference_inputs_cosyvoice3(
+                input_ids=state.input_ids,
+                inputs_embeddings=inputs_embeddings,
+                candidates=candidates,
+                best_candidate=best_candidate,
+                accept_length=accept_length,
+                retrieve_indices=retrieve_indices,
+                logits_processor=state.logits_processor,
+                new_token=state.new_token,
+                past_key_values_data_list=self.past_key_values_data,
+                current_length_data=self.current_length_data,
+                model=self,
+                hidden_state_new=hidden_state_new,
+                sample_token=sample_token,
+            )
+
+            if self.generation_manager.should_stop_cosyvoice3(
+                state.input_ids,
+                state.input_len,
+                state.new_token,
+                config,
+                state.stop_token_id,
+            ):
+                break
+
+        return (
+            (state.input_ids, state.new_token, step, accept_length_list)
+            if log
+            else state.input_ids
+        )
+
+    @torch.no_grad()
+    def naive_generate(
+        self,
+        text: Optional[torch.Tensor] = None,
+        prompt_text: Optional[torch.Tensor] = None,
+        llm_prompt_speech_token: Optional[torch.Tensor] = None,
+        temperature: float = 0.0,
+        top_p: float = 0.0,
+        top_k: float = 0.0,
+        max_new_tokens: int = 512,
+        max_length: int = 2048,
+        log: bool = False,
+        is_llama3: bool = False,
+        max_token_text_ratio: float = 20.0,
+        min_token_text_ratio: float = 2.0,
+        **kwargs,
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, int, int]]:
+        """Generate text using naive (non-speculative) decoding"""
+        config = GenerationConfig(
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            max_new_tokens=max_new_tokens,
+            max_length=max_length,
+            log=log,
+            is_llama3=is_llama3,
+        )
+
+        input_ids = torch.concat(
+            [
+                self.base_model.model.llm.sos_id.unsqueeze(dim=0)
+                .to(text.dtype)
+                .to(text.device),
+                prompt_text,
+                text,
+                self.base_model.model.llm.task_token.unsqueeze(dim=0)
+                .to(text.dtype)
+                .to(text.device),
+                llm_prompt_speech_token,
+            ],
+            dim=1,
+        )
+        state = self.generation_manager.prepare_generation_cosyvoice3(
+            self, input_ids, config
+        )
+
+        device = self.base_model.model.device
+        logits = self.base_model.model.llm(
+            text=text.to(device),
+            text_len=torch.tensor([text.shape[1]], dtype=torch.int32).to(device),
+            prompt_text=prompt_text.to(device),
+            prompt_text_len=torch.tensor([prompt_text.shape[1]], dtype=torch.int32).to(
+                device
+            ),
+            prompt_speech_token=llm_prompt_speech_token.to(device),
+            prompt_speech_token_len=torch.tensor(
+                [llm_prompt_speech_token.shape[1]], dtype=torch.int32
+            ).to(device),
+            past_key_values=state.past_key_values,
+            return_first_token=False,
+        )
+
+        out_tokens = []
+        min_len = int(text.shape[1] * min_token_text_ratio)
+        max_decode_steps = int(text.shape[1] * max_token_text_ratio)
+
+        for step in range(max_decode_steps):  # noqa: B007
+            input_id = self.base_model.model.llm.sampling_ids(
+                logits.squeeze(dim=0),
+                out_tokens,
+                ignore_eos=True if step < min_len else False,
+            )
+            out_tokens.append(input_id)
+            input_id = (
+                torch.tensor(input_id, device=state.input_ids.device)
+                .unsqueeze(0)
+                .unsqueeze(0)
+            )
+
+            logits, _ = self.base_model.model.llm.inference_one_step(
+                input_id, past_key_values=state.past_key_values
+            )
+            logits = logits.squeeze(0)
+            state.input_ids = torch.cat([state.input_ids, input_id], dim=-1)
+            state.new_token += 1
+
+            if self.generation_manager.should_stop_cosyvoice3(
                 state.input_ids,
                 state.input_len,
                 state.new_token,

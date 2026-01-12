@@ -409,6 +409,10 @@ class SpecEngine:
             self.BenchmarkConfig = pytorch_benchmark.BenchmarkConfig
             self.BenchmarkEngine = pytorch_benchmark.BenchmarkEngine
             self.BenchmarkMode = pytorch_benchmark.BenchmarkMode
+        elif self.deploy_backend == "pytorch_tts":
+            self.BenchmarkConfig = pytorch_benchmark.BenchmarkConfig
+            self.BenchmarkEngine = pytorch_benchmark.TTSBenchmarkEngine
+            self.BenchmarkMode = pytorch_benchmark.BenchmarkMode
         elif self.deploy_backend == "vllm":
             self.BenchmarkConfig = vllm_benchmark.BenchmarkConfig
             self.BenchmarkEngine = vllm_benchmark.BenchmarkEngine

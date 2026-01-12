@@ -50,7 +50,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--deploy-backend",
         type=str,
-        choices=["pytorch", "vllm"],
+        choices=["pytorch", "pytorch_tts", "vllm"],
         default="pytorch",
         help="Backend for deployment (pytorch or vllm)",
     )
@@ -121,6 +121,9 @@ def parse_args() -> argparse.Namespace:
         default=1,
         help="Tensor parallel size for draft model (vllm only)",
     )
+    parser.add_argument(
+        "--generate-audio", action="store_true", help="whether or not generate audio"
+    )
 
     return parser.parse_args()
 
@@ -155,10 +158,11 @@ def main():
         "top_p": args.top_p,
         "top_k": args.top_k,
         "depth": args.depth,
+        "generate_audio": args.generate_audio,
     }
 
     # Add backend-specific parameters
-    if args.deploy_backend == "pytorch":
+    if "pytorch" in args.deploy_backend:
         config_dict.update(
             {
                 "total_token": args.total_token,

@@ -1,3 +1,9 @@
 qwen_vl_utils==0.0.11
 qwen_omni_utils
+torchaudio
+openai-whisper
+onnxruntime-gpu
+inflect
+wetext
+librosa
 mistral_common

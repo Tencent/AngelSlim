@@ -13,16 +13,20 @@
 # limitations under the License.
 
 import math
+import os
+from collections import Counter
 from typing import List, Optional, Tuple
 
 import torch
 import torch.nn.functional as F
 import torch.utils.checkpoint
+from huggingface_hub import snapshot_download
 from torch import nn
 from transformers import LlamaConfig
 from transformers.activations import ACT2FN
 from transformers.modeling_rope_utils import ROPE_INIT_FUNCTIONS
 
+from ...data.data_utils import process_token_dict_to_mappings
 from ..model_utils import apply_rotary_pos_emb, apply_rotary_pos_emb_mrope, repeat_kv
 from .base_model import Eagle3BaseDraftModel
 from .draft_model_factory import DraftModelFactory
@@ -698,3 +702,76 @@ class Eagle3LlamaForCausalLM(Eagle3BaseDraftModel):
         logits = self.lm_head(hidden_states_out)
         logits = logits.float()
         return hidden_states, logits
+
+
+@DraftModelFactory.register
+class CosyVoice3Eagle3LlamaForCausalLM(Eagle3LlamaForCausalLM):
+
+    def load_embed_weights(self, target_model_name_or_path, embed_weight_key):
+        """
+        Load embedding weights from pretrained model.
+
+        Args:
+            target_model_name_or_path: Local path or
+            HuggingFace model identifier (e.g., 'Qwen/Qwen2-7B')
+            embed_weight_key: Key for the embedding weights in the model file
+        """
+        # Handle HuggingFace model identifier
+        if not os.path.exists(target_model_name_or_path):
+            target_model_name_or_path = snapshot_download(
+                repo_id=target_model_name_or_path
+            )
+
+        # Try loading embedding weights
+        tensor = torch.load("{}/llm.pt".format(target_model_name_or_path))
+        speech_embedding_weight = tensor["speech_embedding.weight"]
+
+        with torch.no_grad():
+            self.embed_tokens.weight.copy_(speech_embedding_weight)
+
+    def build_vocab_mapping(self, dataset, cache_path):
+        """
+        Build vocab mapping from full vocabulary to draft vocabulary
+        based on token frequency.
+
+        Args:
+            dataset: Preprocessed dataset containing 'input_ids' field
+            cache_path: Path to save/load the token mapping cache
+            num_processes: Number of processes for parallel processing
+        """
+        if not os.path.exists(cache_path):
+            # we first count the frequency of effective tokens in the dataset
+            token_dict = Counter()
+            print(f"vocab len(dataset)={len(dataset)} type(dataset)={type(dataset)}")
+            # for item in tqdm(dataset, desc=f"Counting tokens for vocab mapping"):
+
+            for _, item in enumerate(dataset):
+                input_ids = item["speech_token"]
+                unique_ids, counts = input_ids.unique(return_counts=True)
+                batch_token_dict = dict(zip(unique_ids.tolist(), counts.tolist()))
+                token_dict.update(batch_token_dict)
+
+            # generate the d2t and t2d mapping
+            d2t, t2d = process_token_dict_to_mappings(
+                token_dict,
+                self.draft_vocab_size,
+                self.vocab_size,
+            )
+
+            vocab_mapping = {
+                "d2t": d2t,
+                "t2d": t2d,
+            }
+
+            cache_parent_dir = os.path.dirname(cache_path)
+            os.makedirs(cache_parent_dir, exist_ok=True)
+            torch.save(vocab_mapping, cache_path)
+            print(f"Saved vocab mapping to: {cache_path}")
+        else:
+            # Load from cache
+            cache = torch.load(cache_path)
+            d2t = cache["d2t"]
+            t2d = cache["t2d"]
+
+        self.t2d.copy_(t2d)
+        self.d2t.copy_(d2t)
