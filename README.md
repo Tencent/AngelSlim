@@ -17,7 +17,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
 </p>
 
 ## 📣Latest News
-- [26/01/13] We have released v0.3. We support the training and deployment of [Eagle3 for LLM/VLM/Audio](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html) Multimodal models. And We released **Sherry**, the hardware-efficient 1.25 bit quantization algorithm [Paper Comming soon] | [[Code]](https://github.com/Tencent/AngelSlim/tree/sherry/Sherry)🔥🔥🔥
+- [26/01/13] We have released v0.3. We support the training and deployment of Eagle3 for all-scale LLMs/VLMs/Audio models, as detailed in the [guidance documentation](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html). And We released **Sherry**, the hardware-efficient 1.25 bit quantization algorithm [Paper Comming soon] | [[Code]](https://github.com/Tencent/AngelSlim/tree/sherry/Sherry)🔥🔥🔥
 - [25/11/05] We have released v0.2. Quantization support for new models, such as `GLM-4.6`, `Qwen3-VL` and `Qwen3-Omni`, open-sources the Eagle3 speculative decoding training framework, and updates the Diffusion model quantization tools.
 - [25/09/30] We have released **SpecExit**, the reasoning early-exit algorithm: [[Paper]](http://arxiv.org/abs/2509.24248) | [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html) | [[vLLM Code]](https://github.com/vllm-project/vllm/pull/27192)
 - [25/09/26] We have released **TEQUILA**, the ternary quantization algorithm [[Paper]](https://arxiv.org/abs/2509.23809) | [[Code]](https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant)
@@ -232,8 +232,6 @@ bash scripts/speculative/generate_data_for_target_model.sh
 bash scripts/speculative/train_eagle3_online.sh
 ```
 
-For detailed training configurations and vLLM performance benchmarks of Eagle3, please refer to the [Quick Start Guide for Speculative Sampling](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html#id5).
-
 Training and Deployment Guide for Multimodal Model Eagle3—Supporting LLM, VLM, and Audio (ASR & TTS) Models: [LLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/eagle.html) | [VLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/vlm_eagle.html) | [Audio(ASR)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_asr_eagle.html) | [Audio(TTS)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_tts_eagle.html).
 
 #### 2.2 LLM/VLM Model Quantization
@@ -392,7 +390,7 @@ Benchmark results for Qwen3 series models using Eagle3 speculative decoding on v
       <td>381.05</td><td>1</td>
     </tr>
     <tr>
-      <td>Eagle3</td>
+      <td><a href="https://huggingface.co/AngelSlim/Qwen3-1.7B_eagle3">Eagle3</a></td>
       <td>616.9</td><td>2.13</td>
       <td>653.29</td><td>2.19</td>
       <td>680.1</td><td>2.2</td>
@@ -410,7 +408,7 @@ Benchmark results for Qwen3 series models using Eagle3 speculative decoding on v
       <td>233.26</td><td>1</td>
     </tr>
     <tr>
-      <td>Eagle3</td>
+      <td><a href="https://huggingface.co/AngelSlim/Qwen3-4B_eagle3">Eagle3</a></td>
       <td>389.35</td><td>2.07</td>
       <td>395.97</td><td>2.1</td>
       <td>377.84</td><td>2.08</td>
@@ -428,7 +426,7 @@ Benchmark results for Qwen3 series models using Eagle3 speculative decoding on v
       <td>151.81</td><td>1</td>
     </tr>
     <tr>
-      <td>Eagle3</td>
+      <td><a href="https://huggingface.co/AngelSlim/Qwen3-8B_eagle3">Eagle3</a></td>
       <td>257.32</td><td>2</td>
       <td>266.69</td><td>2.02</td>
       <td>244.89</td><td>1.97</td>
@@ -446,7 +444,7 @@ Benchmark results for Qwen3 series models using Eagle3 speculative decoding on v
       <td>93.26</td><td>1</td>
     </tr>
     <tr>
-      <td>Eagle3</td>
+      <td><a href="https://huggingface.co/AngelSlim/Qwen3-14B_eagle3">Eagle3</a></td>
       <td>153.72</td><td>1.87</td>
       <td>140.46</td><td>1.78</td>
       <td>144.68</td><td>1.76</td>
@@ -464,7 +462,7 @@ Benchmark results for Qwen3 series models using Eagle3 speculative decoding on v
       <td>43.32</td><td>1</td>
     </tr>
     <tr>
-      <td>Eagle3</td>
+      <td><a href="https://huggingface.co/AngelSlim/Qwen3-32B_eagle3">Eagle3</a></td>
       <td>80.43</td><td>2.01</td>
       <td>72.49</td><td>1.9</td>
       <td>71.57</td><td>1.86</td>
@@ -482,7 +480,7 @@ Benchmark results for Qwen3 series models using Eagle3 speculative decoding on v
       <td>320.87</td><td>1</td>
     </tr>
     <tr>
-      <td>Eagle3</td>
+      <td><a href="https://huggingface.co/AngelSlim/Qwen3-a3B_eagle3">Eagle3</a></td>
       <td>453.97</td><td>2.1</td>
       <td>432.45</td><td>2.04</td>
       <td>428.81</td><td>2.02</td>
@@ -554,7 +552,7 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
     <td>1</td>
   </tr>
   <tr>
-    <td>Eagle3</td>
+    <td><a href="https://huggingface.co/AngelSlim/Qwen3-VL-2B-Instruct_eagle3">Eagle3</a></td>
     <td>511.52</td>
     <td>2.11</td>
     <td>560.55</td>
@@ -593,7 +591,7 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
     <td>1</td>
   </tr>
   <tr>
-    <td>Eagle3</td>
+    <td><a href="https://huggingface.co/AngelSlim/Qwen3-VL-4B-Instruct_eagle3">Eagle3</a></td>
     <td>415.29</td>
     <td>2.57</td>
     <td>372.89</td>
@@ -632,7 +630,7 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
     <td>1</td>
   </tr>
   <tr>
-    <td>Eagle3</td>
+    <td><a href="https://huggingface.co/AngelSlim/Qwen3-VL-30B-A3B-Instruct_eagle3">Eagle3</a></td>
     <td>281.93</td>
     <td>2.82</td>
     <td>241.42</td>
@@ -676,7 +674,7 @@ Benchmark results for HunyuanOCR using Eagle3 speculative decoding on vLLM (v0.1
     <td>1</td>
   </tr>
   <tr>
-    <td>Eagle3</td>
+    <td><a href="https://huggingface.co/AngelSlim/HunyuanOCR_eagle3">Eagle3</a></td>
     <td>108.1</td>
     <td>2.08</td>
   </tr>
@@ -709,7 +707,7 @@ Benchmark results for Qwen2-Audio using Eagle3 speculative decoding on vLLM (v0.
     <td>1</td>
   </tr>
   <tr>
-    <td>Eagle3</td>
+    <td><a href="https://huggingface.co/AngelSlim/Qwen2-Audio-7B-Instruct_eagle3">Eagle3</a></td>
     <td>146.66</td>
     <td>3.51</td>
   </tr>
@@ -740,7 +738,7 @@ Benchmark results for Fun-CosyVoice3 using Eagle3 speculative decoding across **
     <td>1</td>
   </tr>
   <tr>
-    <td>Eagle3</td>
+    <td><a href="https://huggingface.co/AngelSlim/Fun-CosyVoice3-0.5B-2512_eagle3">Eagle3</a></td>
     <td>-</td>
     <td>1.96</td>
   </tr>
