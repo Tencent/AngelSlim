@@ -82,6 +82,7 @@ python3 tools/spec_benchmark.py \
 - `--base-model-path`: 基础模型路径（必需）
 - `--eagle-model-path`: Eagle辅助模型路径（必需）
 - `--model-id`: 模型标识符（必需）
+- `--is-tts`: 是否为TTS模型，默认为False
 
 **基准测试配置：**
 - `--bench-name`: 基准数据集名称，可参考【`tts_fake_data`】
@@ -121,7 +122,9 @@ python3 tools/spec_benchmark.py \
     --model-id cosyvoice3 \
     --mode both \
     --output-dir ./results \
-    --deploy-backend pytorch_tts \
+    --deploy-backend pytorch \
+    --is-tts \
+    --bench-name tts_fake_data \
     --generate-audio
 ```
 
@@ -146,5 +149,7 @@ python3 tools/spec_benchmark.py \
     --model-id cosyvoice3 \
     --mode both \
     --output-dir ./results \
-    --deploy-backend pytorch_tts
+    --deploy-backend pytorch \
+    --is-tts \
+    --bench-name tts_fake_data \
 ```
