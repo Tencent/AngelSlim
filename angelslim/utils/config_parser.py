@@ -92,7 +92,7 @@ class GlobalConfig:
     def set_model_hidden_size(self, model_path) -> int:
         json_data = get_hf_config(model_path)
         try:
-            if json_data["model_type"] in ["qwen3_vl"]:
+            if json_data["model_type"] in ["qwen3_vl", "qwen3_vl_moe"]:
                 self.hidden_size = json_data["text_config"]["hidden_size"]
             elif (
                 json_data["architectures"][0]
