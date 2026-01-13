@@ -17,10 +17,10 @@
 </p>
 
 ## 📣最新进展
-- [26/01/13]我们发布V0.2版本， 支持了全模态场景的投机采样训练及部署，文档：[Eagle3 for LLM/VLM/Audio](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html)。并且我们发布了 **Sherry** 新的硬件高效的1.25bit三值量化算法 [论文即将发布] | [[代码]](https://github.com/Tencent/AngelSlim/tree/sherry/Sherry)🔥🔥🔥
+- [26/01/13]我们发布V0.3版本， 支持了全模态场景的投机采样训练及部署，文档：[Eagle3 for LLM/VLM/Audio](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html)。并且我们发布了 **Sherry** 新的硬件高效的1.25bit三值量化算法 [论文即将发布] | [[代码]](https://github.com/Tencent/AngelSlim/tree/sherry/Sherry)🔥🔥🔥
 - [25/11/05] 我们发布V0.2版本，支持了包括GLM-4.6/Qwen3-VL/Qwen3-Omni等更多模型的量化，开源投机采样Eagle3训练框架，更新Diffusion模型量化工具。
-- [25/09/30] 我们开源了思考早退新算法 **SpecExit** [[论文]](http://arxiv.org/abs/2509.24248) | [[文档]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html) | [[vLLM代码]](https://github.com/vllm-project/vllm/pull/27192)🔥🔥🔥
-- [25/09/30] 我们发布了三值量化新算法 **Tequila** [[论文]](https://arxiv.org/abs/2509.23809) | [[代码]](https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant)。🔥🔥🔥
+- [25/09/30] 我们开源了思考早退新算法 **SpecExit** [[论文]](http://arxiv.org/abs/2509.24248) | [[文档]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html) | [[vLLM代码]](https://github.com/vllm-project/vllm/pull/27192)
+- [25/09/30] 我们发布了三值量化新算法 **Tequila** [[论文]](https://arxiv.org/abs/2509.23809) | [[代码]](https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant)
 - [25/09/24] 我们支持了Qwen3系列模型的NVFP4的PTQ量化，我们还开源了[Qwen3-32B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-32B_nvfp4)、[Qwen3-235B-A22B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-235B-A22B_nvfp4)权重。
 
 <details>
@@ -233,8 +233,6 @@ bash scripts/speculative/generate_data_for_target_model.sh
 bash scripts/speculative/train_eagle3_online.sh
 ```
 
-详细训练配置，以及`Eagle3`的vLLM性能测试，详情请参考投机采样[快速开始文档](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html#id5)。
-
 多模态模型 Eagle3 训练与部署指南，支持LLM / VLM / Audio (ASR & TTS) 模型：[LLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/eagle.html) | [VLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/vlm_eagle.html) | [Audio(ASR)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_asr_eagle.html) | [Audio(TTS)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_tts_eagle.html).
 #### 2.2 LLM/VLM模型量化
 完成安装`AngelSlim`后，您可以通过以下脚本快速开始，完成`Qwen3-1.7B`模型的静态`FP8`量化：
@@ -395,7 +393,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
       <td>381.05</td><td>1</td>
     </tr>
     <tr>
-      <td>Eagle3</td>
+      <td><a href="https://huggingface.co/AngelSlim/Qwen3-1.7B_eagle3">Eagle3</a></td>
       <td>616.9</td><td>2.13</td>
       <td>653.29</td><td>2.19</td>
       <td>680.1</td><td>2.2</td>
@@ -413,7 +411,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
       <td>233.26</td><td>1</td>
     </tr>
     <tr>
-      <td>Eagle3</td>
+      <td><a href="https://huggingface.co/AngelSlim/Qwen3-4B_eagle3">Eagle3</a></td>
       <td>389.35</td><td>2.07</td>
       <td>395.97</td><td>2.1</td>
       <td>377.84</td><td>2.08</td>
@@ -431,7 +429,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
       <td>151.81</td><td>1</td>
     </tr>
     <tr>
-      <td>Eagle3</td>
+      <td><a href="https://huggingface.co/AngelSlim/Qwen3-8B_eagle3">Eagle3</a></td>
       <td>257.32</td><td>2</td>
       <td>266.69</td><td>2.02</td>
       <td>244.89</td><td>1.97</td>
@@ -449,7 +447,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
       <td>93.26</td><td>1</td>
     </tr>
     <tr>
-      <td>Eagle3</td>
+      <td><a href="https://huggingface.co/AngelSlim/Qwen3-14B_eagle3">Eagle3</a></td>
       <td>153.72</td><td>1.87</td>
       <td>140.46</td><td>1.78</td>
       <td>144.68</td><td>1.76</td>
@@ -467,7 +465,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
       <td>43.32</td><td>1</td>
     </tr>
     <tr>
-      <td>Eagle3</td>
+      <td><a href="https://huggingface.co/AngelSlim/Qwen3-32B_eagle3">Eagle3</a></td>
       <td>80.43</td><td>2.01</td>
       <td>72.49</td><td>1.9</td>
       <td>71.57</td><td>1.86</td>
@@ -485,7 +483,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
       <td>320.87</td><td>1</td>
     </tr>
     <tr>
-      <td>Eagle3</td>
+      <td><a href="https://huggingface.co/AngelSlim/Qwen3-a3B_eagle3">Eagle3</a></td>
       <td>453.97</td><td>2.1</td>
       <td>432.45</td><td>2.04</td>
       <td>428.81</td><td>2.02</td>
@@ -557,7 +555,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
     <td>1</td>
   </tr>
   <tr>
-    <td>Eagle3</td>
+    <td><a href="https://huggingface.co/AngelSlim/Qwen3-VL-2B-Instruct_eagle3">Eagle3</a></td>
     <td>511.52</td>
     <td>2.11</td>
     <td>560.55</td>
@@ -596,7 +594,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
     <td>1</td>
   </tr>
   <tr>
-    <td>Eagle3</td>
+    <td><a href="https://huggingface.co/AngelSlim/Qwen3-VL-4B-Instruct_eagle3">Eagle3</a></td>
     <td>415.29</td>
     <td>2.57</td>
     <td>372.89</td>
@@ -635,7 +633,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
     <td>1</td>
   </tr>
   <tr>
-    <td>Eagle3</td>
+    <td><a href="https://huggingface.co/AngelSlim/Qwen3-VL-30B-A3B-Instruct_eagle3">Eagle3</a></td>
     <td>281.93</td>
     <td>2.82</td>
     <td>241.42</td>
@@ -679,7 +677,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
     <td>1</td>
   </tr>
   <tr>
-    <td>Eagle3</td>
+    <td><a href="https://huggingface.co/AngelSlim/HunyuanOCR_eagle3">Eagle3</a></td>
     <td>108.1</td>
     <td>2.08</td>
   </tr>
@@ -712,7 +710,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
     <td>1</td>
   </tr>
   <tr>
-    <td>Eagle3</td>
+    <td><a href="https://huggingface.co/AngelSlim/Qwen2-Audio-7B-Instruct_eagle3">Eagle3</a></td>
     <td>146.66</td>
     <td>3.51</td>
   </tr>
@@ -742,7 +740,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
     <td>1</td>
   </tr>
   <tr>
-    <td>Eagle3</td>
+    <td><a href="https://huggingface.co/AngelSlim/Fun-CosyVoice3-0.5B-2512_eagle3">Eagle3</a></td>
     <td>-</td>
     <td>1.96</td>
   </tr>
