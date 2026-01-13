@@ -1,0 +1,2 @@
+{"id": "0", "messages": [{"role": "user", "content": [{"type": "image", "image": "0.png"}, {"type": "text", "text": "How many food item is shown in the bar graph?"}]}, {"role": "assistant", "content": [{"type": "text", "text": "14"}]}]}
+{"id": "1", "messages": [{"role": "user", "content": [{"type": "image", "image": "1.png"}, {"type": "text", "text": "What is the difference in value between Lamb and Corn?"}]}, {"role": "assistant", "content": [{"type": "text", "text": "0.57"}]}]}

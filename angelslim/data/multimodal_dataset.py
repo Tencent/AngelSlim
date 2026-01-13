@@ -49,7 +49,7 @@ class MultiModalDataset(BaseDataset):
 
     def _load_file_based_dataset(self, data_path: str, num_samples: int):
         """Load dataset from local file system"""
-        image_dir = os.path.join(os.path.dirname(data_path), "images")
+        self.data_path = data_path
         line_count = 0
 
         with open(data_path, "r") as f:
@@ -58,28 +58,83 @@ class MultiModalDataset(BaseDataset):
                     break
 
                 data = json.loads(line.strip())
-                image_path = os.path.join(image_dir, data["img_path"])
 
-                # Prepare chat messages with image
-                messages = [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "image", "image": image_path},
-                            {
-                                "type": "text",
-                                "text": data["question"].replace("<image>", ""),
-                            },
-                        ],
-                    },
-                    {
-                        "role": "assistant",
-                        "content": [{"type": "text", "text": data["answer"]}],
-                    },
-                ]
+                # Validate format
+                assert "messages" in data or "question" in data, "JSON format error"
+
+                # Prepare messages
+                messages = self._prepare_messages(data)
 
                 self._process_and_append(messages)
                 line_count += 1
+
+    def _prepare_messages(self, data: Dict) -> List[Dict]:
+        image_dir = os.path.join(os.path.dirname(self.data_path), "images")
+        if "question" in data:
+            # Prepare chat messages with image
+            messages = []
+            if "system_prompt" in data:
+                messages.extend(
+                    [
+                        {
+                            "role": "system",
+                            "content": [
+                                {"type": "text", "text": data["system_prompt"]}
+                            ],
+                        }
+                    ]
+                )
+            if "img_path" in data:
+                image_path = os.path.join(image_dir, data["img_path"])
+                messages.extend(
+                    [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "image", "image": image_path},
+                                {
+                                    "type": "text",
+                                    "text": data["question"].replace("<image>", ""),
+                                },
+                            ],
+                        },
+                        {
+                            "role": "assistant",
+                            "content": [{"type": "text", "text": data["answer"]}],
+                        },
+                    ]
+                )
+            else:
+                messages.extend(
+                    [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": data["question"]},
+                            ],
+                        },
+                        {
+                            "role": "assistant",
+                            "content": [{"type": "text", "text": data["answer"]}],
+                        },
+                    ]
+                )
+        elif "messages" in data:
+            messages = data["messages"]
+            for message in messages:
+                if message["role"] == "user":
+                    for content in message["content"]:
+                        if content["type"] == "image":
+                            content["image"] = os.path.join(image_dir, content["image"])
+        else:
+            raise ValueError("Invalid data format")
+
+        # adapt to hunyuan_vl
+        if self.model_name in ["HunyuanVL"]:
+            for message in messages:
+                if message["role"] == "assistant" or message["role"] == "system":
+                    message["content"] = message["content"][0]["text"]
+        return messages
 
     def _load_hf_dataset(self, dataset: str, num_samples: int):
         """Load dataset from Hugging Face format"""
@@ -108,7 +163,7 @@ class MultiModalDataset(BaseDataset):
 
     def _process_and_append(self, messages: List[Dict]):
         """Process messages and append to dataset"""
-        if self.model_name in ["Qwen3VL"]:
+        if self.model_name in ["Qwen3VL", "Qwen3VLMoE"]:
             inputs = self.processor.apply_chat_template(
                 messages,
                 tokenize=True,
