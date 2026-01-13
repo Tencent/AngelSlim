@@ -500,7 +500,7 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
 
 <table><thead>
   <tr>
-    <th></th>
+    <th>Model</th>
     <th>Method</th>
     <th colspan="2">GSM8K</th>
     <th colspan="2">Alpaca</th>

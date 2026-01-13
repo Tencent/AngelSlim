@@ -503,7 +503,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
 
 <table><thead>
   <tr>
-    <th></th>
+    <th>Model</th>
     <th>Method</th>
     <th colspan="2">GSM8K</th>
     <th colspan="2">Alpaca</th>
