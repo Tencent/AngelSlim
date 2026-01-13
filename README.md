@@ -502,16 +502,14 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th colspan="2">GSM8K</th>
-    <th colspan="2">Alpaca</th>
-    <th colspan="2">HumanEval</th>
-    <th colspan="2">MT-bench</th>
-    <th colspan="2">MATH-500</th>
-    <th colspan="2">MMMU</th>
-    <th colspan="2">MMStar</th>
-    <th colspan="2">Mean</th>
-  </tr></thead>
-<tbody>
+    <th colspan="2" style="text-align:center;">GSM8K</th>
+    <th colspan="2" style="text-align:center;">Alpaca</th>
+    <th colspan="2" style="text-align:center;">HumanEval</th>
+    <th colspan="2" style="text-align:center;">MT-bench</th>
+    <th colspan="2" style="text-align:center;">MATH-500</th>
+    <th colspan="2" style="text-align:center;">MMMU</th>
+    <th colspan="2" style="text-align:center;">MMStar</th>
+    <th colspan="2" style="text-align:center;">Mean</th>
   <tr>
     <td></td>
     <td></td>
@@ -532,6 +530,8 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
     <td>throughput (tokens/s)</td>
     <td>accept length</td>
   </tr>
+  </tr></thead>
+<tbody>
   <tr>
     <td rowspan="2">Qwen3-VL-2B-Instruct</td>
     <td>Vanilla</td>
@@ -654,19 +654,20 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
 ##### 1.2.2 HunyuanOCR Model
 
 Benchmark results for HunyuanOCR using Eagle3 speculative decoding on vLLM (v0.13.0) across **[OmniDocBench](https://huggingface.co/datasets/opendatalab/OmniDocBench)** dataset, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
+
 <table><thead>
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th colspan="2">OmniDocBench</th>
-  </tr></thead>
-<tbody>
+    <th colspan="2" style="text-align:center;">OmniDocBench</th>
   <tr>
     <td></td>
     <td></td>
     <td>throughput (tokens/s)</td>
     <td>accept length</td>
   </tr>
+  </tr></thead>
+<tbody>
   <tr>
     <td rowspan="2">Hunyuan-OCR</td>
     <td>Vanilla</td>
@@ -691,15 +692,15 @@ Benchmark results for Qwen2-Audio using Eagle3 speculative decoding on vLLM (v0.
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th colspan="2">LibriSpeech</th>
-  </tr></thead>
-<tbody>
+   <th colspan="2" style="text-align:center;">LibriSpeech</th>
   <tr>
     <td></td>
     <td></td>
     <td>throughput (tokens/s)</td>
     <td>accept length</td>
   </tr>
+  </tr></thead>
+<tbody>
   <tr>
     <td rowspan="2">Qwen2-Audio</td>
     <td>Vanilla</td>
@@ -722,15 +723,15 @@ Benchmark results for Fun-CosyVoice3 using Eagle3 speculative decoding across **
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th colspan="2">LibriTTS</th>
-  </tr></thead>
-<tbody>
+    <th colspan="2" style="text-align:center;">LibriTTS</th>
   <tr>
     <td></td>
     <td></td>
     <td>throughput (tokens/s)</td>
     <td>accept length</td>
   </tr>
+  </tr></thead>
+<tbody>
   <tr>
     <td rowspan="2">Fun-CosyVoice3</td>
     <td>Vanilla</td>

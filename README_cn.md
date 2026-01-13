@@ -505,16 +505,14 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th colspan="2">GSM8K</th>
-    <th colspan="2">Alpaca</th>
-    <th colspan="2">HumanEval</th>
-    <th colspan="2">MT-bench</th>
-    <th colspan="2">MATH-500</th>
-    <th colspan="2">MMMU</th>
-    <th colspan="2">MMStar</th>
-    <th colspan="2">Mean</th>
-  </tr></thead>
-<tbody>
+    <th colspan="2" style="text-align:center;">GSM8K</th>
+    <th colspan="2" style="text-align:center;">Alpaca</th>
+    <th colspan="2" style="text-align:center;">HumanEval</th>
+    <th colspan="2" style="text-align:center;">MT-bench</th>
+    <th colspan="2" style="text-align:center;">MATH-500</th>
+    <th colspan="2" style="text-align:center;">MMMU</th>
+    <th colspan="2" style="text-align:center;">MMStar</th>
+    <th colspan="2" style="text-align:center;">Mean</th>
   <tr>
     <td></td>
     <td></td>
@@ -535,6 +533,8 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
     <td>throughput (tokens/s)</td>
     <td>accept length</td>
   </tr>
+  </tr></thead>
+<tbody>
   <tr>
     <td rowspan="2">Qwen3-VL-2B-Instruct</td>
     <td>Vanilla</td>
@@ -662,15 +662,15 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th colspan="2">OmniDocBench</th>
-  </tr></thead>
-<tbody>
+    <th colspan="2" style="text-align:center;">OmniDocBench</th>
   <tr>
     <td></td>
     <td></td>
     <td>throughput (tokens/s)</td>
     <td>accept length</td>
   </tr>
+  </tr></thead>
+<tbody>
   <tr>
     <td rowspan="2">Hunyuan-OCR</td>
     <td>Vanilla</td>
@@ -695,15 +695,15 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th colspan="2">LibriSpeech</th>
-  </tr></thead>
-<tbody>
+   <th colspan="2" style="text-align:center;">LibriSpeech</th>
   <tr>
     <td></td>
     <td></td>
     <td>throughput (tokens/s)</td>
     <td>accept length</td>
   </tr>
+  </tr></thead>
+<tbody>
   <tr>
     <td rowspan="2">Qwen2-Audio</td>
     <td>Vanilla</td>
@@ -725,15 +725,15 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th colspan="2">LibriTTS</th>
-  </tr></thead>
-<tbody>
+    <th colspan="2" style="text-align:center;">LibriTTS</th>
   <tr>
     <td></td>
     <td></td>
     <td>throughput (tokens/s)</td>
     <td>accept length</td>
   </tr>
+  </tr></thead>
+<tbody>
   <tr>
     <td rowspan="2">Fun-CosyVoice3</td>
     <td>Vanilla</td>
