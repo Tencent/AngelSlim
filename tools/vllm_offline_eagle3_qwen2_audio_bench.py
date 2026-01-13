@@ -116,7 +116,9 @@ def parse_args():
         "--num_spec_tokens", type=int, default=2, help="Number of speculative tokens"
     )
     parser.add_argument("--max_num_seqs", type=int, default=1)
-    parser.add_argument("--max_model_len", type=int, default=1024)
+    parser.add_argument(
+        "--max_model_len", type=int, default=16384, help="Maximum model length"
+    )
     parser.add_argument(
         "--num_prompts", type=int, default=100, help="Number of prompts to run"
     )

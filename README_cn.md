@@ -234,6 +234,7 @@ bash scripts/speculative/train_eagle3_online.sh
 
 详细训练配置，以及`Eagle3`的vLLM性能测试，详情请参考投机采样[快速开始文档](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html#id5)。
 
+多模态模型 Eagle3 训练与部署指南，支持LLM / VLM / Audio (ASR & TTS) 模型：[LLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/eagle.html) | [VLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/vlm_eagle.html) | [Audio(ASR)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_eagle.html) | [Audio(TTS)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_tts_eagle.html).
 #### 2.2 LLM/VLM模型量化
 完成安装`AngelSlim`后，您可以通过以下脚本快速开始，完成`Qwen3-1.7B`模型的静态`FP8`量化：
 
@@ -511,11 +512,15 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
     <th colspan="2">MATH-500</th>
     <th colspan="2">MMMU</th>
     <th colspan="2">MMStar</th>
+    <th>Mean</th>
+    <th></th>
   </tr></thead>
 <tbody>
   <tr>
     <td></td>
     <td></td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
     <td>throughput (tokens/s)</td>
     <td>accept length</td>
     <td>throughput (tokens/s)</td>
@@ -548,6 +553,8 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
     <td>1</td>
     <td>81.63</td>
     <td>1</td>
+    <td>234.24</td>
+    <td>1</td>
   </tr>
   <tr>
     <td>Eagle3</td>
@@ -565,6 +572,8 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
     <td>2.55</td>
     <td>139.73</td>
     <td>2.31</td>
+    <td>415.76</td>
+    <td>2.5</td>
   </tr>
   <tr>
     <td rowspan="2">Qwen3-VL-4B-Instruct</td>
@@ -583,6 +592,8 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
     <td>1</td>
     <td>67.75</td>
     <td>1</td>
+    <td>150.21</td>
+    <td>1</td>
   </tr>
   <tr>
     <td>Eagle3</td>
@@ -600,6 +611,8 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
     <td>2.05</td>
     <td>107.07</td>
     <td>2.1</td>
+    <td>283.32</td>
+    <td>2.41</td>
   </tr>
   <tr>
     <td rowspan="2">Qwen3-VL-30B-A3B-Instruct</td>
@@ -618,6 +631,8 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
     <td>1</td>
     <td>30.93</td>
     <td>1</td>
+    <td>115.33</td>
+    <td>1</td>
   </tr>
   <tr>
     <td>Eagle3</td>
@@ -635,6 +650,8 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
     <td>1.78</td>
     <td>52.57</td>
     <td>1.94</td>
+    <td>166.17</td>
+    <td>2.32</td>
   </tr>
 </tbody></table>
 
@@ -689,7 +706,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
     <td>accept length</td>
   </tr>
   <tr>
-    <td rowspan="2">Qwen2_Audio</td>
+    <td rowspan="2">Qwen2-Audio</td>
     <td>Vanilla</td>
     <td>78.76</td>
     <td>1</td>

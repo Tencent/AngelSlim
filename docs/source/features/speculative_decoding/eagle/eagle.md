@@ -1,9 +1,10 @@
-# EAGLE
+# EAGLE3
+
 [Eagle3](https://arxiv.org/pdf/2503.01840)是目前最常用、加速效果最好的投机采样算法。
 本项目包括Eagle3的训练以及benchmark测试，并开源了Qwen3和Hunyuan系列的[Eagle3权重](https://huggingface.co/collections/AngelSlim/eagle3)。
 
-我们训练的Qwen3系列Eagle3模型的表现可以参见基准测试[benchmarks](../../performance/speculative_decoding/benchmarks.md)，
-其中全部数据都是在单张H20上使用pytorch推理获得。
+我们训练的Qwen3系列Eagle3模型的表现可以参见基准测试[benchmarks](../../../performance/speculative_decoding/benchmarks.md)，
+其中全部数据都是在单张H20上使用vLLM推理获得。
 
 ## 1. 数据生成
 
@@ -237,4 +238,4 @@ python3 vllm_spec_benchmark.py \
     --max-num-seqs "$BATCH_SIZE"
 ```
 
-完整的vLLM benchmark结果可见[Benchmark](../../performance/speculative_decoding/benchmarks.md)。
+完整的vLLM benchmark结果可见[Benchmark](../../../performance/speculative_decoding/benchmarks.md)。

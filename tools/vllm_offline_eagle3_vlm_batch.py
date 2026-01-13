@@ -55,7 +55,9 @@ def parse_args():
     parser.add_argument(
         "--draft_model", type=str, default=None, help="Path to draft model"
     )
-    parser.add_argument("--dataset", type=str, default="textvqa", help="Dataset to use")
+    parser.add_argument(
+        "--dataset", type=str, default="lmms-lab/textvqa", help="Dataset to use"
+    )
     parser.add_argument(
         "--use_eagle",
         action="store_true",
@@ -74,6 +76,9 @@ def parse_args():
         "--num_spec_tokens", type=int, default=2, help="Number of speculative tokens"
     )
     parser.add_argument("--max_num_seqs", type=int, default=1)
+    parser.add_argument(
+        "--max_model_len", type=int, default=32768, help="Maximum model length"
+    )
     parser.add_argument(
         "--temp", type=float, default=0, help="Number of speculative tokens"
     )
@@ -196,7 +201,7 @@ def main():
         max_num_seqs=args.max_num_seqs,
         enforce_eager=True,
         disable_log_stats=False,
-        max_model_len=32768,
+        max_model_len=args.max_model_len,
         limit_mm_per_prompt={"image": 1},
         disable_chunked_mm_input=False,
     )
