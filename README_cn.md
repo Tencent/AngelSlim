@@ -234,7 +234,7 @@ bash scripts/speculative/train_eagle3_online.sh
 
 详细训练配置，以及`Eagle3`的vLLM性能测试，详情请参考投机采样[快速开始文档](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html#id5)。
 
-多模态模型 Eagle3 训练与部署指南，支持LLM / VLM / Audio (ASR & TTS) 模型：[LLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/eagle.html) | [VLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/vlm_eagle.html) | [Audio(ASR)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_eagle.html) | [Audio(TTS)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_tts_eagle.html).
+多模态模型 Eagle3 训练与部署指南，支持LLM / VLM / Audio (ASR & TTS) 模型：[LLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/eagle.html) | [VLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/vlm_eagle.html) | [Audio(ASR)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_asr_eagle.html) | [Audio(TTS)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_tts_eagle.html).
 #### 2.2 LLM/VLM模型量化
 完成安装`AngelSlim`后，您可以通过以下脚本快速开始，完成`Qwen3-1.7B`模型的静态`FP8`量化：
 
@@ -512,8 +512,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
     <th colspan="2">MATH-500</th>
     <th colspan="2">MMMU</th>
     <th colspan="2">MMStar</th>
-    <th>Mean</th>
-    <th></th>
+    <th colspan="2">Mean</th>
   </tr></thead>
 <tbody>
   <tr>

@@ -233,7 +233,7 @@ bash scripts/speculative/train_eagle3_online.sh
 
 For detailed training configurations and vLLM performance benchmarks of Eagle3, please refer to the [Quick Start Guide for Speculative Sampling](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html#id5).
 
-Training and Deployment Guide for Multimodal Model Eagle3—Supporting LLM, VLM, and Audio (ASR & TTS) Models: [LLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/eagle.html) | [VLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/vlm_eagle.html) | [Audio(ASR)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_eagle.html) | [Audio(TTS)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_tts_eagle.html).
+Training and Deployment Guide for Multimodal Model Eagle3—Supporting LLM, VLM, and Audio (ASR & TTS) Models: [LLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/eagle.html) | [VLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/vlm_eagle.html) | [Audio(ASR)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_asr_eagle.html) | [Audio(TTS)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_tts_eagle.html).
 
 #### 2.2 LLM/VLM Model Quantization
 
@@ -509,8 +509,7 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
     <th colspan="2">MATH-500</th>
     <th colspan="2">MMMU</th>
     <th colspan="2">MMStar</th>
-    <th>Mean</th>
-    <th></th>
+    <th colspan="2">Mean</th>
   </tr></thead>
 <tbody>
   <tr>
