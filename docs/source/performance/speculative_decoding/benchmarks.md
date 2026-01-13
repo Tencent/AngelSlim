@@ -23,229 +23,38 @@
 ### 2. VLM Models
 #### 2.1 Qwen3-VL Series Models
 
-<table><thead>
-  <tr>
-    <th>Model</th>
-    <th>Method</th>
-    <th colspan="2">GSM8K</th>
-    <th colspan="2">Alpaca</th>
-    <th colspan="2">HumanEval</th>
-    <th colspan="2">MT-bench</th>
-    <th colspan="2">MATH-500</th>
-    <th colspan="2">MMMU</th>
-    <th colspan="2">MMStar</th>
-  </tr></thead>
-<tbody>
-  <tr>
-    <td></td>
-    <td></td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-  </tr>
-  <tr>
-    <td rowspan="2">Qwen3-VL-2B-Instruct</td>
-    <td>Vanilla</td>
-    <td>348.55</td>
-    <td>1</td>
-    <td>350.9</td>
-    <td>1</td>
-    <td>346.07</td>
-    <td>1</td>
-    <td>346.31</td>
-    <td>1</td>
-    <td>82.96</td>
-    <td>1</td>
-    <td>83.27</td>
-    <td>1</td>
-    <td>81.63</td>
-    <td>1</td>
-  </tr>
-  <tr>
-    <td>Eagle3</td>
-    <td>511.52</td>
-    <td>2.11</td>
-    <td>560.55</td>
-    <td>2.26</td>
-    <td>826.01</td>
-    <td>3.39</td>
-    <td>555.22</td>
-    <td>2.29</td>
-    <td>163.09</td>
-    <td>2.57</td>
-    <td>154.18</td>
-    <td>2.55</td>
-    <td>139.73</td>
-    <td>2.31</td>
-  </tr>
-  <tr>
-    <td rowspan="2">Qwen3-VL-4B-Instruct</td>
-    <td>Vanilla</td>
-    <td>212.87</td>
-    <td>1</td>
-    <td>213.24</td>
-    <td>1</td>
-    <td>211.69</td>
-    <td>1</td>
-    <td>212.1</td>
-    <td>1</td>
-    <td>67.96</td>
-    <td>1</td>
-    <td>65.88</td>
-    <td>1</td>
-    <td>67.75</td>
-    <td>1</td>
-  </tr>
-  <tr>
-    <td>Eagle3</td>
-    <td>415.29</td>
-    <td>2.57</td>
-    <td>372.89</td>
-    <td>2.26</td>
-    <td>459.37</td>
-    <td>2.82</td>
-    <td>382.33</td>
-    <td>2.34</td>
-    <td>141.87</td>
-    <td>2.72</td>
-    <td>104.44</td>
-    <td>2.05</td>
-    <td>107.07</td>
-    <td>2.1</td>
-  </tr>
-  <tr>
-    <td rowspan="2">Qwen3-VL-30B-A3B-Instruct</td>
-    <td>Vanilla</td>
-    <td>179.94</td>
-    <td>1</td>
-    <td>184.6</td>
-    <td>1</td>
-    <td>168.68</td>
-    <td>1</td>
-    <td>180.57</td>
-    <td>1</td>
-    <td>31.08</td>
-    <td>1</td>
-    <td>31.51</td>
-    <td>1</td>
-    <td>30.93</td>
-    <td>1</td>
-  </tr>
-  <tr>
-    <td>Eagle3</td>
-    <td>281.93</td>
-    <td>2.82</td>
-    <td>241.42</td>
-    <td>2.13</td>
-    <td>223.05</td>
-    <td>2.57</td>
-    <td>240.47</td>
-    <td>2.19</td>
-    <td>75.31</td>
-    <td>2.79</td>
-    <td>48.47</td>
-    <td>1.78</td>
-    <td>52.57</td>
-    <td>1.94</td>
-  </tr>
-</tbody></table>
+| Model                         | Method  | **GSM8K**                 |                   | **Alpaca**                |                   | **HumanEval**             |                   | **MT-bench**              |                   | **MATH-500**              |                   | **MMMU**                  |                   | **MMStar**                |                   | **Mean**                  |                   |
+|-------------------------------|---------|---------------------------|-------------------|---------------------------|-------------------|---------------------------|-------------------|---------------------------|-------------------|---------------------------|-------------------|---------------------------|-------------------|---------------------------|-------------------|---------------------------|-------------------|
+|                               |         | **throughput (tokens/s)** | **accept length** | **throughput (tokens/s)** | **accept length** | **throughput (tokens/s)** | **accept length** | **throughput (tokens/s)** | **accept length** | **throughput (tokens/s)** | **accept length** | **throughput (tokens/s)** | **accept length** | **throughput (tokens/s)** | **accept length** | **throughput (tokens/s)** | **accept length** |
+| **Qwen3-VL-2B-Instruct**      | Vanilla |                    348.55 |                 1 |                     350.9 |                 1 |                    346.07 |                 1 |                    346.31 |                 1 |                     82.96 |                 1 |                     83.27 |                 1 |                     81.63 |                 1 |                    234.24 |                 1 |
+|                               | Eagle3  |                    511.52 |              2.11 |                    560.55 |              2.26 |                    826.01 |              3.39 |                    555.22 |              2.29 |                    163.09 |              2.57 |                    154.18 |              2.55 |                    139.73 |              2.31 |                    415.76 |               2.5 |
+| **Qwen3-VL-4B-Instruct**      | Vanilla |                    212.87 |                 1 |                    213.24 |                 1 |                    211.69 |                 1 |                     212.1 |                 1 |                     67.96 |                 1 |                     65.88 |                 1 |                     67.75 |                 1 |                    150.21 |                 1 |
+|                               | Eagle3  |                    415.29 |              2.57 |                    372.89 |              2.26 |                    459.37 |              2.82 |                    382.33 |              2.34 |                    141.87 |              2.72 |                    104.44 |              2.05 |                    107.07 |               2.1 |                    283.32 |              2.41 |
+| **Qwen3-VL-30B-A3B-Instruct** | Vanilla |                    179.94 |                 1 |                     184.6 |                 1 |                    168.68 |                 1 |                    180.57 |                 1 |                     31.08 |                 1 |                     31.51 |                 1 |                     30.93 |                 1 |                    115.33 |                 1 |
+|                               | Eagle3  |                    281.93 |              2.82 |                    241.42 |              2.13 |                    223.05 |              2.57 |                    240.47 |              2.19 |                     75.31 |              2.79 |                     48.47 |              1.78 |                     52.57 |              1.94 |                    166.17 |              2.32 |
 
 #### 2.2 HunyuanOCR Model
 
-<table><thead>
-  <tr>
-    <th>Model</th>
-    <th>Method</th>
-    <th colspan="2">OmniDocBench</th>
-  </tr></thead>
-<tbody>
-  <tr>
-    <td></td>
-    <td></td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-  </tr>
-  <tr>
-    <td rowspan="2">Hunyuan-OCR</td>
-    <td>Vanilla</td>
-    <td>70.12</td>
-    <td>1</td>
-  </tr>
-  <tr>
-    <td>Eagle3</td>
-    <td>108.1</td>
-    <td>2.08</td>
-  </tr>
-</tbody>
-</table>
+| Model       | Method  | OmniDocBench          |               |
+|-------------|---------|-----------------------|---------------|
+|             |         | **throughput (tokens/s)** | **accept length** |
+| **Hunyuan-OCR** | Vanilla |                 70.12 |             1 |
+|             | Eagle3  |                 108.1 |          2.08 |
 
 ### 3. Audio Models
 
 #### 3.1 Qwen2-Audio Model
 
-<table><thead>
-  <tr>
-    <th>Model</th>
-    <th>Method</th>
-    <th colspan="2">LibriSpeech</th>
-  </tr></thead>
-<tbody>
-  <tr>
-    <td></td>
-    <td></td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-  </tr>
-  <tr>
-    <td rowspan="2">Qwen2_Audio</td>
-    <td>Vanilla</td>
-    <td>78.76</td>
-    <td>1</td>
-  </tr>
-  <tr>
-    <td>Eagle3</td>
-    <td>146.66</td>
-    <td>3.51</td>
-  </tr>
-</tbody>
-</table>
+| Model           | Method  | LibriSpeech               |                   |
+|-----------------|---------|---------------------------|-------------------|
+|                 |         | **throughput (tokens/s)** | **accept length** |
+| **Qwen2-Audio** | Vanilla |                     78.76 |                 1 |
+|                 | Eagle3  |                    146.66 |              3.51 |
 
 #### 3.2 Fun-CosyVoice3 Model
 
-<table><thead>
-  <tr>
-    <th>Model</th>
-    <th>Method</th>
-    <th colspan="2">LibriTTS</th>
-  </tr></thead>
-<tbody>
-  <tr>
-    <td></td>
-    <td></td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-  </tr>
-  <tr>
-    <td rowspan="2">Fun-CosyVoice3</td>
-    <td>Vanilla</td>
-    <td>-</td>
-    <td>1</td>
-  </tr>
-  <tr>
-    <td>Eagle3</td>
-    <td>-</td>
-    <td>1.96</td>
-  </tr>
-</tbody>
-</table>
+| Model              | Method  | LibriTTS                  |                   |
+|--------------------|---------|---------------------------|-------------------|
+|                    |         | **throughput (tokens/s)** | **accept length** |
+| **Fun-CosyVoice3** | Vanilla | -                         |                 1 |
+|                    | Eagle3  | -                         |              1.96 |

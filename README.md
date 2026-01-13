@@ -233,7 +233,7 @@ bash scripts/speculative/train_eagle3_online.sh
 
 For detailed training configurations and vLLM performance benchmarks of Eagle3, please refer to the [Quick Start Guide for Speculative Sampling](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html#id5).
 
-Training and Deployment Guide for Multimodal Model Eagle3—Supporting LLM, VLM, and Audio (ASR & TTS) Models: [Qwen3 series](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/eagle.html) | [Qwen3-VL series & HunyuanOCR](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/vlm_eagle.html) | [Qwen2Audio](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_eagle.html) | [Fun-CosyVoice3](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_tts_eagle.html).
+Training and Deployment Guide for Multimodal Model Eagle3—Supporting LLM, VLM, and Audio (ASR & TTS) Models: [LLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/eagle.html) | [VLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/vlm_eagle.html) | [Audio(ASR)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_eagle.html) | [Audio(TTS)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_tts_eagle.html).
 
 #### 2.2 LLM/VLM Model Quantization
 
@@ -500,7 +500,7 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
 
 <table><thead>
   <tr>
-    <th>Model</th>
+    <th></th>
     <th>Method</th>
     <th colspan="2">GSM8K</th>
     <th colspan="2">Alpaca</th>
@@ -509,11 +509,15 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
     <th colspan="2">MATH-500</th>
     <th colspan="2">MMMU</th>
     <th colspan="2">MMStar</th>
+    <th>Mean</th>
+    <th></th>
   </tr></thead>
 <tbody>
   <tr>
     <td></td>
     <td></td>
+    <td>throughput (tokens/s)</td>
+    <td>accept length</td>
     <td>throughput (tokens/s)</td>
     <td>accept length</td>
     <td>throughput (tokens/s)</td>
@@ -546,6 +550,8 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
     <td>1</td>
     <td>81.63</td>
     <td>1</td>
+    <td>234.24</td>
+    <td>1</td>
   </tr>
   <tr>
     <td>Eagle3</td>
@@ -563,6 +569,8 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
     <td>2.55</td>
     <td>139.73</td>
     <td>2.31</td>
+    <td>415.76</td>
+    <td>2.5</td>
   </tr>
   <tr>
     <td rowspan="2">Qwen3-VL-4B-Instruct</td>
@@ -581,6 +589,8 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
     <td>1</td>
     <td>67.75</td>
     <td>1</td>
+    <td>150.21</td>
+    <td>1</td>
   </tr>
   <tr>
     <td>Eagle3</td>
@@ -598,6 +608,8 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
     <td>2.05</td>
     <td>107.07</td>
     <td>2.1</td>
+    <td>283.32</td>
+    <td>2.41</td>
   </tr>
   <tr>
     <td rowspan="2">Qwen3-VL-30B-A3B-Instruct</td>
@@ -616,6 +628,8 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
     <td>1</td>
     <td>30.93</td>
     <td>1</td>
+    <td>115.33</td>
+    <td>1</td>
   </tr>
   <tr>
     <td>Eagle3</td>
@@ -633,6 +647,8 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
     <td>1.78</td>
     <td>52.57</td>
     <td>1.94</td>
+    <td>166.17</td>
+    <td>2.32</td>
   </tr>
 </tbody></table>
 
@@ -686,7 +702,7 @@ Benchmark results for Qwen2-Audio using Eagle3 speculative decoding on vLLM (v0.
     <td>accept length</td>
   </tr>
   <tr>
-    <td rowspan="2">Qwen2_Audio</td>
+    <td rowspan="2">Qwen2-Audio</td>
     <td>Vanilla</td>
     <td>78.76</td>
     <td>1</td>
