@@ -177,6 +177,7 @@ class BaseEagle3Drafter(nn.Module, ABC):
         self,
         hidden_states: Tensor,
         input_ids: Tensor,
+        inputs_embeds: Optional[Tensor] = None,
         logits_processor: Optional[Any] = None,
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
@@ -204,18 +205,24 @@ class BaseEagle3Drafter(nn.Module, ABC):
         sample_token = input_ids[:, -1]
         input_ids = input_ids[:, 1:]
         self.initial_position_id = input_ids.shape[1]
+        if inputs_embeds is not None:
+            inputs_embeds = inputs_embeds[:, 1:]
+            assert input_ids.shape[1] == inputs_embeds.shape[1]
 
         self.reset()
 
         # Generate initial hidden states and tokens
         last_hidden, past_key_values, early_stop_signal = self._get_initial_hidden(
-            hidden_states, input_ids
+            hidden_states, input_ids, inputs_embeds
         )
         self.stable_kv = past_key_values
 
         # Generate first level of tokens
         topk_index, scores = self._get_topk_tokens(last_hidden)
-        scores_list.append(scores[None])
+        if len(scores.shape) == 1:
+            scores_list.append(scores[None])
+        else:
+            scores_list.append(scores)
         parents_list.append(torch.zeros(1, dtype=torch.long, device=scores.device))
 
         # Handle vocabulary mapping if needed
@@ -272,7 +279,7 @@ class BaseEagle3Drafter(nn.Module, ABC):
         )
 
     def _get_initial_hidden(
-        self, hidden_states: Tensor, input_ids: Tensor
+        self, hidden_states: Tensor, input_ids: Tensor, inputs_embeds: Tensor = None
     ) -> Tuple[Tensor, Any]:
         """Get initial hidden states and past key values."""
         if hasattr(self, "stable_kv") and self.stable_kv is not None:
@@ -280,11 +287,19 @@ class BaseEagle3Drafter(nn.Module, ABC):
             outputs = self(
                 hidden_states,
                 input_ids=input_ids[:, kv_len:],
+                inputs_embeds=(
+                    inputs_embeds[:, kv_len:] if inputs_embeds is not None else None
+                ),
                 past_key_values=self.stable_kv,
                 use_cache=True,
             )
         else:
-            outputs = self(hidden_states, input_ids=input_ids, use_cache=True)
+            outputs = self(
+                hidden_states,
+                input_ids=input_ids,
+                inputs_embeds=inputs_embeds,
+                use_cache=True,
+            )
         out_hidden, past_key_values, early_stop_signal = outputs
 
         return out_hidden[:, -1], past_key_values, early_stop_signal
@@ -332,7 +347,10 @@ class BaseEagle3Drafter(nn.Module, ABC):
 
         # Get top-k tokens for this level
         topk_index, topk_p = self._get_topk_tokens(out_hidden[0])
-        cu_scores = topk_p + scores[:, None]
+        if len(scores.shape) == 1:
+            cu_scores = topk_p + scores[:, None]
+        else:
+            cu_scores = topk_p + scores
 
         # Select best candidates
         topk_cs = torch.topk(cu_scores.view(-1), self.top_k, dim=-1)

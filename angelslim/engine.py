@@ -409,10 +409,6 @@ class SpecEngine:
             self.BenchmarkConfig = pytorch_benchmark.BenchmarkConfig
             self.BenchmarkEngine = pytorch_benchmark.BenchmarkEngine
             self.BenchmarkMode = pytorch_benchmark.BenchmarkMode
-        elif self.deploy_backend == "pytorch_tts":
-            self.BenchmarkConfig = pytorch_benchmark.BenchmarkConfig
-            self.BenchmarkEngine = pytorch_benchmark.TTSBenchmarkEngine
-            self.BenchmarkMode = pytorch_benchmark.BenchmarkMode
         elif self.deploy_backend == "vllm":
             self.BenchmarkConfig = vllm_benchmark.BenchmarkConfig
             self.BenchmarkEngine = vllm_benchmark.BenchmarkEngine
@@ -453,6 +449,8 @@ class SpecEngine:
         config_dict.update(kwargs)
 
         self.config = self.BenchmarkConfig(**config_dict)
+        if self.config.is_tts:
+            self.BenchmarkEngine = pytorch_benchmark.TTSBenchmarkEngine
         self.benchmark_engine = self.BenchmarkEngine(self.config)
 
         return self.config

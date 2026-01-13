@@ -113,6 +113,7 @@ def initialize_cosycoice3_model(config: EvaluationConfig) -> CosyVoice3Eagle3Mod
         top_k=config.top_k,
         device_map="auto",
         torch_dtype="auto",
+        early_stop_method=config.early_stop_method,
         generate_audio=config.generate_audio,
     )
     model.eval()
@@ -175,9 +176,10 @@ def process_tts_conversation_turn(
     qs: str,
     temperature: float,
     path: str,
+    is_cosyvoice3: bool = False,
 ) -> Dict[str, Any]:
     """Process a single question"""
-    if "cosyvoice3" in model_id:
+    if is_cosyvoice3:
         prompt_text = model.base_model.frontend.text_normalize(
             qs["prompt_text"], split=False, text_frontend=True
         )
@@ -200,12 +202,53 @@ def process_tts_conversation_turn(
             torch.cuda.synchronize()
             start_time = time.time()
 
+            dtype = model_input["text"].dtype
+            device = model_input["text"].device
+
+            input_ids = torch.concat(
+                [
+                    model.base_model.model.llm.sos_id.unsqueeze(dim=0)
+                    .to(dtype)
+                    .to(device),
+                    model_input["prompt_text"],
+                    model_input["text"],
+                    model.base_model.model.llm.task_token.unsqueeze(dim=0)
+                    .to(dtype)
+                    .to(device),
+                    model_input["llm_prompt_speech_token"],
+                ],
+                dim=1,
+            )
+
+            # concat llm input embedding
+            text = torch.concat(
+                [model_input["prompt_text"], model_input["text"]], dim=1
+            )
+            text_emb = model.base_model.model.llm.llm.model.model.embed_tokens(text)
+            sos_emb = model.base_model.model.llm.speech_embedding.weight[
+                model.base_model.model.llm.sos
+            ].reshape(1, 1, -1)
+            task_id_emb = model.base_model.model.llm.speech_embedding.weight[
+                model.base_model.model.llm.task_id
+            ].reshape(1, 1, -1)
+            if model_input["llm_prompt_speech_token_len"][0].item() != 0:
+                prompt_speech_token_emb = model.base_model.model.llm.speech_embedding(
+                    model_input["llm_prompt_speech_token"]
+                )
+            else:
+                prompt_speech_token_emb = torch.zeros(
+                    1, 0, model.base_model.model.llm.llm_input_size, dtype=text.dtype
+                ).to(device)
+            inputs_embeds = torch.concat(
+                [sos_emb, text_emb, task_id_emb, prompt_speech_token_emb], dim=1
+            )
+
             output_ids, new_token, idx, accept_length_list = model.eagle_generate(
-                text=model_input["text"],
-                prompt_text=model_input["prompt_text"],
-                llm_prompt_speech_token=model_input["llm_prompt_speech_token"],
+                input_ids=input_ids,
+                inputs_embeds=inputs_embeds,
                 temperature=temperature,
                 log=True,
+                is_cosyvoice3=True,
             )
 
             torch.cuda.synchronize()
@@ -271,6 +314,7 @@ def generate_answer_for_question_tts(
     num_choices: int,
     temperature: float,
     path: str,
+    is_cosyvoice3: bool = False,
 ) -> List[Dict[str, Any]]:
     """Generate answers for a single question with multiple choices"""
     choices = []
@@ -278,7 +322,12 @@ def generate_answer_for_question_tts(
         torch.manual_seed(i)
 
         result = process_tts_conversation_turn(
-            model, model_id, question, temperature, path
+            model,
+            model_id,
+            question,
+            temperature,
+            path,
+            is_cosyvoice3,
         )
 
         choices.append(
@@ -316,11 +365,14 @@ def warmup_tts_lm(
     question: Dict[str, Any],
     temperature: float,
     path: str,
+    is_cosyvoice3: bool = False,
 ) -> None:
     """Warm up the model before actual evaluation"""
     for _ in range(3):
         torch.manual_seed(0)
-        process_tts_conversation_turn(model, model_id, question, temperature, path)
+        process_tts_conversation_turn(
+            model, model_id, question, temperature, path, is_cosyvoice3
+        )
     print("Warmup done")
 
 
@@ -370,8 +422,10 @@ def get_tts_answers(
 ) -> None:
     """Generate answers for a batch of questions"""
     config = EvaluationConfig(args)
+    is_cosyvoice3 = False
     if os.path.exists(os.path.join(args.base_model_path, "cosyvoice3.yaml")):
         model = initialize_cosycoice3_model(config)
+        is_cosyvoice3 = True
 
     if questions:
         current_file = os.path.abspath(__file__)
@@ -382,6 +436,7 @@ def get_tts_answers(
             questions[0],
             temperature,
             os.path.join(project_root, "dataset", args.bench_name),
+            is_cosyvoice3,
         )
 
     os.makedirs(os.path.dirname(answer_file), exist_ok=True)
@@ -395,6 +450,7 @@ def get_tts_answers(
             num_choices,
             temperature,
             os.path.join(project_root, "dataset", args.bench_name),
+            is_cosyvoice3,
         )
 
         with open(os.path.expanduser(answer_file), "a") as fout:

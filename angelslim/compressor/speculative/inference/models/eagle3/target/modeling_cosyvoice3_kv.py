@@ -709,79 +709,32 @@ class CosyVoice3LM(torch.nn.Module):
         return top_ids
 
     @torch.inference_mode()
-    def inference_one_step(
+    def forward(
         self,
-        input_ids: torch.Tensor,
+        input_ids: Optional[torch.LongTensor] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
-        past_key_values: Optional[Any] = None,
         position_ids: Optional[torch.Tensor] = None,
-        pre_tokens: Optional[List] = None,
+        past_key_values=None,
     ) -> List[int]:
-        inputs_embeds = self.speech_embedding.weight[
-            input_ids.squeeze(0).tolist()
-        ].unsqueeze(0)
-
-        out_tokens = []
-        if pre_tokens is not None:
-            out_tokens.extend(pre_tokens)
+        if inputs_embeds is None:
+            inputs_embeds = self.speech_embedding.weight[
+                input_ids.squeeze(0).tolist()
+            ].unsqueeze(0)
+        # prefill
         y_pred, hidden_states = self.llm.forward_one_step(
             inputs_embeds,
+            masks=attention_mask,
             past_key_values=past_key_values,
             position_ids=position_ids,
             output_hidden_states=True,
             return_hidden_states=True,
         )
         logp = self.llm_decoder(y_pred).log_softmax(dim=-1)
-        return logp, hidden_states
 
-    @torch.inference_mode()
-    def forward(
-        self,
-        text: torch.Tensor,
-        text_len: torch.Tensor,
-        prompt_text: torch.Tensor,
-        prompt_text_len: torch.Tensor,
-        prompt_speech_token: torch.Tensor,
-        prompt_speech_token_len: torch.Tensor,
-        sampling: int = 25,
-        past_key_values=None,
-        return_first_token=True,
-    ) -> List[int]:
-        device = text.device
-        text = torch.concat([prompt_text, text], dim=1)
-        text_len += prompt_text_len
-        text = self.llm.model.model.embed_tokens(text)
+        outputs = {"hidden_states": hidden_states}
 
-        # concat llm_input
-        sos_emb = self.speech_embedding.weight[self.sos].reshape(1, 1, -1)
-        task_id_emb = self.speech_embedding.weight[self.task_id].reshape(1, 1, -1)
-        if prompt_speech_token_len != 0:
-            prompt_speech_token_emb = self.speech_embedding(prompt_speech_token)
-        else:
-            prompt_speech_token_emb = torch.zeros(
-                1, 0, self.llm_input_size, dtype=text.dtype
-            ).to(device)
-        lm_input = torch.concat(
-            [sos_emb, text, task_id_emb, prompt_speech_token_emb], dim=1
-        )
-
-        # prefill
-        out_tokens = []
-        y_pred, hidden_states = self.llm.forward_one_step(
-            lm_input,
-            past_key_values=past_key_values,
-            output_hidden_states=True,
-            return_hidden_states=True,
-        )
-        logp = self.llm_decoder(y_pred[:, -1]).log_softmax(dim=-1)
-
-        if return_first_token:
-            probs = torch.nn.functional.softmax(logp.squeeze(dim=0), dim=-1)
-            input_id = torch.multinomial(probs, 1)
-            out_tokens.append(input_id.item())
-            return out_tokens, hidden_states, lm_input
-
-        return logp
+        return outputs, logp
 
 
 class CosyVoice3Model:

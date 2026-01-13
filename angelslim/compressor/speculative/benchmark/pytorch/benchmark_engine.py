@@ -82,6 +82,7 @@ class BenchmarkConfig:
     batch_size: int = 1
 
     # TTS settings
+    is_tts: bool = False
     generate_audio: bool = False
 
 
@@ -351,6 +352,7 @@ class BenchmarkEngine:
         args.early_stop_method = self.config.early_stop_method
 
         # TTS settings
+        args.is_tts = self.config.is_tts
         args.generate_audio = self.config.generate_audio
 
         return args
