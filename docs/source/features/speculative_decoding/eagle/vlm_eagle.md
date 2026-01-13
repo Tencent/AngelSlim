@@ -88,6 +88,7 @@ bash scripts/speculative/hunyuan_ocr/generate_vlm_hidden_for_draft_model.sh
 # For Qwen3-VL series
 bash scripts/speculative/qwen3_vl/generate_vlm_hidden_for_draft_model.sh
 ```
+> 注意：qwen3_vl系列模型生成hidden states需要更新transformers库: `pip install git+https://github.com/huggingface/transformers.git`
 
 **脚本参数说明：**
 
