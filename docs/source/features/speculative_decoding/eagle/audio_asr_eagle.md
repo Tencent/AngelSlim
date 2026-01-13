@@ -103,7 +103,7 @@ AngelSlim提供了Qwen2Audio模型vLLM backend的Eagle3基准测试脚本，用�
 
 ### 4.1 vLLM基准测试
 
-> vLLM 适配参考: [Support Eagle3 for Qwen2Audio](https://github.com/irisliu10/vllm/tree/eagle3_infer)
+> vLLM 适配参考: [Support Eagle3 for Qwen2Audio](https://github.com/vllm-project/vllm/pull/32230)
 
 #### 4.1.1 基本用法
 

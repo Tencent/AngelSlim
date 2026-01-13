@@ -12,6 +12,6 @@
 
 eagle
 vlm_eagle
-audio_eagle
+audio_asr_eagle
 audio_tts_eagle
 :::
