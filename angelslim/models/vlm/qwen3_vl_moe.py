@@ -56,7 +56,7 @@ def moe_observer_forward(
     Returns:
         torch.Tensor
     """
-    # replace Qwen3VLMoeTextExperts forward function by observer_forward"
+    # replace Qwen3VLMoeTextExperts forward function by moe_observer_forward"
     batch_size = hidden_states.shape[0]
     hidden_states = hidden_states.reshape(
         -1, self.hidden_size
