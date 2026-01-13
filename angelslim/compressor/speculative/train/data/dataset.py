@@ -85,7 +85,7 @@ class DatasetManager:
                 chat_template_type=chat_template_type,
                 display=display,
                 target_model_name_or_path=data_args.target_model_name_or_path,
-                output_dir=data_args.output_dir,
+                output_dir=getattr(data_args, "output_dir", None),
             )
         if data_args.training_mode == "offline":
             self.offline_dataset_builder = DatasetBuilderFactory.create(
