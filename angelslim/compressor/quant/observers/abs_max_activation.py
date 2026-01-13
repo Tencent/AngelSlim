@@ -20,6 +20,7 @@ __all__ = [
     "AbsmaxPertensorObserver",
     "AbsMaxTokenWiseActObserver",
     "AbsmaxPerchannelObserver",
+    "MoEAbsmaxPertensorObserver",
 ]
 
 
@@ -205,6 +206,94 @@ class AbsmaxPerchannelObserver(BaseObserver):
         if self.step == 0:
             raise ValueError(
                 "AbsmaxPerchannelObserver scales must calibrate data first!"
+            )
+        if self._scale is None:
+            self.cal_thresholds()
+        if self.dtype:
+            self._scale = self._scale.type(self.dtype)
+        return self._scale
+
+    def zero_points(self):
+        """Return output zero points."""
+        if self._zero_point is None:
+            self.cal_thresholds()
+        return self._zero_point
+
+
+class MoEAbsmaxPertensorObserver(BaseObserver):
+    def __init__(self, layer_name=None, quant_bits=8, **kwargs):
+        super(MoEAbsmaxPertensorObserver, self).__init__(quant_bits=quant_bits)
+        self.layer_name = layer_name
+        self._scale = None
+        self._zero_point = None
+        self._min = None
+        self._max = torch.tensor(1e-7, dtype=torch.float32)
+        self.step = 0
+        self.dtype = None
+        self.parent_observer = (
+            kwargs["parent_observer"]
+            if kwargs and "parent_observer" in kwargs
+            else None
+        )
+
+    def forward(self, inputs):
+        """Calculate forward pass."""
+        self.step += 1
+        if not self.dtype:
+            self.dtype = inputs.dtype
+        if inputs.numel() > 0:
+            self._min, self._max = self._cal_min_max(inputs)
+            if self.parent_observer is not None:
+                self.parent_observer.update(self._min, self._max, self.step)
+        else:
+            assert self.parent_observer is not None
+            self._update_min_max(self.parent_observer.min, self.parent_observer.max)
+        return inputs
+
+    def _cal_min_max(self, inputs):
+        if inputs.dim() >= 2:
+            abs_inputs = torch.abs(inputs)
+            batch_size = abs_inputs.shape[0]
+            abs_inputs_flat = abs_inputs.view(
+                batch_size, -1
+            )  # [batch_size, seq_len * hidden_dim]
+            abs_max_val, _ = torch.max(
+                abs_inputs_flat, dim=1, keepdim=True
+            )  # [batch_size, 1]
+            min_threshold = self._max.to(abs_max_val.device).expand_as(abs_max_val)
+            abs_max_val = torch.maximum(abs_max_val, min_threshold)
+        else:
+            abs_max_val = torch.max(torch.abs(inputs))
+            if abs_max_val.data < self._max.data:
+                abs_max_val = self._max
+            abs_max_val = abs_max_val.unsqueeze(0).unsqueeze(0)  # [1, 1]
+        return 0, abs_max_val.to(inputs.device)
+
+    def _update_min_max(self, min, max):
+        if min is not None and max is not None:
+            if self._min is None or min < self._min:
+                self._min = min
+            if self._max is None or max > self._max:
+                self._max = max
+
+    def cal_thresholds(self):
+        """Compute thresholds for MAX function."""
+        if self._scale is None:
+            self._scale = self._max
+        self._zero_point = torch.zeros_like(self._scale)
+
+    def quant_axis(self):
+        """Return quantization axis."""
+        return -1
+
+    def scales(self):
+        """Return output scales."""
+        if self.step == 0 and self.parent_observer is not None:
+            self._update_min_max(self.parent_observer.min, self.parent_observer.max)
+            self.step = self.parent_observer.step
+        if self.step == 0:
+            raise ValueError(
+                "AbsmaxPertensorObserver scales must calibrate data first!"
             )
         if self._scale is None:
             self.cal_thresholds()

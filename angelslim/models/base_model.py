@@ -147,6 +147,9 @@ class BaseLLMModel(metaclass=ABCMeta):
             raise NotImplementedError
         return q_linear
 
+    def get_moe_qdq_module(self, sub_layer, name):
+        return sub_layer
+
     def get_nvfp4_qdq_module(self, sub_layer, name):
         act_scale, weight_scale, weight_scale_2 = None, None, None
         block_size = self.quant_config.quant_algo_info["block_size"]

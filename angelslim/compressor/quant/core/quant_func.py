@@ -73,10 +73,17 @@ def quantize_weight_per_tensor_fp8(
 ) -> Tuple[torch.Tensor, float]:
     finfo = torch.finfo(torch.float8_e4m3fn)
 
+    squeeze_dim = False
+    while scale.ndim < tensor.ndim:
+        scale = scale.unsqueeze(-1)
+        squeeze_dim = True
+
     qweight = (tensor / scale).clamp(min=finfo.min, max=finfo.max)
     # Return both float8 data and the inverse scale (as float),
     # as both required as inputs to torch._scaled_mm
     qweight = qweight.to(torch.float8_e4m3fn)
+    if squeeze_dim:
+        scale = scale.squeeze(-1)
     scale = scale.float()
     return qweight, scale
 

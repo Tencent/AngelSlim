@@ -1023,3 +1023,80 @@ class NVFP4QDQModule(torch.nn.Module):
             deq_data.shape[0], deq_data.shape[1] // block_size, -1
         ) * per_block_scale.unsqueeze(-1)
         return deq_data.view(-1)[: np.prod(self.shape)].reshape(self.shape).to(dtype)
+
+
+class MoEQDQModule(torch.nn.Module):
+    def __init__(
+        self,
+        gate_proj: torch.nn.Parameter,
+        up_proj: torch.nn.Parameter,
+        down_proj: torch.nn.Parameter,
+        gate_proj_weight_scale: torch.nn.Parameter,
+        up_proj_weight_scale: torch.nn.Parameter,
+        down_proj_weight_scale: torch.nn.Parameter,
+        gate_up_proj_input_scale: torch.nn.Parameter,
+        down_proj_input_scale: torch.nn.Parameter,
+    ):
+        super().__init__()
+        quant_gate_weight, _ = quantize_weight_per_tensor_fp8(
+            gate_proj, gate_proj_weight_scale
+        )
+        quant_up_weight, _ = quantize_weight_per_tensor_fp8(
+            up_proj, up_proj_weight_scale
+        )
+        quant_down_weight, _ = quantize_weight_per_tensor_fp8(
+            down_proj, down_proj_weight_scale
+        )
+        quant_gate_up_weight = torch.cat([quant_gate_weight, quant_up_weight], dim=-1)
+
+        self.gate_up_proj = torch.nn.Parameter(
+            quant_gate_up_weight, requires_grad=False
+        )
+        self.down_proj = torch.nn.Parameter(quant_down_weight, requires_grad=False)
+
+        gate_proj_weight_scale = (
+            gate_proj_weight_scale.view(-1)
+            if gate_proj_weight_scale.ndim == 0
+            else gate_proj_weight_scale
+        )
+        up_proj_weight_scale = (
+            up_proj_weight_scale.view(-1)
+            if up_proj_weight_scale.ndim == 0
+            else up_proj_weight_scale
+        )
+        down_proj_weight_scale = (
+            down_proj_weight_scale.view(-1)
+            if down_proj_weight_scale.ndim == 0
+            else down_proj_weight_scale
+        )
+        gate_up_proj_weight_scale = torch.cat(
+            [gate_proj_weight_scale, up_proj_weight_scale], dim=-1
+        )
+
+        self.gate_up_proj_weight_scale = torch.nn.Parameter(
+            gate_up_proj_weight_scale, requires_grad=False
+        )
+        self.down_proj_weight_scale = torch.nn.Parameter(
+            down_proj_weight_scale, requires_grad=False
+        )
+
+        down_proj_input_scale = (
+            down_proj_input_scale.view(-1)
+            if down_proj_input_scale.ndim == 0
+            else down_proj_input_scale.squeeze()
+        )
+        gate_up_proj_input_scale = (
+            gate_up_proj_input_scale.view(-1)
+            if gate_up_proj_input_scale.ndim == 0
+            else gate_up_proj_input_scale.squeeze()
+        )
+
+        self.gate_up_proj_input_scale = torch.nn.Parameter(
+            gate_up_proj_input_scale, requires_grad=False
+        )
+        self.down_proj_input_scale = torch.nn.Parameter(
+            down_proj_input_scale, requires_grad=False
+        )
+
+    def forward(self, x):
+        pass
