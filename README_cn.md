@@ -78,7 +78,7 @@
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
-          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle.html">Eagle3</a></li>
+          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html">Eagle3</a></li>
           <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html">SpecExit</a></li>
         </ul>
       </td>
@@ -112,7 +112,7 @@
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
-          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle.html">Eagle3</a></li>
+          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html">Eagle3</a></li>
         </ul>
       </td>
       <td>
@@ -182,7 +182,7 @@
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
-          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle.html">Eagle3</a></li>
+          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html">Eagle3</a></li>
         </ul>
       </td>
       <td>
@@ -516,22 +516,22 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
   <tr>
     <td></td>
     <td></td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
   </tr>
   </tr></thead>
 <tbody>
@@ -666,8 +666,8 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
   <tr>
     <td></td>
     <td></td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
   </tr>
   </tr></thead>
 <tbody>
@@ -699,8 +699,8 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
   <tr>
     <td></td>
     <td></td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
   </tr>
   </tr></thead>
 <tbody>
@@ -729,8 +729,8 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
   <tr>
     <td></td>
     <td></td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
   </tr>
   </tr></thead>
 <tbody>

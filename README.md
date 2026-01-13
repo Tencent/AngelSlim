@@ -77,7 +77,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
-          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle.html">Eagle3</a></li>
+          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html">Eagle3</a></li>
           <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html">SpecExit</a></li>
         </ul>
       </td>
@@ -111,7 +111,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
-          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle.html">Eagle3</a></li>
+          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html">Eagle3</a></li>
         </ul>
       </td>
       <td>
@@ -181,7 +181,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
-          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle.html">Eagle3</a></li>
+          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html">Eagle3</a></li>
         </ul>
       </td>
       <td>
@@ -513,22 +513,22 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
   <tr>
     <td></td>
     <td></td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
   </tr>
   </tr></thead>
 <tbody>
@@ -663,8 +663,8 @@ Benchmark results for HunyuanOCR using Eagle3 speculative decoding on vLLM (v0.1
   <tr>
     <td></td>
     <td></td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
   </tr>
   </tr></thead>
 <tbody>
@@ -696,8 +696,8 @@ Benchmark results for Qwen2-Audio using Eagle3 speculative decoding on vLLM (v0.
   <tr>
     <td></td>
     <td></td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
   </tr>
   </tr></thead>
 <tbody>
@@ -727,8 +727,8 @@ Benchmark results for Fun-CosyVoice3 using Eagle3 speculative decoding across **
   <tr>
     <td></td>
     <td></td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
   </tr>
   </tr></thead>
 <tbody>
