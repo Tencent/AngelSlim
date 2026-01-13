@@ -77,7 +77,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
-          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle.html">Eagle3</a></li>
+          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html">Eagle3</a></li>
           <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html">SpecExit</a></li>
         </ul>
       </td>
@@ -111,7 +111,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
-          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle.html">Eagle3</a></li>
+          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html">Eagle3</a></li>
         </ul>
       </td>
       <td>
@@ -181,7 +181,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
-          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle.html">Eagle3</a></li>
+          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html">Eagle3</a></li>
         </ul>
       </td>
       <td>
@@ -233,7 +233,7 @@ bash scripts/speculative/train_eagle3_online.sh
 
 For detailed training configurations and vLLM performance benchmarks of Eagle3, please refer to the [Quick Start Guide for Speculative Sampling](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/quickstrat.html#id5).
 
-Training and Deployment Guide for Multimodal Model Eagle3—Supporting LLM, VLM, and Audio (ASR & TTS) Models: [LLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/eagle.html) | [VLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/vlm_eagle.html) | [Audio(ASR)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_eagle.html) | [Audio(TTS)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_tts_eagle.html).
+Training and Deployment Guide for Multimodal Model Eagle3—Supporting LLM, VLM, and Audio (ASR & TTS) Models: [LLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/eagle.html) | [VLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/vlm_eagle.html) | [Audio(ASR)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_asr_eagle.html) | [Audio(TTS)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_tts_eagle.html).
 
 #### 2.2 LLM/VLM Model Quantization
 
@@ -502,37 +502,36 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th colspan="2">GSM8K</th>
-    <th colspan="2">Alpaca</th>
-    <th colspan="2">HumanEval</th>
-    <th colspan="2">MT-bench</th>
-    <th colspan="2">MATH-500</th>
-    <th colspan="2">MMMU</th>
-    <th colspan="2">MMStar</th>
-    <th>Mean</th>
-    <th></th>
-  </tr></thead>
-<tbody>
+    <th colspan="2" style="text-align:center;">GSM8K</th>
+    <th colspan="2" style="text-align:center;">Alpaca</th>
+    <th colspan="2" style="text-align:center;">HumanEval</th>
+    <th colspan="2" style="text-align:center;">MT-bench</th>
+    <th colspan="2" style="text-align:center;">MATH-500</th>
+    <th colspan="2" style="text-align:center;">MMMU</th>
+    <th colspan="2" style="text-align:center;">MMStar</th>
+    <th colspan="2" style="text-align:center;">Mean</th>
   <tr>
     <td></td>
     <td></td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
   </tr>
+  </tr></thead>
+<tbody>
   <tr>
     <td rowspan="2">Qwen3-VL-2B-Instruct</td>
     <td>Vanilla</td>
@@ -655,19 +654,20 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
 ##### 1.2.2 HunyuanOCR Model
 
 Benchmark results for HunyuanOCR using Eagle3 speculative decoding on vLLM (v0.13.0) across **[OmniDocBench](https://huggingface.co/datasets/opendatalab/OmniDocBench)** dataset, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
+
 <table><thead>
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th colspan="2">OmniDocBench</th>
-  </tr></thead>
-<tbody>
+    <th colspan="2" style="text-align:center;">OmniDocBench</th>
   <tr>
     <td></td>
     <td></td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
   </tr>
+  </tr></thead>
+<tbody>
   <tr>
     <td rowspan="2">Hunyuan-OCR</td>
     <td>Vanilla</td>
@@ -692,15 +692,15 @@ Benchmark results for Qwen2-Audio using Eagle3 speculative decoding on vLLM (v0.
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th colspan="2">LibriSpeech</th>
-  </tr></thead>
-<tbody>
+   <th colspan="2" style="text-align:center;">LibriSpeech</th>
   <tr>
     <td></td>
     <td></td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
   </tr>
+  </tr></thead>
+<tbody>
   <tr>
     <td rowspan="2">Qwen2-Audio</td>
     <td>Vanilla</td>
@@ -723,15 +723,15 @@ Benchmark results for Fun-CosyVoice3 using Eagle3 speculative decoding across **
   <tr>
     <th>Model</th>
     <th>Method</th>
-    <th colspan="2">LibriTTS</th>
-  </tr></thead>
-<tbody>
+    <th colspan="2" style="text-align:center;">LibriTTS</th>
   <tr>
     <td></td>
     <td></td>
-    <td>throughput (tokens/s)</td>
-    <td>accept length</td>
+    <th>throughput (tokens/s)</th>
+    <th>accept length</th>
   </tr>
+  </tr></thead>
+<tbody>
   <tr>
     <td rowspan="2">Fun-CosyVoice3</td>
     <td>Vanilla</td>

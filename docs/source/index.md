@@ -99,9 +99,10 @@ AngelSlim是腾讯自研的，致力于打造更易用、更全面和更高效�
    * - **语音(TTS/ASR)**
      - - Qwen3-Omni
        - Qwen2-Audio
+       - Fun-CosyVoice3
      - - FP8-Static/Dynamic
        - INT8-Dynamic
-     - - 建设中
+     - - Eagle3
      - - **Token剪枝**
 
          - 建设中
