@@ -449,6 +449,8 @@ class SpecEngine:
         config_dict.update(kwargs)
 
         self.config = self.BenchmarkConfig(**config_dict)
+        if self.config.is_tts:
+            self.BenchmarkEngine = pytorch_benchmark.TTSBenchmarkEngine
         self.benchmark_engine = self.BenchmarkEngine(self.config)
 
         return self.config

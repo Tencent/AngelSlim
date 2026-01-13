@@ -17,15 +17,18 @@ import json
 import os
 import random
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, Generator, List
 
 import numpy as np
 import shortuuid
 import torch
 from tqdm import tqdm
 
-from angelslim.compressor.speculative.inference.models import Eagle3Model
-from angelslim.utils.lazy_imports import fastchat, ray
+from angelslim.compressor.speculative.inference.models import (
+    CosyVoice3Eagle3Model,
+    Eagle3Model,
+)
+from angelslim.utils.lazy_imports import fastchat, ray, torchaudio
 
 SYSTEM_PROMPT = {
     "role": "system",
@@ -57,6 +60,7 @@ class EvaluationConfig:
         self.depth = args.depth
         self.top_k = args.top_k
         self.early_stop_method = args.early_stop_method
+        self.generate_audio = args.generate_audio
 
     def _get_question_file_path(self, args: argparse.Namespace) -> str:
         script_dir = os.path.dirname(__file__)
@@ -92,6 +96,25 @@ def initialize_model(config: EvaluationConfig) -> Eagle3Model:
         device_map="auto",
         torch_dtype="auto",
         early_stop_method=config.early_stop_method,
+    )
+    model.eval()
+    print(f"Model training state: {model.training}")
+    print(f'CUDA VISIBLE DEVICES: {os.environ.get("CUDA_VISIBLE_DEVICES")}')
+    return model
+
+
+def initialize_cosycoice3_model(config: EvaluationConfig) -> CosyVoice3Eagle3Model:
+    """Initialize and return the Eagle3 model"""
+    model = CosyVoice3Eagle3Model.from_pretrained(
+        base_model_path=config.base_model_path,
+        eagle_model_path=config.eagle_model_path,
+        total_token=config.total_token,
+        depth=config.depth,
+        top_k=config.top_k,
+        device_map="auto",
+        torch_dtype="auto",
+        early_stop_method=config.early_stop_method,
+        generate_audio=config.generate_audio,
     )
     model.eval()
     print(f"Model training state: {model.training}")
@@ -147,6 +170,103 @@ def process_conversation_turn(
     }
 
 
+def process_tts_conversation_turn(
+    model: Eagle3Model,
+    model_id: str,
+    qs: str,
+    temperature: float,
+    path: str,
+    is_cosyvoice3: bool = False,
+) -> Dict[str, Any]:
+    """Process a single question"""
+    if is_cosyvoice3:
+        prompt_text = model.base_model.frontend.text_normalize(
+            qs["prompt_text"], split=False, text_frontend=True
+        )
+        prompt_wav = os.path.normpath(os.path.join(path, qs["prompt_wav"]))
+        for i in tqdm(
+            model.base_model.frontend.text_normalize(
+                qs["tts_text"], split=True, text_frontend=True
+            )
+        ):
+            if (not isinstance(i, Generator)) and len(i) < 0.5 * len(prompt_text):
+                print(
+                    "synthesis text {} too short than prompt text {}, this may lead to bad performance".format(  # noqa: E501
+                        i, prompt_text
+                    )
+                )
+            model_input = model.base_model.frontend.frontend_zero_shot(
+                i, prompt_text, prompt_wav, model.base_model.sample_rate, ""
+            )
+
+            torch.cuda.synchronize()
+            start_time = time.time()
+
+            dtype = model_input["text"].dtype
+            device = model_input["text"].device
+
+            input_ids = torch.concat(
+                [
+                    model.base_model.model.llm.sos_id.unsqueeze(dim=0)
+                    .to(dtype)
+                    .to(device),
+                    model_input["prompt_text"],
+                    model_input["text"],
+                    model.base_model.model.llm.task_token.unsqueeze(dim=0)
+                    .to(dtype)
+                    .to(device),
+                    model_input["llm_prompt_speech_token"],
+                ],
+                dim=1,
+            )
+
+            # concat llm input embedding
+            text = torch.concat(
+                [model_input["prompt_text"], model_input["text"]], dim=1
+            )
+            text_emb = model.base_model.model.llm.llm.model.model.embed_tokens(text)
+            sos_emb = model.base_model.model.llm.speech_embedding.weight[
+                model.base_model.model.llm.sos
+            ].reshape(1, 1, -1)
+            task_id_emb = model.base_model.model.llm.speech_embedding.weight[
+                model.base_model.model.llm.task_id
+            ].reshape(1, 1, -1)
+            if model_input["llm_prompt_speech_token_len"][0].item() != 0:
+                prompt_speech_token_emb = model.base_model.model.llm.speech_embedding(
+                    model_input["llm_prompt_speech_token"]
+                )
+            else:
+                prompt_speech_token_emb = torch.zeros(
+                    1, 0, model.base_model.model.llm.llm_input_size, dtype=text.dtype
+                ).to(device)
+            inputs_embeds = torch.concat(
+                [sos_emb, text_emb, task_id_emb, prompt_speech_token_emb], dim=1
+            )
+
+            output_ids, new_token, idx, accept_length_list = model.eagle_generate(
+                input_ids=input_ids,
+                inputs_embeds=inputs_embeds,
+                temperature=temperature,
+                log=True,
+                is_cosyvoice3=True,
+            )
+
+            torch.cuda.synchronize()
+            total_time = time.time() - start_time
+            output_ids = output_ids[0][-new_token:]
+
+            return {
+                "tts_text": qs["tts_text"],
+                "prompt_text": qs["prompt_text"],
+                "prompt_wav": prompt_wav,
+                "output_audio_tokens": output_ids,
+                "idx": int(idx),
+                "new_token": int(new_token),
+                "wall_time": total_time,
+                "accept_length_list": accept_length_list,
+            }
+
+
 def generate_answer_for_question(
     model: Eagle3Model,
     tokenizer: Any,
@@ -187,6 +307,46 @@ def generate_answer_for_question(
     return choices
 
 
+def generate_answer_for_question_tts(
+    model: Eagle3Model,
+    model_id: str,
+    question: Dict[str, Any],
+    num_choices: int,
+    temperature: float,
+    path: str,
+    is_cosyvoice3: bool = False,
+) -> List[Dict[str, Any]]:
+    """Generate answers for a single question with multiple choices"""
+    choices = []
+    for i in range(num_choices):
+        torch.manual_seed(i)
+
+        result = process_tts_conversation_turn(
+            model,
+            model_id,
+            question,
+            temperature,
+            path,
+            is_cosyvoice3,
+        )
+
+        choices.append(
+            {
+                "index": i,
+                "tts_text": result["tts_text"],
+                "prompt_text": result["prompt_text"],
+                "prompt_wav": result["prompt_wav"],
+                "output_audio_tokens": result["output_audio_tokens"].tolist(),
+                "idxs": result["idx"],
+                "new_tokens": result["new_token"],
+                "wall_time": result["wall_time"],
+                "accept_length": result["accept_length_list"],
+            }
+        )
+
+    return choices
+
+
 def warmup_model(
     model: Eagle3Model, tokenizer: Any, question: Dict[str, Any], temperature: float
 ) -> None:
@@ -196,6 +356,23 @@ def warmup_model(
         conv = [SYSTEM_PROMPT]
         for qs in question["turns"]:
             process_conversation_turn(model, tokenizer, conv, qs, temperature)
+    print("Warmup done")
+
+
+def warmup_tts_lm(
+    model: Eagle3Model,
+    model_id: str,
+    question: Dict[str, Any],
+    temperature: float,
+    path: str,
+    is_cosyvoice3: bool = False,
+) -> None:
+    """Warm up the model before actual evaluation"""
+    for _ in range(3):
+        torch.manual_seed(0)
+        process_tts_conversation_turn(
+            model, model_id, question, temperature, path, is_cosyvoice3
+        )
     print("Warmup done")
 
 
@@ -232,6 +409,111 @@ def get_model_answers(
                 "tstamp": time.time(),
             }
             fout.write(json.dumps(ans_json) + "\n")
+
+
+@torch.inference_mode()
+def get_tts_answers(
+    model_id: str,
+    questions: List[Dict[str, Any]],
+    answer_file: str,
+    num_choices: int,
+    temperature: float,
+    args: argparse.Namespace,
+) -> None:
+    """Generate answers for a batch of questions"""
+    config = EvaluationConfig(args)
+    is_cosyvoice3 = False
+    if os.path.exists(os.path.join(args.base_model_path, "cosyvoice3.yaml")):
+        model = initialize_cosycoice3_model(config)
+        is_cosyvoice3 = True
+
+    if questions:
+        current_file = os.path.abspath(__file__)
+        project_root = current_file.split("/AngelSlim/")[0] + "/AngelSlim"
+        warmup_tts_lm(
+            model,
+            model_id,
+            questions[0],
+            temperature,
+            os.path.join(project_root, "dataset", args.bench_name),
+            is_cosyvoice3,
+        )
+
+    os.makedirs(os.path.dirname(answer_file), exist_ok=True)
+
+    i = 0
+    for question in tqdm(questions):
+        choices = generate_answer_for_question_tts(
+            model,
+            model_id,
+            question,
+            num_choices,
+            temperature,
+            os.path.join(project_root, "dataset", args.bench_name),
+            is_cosyvoice3,
+        )
+
+        with open(os.path.expanduser(answer_file), "a") as fout:
+            ans_json = {
+                "question_id": i,
+                "answer_id": shortuuid.uuid(),
+                "model_id": model_id,
+                "choices": choices,
+                "tstamp": time.time(),
+            }
+            fout.write(json.dumps(ans_json) + "\n")
+
+        i += 1
+
+
+def get_tts_audios(
+    answers: List[Dict[str, Any]],
+    answer_file: str,
+    args: argparse.Namespace,
+) -> None:
+    """Generate audios for a batch of audio tokens"""
+    config = EvaluationConfig(args)
+    if os.path.exists(os.path.join(args.base_model_path, "cosyvoice3.yaml")):
+        model = initialize_cosycoice3_model(config)
+
+        for answer in tqdm(answers):
+            prompt_text = model.base_model.frontend.text_normalize(
+                answer["choices"][0]["prompt_text"], split=False, text_frontend=True
+            )
+            prompt_wav = answer["choices"][0]["prompt_wav"]
+            for i in tqdm(
+                model.base_model.frontend.text_normalize(
+                    answer["choices"][0]["tts_text"], split=True, text_frontend=True
+                )
+            ):
+                model_input = model.base_model.frontend.frontend_zero_shot(
+                    i, prompt_text, prompt_wav, model.base_model.sample_rate, ""
+                )
+
+            tts_speech_token = answer["choices"][0]["output_audio_tokens"]
+            while tts_speech_token[-1] == model.base_model.model.llm.eos_token:
+                del tts_speech_token[-1]
+            this_tts_speech_token = torch.tensor(tts_speech_token).unsqueeze(dim=0)
+            this_tts_speech = model.base_model.model.token2wav(
+                token=this_tts_speech_token,
+                prompt_token=model_input["flow_prompt_speech_token"],
+                prompt_feat=model_input["prompt_speech_feat"],
+                embedding=model_input["flow_embedding"],
+                token_offset=0,
+                uuid="",
+                finalize=True,
+                speed=1.0,
+            )
+            this_tts_speech = this_tts_speech.cpu()
+            directory = os.path.dirname(answer_file)
+            os.makedirs(f"{directory}/eagle", exist_ok=True)
+            torchaudio.save(
+                f"{directory}/eagle/eval_{answer['question_id']}.wav",
+                this_tts_speech,
+                model.base_model.sample_rate,
+            )
+    else:
+        raise NotImplementedError("Model not supported")
 
 
 def run_evaluation(config: EvaluationConfig, args: argparse.Namespace) -> None:

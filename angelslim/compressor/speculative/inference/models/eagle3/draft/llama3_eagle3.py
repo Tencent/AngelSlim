@@ -13,11 +13,13 @@
 # limitations under the License.
 
 import math
+import os
 from typing import List, Optional, Tuple
 
 import torch
 import torch.nn.functional as F
-from torch import nn
+from huggingface_hub import snapshot_download
+from torch import Tensor, nn
 from transformers.activations import ACT2FN
 
 from .base_model import BaseEagle3Drafter
@@ -637,8 +639,9 @@ class Llama3Eagle3Drafter(BaseEagle3Drafter):
         seq_length_with_past = seq_length
         past_key_values_length = 0
 
-        with torch.no_grad():
-            inputs_embeds = self.embed_tokens(input_ids)
+        if inputs_embeds is None:
+            with torch.no_grad():
+                inputs_embeds = self.embed_tokens(input_ids)
 
         if past_key_values is not None:
             past_key_values_length = past_key_values[0][0].shape[2]
@@ -672,7 +675,9 @@ class Llama3Eagle3Drafter(BaseEagle3Drafter):
             past_key_values_length,
         )
 
-        inputs_embeds = inputs_embeds.to(hidden_states.dtype)
+        dtype = self.fc.weight.dtype
+        inputs_embeds = inputs_embeds.to(dtype)
+        hidden_states = hidden_states.to(dtype)
         if hidden_states.shape[-1] != inputs_embeds.shape[-1]:
             hidden_states = self.fc(hidden_states)
         early_stop_signal: Optional[torch.Tensor] = None
@@ -710,3 +715,25 @@ class Llama3Eagle3Drafter(BaseEagle3Drafter):
         hidden_states = layer_outputs[0]
 
         return hidden_states, next_decoder_cache, early_stop_signal
+
+
+class CosyVoice3Llama3Eagle3Drafter(Llama3Eagle3Drafter):
+
+    def load_embed(self, path: str) -> None:
+        # Handle HuggingFace model identifier
+        if not os.path.exists(path):
+            path = snapshot_download(repo_id=path)
+
+        # Try loading embedding weights
+        tensor = torch.load("{}/llm.pt".format(path))
+        embed_tokens_weight = tensor["speech_embedding.weight"]
+
+        with torch.no_grad():
+            self.embed_tokens.weight.copy_(embed_tokens_weight)
+
+    def _get_topk_tokens(self, hidden: Tensor) -> Tuple[Tensor, Tensor]:
+        """Get top-k tokens from hidden states."""
+        logits = self.lm_head(self.norm(hidden))
+        probs = self.logsoftmax(logits)
+        topk = torch.topk(probs, self.top_k, dim=-1)
+        return topk.indices, topk.values

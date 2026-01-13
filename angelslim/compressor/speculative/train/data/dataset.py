@@ -84,6 +84,8 @@ class DatasetManager:
                 shuffle_seed=data_args.shuffle_seed,
                 chat_template_type=chat_template_type,
                 display=display,
+                target_model_name_or_path=data_args.target_model_name_or_path,
+                output_dir=data_args.output_dir,
             )
         if data_args.training_mode == "offline":
             self.offline_dataset_builder = DatasetBuilderFactory.create(

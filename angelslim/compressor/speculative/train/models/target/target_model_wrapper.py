@@ -12,12 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 from abc import ABC, abstractmethod
 from typing import List, Optional, Tuple
 
 import torch
+from huggingface_hub import snapshot_download
 
 from angelslim.utils import decide_device_for_distributed, print_with_rank
+
+from .cosyvoice3_llm import CosyVoice3LM
 
 
 class BaseBackend(ABC):
@@ -722,6 +726,76 @@ class AudioTransformersBackend(BaseBackend):
         }
 
 
+class TTSTransformersBackend(TransformersBackend):
+    """
+    HuggingFace Transformers backend implementation.
+
+    """
+
+    def load_model(self) -> None:
+        # Load and configure model
+        if not os.path.exists(self.model_path):
+            self.model_path = snapshot_download(self.model_path)
+
+        # Determine device based on distributed environment
+        self.device = decide_device_for_distributed()
+        print_with_rank(f"Loading model to device: {self.device}")
+
+        # Load model
+        if os.path.exists(os.path.join(self.model_path, "cosyvoice3.yaml")):
+            self.model_name = "cosyvoice3"
+            self._load_cosyvoice3()
+        else:
+            raise NotImplementedError("This model is not implemented")
+
+        self._freeze_model_parameters()
+        self.model.eval()
+
+    def _load_cosyvoice3(self) -> None:
+        """Load text tokenizer using HuggingFace Transformers."""
+
+        self.model = CosyVoice3LM(
+            self.model_path,
+            llm_input_size=896,
+            llm_output_size=896,
+            speech_token_size=6561,
+        ).to(self.device)
+        self.model.load_state_dict(
+            torch.load(
+                os.path.join(self.model_path, "llm.pt"), map_location=self.device
+            ),
+            strict=True,
+        )
+
+        # Load tokenizer
+        self.tokenizer = self.model.tokenizer
+
+    def get_hidden_states_and_logits(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        **kwargs,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Extract hidden states and logits using Transformers backend.
+
+        Args:
+            input_ids: Input token IDs
+            attention_mask: Attention mask
+            **kwargs: May contain 'aux_hidden_states_layer_ids' to specify custom layers
+
+        Returns:
+            Tuple of (concatenated_hidden_states, logits)
+        """
+        if self.model_name == "cosyvoice3":
+            with torch.no_grad():
+                outputs = self.model(
+                    **input_ids,
+                    output_hidden_states=True,
+                )
+            return outputs
+
+
 class TargetModelWrapper:
     """
     Unified wrapper for target models in Eagle3 training.
@@ -749,6 +823,7 @@ class TargetModelWrapper:
     BACKENDS = {
         ("hf", "LLM"): TransformersBackend,
         ("hf", "VLM"): VLMTransformersBackend,
+        ("hf", "TTS"): TTSTransformersBackend,
         ("hf", "Audio"): AudioTransformersBackend,
     }
 

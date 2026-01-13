@@ -12,6 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .llama3_eagle3 import Llama3Eagle3Drafter
+# isort: off
+from .llama3_eagle3 import (
+    Llama3Eagle3Drafter,
+    CosyVoice3Llama3Eagle3Drafter,
+)
 
-__all__ = ["Llama3Eagle3Drafter"]
+# isort: on
+
+__all__ = ["Llama3Eagle3Drafter", "CosyVoice3Llama3Eagle3Drafter"]

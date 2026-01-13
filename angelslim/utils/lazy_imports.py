@@ -208,6 +208,12 @@ shortuuid = LazyModule("shortuuid", "speculative")
 # --- multimodal related lazy imports ---
 qwen_vl_utils = LazyModule("qwen_vl_utils", "multimodal")
 qwen_omni_utils = LazyModule("qwen_omni_utils", "multimodal")
+torchaudio = LazyModule("torchaudio", "multimodal")
+whisper = LazyModule("whisper", "multimodal")
+onnxruntime = LazyModule("onnxruntime", "multimodal")
+inflect = LazyModule("inflect", "multimodal")
+librosa = LazyModule("librosa", "multimodal")
+wetext = LazyModule("wetext", "multimodal")
 
 # --- HunyuanVL related lazy imports ---
 HunYuanVLForConditionalGeneration = LazyAttribute(

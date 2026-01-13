@@ -22,6 +22,9 @@ __all__ = [
     "convert_ultrachat_data",
     "DataCollatorWithPadding",
     "VLMDataCollatorWithPadding",
+    "VLMHunyuanDataCollatorWithPadding",
+    "AudioDataCollatorWithPadding",
+    "CosyVoice3DataCollatorWithPadding",
 ]
 
 
@@ -407,5 +410,73 @@ class AudioDataCollatorWithPadding:
         ):
             batch["input_features"] = torch.cat(
                 [(item["input_features"]) for item in features]
+            )
+        return batch
+
+
+class CosyVoice3DataCollatorWithPadding:
+
+    def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, Any]:
+        max_length = max(item["text"].shape[-1] for item in features)
+        batch_text_tokens = torch.cat(
+            [
+                paddingtensor2D(item["text"].unsqueeze(0), max_length)
+                for item in features
+            ]
+        )
+        max_length = max(item["speech_token"].shape[-1] for item in features)
+        batch_speech_tokens = torch.cat(
+            [
+                paddingtensor2D(item["speech_token"].unsqueeze(0), max_length)
+                for item in features
+            ]
+        )
+        max_length = max(item["prompt_text"].shape[-1] for item in features)
+        batch_prompt_text = torch.cat(
+            [
+                paddingtensor2D(item["prompt_text"].unsqueeze(0), max_length)
+                for item in features
+            ]
+        )
+        max_length = max(item["prompt_speech_token"].shape[-1] for item in features)
+        batch_prompt_speech_tokens = torch.cat(
+            [
+                paddingtensor2D(item["prompt_speech_token"].unsqueeze(0), max_length)
+                for item in features
+            ]
+        )
+        batch_text_token_lens = torch.stack([item["text_len"] for item in features])
+        batch_speech_token_lens = torch.stack(
+            [item["speech_token_len"] for item in features]
+        )
+        batch_prompt_text_lens = torch.stack(
+            [item["prompt_text_len"] for item in features]
+        )
+        batch_prompt_speech_token_lens = torch.stack(
+            [item["prompt_speech_token_len"] for item in features]
+        )
+
+        batch = {
+            "text": batch_text_tokens,
+            "text_len": batch_text_token_lens,
+            "speech_token": batch_speech_tokens,
+            "speech_token_len": batch_speech_token_lens,
+            "prompt_speech_token": batch_prompt_speech_tokens,
+            "prompt_speech_token_len": batch_prompt_speech_token_lens,
+            "prompt_text": batch_prompt_text,
+            "prompt_text_len": batch_prompt_text_lens,
+            "hidden_states": None,
+            "target_hiddens": None,
+        }
+
+        # Check if both hidden_states and target_hiddens exist in all features
+        if all(
+            "hidden_states" in item and "target_hiddens" in item for item in features
+        ):
+            batch["hidden_states"] = torch.cat(
+                [paddingtensor(item["hidden_states"], max_length) for item in features]
+            )
+            batch["target_hiddens"] = torch.cat(
+                [paddingtensor(item["target_hiddens"], max_length) for item in features]
             )
         return batch

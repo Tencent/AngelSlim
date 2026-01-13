@@ -12,6 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .eagle3_model import Eagle3Model
+from .eagle3_model import Eagle3Model, CosyVoice3Eagle3Model  # isort: skip
 
-__all__ = ["Eagle3Model"]
+__all__ = ["Eagle3Model", "CosyVoice3Eagle3Model"]
