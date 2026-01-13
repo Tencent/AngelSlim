@@ -25,15 +25,17 @@ from transformers import (
 )
 from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import Qwen3VLMoeTextExperts
 
-from angelslim.compressor.quant.observers.base_observer import BaseObserver
+from angelslim.compressor.quant.core.quant_func import get_fp_maxval
+from angelslim.compressor.quant.observers import MoEAbsmaxPertensorObserver
 
 from ...compressor.quant.core import LossFilter, PTQVLMSaveVllmHF
+from ...compressor.quant.modules import MoEQDQModule
 from ...utils import find_layers, print_info
 from ..base_model import BaseLLMModel
 from ..model_factory import SlimModelFactory
 
 
-def observer_forward(
+def moe_observer_forward(
     self,
     hidden_states: torch.Tensor,
     routing_weights: torch.Tensor,
@@ -108,9 +110,6 @@ def observer_forward(
     return next_states
 
 
-Qwen3VLMoeTextExperts.forward = observer_forward
-
-
 @SlimModelFactory.register
 class Qwen3VLMoE(BaseLLMModel):
     def __init__(
@@ -142,7 +141,6 @@ class Qwen3VLMoE(BaseLLMModel):
         low_cpu_mem_usage=True,
         use_cache=False,
         using_multi_nodes=False,
-        compress_config=None,
     ):
         self.model = Qwen3VLMoeForConditionalGeneration.from_pretrained(
             model_path,
@@ -161,6 +159,14 @@ class Qwen3VLMoE(BaseLLMModel):
         self.processor = AutoProcessor.from_pretrained(
             model_path, trust_remote_code=trust_remote_code
         )
+
+    def init_ptq(self, slim_config):
+        for _, module in self.model.named_modules():
+            if isinstance(module, Qwen3VLMoeTextExperts):
+                module.forward = moe_observer_forward.__get__(
+                    module, Qwen3VLMoeTextExperts
+                )
+        super().init_ptq(slim_config)
 
     def get_observer_layers(self):
         names = [
@@ -189,12 +195,12 @@ class Qwen3VLMoE(BaseLLMModel):
             if result == "mlp.experts":
                 if not hasattr(module, "gateupobservers"):
                     layername = name + ".gate_up"
-                    module.gateupobservers = MyAbsmaxPertensorObserver(
+                    module.gateupobservers = MoEAbsmaxPertensorObserver(
                         layer_name=layername
                     )
                 if not hasattr(module, "downobservers"):
                     layername = name + ".down"
-                    module.downobservers = MyAbsmaxPertensorObserver(
+                    module.downobservers = MoEAbsmaxPertensorObserver(
                         layer_name=layername
                     )
             else:
@@ -209,6 +215,52 @@ class Qwen3VLMoE(BaseLLMModel):
                     if custom_observe_name not in default_name:
                         observer_layers_dict.pop(default_name)
         return observer_layers_dict
+
+    def get_moe_qdq_module(self, sub_layer, name):
+        if not isinstance(sub_layer, Qwen3VLMoeTextExperts):
+            return sub_layer
+        maxval = get_fp_maxval(bits=8)
+        gate_up_act_max = sub_layer.gateupobservers.scales()
+        down_act_max = sub_layer.downobservers.scales()
+        gate_up_act_dtype = gate_up_act_max.dtype
+        down_act_dtype = down_act_max.dtype
+        gate_up_act_scale = gate_up_act_max / maxval.type(gate_up_act_dtype)
+        down_act_scale = down_act_max / maxval.type(down_act_dtype)
+
+        gate_proj, up_proj = sub_layer.gate_up_proj.chunk(2, dim=-1)
+        abs_inputs = torch.abs(gate_proj)
+        batch_size = abs_inputs.shape[0]
+        abs_inputs_flat = abs_inputs.view(batch_size, -1)
+        gate_weight_max, _ = torch.max(abs_inputs_flat, dim=1, keepdim=True)
+
+        abs_inputs = torch.abs(up_proj)
+        batch_size = abs_inputs.shape[0]
+        abs_inputs_flat = abs_inputs.view(batch_size, -1)
+        up_weight_max, _ = torch.max(abs_inputs_flat, dim=1, keepdim=True)
+
+        abs_inputs = torch.abs(sub_layer.down_proj)
+        batch_size = abs_inputs.shape[0]
+        abs_inputs_flat = abs_inputs.view(batch_size, -1)
+        down_weight_max, _ = torch.max(abs_inputs_flat, dim=1, keepdim=True)
+
+        gate_weight_dtype = gate_proj.dtype
+        up_weight_dtype = up_proj.dtype
+        down_weight_dtype = sub_layer.down_proj.dtype
+        gate_weight_scale = gate_weight_max / maxval.type(gate_weight_dtype)
+        up_weight_scale = up_weight_max / maxval.type(up_weight_dtype)
+        down_weight_scale = down_weight_max / maxval.type(down_weight_dtype)
+
+        q_linear = MoEQDQModule(
+            gate_proj=gate_proj.cpu(),
+            up_proj=up_proj.cpu(),
+            down_proj=sub_layer.down_proj.cpu(),
+            gate_proj_weight_scale=gate_weight_scale.cpu(),
+            up_proj_weight_scale=up_weight_scale.cpu(),
+            down_proj_weight_scale=down_weight_scale.cpu(),
+            gate_up_proj_input_scale=gate_up_act_scale.cpu(),
+            down_proj_input_scale=down_act_scale.cpu(),
+        )
+        return q_linear
 
     def model_forward(self, dataloader, **kwargs):
         self.model.use_cache = False
@@ -297,91 +349,3 @@ class Qwen3VLMoE(BaseLLMModel):
             raise NotImplementedError(
                 f"deploy_backend {self.deploy_backend} is not supported for saving."
             )
-
-
-class MyAbsmaxPertensorObserver(BaseObserver):
-    def __init__(self, layer_name=None, quant_bits=8, **kwargs):
-        super(MyAbsmaxPertensorObserver, self).__init__(quant_bits=quant_bits)
-        self.layer_name = layer_name
-        self._scale = None
-        self._zero_point = None
-        self._min = None
-        self._max = torch.tensor(1e-7, dtype=torch.float32)
-        self.step = 0
-        self.dtype = None
-        self.parent_observer = (
-            kwargs["parent_observer"]
-            if kwargs and "parent_observer" in kwargs
-            else None
-        )
-
-    def forward(self, inputs):
-        """Calculate forward pass."""
-        self.step += 1
-        if not self.dtype:
-            self.dtype = inputs.dtype
-        if inputs.numel() > 0:
-            self._min, self._max = self._cal_min_max(inputs)
-            if self.parent_observer is not None:
-                self.parent_observer.update(self._min, self._max, self.step)
-        else:
-            assert self.parent_observer is not None
-            self._update_min_max(self.parent_observer.min, self.parent_observer.max)
-        return inputs
-
-    def _cal_min_max(self, inputs):
-        if inputs.dim() >= 2:
-            abs_inputs = torch.abs(inputs)
-            batch_size = abs_inputs.shape[0]
-            abs_inputs_flat = abs_inputs.view(
-                batch_size, -1
-            )  # [batch_size, seq_len * hidden_dim]
-            abs_max_val, _ = torch.max(
-                abs_inputs_flat, dim=1, keepdim=True
-            )  # [batch_size, 1]
-            min_threshold = self._max.to(abs_max_val.device).expand_as(abs_max_val)
-            abs_max_val = torch.maximum(abs_max_val, min_threshold)
-        else:
-            abs_max_val = torch.max(torch.abs(inputs))
-            if abs_max_val.data < self._max.data:
-                abs_max_val = self._max
-            abs_max_val = abs_max_val.unsqueeze(0).unsqueeze(0)  # [1, 1]
-        return 0, abs_max_val.to(inputs.device)
-
-    def _update_min_max(self, min, max):
-        if min is not None and max is not None:
-            if self._min is None or min < self._min:
-                self._min = min
-            if self._max is None or max > self._max:
-                self._max = max
-
-    def cal_thresholds(self):
-        """Compute thresholds for MAX function."""
-        if self._scale is None:
-            self._scale = self._max
-        self._zero_point = torch.zeros_like(self._scale)
-
-    def quant_axis(self):
-        """Return quantization axis."""
-        return -1
-
-    def scales(self):
-        """Return output scales."""
-        if self.step == 0 and self.parent_observer is not None:
-            self._update_min_max(self.parent_observer.min, self.parent_observer.max)
-            self.step = self.parent_observer.step
-        if self.step == 0:
-            raise ValueError(
-                "AbsmaxPertensorObserver scales must calibrate data first!"
-            )
-        if self._scale is None:
-            self.cal_thresholds()
-        if self.dtype:
-            self._scale = self._scale.type(self.dtype)
-        return self._scale
-
-    def zero_points(self):
-        """Return output zero points."""
-        if self._zero_point is None:
-            self.cal_thresholds()
-        return self._zero_point

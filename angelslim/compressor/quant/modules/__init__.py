@@ -19,6 +19,7 @@ from .gptq.gptaq_module import GPTAQModule  # noqa: F401
 from .gptq.gptq import GPTQ  # noqa: F401
 from .gptq.gptq_module import GPTQModule  # noqa: F401
 from .helper_layer import GPTQQuantLinear  # noqa: F401
+from .helper_layer import MoEQDQModule  # noqa: F401
 from .helper_layer import NVFP4QDQModule  # noqa: F401
 from .helper_layer import QDQModule  # noqa: F401
 from .helper_layer import QDQSingleModule  # noqa: F401
