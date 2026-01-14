@@ -1,7 +1,6 @@
 # <img src="figures/sherry.jpg" width="40"> Sherry: Hardware-Efficient 1.25-Bit Ternary Quantization via Fine-grained Sparsification
 
-This repository contains the code for the paper "Sherry: Hardware-Efficient 1.25-Bit Ternary Quantization via Fine-grained Sparsification." Our code is modified from ParetoQ，https://arxiv.org/abs/2502.02631
-
+This repository contains the code for the paper [Sherry: Hardware-Efficient 1.25-Bit Ternary Quantization via Fine-grained Sparsification](https://arxiv.org/abs/2601.07892)
 
 ## Overview
 Sherry is a hardware-efficient 1.25bit ternary quantization framework that resolves the fundamental tension between bit efficiency and hardware alignment for deploying Large Language Models (LLMs) on resource-constrained edge devices.
@@ -112,3 +111,21 @@ python3 test_llama.py \
 --do_mmlu_eval False \
 --eval_tasks piqa,arc_easy,arc_challenge,hellaswag,winogrande \
 ```
+
+## Citation
+
+```
+@misc{huang2026sherryhardwareefficient125bitternary,
+      title={Sherry: Hardware-Efficient 1.25-Bit Ternary Quantization via Fine-grained Sparsification}, 
+      author={Hong Huang and Decheng Wu and Qiangqiang Hu and Guanghua Yu and Jinhai Yang and Jianchen Zhu and Xue Liu and Dapeng Wu},
+      year={2026},
+      eprint={2601.07892},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2601.07892}, 
+}
+```
+
+## Acknowledgements
+
+Our code is modified from [ParetoQ](https://arxiv.org/abs/2502.02631).
