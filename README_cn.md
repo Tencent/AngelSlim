@@ -17,7 +17,7 @@
 </p>
 
 ## 📣最新进展
-- [26/01/13]我们发布V0.3版本， 支持了全模态场景的投机采样训练及部署，文档：[Eagle3 for LLM/VLM/Audio](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html)。并且我们发布了 **Sherry** 新的硬件高效的1.25bit三值量化算法 [论文即将发布] | [[代码]](https://github.com/Tencent/AngelSlim/tree/sherry/Sherry)🔥🔥🔥
+- [26/01/13]我们发布V0.3版本， 支持了全模态场景的投机采样训练及部署，文档：[Eagle3 for LLM/VLM/Audio](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html)。并且我们发布了 **Sherry** 新的硬件高效的1.25bit三值量化算法 [[论文]](https://arxiv.org/abs/2601.07892) | [[代码]](https://github.com/Tencent/AngelSlim/tree/sherry/Sherry)🔥🔥🔥
 - [25/11/05] 我们发布V0.2版本，支持了包括GLM-4.6/Qwen3-VL/Qwen3-Omni等更多模型的量化，开源投机采样Eagle3训练框架，更新Diffusion模型量化工具。
 - [25/09/30] 我们开源了思考早退新算法 **SpecExit** [[论文]](http://arxiv.org/abs/2509.24248) | [[文档]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html) | [[vLLM代码]](https://github.com/vllm-project/vllm/pull/27192)
 - [25/09/30] 我们发布了三值量化新算法 **Tequila** [[论文]](https://arxiv.org/abs/2509.23809) | [[代码]](https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant)
@@ -74,7 +74,7 @@
           <li><a href="https://github.com/Tencent/AngelSlim/tree/main/configs/qwen3">INT4-GPTQ/AWQ/GPTAQ</a></li>
           <li><a href="https://github.com/Tencent/AngelSlim/tree/d55b06aeffc53e31f485044c5026e754f4e27b74/configs/qwen3/nvfp4">NVFP4</a></li>
           <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/quantization/fp8_lepto.html">LeptoQuant</a></li>
-          <li><a href="https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant">Tequila</a></li>
+          <li><a href="https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant">Tequila</a> | <a href="https://github.com/Tencent/AngelSlim/tree/sherry/Sherry">Sherry</a></li>
         </ul>
       </td>
       <td>
@@ -233,7 +233,7 @@ bash scripts/speculative/generate_data_for_target_model.sh
 bash scripts/speculative/train_eagle3_online.sh
 ```
 
-多模态模型 Eagle3 训练与部署指南，支持LLM / VLM / Audio (ASR & TTS) 模型：[LLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/eagle.html) | [VLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/vlm_eagle.html) | [Audio(ASR)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_asr_eagle.html) | [Audio(TTS)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_tts_eagle.html).
+全模态大模型的 Eagle3 训练与部署指南可参考：[LLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/eagle.html) | [VLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/vlm_eagle.html) | [Audio(ASR)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_asr_eagle.html) | [Audio(TTS)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_tts_eagle.html).
 #### 2.2 LLM/VLM模型量化
 完成安装`AngelSlim`后，您可以通过以下脚本快速开始，完成`Qwen3-1.7B`模型的静态`FP8`量化：
 
@@ -287,7 +287,10 @@ python scripts/diffusion/run_diffusion.py \
 
 #### 3.1 离线推理
 
-通过`transformers`加载量化模型离线推理：
+通过`transformers`加载量化模型进行离线推理。
+
+<details>
+<summary>执行脚本细节</summary>
 
 ```shell
 python scripts/deploy/offline.py $MODEL_PATH "Hello, my name is"
@@ -295,10 +298,14 @@ python scripts/deploy/offline.py $MODEL_PATH "Hello, my name is"
 
 其中 `MODEL_PATH` 为量化产出模型路径。
 
+</details>
 
 #### 3.2 服务部署
 
-支持通过以下推理框架部署 OpenAI 兼容的 API 服务：
+支持通过 **vLLM**、**SGLang**推理框架部署 OpenAI 兼容的 API 服务。
+
+<details>
+<summary>执行脚本细节</summary>
 
 - **vLLM**
 
@@ -317,14 +324,21 @@ python scripts/deploy/offline.py $MODEL_PATH "Hello, my name is"
   bash scripts/deploy/run_sglang.sh --model-path $MODEL_PATH --port 8080 -d 0,1,2,3 -t 4 -g 0.8
   ```
 
+</details>
+
 #### 3.3 服务调用
 
-通过 [OpenAI 格式](https://platform.openai.com/docs/api-reference/introduction) 接口发起请求：
+通过 [OpenAI 格式](https://platform.openai.com/docs/api-reference/introduction) 接口发起请求。
+
+<details>
+<summary>执行脚本细节</summary>
 
 ```shell
 bash scripts/deploy/openai.sh -m $MODEL_PATH -p "Hello, my name is" --port 8080 --max-tokens 4096 --temperature 0.7 --top-p 0.8 --top-k 20 --repetition-penalty 1.05 --system-prompt "You are a helpful assistant."
 ```
 其中`-p`为输入prompt
+
+</details>
 
 #### 3.4 效果验证
 
@@ -338,9 +352,9 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
 ```
 其中`RESULT_PATH`为测试结果保存目录，`-b`为batch size大小，`--tasks`为评测任务，`-n`为few-shot数量
 
-详细操作指南请参阅[部署文档](https://angelslim.readthedocs.io/zh-cn/latest/deployment/deploy.html)。
-
 </details>
+
+详细操作指南请参阅[部署文档](https://angelslim.readthedocs.io/zh-cn/latest/deployment/deploy.html)。
 
 ## 📈Benchmark
 
