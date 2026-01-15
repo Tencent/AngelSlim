@@ -62,11 +62,14 @@ class MultiModalDataset(BaseDataset):
                 # Validate format
                 assert "messages" in data or "question" in data, "JSON format error"
 
-                # Prepare messages
-                messages = self._prepare_messages(data)
+                try:
+                    # Prepare messages
+                    messages, tools = self._prepare_messages(data)
 
-                self._process_and_append(messages)
-                line_count += 1
+                    self._process_and_append(messages, tools)
+                    line_count += 1
+                except Exception as e:
+                    print(f"Warning: processing data: {e}, continue to next data")
 
     def _prepare_messages(self, data: Dict) -> List[Dict]:
         image_dir = os.path.join(os.path.dirname(self.data_path), "images")
@@ -134,7 +137,15 @@ class MultiModalDataset(BaseDataset):
             for message in messages:
                 if message["role"] == "assistant" or message["role"] == "system":
                     message["content"] = message["content"][0]["text"]
-        return messages
+
+        # extract tools if exist
+        try:
+            tools = data.get("tools", None)
+            if tools is not None:
+                tools = json.loads(tools)
+        except Exception as e:
+            print(f"Error extracting tools: {e}")
+        return messages, tools
 
     def _load_hf_dataset(self, dataset: str, num_samples: int):
         """Load dataset from Hugging Face format"""
@@ -161,11 +172,12 @@ class MultiModalDataset(BaseDataset):
             ]
             self._process_and_append(messages)
 
-    def _process_and_append(self, messages: List[Dict]):
+    def _process_and_append(self, messages: List[Dict], tools=None):
         """Process messages and append to dataset"""
         if self.model_name in ["Qwen3VL", "Qwen3VLMoE"]:
             inputs = self.processor.apply_chat_template(
                 messages,
+                tools=tools,
                 tokenize=True,
                 add_generation_prompt=True,
                 return_dict=True,
