@@ -17,6 +17,7 @@ compression:
   name: PTQ
   quantization:
     name: fp8_static
+    save_name: fp8
     bits: 8
     quant_method:
       weight: "per-tensor"
