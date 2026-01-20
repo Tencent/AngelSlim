@@ -27,6 +27,7 @@ class ChatTemplateType(Enum):
     """Supported chat template types."""
 
     QWEN2_AUDIO = "qwen2_audio"
+    QWEN2_5 = "qwen2.5"
     QWEN3 = "qwen3"
     HUNYUAN = "hunyuan"
     QWEN3_VL = "qwen3_vl"
@@ -37,6 +38,7 @@ class ChatTemplateType(Enum):
 # String to ChatTemplateType mapping
 CHAT_TEMPLATE_TYPE_MAPPING = {
     "qwen2_audio": ChatTemplateType.QWEN2_AUDIO,
+    "qwen2.5": ChatTemplateType.QWEN2_5,
     "qwen3": ChatTemplateType.QWEN3,
     "hunyuan": ChatTemplateType.HUNYUAN,
     "hunyuan_7b": ChatTemplateType.HUNYUAN_7B,
@@ -72,6 +74,21 @@ class ChatTemplateManager:
         """Initialize predefined chat templates."""
         return {
             ChatTemplateType.QWEN3: ChatTemplate(
+                user_header="<|im_start|>user\n",
+                assistant_header="<|im_start|>assistant\n",
+                system_prompt=(
+                    "You are a helpful, respectful and honest assistant. "
+                    "Always answer as helpfully as possible, while being safe. "
+                    "Your answers should not include any harmful, unethical, racist, "
+                    "sexist, toxic, dangerous, or illegal content. Please ensure that "
+                    "your responses are socially unbiased and positive in nature.\n\n"
+                    "If a question does not make any sense, or is not factually "
+                    "coherent, explain why instead of answering something not "
+                    "correct. If you don't know the answer to a question, "
+                    "please don't share false information."
+                ),
+            ),
+            ChatTemplateType.QWEN2_5: ChatTemplate(
                 user_header="<|im_start|>user\n",
                 assistant_header="<|im_start|>assistant\n",
                 system_prompt=(
