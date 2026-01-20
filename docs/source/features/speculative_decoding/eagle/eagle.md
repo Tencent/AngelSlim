@@ -73,7 +73,7 @@ bash scripts/speculative/generate_vlm_hidden_for_draft_model.sh
 - `MODEL_NAME`: 目标模型的HF名称或本地路径
 - `TARGET_BACKEND`: 目标模型后端，目前仅支持HF
 - `MODEL_MAX_LENGTH`: 生成数据的上下文长度
-- `CHAT_TEMPLATE_TYPE`: 目标模型的目标类型，目前支持qwen3/hunyuan
+- `CHAT_TEMPLATE_TYPE`: 目标模型的目标类型，目前支持qwen3/qwen2.5/hunyuan/hunyuan-7b
 - `OUTPUT_DIR`: 生成的数据集输出路径
 
 
