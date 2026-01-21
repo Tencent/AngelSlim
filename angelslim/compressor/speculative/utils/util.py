@@ -105,6 +105,7 @@ def initialize_tree(input_ids, inputs_embeds, model, past_key_values, logits_pro
         token = token[None, None]
     input_ids = torch.cat((input_ids, token.to(input_ids.device)), dim=1)
     # add embedding
+    add_inputs_embeds = None
     if inputs_embeds is not None:
         add_inputs_embeds = torch.cat(
             [inputs_embeds, model.eagle_layer.embed_tokens(token)], dim=1
@@ -322,16 +323,18 @@ def update_inference_inputs(
     ]
 
     # add embedding
+    tmp_inputs_embeds = None
     if inputs_embeds is not None:
         add_inputs_embeds = model.eagle_layer.embed_tokens.weight[
             sample_token.squeeze(0).tolist()
         ].unsqueeze(0)
+        tmp_inputs_embeds = torch.cat([inputs_embeds, add_inputs_embeds], dim=1)
 
     draft_tokens, retrieve_indices, tree_mask, tree_position_ids, early_stop_signal = (
         model.eagle_layer.topK_genrate(
             accept_hidden_state_new,
             input_ids=torch.cat((input_ids, sample_token.to(input_ids.device)), dim=1),
-            inputs_embeds=torch.cat([inputs_embeds, add_inputs_embeds], dim=1),
+            inputs_embeds=tmp_inputs_embeds,
             logits_processor=logits_processor,
         )
     )
