@@ -323,7 +323,7 @@ def update_inference_inputs(
     ]
 
     # add embedding
-    add_inputs_embeds = None
+    tmp_inputs_embeds = None
     if inputs_embeds is not None:
         add_inputs_embeds = model.eagle_layer.embed_tokens.weight[
             sample_token.squeeze(0).tolist()
