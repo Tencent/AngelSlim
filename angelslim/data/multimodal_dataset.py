@@ -181,7 +181,6 @@ class MultiModalDataset(BaseDataset):
                 tokenize=True,
                 add_generation_prompt=True,
                 return_dict=True,
-                padding="max_length",
                 truncation=True,
                 return_tensors="pt",
                 max_length=self.max_length,
@@ -196,7 +195,6 @@ class MultiModalDataset(BaseDataset):
             inputs = self.processor(
                 text=[text],
                 images=image_inputs,
-                padding="max_length",
                 truncation=True,
                 return_tensors="pt",
                 max_length=self.max_length,
@@ -214,7 +212,6 @@ class MultiModalDataset(BaseDataset):
                 text=[text],
                 images=image_inputs,
                 videos=video_inputs,
-                padding="max_length",
                 truncation=True,
                 return_tensors="pt",
                 max_length=self.max_length,
