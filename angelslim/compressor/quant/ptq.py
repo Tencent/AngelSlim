@@ -23,7 +23,7 @@ from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import Qwen3VLMoeTex
 from ...utils import find_parent_layer_and_sub_name, print_info
 from ..compressor_factory import CompressorFactory
 from .core import PTQHook
-from .modules import AWQ, FP8, GPTQ, INT8, NVFP4, LeptoFP8, SmoothQuant
+from .modules import AWQ, FP8, GPTQ, INT8, NVFP4, W4A8INT8, LeptoFP8, SmoothQuant
 
 __all__ = ["PTQ"]
 
@@ -57,6 +57,12 @@ class PTQ:
             max_seq_length = self.quant_model.quant_config.max_seq_length
             hidden_size = self.quant_model.quant_config.hidden_size
             self.gptq = GPTQ(
+                self.quant_model, seq_length=max_seq_length, hidden_size=hidden_size
+            )
+        elif "w4a8i8" in self.quant_algo:
+            max_seq_length = self.quant_model.quant_config.max_seq_length
+            hidden_size = self.quant_model.quant_config.hidden_size
+            self.w4a8i8 = W4A8INT8(
                 self.quant_model, seq_length=max_seq_length, hidden_size=hidden_size
             )
         elif "awq" in self.quant_algo:
@@ -121,6 +127,8 @@ class PTQ:
     def calibrate(self, dataloader):
         if "gptq" in self.quant_algo or "gptaq" in self.quant_algo:
             self.gptq.run(dataloader)
+        elif "w4a8i8" in self.quant_algo:
+            self.w4a8i8.run(dataloader)
         elif "awq" in self.quant_algo:
             self.awq.run(dataloader)
         elif "fp8" in self.quant_algo:
@@ -141,6 +149,8 @@ class PTQ:
         print_info("Start convert model...")
         if "gptq" in self.quant_algo or "gptaq" in self.quant_algo:
             self.gptq.convert()
+        elif "w4a8i8" in self.quant_algo:
+            self.w4a8i8.convert()
         elif "awq" in self.quant_algo:
             self.awq.convert()
         elif "lepto" in self.quant_algo:
@@ -180,6 +190,8 @@ class PTQ:
         print_info("Start save PTQ ckpt to: {}".format(save_path))
         if "gptq" in self.quant_algo or "gptaq" in self.quant_algo:
             self.gptq.save(save_path)
+        elif "w4a8i8" in self.quant_algo:
+            self.w4a8i8.save(save_path)
         elif "awq" in self.quant_algo:
             self.awq.save(save_path)
         else:
