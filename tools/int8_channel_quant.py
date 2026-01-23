@@ -26,9 +26,33 @@ from safetensors.torch import safe_open, save_file
 
 from angelslim.compressor.quant.core.quant_func import weight_dequant
 
+SUFFIX_TO_QUANT = [
+    ".gate_and_up_proj.weight",
+    ".gate_proj.weight",
+    ".up_proj.weight",
+    ".down_proj.weight",
+    ".q_a_proj.weight",
+    ".q_b_proj.weight",
+    ".kv_a_proj_with_mqa.weight",
+    ".kv_b_proj.weight",
+    ".qkv_proj.weight",
+    ".q_proj.weight",
+    ".k_proj.weight",
+    ".v_proj.weight",
+    ".o_proj.weight",
+    ".indexer.wq_b.weight",
+    ".indexer.wk.weight",
+]
+
 
 def process_worker(
-    worker_id, safetensor_files, fp8_path, int8_path, weight_map, return_dict
+    worker_id,
+    safetensor_files,
+    input_path,
+    int8_path,
+    weight_map,
+    return_dict,
+    input_type="bf16",
 ):
     """
     Process worker.
@@ -51,18 +75,19 @@ def process_worker(
             keys = set(f.keys())
             for weight_name in keys:
                 weight = f.get_tensor(weight_name)
-                scale_inv_name = f"{weight_name}_scale_inv"
-                if scale_inv_name in weight_map:
+                if any(weight_name.endswith(suffix) for suffix in SUFFIX_TO_QUANT):
                     quant_count += 1
-                    # 1. fp8 dequant to bf16
-                    scale_inv = get_tensor_from_file(
-                        rank, scale_inv_name, weight_map, fp8_path
-                    )
-                    weight_bf16 = weight_dequant(weight, scale_inv)
-                    # 2. bf16 quant to int8
+                    if input_type == "fp8":
+                        scale_inv_name = f"{weight_name}_scale_inv"
+                        scale_inv = get_tensor_from_file(
+                            rank, scale_inv_name, weight_map, input_path
+                        )
+                        weight_bf16 = weight_dequant(weight, scale_inv)
+                    else:
+                        weight_bf16 = weight
                     int8_weight, scale_inv = weight_quant(weight_bf16)
                     new_state_dict[weight_name] = int8_weight
-                    new_scale_name = scale_inv_name.replace("_scale_inv", "_scale")
+                    new_scale_name = f"{weight_name}_scale"
                     new_state_dict[new_scale_name] = scale_inv
                     new_weight_map[weight_name] = file_name
                     new_weight_map[new_scale_name] = file_name
@@ -78,7 +103,7 @@ def process_worker(
 
 
 # Helper function to get tensor from the correct file
-def get_tensor_from_file(rank, tensor_name, weight_map, fp8_path):
+def get_tensor_from_file(rank, tensor_name, weight_map, input_path):
     """
     Retrieves a tensor from mmap safe_tensors
 
@@ -93,7 +118,7 @@ def get_tensor_from_file(rank, tensor_name, weight_map, fp8_path):
     """
     torch.cuda.set_device(rank)
     file_name = weight_map[tensor_name]
-    file_path = os.path.join(fp8_path, file_name)
+    file_path = os.path.join(input_path, file_name)
 
     with safe_open(file_path, framework="pt", device=f"cuda:{rank}") as f:
         return f.get_tensor(tensor_name)
@@ -119,7 +144,7 @@ def weight_quant(tensor: torch.Tensor):
     return quantized.to(torch.int8), scale.to(torch.float32)
 
 
-def main(fp8_path, int8_path, num_workers):
+def main(input_path, int8_path, num_workers):
     """
     Run the FP8-to-INT8 per-channel quantization pipeline.
 
@@ -130,7 +155,7 @@ def main(fp8_path, int8_path, num_workers):
         4. Saves quantized safetensors and updates model index.
 
     Args:
-        fp8_path (str): Path to directory containing FP8 safetensors.
+        input_path (str): Path to directory containing FP8 safetensors.
         int8_path (str): Output directory to save INT8 safetensors.
         num_workers (int): Number of processing workers
     """
@@ -139,10 +164,10 @@ def main(fp8_path, int8_path, num_workers):
     model_index_file = os.path.join(int8_path, "model.safetensors.index.json")
     config_file = os.path.join(int8_path, "config.json")
 
-    for fname in os.listdir(fp8_path):
+    for fname in os.listdir(input_path):
         if fname.endswith(".safetensors"):
             continue
-        src = os.path.join(fp8_path, fname)
+        src = os.path.join(input_path, fname)
         dst = os.path.join(int8_path, fname)
         if os.path.isdir(src):
             print(f"cp -r {src} {dst}")
@@ -154,7 +179,11 @@ def main(fp8_path, int8_path, num_workers):
     # modify config.json and save it
     config = json.load(open(config_file))
     # delete quantization_config
-    config.pop("quantization_config", None)
+    quant_config = config.pop("quantization_config", None)
+    input_type = "bf16"
+    if quant_config is not None:
+        input_type = quant_config.get("quant_method", input_type)
+    print("input_type", input_type)
     config["quantization_config"] = {
         "config_groups": {
             "group_0": {
@@ -200,9 +229,8 @@ def main(fp8_path, int8_path, num_workers):
     with open(model_index_file, "r") as f:
         model_index = json.load(f)
     weight_map = model_index["weight_map"]
-    scale_count = len([key for key in weight_map.keys() if key.endswith("_scale_inv")])
 
-    safetensor_files = list(glob(os.path.join(fp8_path, "*.safetensors")))
+    safetensor_files = list(glob(os.path.join(input_path, "*.safetensors")))
     safetensor_files.sort()
     quant_count = 0
     new_weight_map = {}
@@ -216,7 +244,15 @@ def main(fp8_path, int8_path, num_workers):
     for i in range(num_workers):
         p = mp.Process(
             target=process_worker,
-            args=(i, file_subsets[i], fp8_path, int8_path, weight_map, return_dict),
+            args=(
+                i,
+                file_subsets[i],
+                input_path,
+                int8_path,
+                weight_map,
+                return_dict,
+                input_type,
+            ),
         )
         p.start()
         processes.append(p)
@@ -227,7 +263,6 @@ def main(fp8_path, int8_path, num_workers):
         qc, wm = return_dict[i]
         quant_count += qc
         new_weight_map.update(wm)
-    assert quant_count == scale_count
     print(f"{quant_count} weights are quantized.")
 
     # modify model.safetensors.index.json
@@ -241,10 +276,10 @@ def main(fp8_path, int8_path, num_workers):
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("--input-fp8-path", type=str, required=True)
+    parser.add_argument("--input-path", type=str, required=True)
     parser.add_argument("--output-int8-path", type=str, required=True)
     parser.add_argument("--num-workers", type=int, default=32)
 
     args = parser.parse_args()
-    main(args.input_fp8_path, args.output_int8_path, args.num_workers)
+    main(args.input_path, args.output_int8_path, args.num_workers)
     print("done")
