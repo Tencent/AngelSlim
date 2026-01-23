@@ -8,13 +8,17 @@ Eagle3 - это метод speculative decoding для ускорения infere
 
 ## Требования
 
-- Google Colab Pro+ (для доступа к A100 GPU)
-- Google Drive: минимум 900GB свободного места
+- **GPU:**
+  - Для генерации ответов: **A100 80GB** (Qwen3-VL-30B) или A100 40GB (Qwen3-VL-4B для тестов)
+  - Для генерации hidden states: **A100 80GB** (30B) или A100 40GB (4B)
+  - Для обучения draft модели: **A100 40GB** (offline режим экономит память!)
+- **Google Colab:** Pro+ рекомендуется
+- **Google Drive:** минимум 900GB свободного места
   - Модели: ~60GB
   - Датасеты: ~100GB
-  - Hidden states: ~800GB
+  - Hidden states: ~800GB (для 50K samples)
   - Checkpoints: ~100GB
-- Wandb account (для мониторинга обучения)
+- **Wandb account** (для мониторинга обучения)
 
 ## Процесс обучения (Offline режим)
 
@@ -44,22 +48,26 @@ wandb.login(key=userdata.get('WANDB_API_KEY'))
 - Валидирует все изображения
 - Сохраняет в Drive: `/Eagle3_Qwen3VL/datasets/`
 
-### Этап 2: Генерация ответов (8-12 часов, A100 GPU)
+### Этап 2: Генерация ответов (8-12 часов, A100 80GB GPU) ⚠️
 
 Запустите `generate_responses.ipynb`:
-- Загружает Qwen3-VL-30B-A3B
+- Загружает **Qwen3-VL-30B-A3B** (требует 80GB VRAM!)
 - Генерирует ответы на изображения (batch inference)
 - Сохраняет conversations в ShareGPT формат
 - Результат: `data_generated.jsonl` для каждого датасета
 
-### Этап 3: Генерация  hidden states (8-12 часов, A100 GPU) ⭐
+💡 **Для тестов с A100 40GB:** Используйте Qwen3-VL-4B вместо 30B в CONFIG
+
+### Этап 3: Генерация  hidden states (8-12 часов, A100 80GB GPU) ⭐ ⚠️
 
 Запустите `generate_hidden_states.ipynb`:
-- Загружает Qwen3-VL-30B-A3B
+- Загружает **Qwen3-VL-30B-A3B** (требует 80GB VRAM!)
 - Forward pass через target model
 - Извлекает hidden states для каждого sample
 - Сохраняет ~800GB .ckpt файлов в Drive
 - **После этого target модель больше НЕ НУЖНА!**
+
+💡 **Для тестов с A100 40GB:** Используйте Qwen3-VL-4B (но draft модель будет для 4B, не 30B)
 
 ### Этап 4: Обучение draft модели (12-20 часов, A100 GPU) ⚡
 
@@ -107,11 +115,35 @@ wandb.login(key=userdata.get('WANDB_API_KEY'))
 
 | Критерий | Online | Offline (✅) |
 |----------|--------|--------------|
-| GPU память (обучение) | 38GB | **10GB** |
+| **GPU для генерации данных** | Не нужна отдельно | **A100 80GB** ⚠️ |
+| **GPU для обучения** | A100 80GB | **A100 40GB** ✅ |
 | Скорость обучения | 25-40ч | **12-20ч** ⚡ |
 | Гибкость | Нужна регенерация | **Можно перезапускать** |
 | Эксперименты | Expensive | **Cheap** |
 | Стабильность | High memory pressure | **Low usage** |
+
+## ⚡ Альтернатива для A100 40GB
+
+Если у вас только A100 40GB (не 80GB), используйте **Qwen3-VL-4B** вместо 30B:
+
+**Преимущества:**
+- ✅ Помещается в A100 40GB
+- ✅ Быстрее генерация (2-3 часа вместо 8-12)
+- ✅ Меньше места в Drive (~200GB hidden states вместо 800GB)
+
+**Недостатки:**
+- ⚠️ Draft модель обучается для 4B, не для 30B
+- ⚠️ Немного ниже качество генерации
+
+**Как использовать:**
+В `generate_responses.ipynb` измените:
+```python
+CONFIG = {
+    'model_name': 'Qwen/Qwen3-VL-4B',  # Вместо 30B-A3B
+}
+```
+
+И используйте соответствующий draft config: `qwen3-vl-4b-eagle3-mrope.json`
 
 ## Быстрый старт
 

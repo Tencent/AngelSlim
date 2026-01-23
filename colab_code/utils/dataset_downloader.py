@@ -23,6 +23,7 @@ import io
 import json
 import logging
 import os
+import random
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -39,6 +40,29 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Question templates for diversity
+ENGLISH_QUESTIONS = [
+    "Describe this image in detail.",
+    "What do you see in this picture?",
+    "Can you tell me what's shown in this image?",
+    "Please describe what is happening in this picture.",
+    "What can you observe in this image?",
+    "Provide a detailed description of this image.",
+    "What does this image show?",
+    "Explain what you see in this picture.",
+]
+
+CHINESE_QUESTIONS = [
+    "详细描述这张图片。",
+    "你在这张图片中看到了什么？",
+    "请描述一下图片中的内容。",
+    "这张图片展示了什么？",
+    "请说明图片中发生了什么。",
+    "你能观察到图片中有什么吗？",
+    "请详细说明这张图片的内容。",
+    "解释一下你在图片中看到的内容。",
+]
 
 
 class DatasetDownloader:
@@ -174,10 +198,10 @@ class DatasetDownloader:
                 if not conversations:
                     continue
 
-                # Get first user message as question
+                # Get first user message as question, or use random English question
                 question = next(
                     (msg["value"] for msg in conversations if msg.get("from") == "human"),
-                    "Describe this image"
+                    random.choice(ENGLISH_QUESTIONS)
                 )
 
                 samples.append({
@@ -268,8 +292,8 @@ class DatasetDownloader:
                 else:
                     continue
 
-                # Extract Chinese question
-                question = example.get("question", "描述这张图片")
+                # Extract Chinese question or use random template
+                question = example.get("question", random.choice(CHINESE_QUESTIONS))
 
                 samples.append({
                     "image_url": image_url,
@@ -358,7 +382,7 @@ class DatasetDownloader:
 
                 samples.append({
                     "image_url": image_url,
-                    "question": "描述这张图片",
+                    "question": random.choice(CHINESE_QUESTIONS),  # Random question
                     "caption": caption,
                     "index": i,
                 })
