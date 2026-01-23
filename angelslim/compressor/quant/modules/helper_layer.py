@@ -1190,7 +1190,8 @@ class W4A8Int8QuantLinear(nn.Module):
         Pack int4 tensor to int8 by storing two int4 values in one int8.
 
         Args:
-            t: int8 tensor with values in range [-8, 7], shape [out_features, in_features]
+            t: int8 tensor with values in range [-8, 7],
+              shape [out_features, in_features]
 
         Returns:
             Packed int8 tensor with shape [out_features, in_features // 2]
@@ -1223,5 +1224,6 @@ class W4A8Int8QuantLinear(nn.Module):
         # For compressed-tensors format, forward is handled by the inference engine
         # This is mainly for compatibility
         raise NotImplementedError(
-            "W4A8Int8QuantLinear is for export only. Use compressed-tensors runtime for inference."
+            "W4A8Int8QuantLinear is for export only. "
+            "Use compressed-tensors runtime for inference."
         )

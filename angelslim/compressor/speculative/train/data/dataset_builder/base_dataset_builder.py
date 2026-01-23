@@ -95,7 +95,7 @@ class OnlineDatasetBuilder(DatasetBuilder):
         rank0_print(f"\n{BOLD}Statistics:{RESET}")
         rank0_print(f"Total tokens: {total_tokens}")
         rank0_print(f"Training tokens: {training_tokens} ({training_ratio:.2f}%)")
-        rank0_print(f"Ignored tokens: {ignored_tokens} ({100-training_ratio:.2f}%)")
+        rank0_print(f"Ignored tokens: {ignored_tokens} ({100 - training_ratio:.2f}%)")
 
         # Display token-by-token visualization
         rank0_print(f"\n{BOLD}Token-by-token visualization:{RESET}")

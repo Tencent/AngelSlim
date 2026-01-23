@@ -192,7 +192,6 @@ class GPTQModule:
 
         all_norm_loss = [norm_loss]
 
-        # print_info(" self.layer.weight: {}, {}".format(q_weight.shape, q_weight.sum()))
         print_info(f" norm loss: {list(map(get_tensor_item, all_norm_loss))}")
 
         self.layer.weight.data.copy_(
