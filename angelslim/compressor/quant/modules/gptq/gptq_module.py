@@ -35,7 +35,7 @@ class GPTQModule:
         super(GPTQModule, self).__init__()
         self.layer = layer
         self.dev = self.layer.weight.device
-        self.w = layer.weight.data
+        self.w = layer.weight.data.clone()
         self.rows = self.w.shape[0]
         self.columns = self.w.shape[1]
         self.h = torch.zeros(
