@@ -1100,3 +1100,130 @@ class MoEQDQModule(torch.nn.Module):
 
     def forward(self, x):
         pass
+
+
+class W4A8Int8QuantLinear(nn.Module):
+    """
+    W4A8 per-channel symmetric quantized Linear layer for compressed-tensors format.
+    Weights are quantized to 4-bit and packed into int8 tensors.
+    """
+
+    def __init__(
+        self,
+        bits,
+        group_size,
+        infeatures,
+        outfeatures,
+        bias,
+        weight_dtype=torch.float16,
+    ):
+        super().__init__()
+        if bits != 4:
+            raise NotImplementedError("Only 4-bit weights are supported for W4A8Int8.")
+        if group_size != -1:
+            raise RuntimeError(
+                "Only per-channel quantization are supported for W4A8Int8."
+            )
+
+        self.infeatures = infeatures
+        self.outfeatures = outfeatures
+        self.bits = bits
+
+        # Register buffers for packed weight and scale only
+        self.register_buffer(
+            "weight_packed",
+            torch.zeros((outfeatures, infeatures // 2), dtype=torch.int8),
+        )
+        self.register_buffer(
+            "weight_scale",
+            torch.zeros((outfeatures, 1), dtype=torch.float32),
+        )
+        if bias:
+            self.register_buffer("bias", torch.zeros((outfeatures), dtype=weight_dtype))
+        else:
+            self.bias = None
+
+    @torch.no_grad()
+    def pack(self, linear, scales, zeros, g_idx=None):
+        """
+        Per-output-channel symmetric quantization.
+        """
+        w = linear.weight  # [out, in]
+
+        # bias
+        if self.bias is not None and linear.bias is not None:
+            self.bias.copy_(linear.bias)
+
+        # ---- normalize shapes ----
+        # scales: [out, 1] -> [out]
+        if scales.dim() == 2:
+            scales = scales.squeeze(1)
+        # zeros: [out, 1] or scalar
+        if zeros.dim() == 2:
+            zeros = zeros.squeeze(1)
+
+        assert (
+            scales.shape[0] == w.shape[0]
+        ), f"scale shape mismatch: {scales.shape} vs {w.shape}"
+
+        # store scale
+        self.weight_scale.copy_(scales.float().unsqueeze(1))  # [out, 1]
+
+        # ---- quantize ----
+        q = torch.round(w / scales[:, None])
+        q = torch.clamp(q, -8, 7).to(torch.int8)
+
+        # ---- pack ----
+        # q must be [out, in]
+        pack_w = self._pack_to_int8(q)
+
+        assert (
+            pack_w.shape == self.weight_packed.shape
+        ), f"packed shape mismatch: {pack_w.shape} vs {self.weight_packed.shape}"
+
+        self.weight_packed.copy_(pack_w)
+        linear.weight = None
+        gc.collect()
+
+    def _pack_to_int8(self, t: torch.Tensor) -> torch.Tensor:
+        """
+        Pack int4 tensor to int8 by storing two int4 values in one int8.
+
+        Args:
+            t: int8 tensor with values in range [-8, 7],
+              shape [out_features, in_features]
+
+        Returns:
+            Packed int8 tensor with shape [out_features, in_features // 2]
+        """
+        assert t.dtype == torch.int8
+        assert t.shape[-1] % 2 == 0, "Last dimension must be even for packing"
+
+        # Flatten and pack
+        # Take two adjacent int4 values and pack them into one int8
+        # Low nibble: first value, High nibble: second value
+
+        out_features = t.shape[0]
+        in_features = t.shape[1]
+
+        # Reshape to separate pairs
+        t_reshaped = t.view(out_features, in_features // 2, 2)
+
+        # Extract low and high nibbles
+        # Low nibble (first int4)
+        low = t_reshaped[:, :, 0] & 0x0F
+        # High nibble (second int4)
+        high = t_reshaped[:, :, 1] & 0x0F
+
+        # Pack: (high << 4) | low
+        packed = (high << 4) | low
+
+        return packed.view(out_features, in_features // 2)
+
+    def forward(self, x):
+        # For compressed-tensors format, forward is handled by the inference engine
+        # This is mainly for compatibility
+        raise NotImplementedError(
+            "W4A8Int8QuantLinear is for export only. "
+            "Use compressed-tensors runtime for inference."
+        )

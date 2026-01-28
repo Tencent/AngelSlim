@@ -20,6 +20,7 @@ from .quant_func import *  # noqa: F401 F403
 from .sample_func import EMASampler, MultiStepSampler  # noqa: F401
 from .save import DeepSeekV3PTQSaveMulti  # noqa: F401
 from .save import DeepSeekV3PTQSaveSingle  # noqa: F401
+from .save import DeepSeekV3W4A8Int8Save  # noqa: F401
 from .save import PTQOnlyScaleSave  # noqa: F401
 from .save import PTQPTMSave  # noqa: F401
 from .save import PTQSaveVllmHF  # noqa: F401

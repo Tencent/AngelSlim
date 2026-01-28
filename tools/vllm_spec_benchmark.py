@@ -197,7 +197,7 @@ def run_benchmark(args, benchmark_name, llm, tokenizer, sampling_params):
     if args.print_output:
         for i, output in enumerate(outputs):
             print("-" * 50)
-            print(f"Prompt {i+1}: {output.prompt}")
+            print(f"Prompt {i + 1}: {output.prompt}")
             print(f"Generated text: {output.outputs[0].text}")
             print("-" * 50)
 

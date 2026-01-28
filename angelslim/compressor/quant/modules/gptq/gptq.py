@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import gc
 import os
 
 import threadpoolctl as tctl
@@ -51,6 +52,8 @@ class GPTQ:
         self.gptq = {}
         self.quant_algo = self.model.quant_config.quant_algo
         self.native_inp_caches = {}
+        self.quant_linear_cls = GPTQQuantLinear
+        self.rank = int(os.getenv("RANK", "0"))
 
     @torch.no_grad()
     def run(self, dataloader):
@@ -58,7 +61,7 @@ class GPTQ:
             model_module.eval()
 
         layers = self.layers
-        dev = "cuda:0"
+        dev = f"cuda:{self.rank}"
 
         print_info("dev = :{}".format(dev))
 
@@ -95,8 +98,9 @@ class GPTQ:
 
         for i in range(len(layers)):
             layer = layers[i].to(inps.device)
-            subset = find_layers(layer)
+            subset = find_layers(layer, layers=self.model.observer_layer_classes)
             print_info("subset:{}".format(subset))
+
             self.gptq = {}
             if "gptaq" in self.quant_algo:
                 self.native_inp_caches = {}
@@ -171,10 +175,14 @@ class GPTQ:
             for name in subset:
                 if name in self.ignore_layers:
                     continue
-                print_info("Quant {} ...".format(name))
+                print_info(f"Quant {name} ,nsamples: {self.gptq[name].nsamples}...")
                 scale, zero, g_idx = self.gptq[name].fasterquant(
                     percdamp=self.percdamp,
-                    group_size=self.group_size,
+                    group_size=(
+                        self.group_size
+                        if self.group_size != -1
+                        else self.gptq[name].columns
+                    ),
                     actorder=self.actorder,
                     sym=self.sym,
                 )
@@ -198,6 +206,7 @@ class GPTQ:
             del layer
             # del gptq
             torch.cuda.empty_cache()
+            gc.collect()
             inps, outs = outs, inps
             print_info("GPTQ end layer {}\n".format(i))
 
@@ -214,18 +223,17 @@ class GPTQ:
         bits,
         group_size,
     ):
-        if isinstance(module, GPTQQuantLinear):
+        if isinstance(module, self.quant_linear_cls):
             return
 
         for name, submodule in module.named_modules():
             if name in names:
                 ori_layer_device = next(submodule.parameters()).device
 
-                if isinstance(submodule, nn.Linear):
-                    in_features = submodule.in_features
-                    out_features = submodule.out_features
+                in_features = submodule.in_features
+                out_features = submodule.out_features
                 bias = submodule.bias is not None
-                new_layer = GPTQQuantLinear(
+                new_layer = self.quant_linear_cls(
                     bits,
                     group_size,
                     in_features,
@@ -243,12 +251,12 @@ class GPTQ:
             model.cpu()
 
         print_info("Packing model...")
-        layers = find_layers(model)
+        layers = find_layers(model, layers=self.model.observer_layer_classes)
         layers = {n: layers[n] for n in quantizers}
 
         self._make_quant(model, quantizers, bits, group_size)
 
-        qlayers = find_layers(model, [GPTQQuantLinear])
+        qlayers = find_layers(model, [self.quant_linear_cls])
 
         with tctl.threadpool_limits(limits=1):
             pbar = tqdm(qlayers.keys(), leave=True)
@@ -267,6 +275,7 @@ class GPTQ:
                 )
                 qlayers[name].pack(layers[name], scale, zero, g_idx)
                 qlayers[name].to(layer_device)
+                del layers[name]
         print_info("Model packed.")
 
     def _convert_llm(self):

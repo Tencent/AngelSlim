@@ -38,7 +38,9 @@ class GPTQModule:
         self.w = layer.weight.data.clone()
         self.rows = self.w.shape[0]
         self.columns = self.w.shape[1]
-        self.h = torch.zeros((self.columns, self.columns), device=self.dev)
+        self.h = torch.zeros(
+            (self.columns, self.columns), device=self.dev, dtype=torch.float32
+        )
         self.nsamples = 0
         self.quant_bits = quant_bits
 
@@ -51,6 +53,7 @@ class GPTQModule:
         tmp = inp.shape[0]
         if len(inp.shape) == 3:
             inp = inp.reshape((-1, inp.shape[-1]))
+        inp = inp.float()
         inp = inp.t()
         self.h *= self.nsamples / (self.nsamples + tmp)
         self.nsamples += tmp
@@ -171,7 +174,6 @@ class GPTQModule:
 
         torch.cuda.synchronize()
         print_info(f" duration: {(time.time() - tick)}")
-        print_info(f" avg loss: {torch.sum(losses).item() / self.nsamples}")
 
         group_size = group_size if group_size != -1 else self.columns
         if static_groups and actorder:
@@ -187,9 +189,9 @@ class GPTQModule:
             q_weight.reshape(self.layer.weight.shape).type_as(self.layer.weight.data)
             - self.layer.weight.data
         )
+
         all_norm_loss = [norm_loss]
 
-        print_info(" self.layer.weight: {}, {}".format(q_weight.shape, q_weight.sum()))
         print_info(f" norm loss: {list(map(get_tensor_item, all_norm_loss))}")
 
         self.layer.weight.data.copy_(

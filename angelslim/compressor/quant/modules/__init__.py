@@ -29,3 +29,4 @@ from .helper_layer import WQLinearGEMM  # noqa: F401
 from .int8.int8 import INT8  # noqa: F401
 from .nvfp4.nvfp4 import NVFP4  # noqa: F401
 from .smooth.smooth import SmoothQuant  # noqa: F401
+from .w4a8int8.w4a8int8 import W4A8INT8  # noqa: F401
