@@ -169,6 +169,7 @@ def run(config):
             inference_settings=dataset_config.inference_settings,
             use_audio_in_video=model_config.use_audio_in_video,
             model_name=model_config.name,
+            quantization_config=compress_config.quantization,
         )
 
     # Step 5: Initialize compressor
