@@ -4,7 +4,7 @@
 本项目包括Eagle3的训练以及benchmark测试，并开源了Qwen3和Hunyuan系列的[Eagle3权重](https://huggingface.co/collections/AngelSlim/eagle3)。
 
 我们训练的Qwen3系列Eagle3模型的表现可以参见基准测试[benchmarks](../../../performance/speculative_decoding/benchmarks.md)，
-其中全部数据都是在单张H20上使用vLLM推理获得。
+其中全部数据都是在单张GPU上使用vLLM推理获得。
 
 ## 1. 数据生成
 

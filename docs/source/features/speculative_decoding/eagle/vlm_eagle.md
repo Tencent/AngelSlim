@@ -4,7 +4,7 @@
 本项目包括Eagle3的训练以及benchmark测试，并开源了HunyuanOCR和Qwen3-VL系列的[Eagle3权重](https://huggingface.co/collections/AngelSlim/eagle3)。
 
 我们训练的HunyuanOCR和Qwen3-VL系列Eagle3模型的表现可以参见基准测试[benchmarks](../../../performance/speculative_decoding/benchmarks.md)，
-其中全部数据都是在单张H20上使用vLLM推理获得。
+其中全部数据都是在单张GPU上使用vLLM推理获得。
 ## 1. 支持模型列表
 - `HunyuanOCR`
 - `Qwen3-VL`
@@ -88,7 +88,9 @@ bash scripts/speculative/hunyuan_ocr/generate_vlm_hidden_for_draft_model.sh
 # For Qwen3-VL series
 bash scripts/speculative/qwen3_vl/generate_vlm_hidden_for_draft_model.sh
 ```
-> 注意：qwen3_vl系列模型生成hidden states需要更新transformers库: `pip install git+https://github.com/huggingface/transformers.git`
+> 注意：qwen3_vl系列模型生成hidden states需要更新transformers>=5.0.0,
+ 或者cherry-pick: https://github.com/huggingface/transformers/pull/42609,
+ 否则抓取的hidden states不可用！！！
 
 **脚本参数说明：**
 
