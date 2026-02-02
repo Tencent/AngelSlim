@@ -371,7 +371,7 @@ We evaluated the Eagle3 model trained by AngelSlim on tasks including code gener
 
 #### 1.1 Qwen3 Series Models
 
-Benchmark results for Qwen3 series models using Eagle3 speculative decoding on vLLM (v0.11.2) across **MT-bench**, **HumanEval**, **GSM8K** and **Alpaca**, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=2, batch_size=1, output_len=1024**).
+Benchmark results for Qwen3 series models using Eagle3 speculative decoding on vLLM (v0.11.2) across **MT-bench**, **HumanEval**, **GSM8K** and **Alpaca**, using a single GPU (**tp=1, ep=1, num_speculative_tokens=2, batch_size=1, output_len=1024**).
 
 <table>
   <thead>
@@ -511,7 +511,7 @@ Benchmark results for Qwen3 series models using Eagle3 speculative decoding on v
 
 ##### 1.2.1 Qwen3-VL Series Models
 
-Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding on vLLM (v0.12.0) across language and multimodal tasks, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
+Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding on vLLM (v0.12.0) across language and multimodal tasks, using a single GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
 
 <table><thead>
   <tr>
@@ -668,7 +668,7 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
 
 ##### 1.2.2 HunyuanOCR Model
 
-Benchmark results for HunyuanOCR using Eagle3 speculative decoding on vLLM (v0.13.0) across **[OmniDocBench](https://huggingface.co/datasets/opendatalab/OmniDocBench)** dataset, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
+Benchmark results for HunyuanOCR using Eagle3 speculative decoding on vLLM (v0.13.0) across **[OmniDocBench](https://huggingface.co/datasets/opendatalab/OmniDocBench)** dataset, using a single GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
 
 <table><thead>
   <tr>
@@ -701,7 +701,7 @@ Benchmark results for HunyuanOCR using Eagle3 speculative decoding on vLLM (v0.1
 
 ##### 1.3.1 Qwen2-Audio Model
 
-Benchmark results for Qwen2-Audio using Eagle3 speculative decoding on vLLM (v0.12.0) across **[LibriSpeech](https://www.openslr.org/12)** dataset, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
+Benchmark results for Qwen2-Audio using Eagle3 speculative decoding on vLLM (v0.12.0) across **[LibriSpeech](https://www.openslr.org/12)** dataset, using a single GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
 
 <table><thead>
   <tr>
@@ -732,7 +732,7 @@ Benchmark results for Qwen2-Audio using Eagle3 speculative decoding on vLLM (v0.
 
 ##### 1.3.2 Fun-CosyVoice3 Model
 
-Benchmark results for Fun-CosyVoice3 using Eagle3 speculative decoding across **[LibriTTS](https://www.openslr.org/60/)** dataset, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
+Benchmark results for Fun-CosyVoice3 using Eagle3 speculative decoding across **[LibriTTS](https://www.openslr.org/60/)** dataset, using a single GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
 
 <table><thead>
   <tr>

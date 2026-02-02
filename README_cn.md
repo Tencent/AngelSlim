@@ -372,7 +372,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
 
 #### 1.1 Qwen3系列模型
 
-我们使用vLLM(v0.11.2)评测了Qwen3系列Eagle3模型在**MT-bench**、 **HumanEval**、 **GSM8K**、**Alpaca**等数据集上的接收长度和吞吐。全部结果都是在单张H20上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=2, batch_size=1, output_len=1024**。
+我们使用vLLM(v0.11.2)评测了Qwen3系列Eagle3模型在**MT-bench**、 **HumanEval**、 **GSM8K**、**Alpaca**等数据集上的接收长度和吞吐。全部结果都是在单张GPU上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=2, batch_size=1, output_len=1024**。
 
 <table>
   <thead>
@@ -512,7 +512,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
 
 ##### 1.2.1 Qwen3-VL系列模型
 
-我们使用(v0.12.0)评测了Qwen3-VL系列Eagle3模型在语言理解任务和多模态理解任务上的接收长度和吞吐。全部结果都是在单张H20上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
+我们使用(v0.12.0)评测了Qwen3-VL系列Eagle3模型在语言理解任务和多模态理解任务上的接收长度和吞吐。全部结果都是在单张GPU上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
 
 <table><thead>
   <tr>
@@ -669,7 +669,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
 
 ##### 1.2.2 HunyuanOCR模型
 
-我们使用(v0.13.0)评测了HunyuanOCR Eagle3模型在[OmniDocBench](https://huggingface.co/datasets/opendatalab/OmniDocBench)上的接收长度和吞吐。结果是在单张H20上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
+我们使用(v0.13.0)评测了HunyuanOCR Eagle3模型在[OmniDocBench](https://huggingface.co/datasets/opendatalab/OmniDocBench)上的接收长度和吞吐。结果是在单张GPU上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
 
 <table><thead>
   <tr>
@@ -702,7 +702,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
 
 ##### 1.3.1 Qwen2-Audio模型
 
-我们使用(v0.12.0)评测了Qwen2-Audio Eagle3模型在[LibriSpeech](https://www.openslr.org/12)数据集上的接收长度和吞吐。结果是在单张H20上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
+我们使用(v0.12.0)评测了Qwen2-Audio Eagle3模型在[LibriSpeech](https://www.openslr.org/12)数据集上的接收长度和吞吐。结果是在单张GPU上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
 
 <table><thead>
   <tr>
@@ -732,7 +732,7 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
 </table>
 
 ##### 1.3.2 Fun-CosyVoice3模型
-我们评测了Fun-CosyVoice3 Eagle3模型在[LibriTTS](https://www.openslr.org/60/)数据集上的接收长度。结果是在单张H20上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
+我们评测了Fun-CosyVoice3 Eagle3模型在[LibriTTS](https://www.openslr.org/60/)数据集上的接收长度。结果是在单张GPU上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
 
 <table><thead>
   <tr>
