@@ -177,8 +177,8 @@ class MultiModalDataset(BaseDataset):
     def _process_and_append(self, messages: List[Dict], tools=None):
         """Process messages and append to dataset"""
 
-        # max_length padding for gptq and awq
-        if "gptq" in self.quant_algo or "awq" in self.quant_algo:
+        # max_length padding for int4 gptq, gptaq and awq
+        if "int4_" in self.quant_algo:
             padding = "max_length"
         else:
             padding = True
