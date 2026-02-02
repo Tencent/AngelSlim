@@ -17,13 +17,41 @@ import subprocess
 
 from setuptools import find_packages, setup
 
-TOOLS_VERSION = None
+BASE_VERSION = None
 
 if "main" in subprocess.getoutput("git branch"):
-    TOOLS_VERSION = "0.0.0_dev"
+    BASE_VERSION = "0.0.0_dev"
 else:
     tag_list = subprocess.getoutput("git tag").split("\n")
-    TOOLS_VERSION = tag_list[-1]
+    BASE_VERSION = tag_list[-1]
+
+
+def get_version_with_cuda_torch():
+    """Generate version string with CUDA and PyTorch version suffix.
+
+    Example: 0.0.0_dev+cu128.torch2.10
+    """
+    try:
+        import torch
+
+        # Get CUDA version (e.g., "12.8" -> "128")
+        cuda_version = torch.version.cuda
+        if cuda_version:
+            cuda_version = cuda_version.replace(".", "")
+        else:
+            cuda_version = "cpu"
+
+        # Get PyTorch version (e.g., "2.10.0" -> "2.10")
+        torch_version = torch.__version__.split("+")[0]  # Remove any existing suffix
+        torch_major_minor = ".".join(torch_version.split(".")[:2])
+
+        return f"{BASE_VERSION}+cu{cuda_version}.torch{torch_major_minor}"
+    except ImportError:
+        # torch not installed, return base version
+        return BASE_VERSION
+
+
+TOOLS_VERSION = get_version_with_cuda_torch()
 
 
 def get_requirements(filename):

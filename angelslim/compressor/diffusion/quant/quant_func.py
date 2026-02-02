@@ -60,10 +60,12 @@ def fp8_per_token_group_quant(
     scale_tma_aligned: bool = False,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    Per-token-group FP8 quantization using triton kernel.
+    Per-token-group FP8 quantization with automatic backend selection.
+
+    Uses Triton kernel on GPU when available, otherwise falls back to PyTorch.
 
     Args:
-        x: Input tensor on GPU
+        x: Input tensor
         group_size: Size of each quantization group
         eps: Small value to avoid division by zero
         dtype: Target FP8 data type
@@ -72,11 +74,9 @@ def fp8_per_token_group_quant(
 
     Returns:
         Tuple of (quantized_tensor, scale_tensor)
-
-    Raises:
-        AssertionError: If input tensor is not on GPU
     """
-    assert x.is_cuda, "x must be on GPU for fp8_per_token_group_quant_triton"
+    # fp8_per_token_group_quant_triton is automatically selected based on
+    # backend availability (Triton vs PyTorch) via __init__.py
     return fp8_per_token_group_quant_triton(
         x,
         group_size,
