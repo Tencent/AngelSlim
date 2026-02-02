@@ -73,8 +73,9 @@ class FP8DynamicLinear(torch.nn.Module):
                 x, group_size=128, column_major_scales=True, scale_tma_aligned=True
             )
         elif self.quant_type == "fp8-per-block" and not self.native_fp8_support:
-            origin_shape = None
-            qinput, x_scale = fp8_per_block_quant(x, block_size=128)
+            origin_shape = x.shape
+            x_2d = x.view(-1, x.shape[-1])
+            qinput, x_scale = fp8_per_block_quant(x_2d, block_size=128)
         else:
             raise ValueError(f"Invalid quant_type: {self.quant_type}")
 
@@ -96,6 +97,17 @@ class FP8DynamicLinear(torch.nn.Module):
             and output.dim() == 2
         ):
             output = output.unsqueeze(0)
+
+        # Restore original shape for fp8-per-block with native_fp8_support=False
+        # (native_fp8_support=True case is handled in fp8_gemm_deepgemm_block)
+        if (
+            self.quant_type == "fp8-per-block"
+            and not self.native_fp8_support
+            and origin_shape is not None
+            and len(origin_shape) == 3
+            and output.dim() == 2
+        ):
+            output = output.view(origin_shape[0], origin_shape[1], -1)
 
         return output
 
