@@ -1,0 +1,29 @@
+# Copyright 2026 Tencent Inc. All Rights Reserved.
+
+# 1. Model Mapping: Link the LLaVA architecture to Prunable wrappers
+model_mapping:
+  - name: "vl_model"
+    path: "model"
+    wrapper_module: ".models.llava"
+    wrapper_class: "Prunable_LlavaModel"
+  - name: "text_model"
+    path: "model.language_model"
+    wrapper_module: ".models.llava"
+    wrapper_class: "Prunable_LlamaModel"
+  - name: "llm_attn"
+    path: "model.language_model.layers[n].self_attn"
+    wrapper_module: ".models.llava"
+    wrapper_class: "Prunable_LlamaAttention"
+  - name: "vision_attn"
+    path: "model.vision_tower.vision_model.encoder.layers[n].self_attn"
+    wrapper_module: ".models.llava"
+    wrapper_class: "Prunable_CLIPAttention"
+
+# 2. Compressor Configuration
+compressor:
+  strategies:
+    # "global" strategy is executed at the entry of the Language Model (Prunable_LlamaModel)
+    global:
+      strategy: "random"
+      params:
+        ratio: 0.75  # Discard 50% of the visual tokens randomly

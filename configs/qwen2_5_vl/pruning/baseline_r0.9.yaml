@@ -1,0 +1,29 @@
+model_mapping:
+  - name: "vl_model"
+    path: "model"
+    wrapper_module: ".models.qwen2_5_vl"
+    wrapper_class: "Prunable_Qwen2_5_VLModel"
+  - name: "vision_transformer"
+    path: "model.visual"
+    wrapper_module: ".models.qwen2_5_vl"
+    wrapper_class: "Prunable_Qwen2_5_VisionTransformer"
+  - name: "vision_attn"
+    path: "model.visual.blocks[n].attn"
+    wrapper_module: ".models.qwen2_5_vl"
+    wrapper_class: "Prunable_Qwen2_5_VLVisionAttention"
+  - name: "text_model"
+    path: "model.language_model"
+    wrapper_module: ".models.qwen2_5_vl"
+    wrapper_class: "Prunable_Qwen2_5_VLTextModel"
+  - name: "llm_attn"
+    path: "model.language_model.layers[n].self_attn"
+    wrapper_module: ".models.qwen2_5_vl"
+    wrapper_class: "Prunable_Qwen2_5_VLAttention"
+
+compressor:
+  requirements: {}
+  strategies:
+    global:
+      strategy: "baseline"
+      params:
+        ratio: 0.9
