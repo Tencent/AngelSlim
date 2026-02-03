@@ -474,3 +474,17 @@ def reduce_block_padding(input: torch.Tensor, block_sizes: dict, pad_value: floa
                 padded_tensor = F.pad(padded_tensor, pad, value=pad_value)
 
         return padded_tensor
+
+
+class Int8PerChannelQuantizer:
+    """Per-channel symmetric int8 quantizer."""
+
+    @torch.no_grad()
+    def quantize(self, tensor: torch.Tensor):
+        assert tensor.dtype == torch.bfloat16
+        qmax = 127.0
+        abs_max = torch.abs(tensor).max(dim=1, keepdim=True)[0]
+        scale = abs_max / qmax
+        quantized = torch.round(tensor / scale)
+        quantized = torch.clamp(quantized, -qmax, qmax)
+        return quantized.to(torch.int8), scale.to(torch.float32)

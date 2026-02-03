@@ -4,7 +4,7 @@
 本项目包括Eagle3的训练以及benchmark测试，并开源了Qwen3和Hunyuan系列的[Eagle3权重](https://huggingface.co/collections/AngelSlim/eagle3)。
 
 我们训练的Qwen3系列Eagle3模型的表现可以参见基准测试[benchmarks](../../../performance/speculative_decoding/benchmarks.md)，
-其中全部数据都是在单张H20上使用vLLM推理获得。
+其中全部数据都是在单张GPU上使用vLLM推理获得。
 
 ## 1. 数据生成
 
@@ -73,7 +73,7 @@ bash scripts/speculative/generate_vlm_hidden_for_draft_model.sh
 - `MODEL_NAME`: 目标模型的HF名称或本地路径
 - `TARGET_BACKEND`: 目标模型后端，目前仅支持HF
 - `MODEL_MAX_LENGTH`: 生成数据的上下文长度
-- `CHAT_TEMPLATE_TYPE`: 目标模型的目标类型，目前支持qwen3/hunyuan
+- `CHAT_TEMPLATE_TYPE`: 目标模型的目标类型，目前支持qwen3/qwen2.5/hunyuan/hunyuan-7b
 - `OUTPUT_DIR`: 生成的数据集输出路径
 
 

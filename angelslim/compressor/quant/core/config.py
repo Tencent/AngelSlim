@@ -103,6 +103,13 @@ class QuantConfig:
             self.low_memory = config.quantization.low_memory
             self.quant_analyse = config.quantization.quant_analyse
             self.quant_vit = config.quantization.quant_vit
+        elif "w4a8i8" in self.quant_algo:
+            group_size = quantization_args.quant_method["group_size"]
+            self.quant_algo_info = {
+                "group_size": group_size,
+                "ignore_layers": quantization_args.ignore_layers,
+            }
+            self.low_memory = config.quantization.low_memory
         elif "int8" in self.quant_algo:
             is_dynamic = "dynamic" if "dynamic" in self.quant_algo else "static"
             assert (

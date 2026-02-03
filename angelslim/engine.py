@@ -149,6 +149,7 @@ class Engine:
         inference_settings=None,
         use_audio_in_video=False,
         model_name=None,
+        quantization_config=None,
     ) -> Optional[Any]:
         """Prepare compression dataset"""
         if custom_dataloader is not None:
@@ -174,6 +175,7 @@ class Engine:
             inference_settings=inference_settings,
             use_audio_in_video=use_audio_in_video,
             model_name=model_name,
+            quantization_config=quantization_config,
         )
         self.max_seq_length = max_length
 
