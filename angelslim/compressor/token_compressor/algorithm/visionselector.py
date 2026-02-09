@@ -14,19 +14,13 @@
 
 """
 Vision Selector Pruning Strategy module.
-This module provides a pruning strategy that leverages a trained Transformer-based
-Scorer (Vision Selector) to predict the importance of visual tokens.
 """
 
+
 import torch
-from typing import Dict, Any, Optional
-import warnings
 
 from ..base.context import PruningContext
-from .utils.utils import (
-    _extract_and_validate_vision_token_info,
-    get_valid_content_mask,
-)
+from .utils.utils import _extract_and_validate_vision_token_info, get_valid_content_mask
 from .utils.vision_selector_utils import get_universal_selector_scores
 
 
@@ -35,13 +29,20 @@ def vision_selector_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
     Executes global token pruning using the pre-trained Vision Selector.
 
     Args:
-        context (PruningContext, required): The execution context containing multimodal embeddings.
+        context (PruningContext):
+        The execution context containing multimodal embeddings.
         **kwargs:
-            selector_path (str, required): The absolute or relative path to the selector model folder.
-            ratio (float, required): The percentage of vision tokens to be pruned.
-            randomize (bool): If True, use multinomial sampling; otherwise, use deterministic Top-K.
-            text_selection_mode (str): Specifies how to select text features for V2 selectors ('inverse' or 'valid_content').
-            score_mode (str): The processing mode for importance weights (e.g., 'soft_topk', 'raw').
+            selector_path (str):
+            The absolute or relative path to the selector model folder.
+            ratio (float):
+            The percentage of vision tokens to be pruned.
+            randomize (bool):
+            If True, use multinomial sampling; otherwise, use deterministic Top-K.
+            text_selection_mode (str):
+            Specifies how to select text features for V2 selectors
+            ('inverse' or 'valid_content').
+            score_mode (str):
+            The processing mode for importance weights (e.g., 'soft_topk', 'raw').
 
     Returns:
         torch.Tensor: A boolean keep_mask of shape [1, sequence_length].
@@ -55,7 +56,8 @@ def vision_selector_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
         score_mode = kwargs.get("score_mode", "soft_topk")
     except KeyError as e:
         raise ValueError(
-            f"[TokenCompressor Error] 'vision_selector_pruning' missing required parameter: {e}"
+            f"[TokenCompressor Error] "
+            f"'vision_selector_pruning' missing required parameter: {e}"
         )
 
     # 2. Access context attributes directly
@@ -64,14 +66,16 @@ def vision_selector_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
 
     if input_ids is None or inputs_embeds is None:
         raise ValueError(
-            "[TokenCompressor Error] Required tensors 'input_ids' or 'inputs_embeds' not found in context."
+            "[TokenCompressor Error] "
+            "Required tensors 'input_ids' or 'inputs_embeds' not found in context."
         )
 
     device = inputs_embeds.device
     batch_size = inputs_embeds.shape[0]
     if batch_size != 1:
         raise NotImplementedError(
-            "[TokenCompressor Error] Vision Selector strategy currently only supports batch_size=1."
+            "[TokenCompressor Error] "
+            "Vision Selector strategy currently only supports batch_size=1."
         )
 
     # 3. Locate modality-specific tokens
@@ -98,7 +102,8 @@ def vision_selector_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
 
     text_hidden = None
     if text_selection_mode == "valid_content":
-        # Extract meaningful text content (e.g., instructions after the last image)
+        # Extract meaningful text content (e.g., instructions after the last
+        # image)
         valid_mask = get_valid_content_mask(input_ids[0])
         text_indices = torch.where(valid_mask)[0]
         if len(text_indices) > 0:
@@ -133,7 +138,8 @@ def vision_selector_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
             )
         except RuntimeError as e:
             raise RuntimeError(
-                f"[TokenCompressor Error] Multinomial sampling failed for Vision Selector. Details: {e}"
+                "[TokenCompressor Error] "
+                f"Multinomial sampling failed for Vision Selector. Details: {e}"
             )
     else:
         # Deterministic selection of highest scores

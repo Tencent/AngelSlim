@@ -12,14 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import yaml
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any, Union
+from typing import Any, Dict, List, Union
+
+import yaml
 
 
 @dataclass
 class StrategyConfig:
-    """Configuration for a specific pruning or merging algorithm and its hyperparameters."""
+    """Configuration for a specific pruning or merging algorithm."""
 
     strategy: str
     """The registered name of the compression algorithm (e.g., 'idpruner', 'random')."""
@@ -33,7 +34,7 @@ class StrategyConfig:
 
 @dataclass
 class DataRequirements:
-    """Capturing requirements specifying which intermediate tensors must be stored in the PruningContext."""
+    """Capturing requirements stored in the PruningContext."""
 
     inputs_embeds: bool = False
     """Whether to capture multimodal embeddings."""
@@ -84,47 +85,44 @@ class DataRequirements:
 
 @dataclass
 class TokenCompressorConfig:
-    """The root configuration object for token compression, containing all requirements and multi-stage strategies."""
+    """The root configuration object for token compression, containing all requirements
+    and multi-stage strategies."""
 
     requirements: DataRequirements = field(default_factory=DataRequirements)
     """The centralized data capturing plan for the model adapter."""
 
     strategies: Dict[Union[str, int], StrategyConfig] = field(default_factory=dict)
-    """A map of execution stages ('global' or layer indices) to their respective strategy configurations."""
+    """A map of execution stages ('global' or layer indices)
+    to their respective strategy configurations."""
 
     @classmethod
     def from_yaml(cls, path: str) -> "TokenCompressorConfig":
         """
-        解析 YAML 配置文件并返回结构化的 TokenCompressorConfig 对象。
+        Parse YAML configuration file
+        Return a structured TokenCompressorConfig object.
         """
         with open(path, "r", encoding="utf-8") as f:
             raw_data = yaml.safe_load(f)
 
         compressor_data = raw_data.get("compressor", {})
 
-        # 1. 解析数据需求 (DataRequirements)
-        # 指定剪枝上下文需要捕获哪些模型激活张量
         req_raw = compressor_data.get("requirements", {})
         requirements = DataRequirements(**req_raw)
 
-        # 2. 解析多阶段压缩策略 (Multi-stage strategies)
-        # 遍历配置中的 strategies 字典，将其转换为 StrategyConfig 对象
         strategies_raw = compressor_data.get("strategies", {})
         strategies = {}
         for stage, conf in strategies_raw.items():
-            # 为逐层剪枝将数字键转换为整数 (int)
-            # 修复：当 YAML 中的键为纯数字且未加引号时，PyYAML 会自动将其解析为 Python int 类型。
-            # int 对象没有 .isdigit() 方法，此处通过类型判断确保兼容性。
             if isinstance(stage, str) and stage.isdigit():
                 key = int(stage)
             elif isinstance(stage, int):
                 key = stage
             else:
-                # 保持原有的非数字键（如 "global"）
                 key = stage
-                
+
             strategies[key] = StrategyConfig(
-                strategy=conf["strategy"], params=conf.get("params", {}), model_related_params=conf.get("model_related_params", {})
+                strategy=conf["strategy"],
+                params=conf.get("params", {}),
+                model_related_params=conf.get("model_related_params", {}),
             )
 
         return cls(requirements=requirements, strategies=strategies)

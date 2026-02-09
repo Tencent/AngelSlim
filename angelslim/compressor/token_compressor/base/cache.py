@@ -12,20 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Any, Dict, Optional, Tuple, Union
+
 import torch
-from typing import Optional, Dict, Any, List, Tuple, Union
-from transformers.cache_utils import DynamicCache
 from transformers import PretrainedConfig
+from transformers.cache_utils import DynamicCache
 
 
 class PruningCache(DynamicCache):
-    """
-    A specialized KV cache that tracks pruning states and manages the transition between prefill and decoding.
-
-    This class extends DynamicCache to store pruning masks for each layer (or global stage) and tracks
-    how many times each layer has been updated to accurately identify the prefill stage.
-    """
-
     def __init__(
         self,
         config: Optional[PretrainedConfig] = None,
@@ -39,15 +33,14 @@ class PruningCache(DynamicCache):
             offload_only_non_sliding=offload_only_non_sliding,
             **kwargs
         )
-        # Stores pruning info. Key can be layer index (int) or stage name (e.g., "global").
+        # Stores pruning info. Key can be layer index (int) or stage name
+        # (e.g., "global").
         self.pruning_info: Dict[Union[int, str], Dict[str, Any]] = {}
-        # Tracks update counts per layer to distinguish between prefill and decoding.
+        # Tracks update counts per layer to distinguish between prefill and
+        # decoding.
         self.update_counts: Dict[int, int] = {}
 
     def is_prefill_stage(self, layer_idx: int, timing: str = "after_update") -> bool:
-        """
-        Determines if the specified layer is currently in the prefill stage based on update counts.
-        """
         count = self.update_counts.get(layer_idx, 0)
         if timing == "before_update":
             return count == 0
@@ -63,9 +56,6 @@ class PruningCache(DynamicCache):
         layer_idx: int,
         cache_kwargs: Optional[Dict[str, Any]] = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Standard KV cache update with an integrated counter to track the inference stage.
-        """
         updated_key, updated_value = super().update(
             key_states, value_states, layer_idx, cache_kwargs
         )
@@ -75,9 +65,6 @@ class PruningCache(DynamicCache):
     def set_pruning_mask_for_layer(
         self, stage_key: Union[int, str], mask: torch.Tensor
     ):
-        """
-        Registers a pruning mask and computes the number of pruned tokens for offset compensation.
-        """
         if mask.dim() != 1:
             mask = mask.view(-1)
 
@@ -91,7 +78,8 @@ class PruningCache(DynamicCache):
         self, stage_key: Union[int, str]
     ) -> Tuple[bool, Optional[torch.Tensor], int]:
         """
-        Retrieves the pruning status, mask tensor, and pruned token count for a specific stage or layer.
+        Retrieves the pruning status, mask tensor,
+        and pruned token count for a specific stage or layer.
         """
         # Support for smart index -1 to get the last registered pruning stage
         if stage_key == -1:
@@ -109,7 +97,7 @@ class PruningCache(DynamicCache):
 
     @property
     def is_prefill(self) -> bool:
-        """Global flag to check if the overall model is in prefill (based on layer 0)."""
+        """Global flag to check if the overall model is in prefill."""
         return self.is_prefill_stage(0, timing="before_update")
 
     def reset(self):

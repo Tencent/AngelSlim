@@ -14,12 +14,11 @@
 
 """
 DivPrune Pruning Strategy (Diversity-based Visual Token Pruning).
-Reference: "DivPrune: Diversity-based Visual Token Pruning for Large Multimodal Models (CVPR 2025)".
 """
+
 
 import torch
 import torch.nn.functional as F
-from typing import Dict, Any
 
 from ..base.context import PruningContext
 from .utils.utils import _extract_and_validate_vision_token_info
@@ -30,9 +29,9 @@ def divprune(context: PruningContext, **kwargs) -> torch.Tensor:
     Executes DivPrune using iterative Farthest Point Sampling (FPS) in feature space.
 
     Args:
-        context (PruningContext, required): The execution context containing inputs_embeds.
+        context (PruningContext): The execution context containing inputs_embeds.
         **kwargs:
-            ratio (float, required): Ratio of vision tokens to prune.
+            ratio (float): Ratio of vision tokens to prune.
 
     Returns:
         torch.Tensor: Boolean keep_mask of shape [B, seq_len].
@@ -92,7 +91,8 @@ def divprune(context: PruningContext, **kwargs) -> torch.Tensor:
         # 3. Iterative Selection using Farthest Point Sampling logic
         kept_local_indices = torch.empty(num_to_keep, dtype=torch.long, device=device)
 
-        # Maximin Initialization: Pick the point with largest minimum distance to others
+        # Maximin Initialization: Pick the point with largest minimum distance
+        # to others
         if num_vision_tokens > 1:
             min_dists_to_others, _ = torch.min(distance_matrix, dim=1)
             first_idx = torch.argmax(min_dists_to_others)

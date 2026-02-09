@@ -14,12 +14,11 @@
 
 """
 HiPrune (Hierarchical Pruning) Strategy.
-Adapted from Qwen2.5-VL implementation, combining shallow spatial anchors and deep semantic completion.
 """
 
-import torch
 import math
-from typing import Dict, Any, List
+
+import torch
 
 from ..base.context import PruningContext
 from .utils.utils import (
@@ -34,12 +33,12 @@ def hiprune_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
     Executes HiPrune by combining attention from shallow and deep layers.
 
     Args:
-        context (PruningContext, required): The execution context with ViT Q/K and grid metadata.
+        context (PruningContext): The execution context with ViT Q/K and grid metadata.
         **kwargs:
-            ratio (float, required): Global pruning ratio.
-            object_layer (int, required): Index of the shallow ViT layer for spatial anchors.
-            last_vit_layer (int, required): Index of the deep ViT layer for semantic info.
-            alpha (float, required): Proportion of budget for shallow anchor expansion.
+            ratio (float): Global pruning ratio.
+            object_layer (int): Index of the shallow ViT layer for spatial anchors.
+            last_vit_layer (int): Index of the deep ViT layer for semantic info.
+            alpha (float): Proportion of budget for shallow anchor expansion.
 
     Returns:
         torch.Tensor: Boolean keep_mask of shape [B, seq_len].
@@ -72,9 +71,12 @@ def hiprune_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
     model_type = identify_model_architecture(context)
 
     # 2. Extract vision token distribution
-    vision_indices_global, non_vision_indices_global, _, num_tokens_per_image = (
-        _extract_and_validate_vision_token_info(context)
-    )
+    (
+        vision_indices_global,
+        non_vision_indices_global,
+        _,
+        num_tokens_per_image,
+    ) = _extract_and_validate_vision_token_info(context)
 
     if len(vision_indices_global) == 0:
         return torch.ones_like(input_ids, dtype=torch.bool)
@@ -88,7 +90,8 @@ def hiprune_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
 
     if any(x is None for x in [q_shallow, k_shallow, q_deep, k_deep]):
         raise ValueError(
-            f"[TokenCompressor Error] HiPrune requires Q/K from layers {object_layer} and {last_vit_layer}."
+            f"[TokenCompressor Error] "
+            f"HiPrune requires Q/K from layers {object_layer} and {last_vit_layer}."
         )
 
     shallow_scores_list, _ = _recompute_attention_maps_for_all_images(
@@ -115,7 +118,10 @@ def hiprune_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
     if grid_thw is None:
         grid_thw = [None] * len(shallow_scores_list)
     for shallow_score, deep_score, global_idx_map, grid in zip(
-        shallow_scores_list, deep_scores_list, vision_indices_split, grid_thw
+        shallow_scores_list,
+        deep_scores_list,
+        vision_indices_split,
+        grid_thw,
     ):
         shallow_score = shallow_score.squeeze(0)
         deep_score = deep_score.squeeze(0)
@@ -146,7 +152,8 @@ def hiprune_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
                 width = int(math.sqrt(N))
             else:
                 raise ValueError(
-                    f"[TokenCompressor Error] Unsupported architecture for HiPrune: {model_type}"
+                    f"[TokenCompressor Error] "
+                    f"Unsupported architecture for HiPrune: {model_type}"
                 )
 
             # Expand anchors to Cross-Shape neighbors

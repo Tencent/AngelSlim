@@ -12,31 +12,57 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from angelslim.compressor.token_compressor.factory import compression_strategy_factory
+from typing import Callable, Unpack
+
 import torch
 import torch.nn as nn
-from typing import Callable, Optional, Dict, Any, Tuple, Union, List, Unpack
+from transformers.models.clip.modeling_clip import (
+    ALL_ATTENTION_FUNCTIONS as CLIP_ALL_ATTENTION_FUNCTIONS,
+)
+from transformers.models.clip.modeling_clip import CLIPAttention, TransformersKwargs
+from transformers.models.clip.modeling_clip import (
+    eager_attention_forward as clip_eager_attention_forward,
+)
+from transformers.models.llama.modeling_llama import (
+    ALL_ATTENTION_FUNCTIONS as LLAMA_ALL_ATTENTION_FUNCTIONS,
+)
+from transformers.models.llama.modeling_llama import (
+    BaseModelOutputWithPast,
+    Cache,
+    LlamaAttention,
+    LlamaModel,
+    apply_rotary_pos_emb,
+    create_causal_mask,
+)
+from transformers.models.llama.modeling_llama import (
+    eager_attention_forward as llama_eager_attention_forward,
+)
 
 # Import original model components from Transformers
-from transformers.models.llava.modeling_llava import LlavaModel, LlavaModelOutputWithPast
-from transformers.models.llama.modeling_llama import LlamaModel, LlamaAttention, eager_attention_forward as llama_eager_attention_forward, ALL_ATTENTION_FUNCTIONS as LLAMA_ALL_ATTENTION_FUNCTIONS, apply_rotary_pos_emb, Cache, BaseModelOutputWithPast, create_causal_mask
-from transformers.models.clip.modeling_clip import CLIPAttention, eager_attention_forward as clip_eager_attention_forward, ALL_ATTENTION_FUNCTIONS as CLIP_ALL_ATTENTION_FUNCTIONS, TransformersKwargs
+from transformers.models.llava.modeling_llava import (
+    LlavaModel,
+    LlavaModelOutputWithPast,
+)
+
+from angelslim.compressor.token_compressor.factory import compression_strategy_factory
+
+from ..base.cache import PruningCache
+from ..base.config import TokenCompressorConfig
 
 # Import AngelSlim base components
 from ..base.context import PruningContext
-from ..base.config import TokenCompressorConfig
-from ..base.cache import PruningCache
-from ..utils.mask_utils import apply_pruning_mask, apply_token_merging, compensate_decoding_state
+from ..utils.mask_utils import (
+    apply_pruning_mask,
+    apply_token_merging,
+    compensate_decoding_state,
+)
 
 
 class Prunable_CLIPAttention(CLIPAttention):
-    """
-    Vision Tower attention wrapper for CLIP.
-    Used to hook internal activations and attention maps from the vision encoder.
-    """
-
     def __init__(
-        self, original_model: nn.Module, pruning_config: TokenCompressorConfig
+        self,
+        original_model: nn.Module,
+        pruning_config: TokenCompressorConfig,
     ):
         torch.nn.Module.__init__(self)
         self.__dict__.update(original_model.__dict__)
@@ -57,22 +83,28 @@ class Prunable_CLIPAttention(CLIPAttention):
         keys = self.k_proj(hidden_states)
         values = self.v_proj(hidden_states)
 
-        queries = queries.view(batch_size, seq_length, -1, self.head_dim).transpose(1, 2)
+        queries = queries.view(batch_size, seq_length, -1, self.head_dim).transpose(
+            1, 2
+        )
         keys = keys.view(batch_size, seq_length, -1, self.head_dim).transpose(1, 2)
         values = values.view(batch_size, seq_length, -1, self.head_dim).transpose(1, 2)
 
         attention_interface: Callable = clip_eager_attention_forward
         if self.config._attn_implementation != "eager":
-            attention_interface = CLIP_ALL_ATTENTION_FUNCTIONS[self.config._attn_implementation]
+            attention_interface = CLIP_ALL_ATTENTION_FUNCTIONS[
+                self.config._attn_implementation
+            ]
 
-        ### PRUNING START: Capture Vision Q/K States ###
-        assert context is not None, "PruningContext must be provided for prunable attention."
+        # PRUNING START: Capture Vision Q/K States #
+        assert (
+            context is not None
+        ), "PruningContext must be provided for prunable attention."
         if context is not None and hasattr(self, "layer_idx"):
             if self.pruning_config.requirements.needs_vit_q(self.layer_idx):
                 context.vit_q[self.layer_idx] = queries
             if self.pruning_config.requirements.needs_vit_k(self.layer_idx):
                 context.vit_k[self.layer_idx] = keys
-        ### PRUNING END ###
+        # PRUNING END #
 
         attn_output, attn_weights = attention_interface(
             self,
@@ -92,13 +124,10 @@ class Prunable_CLIPAttention(CLIPAttention):
 
 
 class Prunable_LlamaAttention(LlamaAttention):
-    """
-    Language Model attention wrapper for Llama.
-    Responsible for capturing Q/K states and applying soft-pruning scales within the LLM.
-    """
-
     def __init__(
-        self, original_model: nn.Module, pruning_config: TokenCompressorConfig
+        self,
+        original_model: nn.Module,
+        pruning_config: TokenCompressorConfig,
     ):
         torch.nn.Module.__init__(self)
         self.__dict__.update(original_model.__dict__)
@@ -122,27 +151,43 @@ class Prunable_LlamaAttention(LlamaAttention):
         value_states = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
 
         cos, sin = position_embeddings
-        query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
+        query_states, key_states = apply_rotary_pos_emb(
+            query_states, key_states, cos, sin
+        )
 
-        ### PRUNING START: Capture LLM States ###
-        assert context is not None, "PruningContext must be provided for prunable attention."
+        # PRUNING START: Capture LLM States #
+        assert (
+            context is not None
+        ), "PruningContext must be provided for prunable attention."
         if context is not None and hasattr(self, "layer_idx"):
             if self.pruning_config.requirements.needs_llm_q(self.layer_idx):
                 context.llm_q[self.layer_idx] = query_states
             if self.pruning_config.requirements.needs_llm_k(self.layer_idx):
                 context.llm_k[self.layer_idx] = key_states
-            if self.pruning_config.requirements.feature_map and context.feature_map is None:
+            if (
+                self.pruning_config.requirements.feature_map
+                and context.feature_map is None
+            ):
                 context.feature_map = hidden_states
-        ### PRUNING END ###
+        # PRUNING END #
 
         if past_key_values is not None:
-            # sin and cos are specific to RoPE models; cache_position needed for the static cache
-            cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position}
-            key_states, value_states = past_key_values.update(key_states, value_states, self.layer_idx, cache_kwargs)
+            # sin and cos are specific to RoPE models; cache_position needed
+            # for the static cache
+            cache_kwargs = {
+                "sin": sin,
+                "cos": cos,
+                "cache_position": cache_position,
+            }
+            key_states, value_states = past_key_values.update(
+                key_states, value_states, self.layer_idx, cache_kwargs
+            )
 
         attention_interface: Callable = llama_eager_attention_forward
         if self.config._attn_implementation != "eager":
-            attention_interface = LLAMA_ALL_ATTENTION_FUNCTIONS[self.config._attn_implementation]
+            attention_interface = LLAMA_ALL_ATTENTION_FUNCTIONS[
+                self.config._attn_implementation
+            ]
 
         attn_output, attn_weights = attention_interface(
             self,
@@ -150,7 +195,7 @@ class Prunable_LlamaAttention(LlamaAttention):
             key_states,
             value_states,
             attention_mask,
-            dropout=0.0 if not self.training else self.attention_dropout,
+            dropout=(0.0 if not self.training else self.attention_dropout),
             scaling=self.scaling,
             **kwargs,
         )
@@ -161,17 +206,15 @@ class Prunable_LlamaAttention(LlamaAttention):
 
 
 class Prunable_LlamaModel(LlamaModel):
-    """
-    Language Model backbone wrapper for Llama.
-    Orchestrates global pruning/merging strategies and manages coordinate synchronization.
-    """
-
     def __init__(self, original_model: nn.Module, config: TokenCompressorConfig):
         torch.nn.Module.__init__(self)
         self.__dict__.update(original_model.__dict__)
         self.compressor_config = config
         self.pruning_fns = {
-            stage: (compression_strategy_factory(c.strategy), c.params)
+            stage: (
+                compression_strategy_factory(c.strategy),
+                c.params,
+            )
             for stage, c in config.strategies.items()
         }
 
@@ -188,7 +231,9 @@ class Prunable_LlamaModel(LlamaModel):
         **kwargs: Unpack[TransformersKwargs],
     ) -> BaseModelOutputWithPast:
         if (input_ids is None) ^ (inputs_embeds is not None):
-            raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
+            raise ValueError(
+                "You must specify exactly one of input_ids or inputs_embeds"
+            )
 
         if inputs_embeds is None:
             inputs_embeds: torch.Tensor = self.embed_tokens(input_ids)
@@ -197,32 +242,52 @@ class Prunable_LlamaModel(LlamaModel):
             past_key_values = PruningCache(config=self.config)
 
         if cache_position is None:
-            past_seen_tokens = past_key_values.get_seq_length() if past_key_values is not None else 0
+            past_seen_tokens = (
+                past_key_values.get_seq_length() if past_key_values is not None else 0
+            )
             cache_position: torch.Tensor = (
-                torch.arange(inputs_embeds.shape[1], device=inputs_embeds.device) + past_seen_tokens
+                torch.arange(
+                    inputs_embeds.shape[1],
+                    device=inputs_embeds.device,
+                )
+                + past_seen_tokens
             )
 
         if position_ids is None:
             position_ids = cache_position.unsqueeze(0)
 
-        is_prefill = getattr(past_key_values, "is_prefill", True) if past_key_values else True
+        is_prefill = (
+            getattr(past_key_values, "is_prefill", True) if past_key_values else True
+        )
 
-        ### PRUNING START: Global Compression ###
-        assert context is not None, "PruningContext must be provided for prunable model."
+        # PRUNING START: Global Compression #
+        assert (
+            context is not None
+        ), "PruningContext must be provided for prunable model."
         assert inputs_embeds.shape[0] == 1, "Batch size must be 1 for global pruning."
         if is_prefill:
             if "global" in self.pruning_fns:
                 fn, p = self.pruning_fns["global"]
                 res = fn(context, **p)
                 if isinstance(res, (torch.Tensor, tuple)):
-                    update_fn = apply_pruning_mask if isinstance(res, torch.Tensor) else apply_token_merging
+                    update_fn = (
+                        apply_pruning_mask
+                        if isinstance(res, torch.Tensor)
+                        else apply_token_merging
+                    )
                     # Synchronize sequence metadata
-                    inputs_embeds, position_ids, _, attention_mask, cache_position = update_fn(
+                    (
+                        inputs_embeds,
+                        position_ids,
+                        _,
+                        attention_mask,
+                        cache_position,
+                    ) = update_fn(
                         inputs_embeds,
                         *(res if isinstance(res, tuple) else [res]),
                         context,
                         position_ids,
-                        None, # No separate text_position_ids in Llama-1.5
+                        None,  # No separate text_position_ids in Llama-1.5
                         attention_mask,
                         cache_position,
                         stage_key="global",
@@ -231,9 +296,13 @@ class Prunable_LlamaModel(LlamaModel):
         else:
             # Decoding Coordinate Compensation
             position_ids, cache_position, _ = compensate_decoding_state(
-                position_ids, cache_position, None, "global", past_key_values
+                position_ids,
+                cache_position,
+                None,
+                "global",
+                past_key_values,
             )
-        ### PRUNING END ###
+        # PRUNING END #
 
         causal_mask = create_causal_mask(
             config=self.config,
@@ -247,7 +316,9 @@ class Prunable_LlamaModel(LlamaModel):
         hidden_states = inputs_embeds
         position_embeddings = self.rotary_emb(hidden_states, position_ids=position_ids)
 
-        for layer_idx, decoder_layer in enumerate(self.layers[: self.config.num_hidden_layers]):
+        for layer_idx, decoder_layer in enumerate(
+            self.layers[: self.config.num_hidden_layers]
+        ):
             hidden_states = decoder_layer(
                 hidden_states,
                 attention_mask=causal_mask,
@@ -260,14 +331,24 @@ class Prunable_LlamaModel(LlamaModel):
                 **kwargs,
             )
 
-            ### PRUNING START: Layer-wise Compression ###
+            # PRUNING START: Layer-wise Compression #
             if is_prefill:
                 if layer_idx in self.pruning_fns:
                     fn, p = self.pruning_fns[layer_idx]
                     res = fn(context, **p)
                     if isinstance(res, (torch.Tensor, tuple)):
-                        update_fn = apply_pruning_mask if isinstance(res, torch.Tensor) else apply_token_merging
-                        hidden_states, position_ids, _, causal_mask, cache_position = update_fn(
+                        update_fn = (
+                            apply_pruning_mask
+                            if isinstance(res, torch.Tensor)
+                            else apply_token_merging
+                        )
+                        (
+                            hidden_states,
+                            position_ids,
+                            _,
+                            causal_mask,
+                            cache_position,
+                        ) = update_fn(
                             hidden_states,
                             *(res if isinstance(res, tuple) else [res]),
                             context,
@@ -281,12 +362,19 @@ class Prunable_LlamaModel(LlamaModel):
                         # Slice RoPE for subsequent layers
                         m = res if isinstance(res, torch.Tensor) else res[-1]
                         cos, sin = position_embeddings
-                        position_embeddings = (cos[:, m.view(-1), :], sin[:, m.view(-1), :])
+                        position_embeddings = (
+                            cos[:, m.view(-1), :],
+                            sin[:, m.view(-1), :],
+                        )
             else:
                 position_ids, cache_position, causal_mask = compensate_decoding_state(
-                    position_ids, cache_position, causal_mask, layer_idx, past_key_values
+                    position_ids,
+                    cache_position,
+                    causal_mask,
+                    layer_idx,
+                    past_key_values,
                 )
-            ### PRUNING END ###
+            # PRUNING END #
 
         hidden_states = self.norm(hidden_states)
         return BaseModelOutputWithPast(
@@ -296,13 +384,10 @@ class Prunable_LlamaModel(LlamaModel):
 
 
 class Prunable_LlavaModel(LlavaModel):
-    """
-    Top-level multimodal model wrapper for LLaVA.
-    Initializes the PruningContext and manages the data flow between CLIP and Llama.
-    """
-
     def __init__(
-        self, original_model: nn.Module, pruning_config: TokenCompressorConfig
+        self,
+        original_model: nn.Module,
+        pruning_config: TokenCompressorConfig,
     ):
         torch.nn.Module.__init__(self)
         self.__dict__.update(original_model.__dict__)
@@ -322,15 +407,19 @@ class Prunable_LlavaModel(LlavaModel):
         image_sizes: torch.Tensor | None = None,
         **kwargs: Unpack[TransformersKwargs],
     ) -> tuple | LlavaModelOutputWithPast:
-        ### PRUNING START: Context Init ###
+        # PRUNING START: Context Init #
         context = PruningContext(
-            input_ids=input_ids, inputs_embeds=None, model_config=self.config
+            input_ids=input_ids,
+            inputs_embeds=None,
+            model_config=self.config,
         )
         context.vit_layer_num = self.config.vision_config.num_hidden_layers
-        ### PRUNING END ###
+        # PRUNING END #
 
         if (input_ids is None) ^ (inputs_embeds is not None):
-            raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
+            raise ValueError(
+                "You must specify exactly one of input_ids or inputs_embeds"
+            )
 
         if inputs_embeds is None:
             inputs_embeds = self.get_input_embeddings()(input_ids)
@@ -344,15 +433,21 @@ class Prunable_LlavaModel(LlavaModel):
                 return_dict=True,
                 context=context,
             ).pooler_output
-            image_features = torch.cat(image_features, dim=0).to(inputs_embeds.device, inputs_embeds.dtype)
-            special_image_mask = self.get_placeholder_mask(
-                input_ids, inputs_embeds=inputs_embeds, image_features=image_features
+            image_features = torch.cat(image_features, dim=0).to(
+                inputs_embeds.device, inputs_embeds.dtype
             )
-            inputs_embeds = inputs_embeds.masked_scatter(special_image_mask, image_features)
+            special_image_mask = self.get_placeholder_mask(
+                input_ids,
+                inputs_embeds=inputs_embeds,
+                image_features=image_features,
+            )
+            inputs_embeds = inputs_embeds.masked_scatter(
+                special_image_mask, image_features
+            )
 
-        ### PRUNING START: Capturing Image Info ###
+        # PRUNING START: Capturing Image Info #
         context.inputs_embeds = inputs_embeds
-        ### PRUNING END ###
+        # PRUNING END #
 
         outputs = self.language_model(
             attention_mask=attention_mask,
@@ -369,5 +464,5 @@ class Prunable_LlavaModel(LlavaModel):
             past_key_values=outputs.past_key_values,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
-            image_hidden_states=image_features if pixel_values is not None else None,
+            image_hidden_states=(image_features if pixel_values is not None else None),
         )

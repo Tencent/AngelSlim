@@ -18,9 +18,9 @@ Reference: "Stop Looking for Important Tokens in Multimodal Language Models:
 Duplication Matters More (arXiv:2502.11494)".
 """
 
+
 import torch
 import torch.nn.functional as F
-from typing import Dict, Any
 
 from ..base.context import PruningContext
 from .utils.utils import _extract_and_validate_vision_token_info
@@ -31,12 +31,13 @@ def dart_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
     Executes DART pruning based on information redundancy rather than just importance.
 
     Args:
-        context (PruningContext, required): The execution context containing feature_map and K tensors.
+        context (PruningContext):
+            The execution context containing feature_map and K tensors.
         **kwargs:
-            ratio (float, required): Ratio of vision tokens to prune.
-            pivot_image_token (int|float, required): Number or ratio of image pivot tokens.
-            pivot_text_token (int|float, required): Number or ratio of text pivot tokens.
-            use_post_rope (bool, required): Whether to use post-RoPE Key tensors.
+            ratio (float): Ratio of vision tokens to prune.
+            pivot_image_token (int|float): Number or ratio of image pivot tokens.
+            pivot_text_token (int|float): Number or ratio of text pivot tokens.
+            use_post_rope (bool): Whether to use post-RoPE Key tensors.
 
     Returns:
         torch.Tensor: Boolean keep_mask of shape [B, seq_len].
@@ -46,7 +47,6 @@ def dart_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
         ratio = kwargs["ratio"]
         pivot_image_token = kwargs["pivot_image_token"]
         pivot_text_token = kwargs["pivot_text_token"]
-        use_post_rope = kwargs["use_post_rope"]
         layer_idx = kwargs["layer_idx"]
     except KeyError as e:
         raise ValueError(
@@ -151,7 +151,9 @@ def dart_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
                     break
 
                 pivot_feat_norm = F.normalize(
-                    features_single[pivot_global_idx].unsqueeze(0), p=2, dim=1
+                    features_single[pivot_global_idx].unsqueeze(0),
+                    p=2,
+                    dim=1,
                 )
                 # Compute Cosine Similarity
                 cos_sim = torch.mm(pivot_feat_norm, visual_features_norm.t()).squeeze(0)
@@ -159,18 +161,22 @@ def dart_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
                 # Exclude already selected tokens
                 if kept_local_indices:
                     mask_indices = torch.tensor(
-                        list(kept_local_indices), device=device, dtype=torch.long
+                        list(kept_local_indices),
+                        device=device,
+                        dtype=torch.long,
                     )
                     cos_sim.scatter_(0, mask_indices, float("inf"))
 
                 num_to_gather = min(
-                    token_topk_per_pivot, num_to_keep - len(kept_local_indices)
+                    token_topk_per_pivot,
+                    num_to_keep - len(kept_local_indices),
                 )
                 num_available = (cos_sim != float("inf")).sum().item()
                 num_to_gather = min(num_to_gather, num_available)
 
                 if num_to_gather > 0:
-                    # Select tokens with lowest redundancy (smallest similarity)
+                    # Select tokens with lowest redundancy (smallest
+                    # similarity)
                     _, least_similar_indices = torch.topk(
                         cos_sim, k=num_to_gather, largest=False
                     )
@@ -180,7 +186,9 @@ def dart_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
         final_kept_vision_indices = torch.tensor([], dtype=torch.long, device=device)
         if kept_local_indices:
             valid_indices = torch.tensor(
-                list(kept_local_indices), device=device, dtype=torch.long
+                list(kept_local_indices),
+                device=device,
+                dtype=torch.long,
             )
             valid_indices = valid_indices[valid_indices < len(vision_indices)]
             if len(valid_indices) > 0:

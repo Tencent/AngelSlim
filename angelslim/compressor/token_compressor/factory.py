@@ -17,23 +17,20 @@ Token Compression Strategy Factory module.
 Responsible for registering and dispatching pruning and merging algorithms.
 """
 
-from typing import Dict, Any, Callable
+from typing import Callable, Dict
+
+from .algorithm.attention_based import special_token_based_attention_pruning
 
 # Algorithm Imports
-from .algorithm.basic import (
-    baseline_pruning,
-    override_pruning,
-    random_pruning,
-)
-from .algorithm.attention_based import special_token_based_attention_pruning
-from .algorithm.divprune import divprune
+from .algorithm.basic import baseline_pruning, override_pruning, random_pruning
 from .algorithm.dart import dart_pruning
-from .algorithm.visionselector import vision_selector_pruning
-from .algorithm.idpruner import idpruner
-from .algorithm.vispruner import vispruner_pruning
-from .algorithm.scope import scope_pruning
+from .algorithm.divprune import divprune
 from .algorithm.hiprune import hiprune_pruning
+from .algorithm.idpruner import idpruner
+from .algorithm.scope import scope_pruning
+from .algorithm.visionselector import vision_selector_pruning
 from .algorithm.visionzip import visionzip
+from .algorithm.vispruner import vispruner_pruning
 
 # --- Strategy Registries ---
 
@@ -42,7 +39,7 @@ PRUNING_STRATEGIES: Dict[str, Callable] = {
     "baseline": baseline_pruning,
     "override": override_pruning,
     "random": random_pruning,
-    "special_token_based_attention": special_token_based_attention_pruning,
+    "special_token_based_attention": (special_token_based_attention_pruning),
     "divprune": divprune,
     "dart": dart_pruning,
     "hiprune": hiprune_pruning,

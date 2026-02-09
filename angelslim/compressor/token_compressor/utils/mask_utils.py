@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Any, List, Optional, Tuple, Union
+
 import torch
-from typing import Optional, Tuple, List, Union, Any
 
 
 def apply_pruning_mask(
@@ -34,16 +35,23 @@ def apply_pruning_mask(
 ]:
     """
     Apply a boolean keep_mask to synchronize tensors during prefill.
-    Aligned with Adapter: uses end-truncation for position_ids and re-generates cache_position.
+    Aligned with Adapter: uses end-truncation
+    for position_ids and re-generates cache_position.
     """
     if keep_mask is None:
-        return hidden_states, position_ids, causal_mask, cache_position
+        return (
+            hidden_states,
+            position_ids,
+            causal_mask,
+            cache_position,
+        )
 
     mask_1d = keep_mask.view(-1)
     num_kept = mask_1d.sum().item()
 
     # 1. Physical slicing for hidden states [Batch, Seq, Dim]
-    # Slicing is performed only if hidden_states is provided and not yet compressed (e.g., Pruning)
+    # Slicing is performed only if hidden_states is provided and not yet
+    # compressed (e.g., Pruning)
     if hidden_states is not None:
         print(f"Hidden States Shape Before Pruning: {hidden_states.shape}")
         hidden_states = hidden_states[:, mask_1d, :]
@@ -61,7 +69,8 @@ def apply_pruning_mask(
     elif causal_mask is not None and causal_mask.ndim == 2:
         causal_mask = causal_mask[:, mask_1d]
 
-    # 4. Cache Position: Re-generate continuous indices starting from 0 (Adapter style)
+    # 4. Cache Position: Re-generate continuous indices starting from 0
+    # (Adapter style)
     if cache_position is not None:
         cache_position = torch.arange(num_kept, device=mask_1d.device)
 
@@ -74,7 +83,13 @@ def apply_pruning_mask(
         if hasattr(context, "input_ids") and context.input_ids is not None:
             context.input_ids = context.input_ids[:, mask_1d]
 
-    return hidden_states, position_ids, text_position_ids, causal_mask, cache_position
+    return (
+        hidden_states,
+        position_ids,
+        text_position_ids,
+        causal_mask,
+        cache_position,
+    )
 
 
 def apply_token_merging(
@@ -91,7 +106,10 @@ def apply_token_merging(
     stage_key: Union[str, int] = "global",
     past_key_values: Any = None,
 ) -> Tuple[
-    torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor]
+    torch.Tensor,
+    Optional[torch.Tensor],
+    Optional[torch.Tensor],
+    Optional[torch.Tensor],
 ]:
     """
     Merge tokens via weighted aggregation for hidden states.
@@ -121,8 +139,15 @@ def apply_token_merging(
     print(f"Hidden States Shape After Merging: {merged_hidden.shape}")
 
     # 2. Metadata synchronization using fake_mask (Truncation/Re-generation logic)
-    # Pass hidden_states=None to avoid redundant slicing as it is already compressed
-    _, position_ids, text_position_ids, causal_mask, cache_position = apply_pruning_mask(
+    # Pass hidden_states=None to avoid redundant slicing as it is already
+    # compressed
+    (
+        _,
+        position_ids,
+        text_position_ids,
+        causal_mask,
+        cache_position,
+    ) = apply_pruning_mask(
         hidden_states=None,
         keep_mask=fake_mask,
         context=context,
@@ -134,7 +159,13 @@ def apply_token_merging(
         past_key_values=past_key_values,
     )
 
-    return merged_hidden, position_ids, text_position_ids, causal_mask, cache_position
+    return (
+        merged_hidden,
+        position_ids,
+        text_position_ids,
+        causal_mask,
+        cache_position,
+    )
 
 
 def compensate_decoding_state(
@@ -143,7 +174,11 @@ def compensate_decoding_state(
     causal_mask: Optional[torch.Tensor],
     stage_key: Union[str, int],
     past_key_values: Any,
-) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor]]:
+) -> Tuple[
+    Optional[torch.Tensor],
+    Optional[torch.Tensor],
+    Optional[torch.Tensor],
+]:
     """
     Adjust indices and masks during decoding to compensate for past pruning.
     Performs numerical offset for IDs and optional Key-dimension slicing for the mask.

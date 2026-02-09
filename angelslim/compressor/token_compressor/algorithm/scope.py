@@ -14,14 +14,11 @@
 
 """
 SCOPE Pruning Strategy (Saliency-Coverage Oriented Token Pruning).
-This strategy optimizes submodular functions to ensure both token importance (Saliency)
-and representative image coverage (Coverage).
 """
 
-import torch
-import torch.nn.functional as F
 import os
-from typing import Dict, Any, Tuple, List
+
+import torch
 
 from ..base.context import PruningContext
 from .utils.utils import (
@@ -30,7 +27,12 @@ from .utils.utils import (
 )
 
 
-def SCOPE(visual_feature_vectors, num_selected_token, cls_attn=None, alpha=1.0):
+def SCOPE(
+    visual_feature_vectors,
+    num_selected_token,
+    cls_attn=None,
+    alpha=1.0,
+):
     """
     Batched implementation of SCOPE core logic.
     Args:
@@ -81,7 +83,8 @@ def SCOPE(visual_feature_vectors, num_selected_token, cls_attn=None, alpha=1.0):
         selected[torch.arange(B, device=device), best_idx] = True
         selected_idx[:, i] = best_idx
         cur_max = torch.maximum(
-            cur_max, cosine_simi[torch.arange(B, device=device), best_idx]
+            cur_max,
+            cosine_simi[torch.arange(B, device=device), best_idx],
         )
 
     return selected_idx, cosine_simi
@@ -92,10 +95,10 @@ def scope_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
     Framework wrapper for SCOPE pruning strategy.
 
     Args:
-        context (PruningContext, required): Execution context with feature_map and Vit Q/K.
+        context (PruningContext): Execution context with feature_map and Vit Q/K.
         **kwargs:
-            ratio (float, required): Pruning ratio.
-            layer_idx (int, required): ViT layer index for saliency computation.
+            ratio (float): Pruning ratio.
+            layer_idx (int): ViT layer index for saliency computation.
             alpha (float): Scaling factor for attention scores.
 
     Returns:
@@ -143,7 +146,9 @@ def scope_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
     scores_list, _ = _recompute_attention_maps_for_all_images(
         q_tensor, k_tensor, context
     )
-    cls_attn = torch.cat(scores_list, dim=1).to(device=device, dtype=inputs_embeds.dtype)
+    cls_attn = torch.cat(scores_list, dim=1).to(
+        device=device, dtype=inputs_embeds.dtype
+    )
 
     # 5. Execute SCOPE core
     num_to_keep = int(round(N_vision * (1.0 - ratio)))

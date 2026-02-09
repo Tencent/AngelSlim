@@ -14,10 +14,12 @@
 
 """General utility functions for token compression strategies."""
 
-import torch
 import math
-from typing import Dict, Any, List, Set, Tuple, Optional
+from typing import Any, List, Optional, Set, Tuple
+
+import torch
 import torch.nn.functional as F
+
 from ...base.context import PruningContext
 
 SUPPORTED_MODEL_TYPES = {"llava", "qwen2_5_vl", "llava_ov"}
@@ -58,7 +60,9 @@ def identify_model_architecture(context: PruningContext) -> str:
     raise ValueError(f"[TokenCompressor Error] Unsupported model type: '{model_type}'.")
 
 
-def get_model_specific_vision_token_ids(context: PruningContext) -> Set[int]:
+def get_model_specific_vision_token_ids(
+    context: PruningContext,
+) -> Set[int]:
     """Retrieves vision-related token IDs specific to the current model architecture."""
     model_type = identify_model_architecture(context)
     config = context.model_config
@@ -70,14 +74,19 @@ def get_model_specific_vision_token_ids(context: PruningContext) -> Set[int]:
             if val is not None:
                 token_ids.add(val)
     elif "qwen" in model_type or model_type == "llava_ov":
-        for key in ["image_token_id", "video_token_id", "vision_token_id"]:
+        for key in [
+            "image_token_id",
+            "video_token_id",
+            "vision_token_id",
+        ]:
             val = _get_config_attr(config, key)
             if val is not None:
                 token_ids.add(val)
 
     if not token_ids:
         raise ValueError(
-            f"[TokenCompressor Error] Failed to extract vision token IDs for {model_type}."
+            "[TokenCompressor Error] "
+            f"Failed to extract vision token IDs for {model_type}."
         )
     return token_ids
 
@@ -92,10 +101,8 @@ def _extract_and_validate_vision_token_info(
     if input_ids is None:
         raise ValueError("[TokenCompressor Error] 'input_ids' missing in context.")
 
-    device = input_ids.device
     input_ids_single = input_ids.squeeze(0)
     model_type = identify_model_architecture(context)
-    config = context.model_config
 
     # 1. Build vision mask
     target_ids = get_model_specific_vision_token_ids(context)
@@ -129,11 +136,18 @@ def _extract_and_validate_vision_token_info(
                     "[TokenCompressor Error] Strict Check Failed: Token count mismatch."
                 )
 
-    return vision_indices, non_vision_indices, vision_mask, actual_counts
+    return (
+        vision_indices,
+        non_vision_indices,
+        vision_mask,
+        actual_counts,
+    )
 
 
 def _recompute_attention_maps_for_all_images(
-    q_tensor: torch.Tensor, k_tensor: torch.Tensor, context: PruningContext
+    q_tensor: torch.Tensor,
+    k_tensor: torch.Tensor,
+    context: PruningContext,
 ) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
     """Recomputes attention importance scores and metric features per image."""
     final_scores_list, final_keys_list = [], []
@@ -160,10 +174,14 @@ def _recompute_attention_maps_for_all_images(
 
         lengths = torch.diff(cu_seqlens).cpu().tolist()
         q_splits = torch.split(
-            q_tensor.squeeze(0) if q_tensor.dim() == 4 else q_tensor, lengths, dim=1
+            q_tensor.squeeze(0) if q_tensor.dim() == 4 else q_tensor,
+            lengths,
+            dim=1,
         )
         k_splits = torch.split(
-            k_tensor.squeeze(0) if k_tensor.dim() == 4 else k_tensor, lengths, dim=1
+            k_tensor.squeeze(0) if k_tensor.dim() == 4 else k_tensor,
+            lengths,
+            dim=1,
         )
 
         for q_slice, k_slice in zip(q_splits, k_splits):
@@ -210,7 +228,8 @@ def get_valid_content_mask(input_ids: torch.Tensor) -> torch.Tensor:
     forbidden = {151654, 151655, 151656, 151652, 151653}
     mask = torch.zeros_like(input_ids, dtype=torch.bool)
     is_vis = torch.isin(
-        input_ids, torch.tensor(list(forbidden), device=input_ids.device)
+        input_ids,
+        torch.tensor(list(forbidden), device=input_ids.device),
     )
     vis_idx = torch.where(is_vis)[0]
     start = vis_idx[-1].item() + 1 if len(vis_idx) > 0 else 0

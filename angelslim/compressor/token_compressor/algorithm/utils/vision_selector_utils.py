@@ -18,14 +18,14 @@ import inspect
 import json
 import os
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import torch
-import torch.nn as nn
-from safetensors.torch import load_file
 from huggingface_hub import snapshot_download
+from safetensors.torch import load_file
 
-# Mapping conceptual roles to actual forward argument names in various model versions
+# Mapping conceptual roles to actual forward argument names in various
+# model versions
 CONCEPT_MAPPING = {
     "vision": [
         "vision_hidden",
@@ -35,11 +35,14 @@ CONCEPT_MAPPING = {
         "xs",
         "vision_embeds",
     ],
-    "text": ["text_hidden", "text_embeds", "context_hidden", "textual_hidden"],
+    "text": [
+        "text_hidden",
+        "text_embeds",
+        "context_hidden",
+        "textual_hidden",
+    ],
 }
 
-# Global registry for singleton model instances and their metadata
-# Structure: { selector_path: { "model": nn.Module, "arg_mapping": dict, "dtype": torch.dtype } }
 _SELECTOR_REGISTRY: Dict[str, Dict[str, Any]] = {}
 
 
@@ -104,11 +107,15 @@ def _init_selector_entry(selector_path: str, device: torch.device):
         resolved_path = selector_path
     else:
         try:
-            print(f"[TokenCompressor] '{selector_path}' not found locally. Downloading from Hugging Face...")
+            print(
+                "[TokenCompressor] "
+                f"'{selector_path}' not found locally. Downloading from Hugging Face."
+            )
             resolved_path = snapshot_download(repo_id=selector_path)
         except Exception as e:
             raise FileNotFoundError(
-                f"[TokenCompressor Error] Failed to resolve selector path '{selector_path}' locally or from HF. "
+                "[TokenCompressor Error] "
+                f"Failed to resolve selector path '{selector_path}'. "
                 f"Details: {e}"
             )
 
@@ -121,7 +128,8 @@ def _init_selector_entry(selector_path: str, device: torch.device):
 
     if not weights_files or not py_files:
         raise FileNotFoundError(
-            f"[TokenCompressor Error] Incomplete selector components in: {resolved_path}"
+            f"[TokenCompressor Error]"
+            f"Incomplete selector components in: {resolved_path}"
         )
 
     with open(config_path, "r", encoding="utf-8") as f:
@@ -158,7 +166,8 @@ def _init_selector_entry(selector_path: str, device: torch.device):
 
     if "vision" not in arg_mapping.values():
         raise TypeError(
-            f"[TokenCompressor Error] Cannot identify vision input for forward function in {arch_name}."
+            "[TokenCompressor Error]"
+            f"Cannot identify vision input for forward function in {arch_name}."
         )
 
     # 6. Load weights and clean internal training prefixes

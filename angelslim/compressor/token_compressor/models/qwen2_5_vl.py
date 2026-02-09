@@ -12,55 +12,49 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Any, Callable, Optional, Unpack
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, Dict, Any, Tuple, Union, List, Callable, Unpack
-
-from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
-    Qwen2_5_VLVisionAttention,
-    Qwen2_5_VLAttention,
-    Qwen2_5_VLVisionBlock,
-    Qwen2_5_VisionTransformerPretrainedModel,
-    Qwen2_5_VLTextModel,
-    Qwen2_5_VLModel,
-    apply_rotary_pos_emb_vision,
-    apply_multimodal_rotary_pos_emb,
-    eager_attention_forward,
-    Qwen2_5_VLModelOutputWithPast,
-    Qwen2_5_VLRotaryEmbedding,
-    Qwen2_5_VLDecoderLayer,
-    TransformersKwargs,
-    BaseModelOutputWithPooling,
-    FlashAttentionKwargs,
-)
-from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
+from transformers.cache_utils import Cache, DynamicCache
 from transformers.masking_utils import (
     create_causal_mask,
     create_sliding_window_causal_mask,
 )
 from transformers.modeling_outputs import BaseModelOutputWithPast
-from transformers.cache_utils import Cache, DynamicCache
+from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
+from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
+    BaseModelOutputWithPooling,
+    FlashAttentionKwargs,
+    Qwen2_5_VisionTransformerPretrainedModel,
+    Qwen2_5_VLAttention,
+    Qwen2_5_VLModel,
+    Qwen2_5_VLModelOutputWithPast,
+    Qwen2_5_VLTextModel,
+    Qwen2_5_VLVisionAttention,
+    TransformersKwargs,
+    apply_multimodal_rotary_pos_emb,
+    apply_rotary_pos_emb_vision,
+    eager_attention_forward,
+)
 
-from ..base.context import PruningContext
-from ..base.config import TokenCompressorConfig
 from ..base.cache import PruningCache
+from ..base.config import TokenCompressorConfig
+from ..base.context import PruningContext
+from ..factory import compression_strategy_factory
 from ..utils.mask_utils import (
     apply_pruning_mask,
     apply_token_merging,
     compensate_decoding_state,
 )
-from ..factory import compression_strategy_factory
 
 
 class Prunable_Qwen2_5_VLVisionAttention(Qwen2_5_VLVisionAttention):
-    """
-    Vision attention wrapper that hooks the internal Query and Key states of the Vision Tower.
-    Supports capturing post-RoPE activations into the PruningContext as specified by the configuration.
-    """
-
     def __init__(
-        self, original_model: nn.Module, pruning_config: TokenCompressorConfig
+        self,
+        original_model: nn.Module,
+        pruning_config: TokenCompressorConfig,
     ):
         torch.nn.Module.__init__(self)
         self.__dict__.update(original_model.__dict__)
@@ -91,13 +85,13 @@ class Prunable_Qwen2_5_VLVisionAttention(Qwen2_5_VLVisionAttention):
         key_states = key_states.transpose(0, 1).unsqueeze(0)
         value_states = value_states.transpose(0, 1).unsqueeze(0)
 
-        ### PRUNING START ###
+        # PRUNING START #
         if context is not None:
             if self.pruning_config.requirements.needs_vit_q(self.layer_idx):
                 context.vit_q[self.layer_idx] = query_states
             if self.pruning_config.requirements.needs_vit_k(self.layer_idx):
                 context.vit_k[self.layer_idx] = key_states
-        ### PRUNING END ###
+        # PRUNING END #
 
         attention_interface: Callable = eager_attention_forward
         if self.config._attn_implementation != "eager":
@@ -114,7 +108,7 @@ class Prunable_Qwen2_5_VLVisionAttention(Qwen2_5_VLVisionAttention):
                 value_states,
                 attention_mask=None,
                 scaling=self.scaling,
-                dropout=0.0 if not self.training else self.attention_dropout,
+                dropout=(0.0 if not self.training else self.attention_dropout),
                 cu_seq_lens_q=cu_seqlens,
                 cu_seq_lens_k=cu_seqlens,
                 max_length_q=max_seqlen,
@@ -136,7 +130,7 @@ class Prunable_Qwen2_5_VLVisionAttention(Qwen2_5_VLVisionAttention):
                     v,
                     attention_mask=None,
                     scaling=self.scaling,
-                    dropout=0.0 if not self.training else self.attention_dropout,
+                    dropout=(0.0 if not self.training else self.attention_dropout),
                     is_causal=False,
                     **kwargs,
                 )[0]
@@ -150,13 +144,10 @@ class Prunable_Qwen2_5_VLVisionAttention(Qwen2_5_VLVisionAttention):
 
 
 class Prunable_Qwen2_5_VLAttention(Qwen2_5_VLAttention):
-    """
-    Language Model attention wrapper that captures LLM-domain Query/Key states and hidden features.
-    Provides the necessary activations for diversity-based or textual-relevance pruning strategies.
-    """
-
     def __init__(
-        self, original_model: nn.Module, pruning_config: TokenCompressorConfig
+        self,
+        original_model: nn.Module,
+        pruning_config: TokenCompressorConfig,
     ):
         torch.nn.Module.__init__(self)
         self.__dict__.update(original_model.__dict__)
@@ -187,10 +178,14 @@ class Prunable_Qwen2_5_VLAttention(Qwen2_5_VLAttention):
 
         cos, sin = position_embeddings
         query_states, key_states = apply_multimodal_rotary_pos_emb(
-            query_states, key_states, cos, sin, self.config.rope_parameters["mrope_section"]
+            query_states,
+            key_states,
+            cos,
+            sin,
+            self.config.rope_parameters["mrope_section"],
         )
 
-        ### PRUNING START ###
+        # PRUNING START #
         if context is not None:
             if self.pruning_config.requirements.needs_llm_q(self.layer_idx):
                 context.llm_q[self.layer_idx] = query_states
@@ -201,15 +196,23 @@ class Prunable_Qwen2_5_VLAttention(Qwen2_5_VLAttention):
                 and context.feature_map is None
             ):
                 context.feature_map = hidden_states
-        ### PRUNING END ###
+        # PRUNING END #
 
         if past_key_values is not None:
-            cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position}  # Specific to RoPE models
-            key_states, value_states = past_key_values.update(key_states, value_states, self.layer_idx, cache_kwargs)
+            cache_kwargs = {
+                "sin": sin,
+                "cos": cos,
+                "cache_position": cache_position,
+            }  # Specific to RoPE models
+            key_states, value_states = past_key_values.update(
+                key_states, value_states, self.layer_idx, cache_kwargs
+            )
 
         attention_interface: Callable = eager_attention_forward
         if self.config._attn_implementation != "eager":
-            attention_interface = ALL_ATTENTION_FUNCTIONS[self.config._attn_implementation]
+            attention_interface = ALL_ATTENTION_FUNCTIONS[
+                self.config._attn_implementation
+            ]
 
         attn_output, attn_weights = attention_interface(
             self,
@@ -217,7 +220,7 @@ class Prunable_Qwen2_5_VLAttention(Qwen2_5_VLAttention):
             key_states,
             value_states,
             attention_mask,
-            dropout=0.0 if not self.training else self.attention_dropout,
+            dropout=(0.0 if not self.training else self.attention_dropout),
             scaling=self.scaling,
             sliding_window=self.sliding_window,
             position_ids=position_ids,  # pass positions for FA2
@@ -230,13 +233,10 @@ class Prunable_Qwen2_5_VLAttention(Qwen2_5_VLAttention):
 
 
 class Prunable_Qwen2_5_VisionTransformer(Qwen2_5_VisionTransformerPretrainedModel):
-    """
-    Vision Transformer wrapper responsible for extracting grid geometry and spatial merging parameters.
-    Captures internal reordering indices and pooling factors into the PruningContext.
-    """
-
     def __init__(
-        self, original_model: nn.Module, pruning_config: TokenCompressorConfig
+        self,
+        original_model: nn.Module,
+        pruning_config: TokenCompressorConfig,
     ):
         torch.nn.Module.__init__(self)
         self.__dict__.update(original_model.__dict__)
@@ -255,27 +255,33 @@ class Prunable_Qwen2_5_VisionTransformer(Qwen2_5_VisionTransformerPretrainedMode
         cu_window_seqlens = torch.tensor(
             cu_window_seqlens,
             device=hidden_states.device,
-            dtype=grid_thw.dtype if torch.jit.is_tracing() else torch.int32,
+            dtype=(grid_thw.dtype if torch.jit.is_tracing() else torch.int32),
         )
         cu_window_seqlens = torch.unique_consecutive(cu_window_seqlens)
 
         seq_len, _ = hidden_states.size()
-        hidden_states = hidden_states.reshape(seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1)
+        hidden_states = hidden_states.reshape(
+            seq_len // self.spatial_merge_unit,
+            self.spatial_merge_unit,
+            -1,
+        )
         hidden_states = hidden_states[window_index, :, :]
         hidden_states = hidden_states.reshape(seq_len, -1)
-        rotary_pos_emb = rotary_pos_emb.reshape(seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1)
+        rotary_pos_emb = rotary_pos_emb.reshape(
+            seq_len // self.spatial_merge_unit,
+            self.spatial_merge_unit,
+            -1,
+        )
         rotary_pos_emb = rotary_pos_emb[window_index, :, :]
         rotary_pos_emb = rotary_pos_emb.reshape(seq_len, -1)
         emb = torch.cat((rotary_pos_emb, rotary_pos_emb), dim=-1)
         position_embeddings = (emb.cos(), emb.sin())
 
-        cu_seqlens = torch.repeat_interleave(grid_thw[:, 1] * grid_thw[:, 2], grid_thw[:, 0]).cumsum(
+        cu_seqlens = torch.repeat_interleave(
+            grid_thw[:, 1] * grid_thw[:, 2], grid_thw[:, 0]
+        ).cumsum(
             dim=0,
-            # Select dtype based on the following factors:
-            #  - FA2 requires that cu_seqlens_q must have dtype int32
-            #  - torch.onnx.export requires that cu_seqlens_q must have same dtype as grid_thw
-            # See https://github.com/huggingface/transformers/pull/34852 for more information
-            dtype=grid_thw.dtype if torch.jit.is_tracing() else torch.int32,
+            dtype=(grid_thw.dtype if torch.jit.is_tracing() else torch.int32),
         )
         cu_seqlens = F.pad(cu_seqlens, (1, 0), value=0)
 
@@ -297,7 +303,7 @@ class Prunable_Qwen2_5_VisionTransformer(Qwen2_5_VisionTransformerPretrainedMode
         reverse_indices = torch.argsort(window_index)
         merged_hidden_states = merged_hidden_states[reverse_indices, :]
 
-        ### PRUNING START ###
+        # PRUNING START #
         if context is not None:
             context.spatial_merge_size = self.spatial_merge_size
             context.cu_seqlens_full = cu_seqlens
@@ -305,7 +311,7 @@ class Prunable_Qwen2_5_VisionTransformer(Qwen2_5_VisionTransformerPretrainedMode
                 context.reverse_indices = reverse_indices
             if self.pruning_config.requirements.window_index:
                 context.window_index = window_index
-        ### PRUNING END ###
+        # PRUNING END #
 
         return BaseModelOutputWithPooling(
             last_hidden_state=hidden_states,
@@ -314,17 +320,15 @@ class Prunable_Qwen2_5_VisionTransformer(Qwen2_5_VisionTransformerPretrainedMode
 
 
 class Prunable_Qwen2_5_VLTextModel(Qwen2_5_VLTextModel):
-    """
-    LLM backbone wrapper that orchestrates multi-stage compression (Global and Per-Layer).
-    Manages stage-specific pruning functions and ensures geometric consistency through decoding compensation.
-    """
-
     def __init__(self, original_model: nn.Module, config: TokenCompressorConfig):
         torch.nn.Module.__init__(self)
         self.__dict__.update(original_model.__dict__)
         self.compressor_config = config
         self.pruning_fns = {
-            stage: (compression_strategy_factory(c.strategy), c.params)
+            stage: (
+                compression_strategy_factory(c.strategy),
+                c.params,
+            )
             for stage, c in config.strategies.items()
         }
 
@@ -345,7 +349,8 @@ class Prunable_Qwen2_5_VLTextModel(Qwen2_5_VLTextModel):
     ) -> tuple | BaseModelOutputWithPast:
         """
         Forward pass for Prunable Qwen2.5-VL.
-        Maintains HF source compatibility while integrating post-layer pruning and compensation.
+        Maintains HF source compatibility
+        while integrating post-layer pruning and compensation.
         """
         output_attentions = (
             output_attentions
@@ -410,10 +415,11 @@ class Prunable_Qwen2_5_VLTextModel(Qwen2_5_VLTextModel):
             getattr(past_key_values, "is_prefill", True) if past_key_values else True
         )
 
-        ### PRUNING START: GLOBAL STAGE ###
+        # PRUNING START: GLOBAL STAGE #
         assert inputs_embeds.shape[0] == 1, "Batch size must be 1 for global pruning."
 
-        # Global compression occurs BEFORE RoPE calculation to allow natural coordinate alignment
+        # Global compression occurs BEFORE RoPE calculation to allow natural
+        # coordinate alignment
         if is_prefill:
             if "global" in self.pruning_fns:
                 fn, p = self.pruning_fns["global"]
@@ -424,26 +430,36 @@ class Prunable_Qwen2_5_VLTextModel(Qwen2_5_VLTextModel):
                         if isinstance(res, torch.Tensor)
                         else apply_token_merging
                     )
-                    # Global update: truncation for IDs, re-generation for cache_position
-                    inputs_embeds, position_ids, text_position_ids, attention_mask, cache_position = (
-                        update_fn(
-                            inputs_embeds,
-                            *(res if isinstance(res, tuple) else [res]),
-                            context,
-                            position_ids,
-                            text_position_ids,
-                            attention_mask,
-                            cache_position,
-                            stage_key="global",
-                            past_key_values=past_key_values,
-                        )
+                    # Global update: truncation for IDs, re-generation for
+                    # cache_position
+                    (
+                        inputs_embeds,
+                        position_ids,
+                        text_position_ids,
+                        attention_mask,
+                        cache_position,
+                    ) = update_fn(
+                        inputs_embeds,
+                        *(res if isinstance(res, tuple) else [res]),
+                        context,
+                        position_ids,
+                        text_position_ids,
+                        attention_mask,
+                        cache_position,
+                        stage_key="global",
+                        past_key_values=past_key_values,
                     )
         else:
-            # Global Decoding Compensation: Offset indices only, mask is not updated here
+            # Global Decoding Compensation: Offset indices only, mask is not
+            # updated here
             text_position_ids, cache_position, _ = compensate_decoding_state(
-                text_position_ids, cache_position, None, "global", past_key_values
+                text_position_ids,
+                cache_position,
+                None,
+                "global",
+                past_key_values,
             )
-        ### PRUNING END ###
+        # PRUNING END #
 
         # Initialize causal_mask_mapping (HF Standard)
         if not isinstance(causal_mask_mapping := attention_mask, dict):
@@ -465,7 +481,8 @@ class Prunable_Qwen2_5_VLTextModel(Qwen2_5_VLTextModel):
 
         hidden_states = inputs_embeds
 
-        # Calculate RoPE (HF Standard). Pick up updated coordinates if global pruning happened.
+        # Calculate RoPE (HF Standard). Pick up updated coordinates if global
+        # pruning happened.
         position_embeddings = self.rotary_emb(hidden_states, position_ids)
 
         all_hidden_states = () if output_hidden_states else None
@@ -497,7 +514,7 @@ class Prunable_Qwen2_5_VLTextModel(Qwen2_5_VLTextModel):
             if output_attentions:
                 all_self_attns += (layer_outputs[1],)
 
-            ### PRUNING START: POST-LAYER LOGIC ###
+            # PRUNING START: POST-LAYER LOGIC #
             if is_prefill:
                 # Apply pruning/merging AFTER the current layer call
                 if layer_idx in self.pruning_fns:
@@ -510,29 +527,34 @@ class Prunable_Qwen2_5_VLTextModel(Qwen2_5_VLTextModel):
                             else apply_token_merging
                         )
                         # Update sequence with truncation logic
-                        hidden_states, position_ids, text_position_ids, curr_mask, cache_position = (
-                            update_fn(
-                                hidden_states,
-                                *(res if isinstance(res, tuple) else [res]),
-                                context,
-                                position_ids,
-                                text_position_ids,
-                                curr_mask,
-                                cache_position,
-                                stage_key=layer_idx,
-                                past_key_values=past_key_values,
-                            )
+                        (
+                            hidden_states,
+                            position_ids,
+                            text_position_ids,
+                            curr_mask,
+                            cache_position,
+                        ) = update_fn(
+                            hidden_states,
+                            *(res if isinstance(res, tuple) else [res]),
+                            context,
+                            position_ids,
+                            text_position_ids,
+                            curr_mask,
+                            cache_position,
+                            stage_key=layer_idx,
+                            past_key_values=past_key_values,
                         )
 
                         # Physically slice RoPE cache for all subsequent layers
                         m = res if isinstance(res, torch.Tensor) else res[-1]
                         cos, sin = position_embeddings
                         m = m.view(-1)
-                        position_embeddings = (cos[:, :, m, :], sin[:, :, m, :])
+                        position_embeddings = (
+                            cos[:, :, m, :],
+                            sin[:, :, m, :],
+                        )
                         causal_mask_mapping[decoder_layer.attention_type] = curr_mask
             else:
-                # Decoding: Compensate current state AFTER the layer to prepare for Layer+1
-                # Must update curr_mask (Key-dimension slicing) for per-layer pruning records
                 text_position_ids, cache_position, curr_mask = (
                     compensate_decoding_state(
                         text_position_ids,
@@ -543,7 +565,7 @@ class Prunable_Qwen2_5_VLTextModel(Qwen2_5_VLTextModel):
                     )
                 )
                 causal_mask_mapping[decoder_layer.attention_type] = curr_mask
-            ### PRUNING END ###
+            # PRUNING END #
 
         hidden_states = self.norm(hidden_states)
 
@@ -571,13 +593,10 @@ class Prunable_Qwen2_5_VLTextModel(Qwen2_5_VLTextModel):
 
 
 class Prunable_Qwen2_5_VLModel(Qwen2_5_VLModel):
-    """
-    Top-level multimodal model wrapper that initializes and maintains the PruningContext.
-    Synchronizes visual token masks and multimodal inputs throughout the entire forward pass.
-    """
-
     def __init__(
-        self, original_model: nn.Module, pruning_config: TokenCompressorConfig
+        self,
+        original_model: nn.Module,
+        pruning_config: TokenCompressorConfig,
     ):
         torch.nn.Module.__init__(self)
         self.__dict__.update(original_model.__dict__)
@@ -590,14 +609,19 @@ class Prunable_Qwen2_5_VLModel(Qwen2_5_VLModel):
         **kwargs: Unpack[TransformersKwargs],
     ) -> tuple | BaseModelOutputWithPooling:
         r"""
-        pixel_values_videos (`torch.FloatTensor` of shape `(batch_size, num_channels, image_size, image_size)`):
+        pixel_values_videos (`torch.FloatTensor`
+        of shape `(batch_size, num_channels, image_size, image_size)`):
             The tensors corresponding to the input videos.
         video_grid_thw (`torch.LongTensor` of shape `(num_videos, 3)`, *optional*):
             The temporal, height and width of feature shape of each video in LLM.
         """
         pixel_values_videos = pixel_values_videos.type(self.visual.dtype)
-        vision_outputs = self.visual(pixel_values_videos, grid_thw=video_grid_thw, **kwargs)
-        split_sizes = (video_grid_thw.prod(-1) // self.visual.spatial_merge_size**2).tolist()
+        vision_outputs = self.visual(
+            pixel_values_videos, grid_thw=video_grid_thw, **kwargs
+        )
+        split_sizes = (
+            video_grid_thw.prod(-1) // self.visual.spatial_merge_size**2
+        ).tolist()
         video_embeds = torch.split(vision_outputs.pooler_output, split_sizes)
         vision_outputs.pooler_output = video_embeds
 
@@ -610,14 +634,17 @@ class Prunable_Qwen2_5_VLModel(Qwen2_5_VLModel):
         **kwargs: Unpack[TransformersKwargs],
     ) -> tuple | BaseModelOutputWithPooling:
         r"""
-        pixel_values (`torch.FloatTensor` of shape `(batch_size, num_channels, image_size, image_size)`):
+        pixel_values (`torch.FloatTensor`
+        of shape `(batch_size, num_channels, image_size, image_size)`):
             The tensors corresponding to the input images.
         image_grid_thw (`torch.LongTensor` of shape `(num_images, 3)`, *optional*):
             The temporal, height and width of feature shape of each image in LLM.
         """
         pixel_values = pixel_values.type(self.visual.dtype)
         vision_outputs = self.visual(pixel_values, grid_thw=image_grid_thw, **kwargs)
-        split_sizes = (image_grid_thw.prod(-1) // self.visual.spatial_merge_size**2).tolist()
+        split_sizes = (
+            image_grid_thw.prod(-1) // self.visual.spatial_merge_size**2
+        ).tolist()
         image_embeds = torch.split(vision_outputs.pooler_output, split_sizes)
         vision_outputs.pooler_output = image_embeds
 
@@ -644,13 +671,18 @@ class Prunable_Qwen2_5_VLModel(Qwen2_5_VLModel):
         **kwargs: Unpack[TransformersKwargs],
     ) -> tuple | Qwen2_5_VLModelOutputWithPast:
 
-        ### PRUNING START ###
+        # PRUNING START #
         context = PruningContext(
-            input_ids=input_ids, inputs_embeds=None, model_config=self.config
+            input_ids=input_ids,
+            inputs_embeds=None,
+            model_config=self.config,
         )
-        context.image_grid_thw, context.video_grid_thw = image_grid_thw, video_grid_thw
+        context.image_grid_thw, context.video_grid_thw = (
+            image_grid_thw,
+            video_grid_thw,
+        )
         context.vit_layer_num = self.config.vision_config.depth
-        ### PRUNING END ###
+        # PRUNING END #
 
         output_attentions = (
             output_attentions
@@ -671,25 +703,35 @@ class Prunable_Qwen2_5_VLModel(Qwen2_5_VLModel):
 
         if pixel_values is not None:
             image_embeds = self.get_image_features(
-                pixel_values, image_grid_thw, return_dict=True, context=context
+                pixel_values,
+                image_grid_thw,
+                return_dict=True,
+                context=context,
             ).pooler_output
             image_embeds = torch.cat(image_embeds, dim=0).to(
                 inputs_embeds.device, inputs_embeds.dtype
             )
             image_mask, _ = self.get_placeholder_mask(
-                input_ids, inputs_embeds=inputs_embeds, image_features=image_embeds
+                input_ids,
+                inputs_embeds=inputs_embeds,
+                image_features=image_embeds,
             )
             inputs_embeds = inputs_embeds.masked_scatter(image_mask, image_embeds)
 
         if pixel_values_videos is not None:
             video_embeds = self.get_video_features(
-                pixel_values_videos, video_grid_thw, return_dict=True, context=context
+                pixel_values_videos,
+                video_grid_thw,
+                return_dict=True,
+                context=context,
             ).pooler_output
             video_embeds = torch.cat(video_embeds, dim=0).to(
                 inputs_embeds.device, inputs_embeds.dtype
             )
             _, video_mask = self.get_placeholder_mask(
-                input_ids, inputs_embeds=inputs_embeds, video_features=video_embeds
+                input_ids,
+                inputs_embeds=inputs_embeds,
+                video_features=video_embeds,
             )
             inputs_embeds = inputs_embeds.masked_scatter(video_mask, video_embeds)
 
@@ -716,9 +758,9 @@ class Prunable_Qwen2_5_VLModel(Qwen2_5_VLModel):
                 delta = delta.repeat_interleave(batch_size // delta.shape[0], dim=1)
                 position_ids = position_ids + delta.to(position_ids.device)
 
-        ### PRUNING START ###
+        # PRUNING START #
         context.inputs_embeds = inputs_embeds
-        ### PRUNING END ###
+        # PRUNING END #
 
         outputs = self.language_model(
             input_ids=None,

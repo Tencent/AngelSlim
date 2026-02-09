@@ -13,28 +13,25 @@
 # limitations under the License.
 
 import math
+
 import torch
-import warnings
-from typing import Dict, Any, List
 
 from ..base.context import PruningContext
-from .utils.utils import (
-    _extract_and_validate_vision_token_info,
-)
+from .utils.utils import _extract_and_validate_vision_token_info
 
 
 def special_token_based_attention_pruning(
     context: PruningContext, **kwargs
 ) -> torch.Tensor:
     """
-    Pruning strategy based on attention scores between specific tokens and vision tokens.
+    Pruning strategy base on attention scores between specific tokens and vision tokens.
     Supports 'last_text' and 'global_average' strategies.
 
     Args:
-        context (PruningContext, required): Execution context with model activations.
+        context (PruningContext): Execution context with model activations.
         **kwargs:
-            ratio (float, required): Pruning ratio for vision tokens.
-            query_source (dict, required): Configuration for selecting Query tokens.
+            ratio (float): Pruning ratio for vision tokens.
+            query_source (dict): Configuration for selecting Query tokens.
                 - strategy (str): 'last_text' or 'global_average'.
                 - token_id (int): Required if strategy is 'global_average'.
 
@@ -112,9 +109,6 @@ def special_token_based_attention_pruning(
             raise ValueError(f"[AngelSlim Error] Unsupported strategy: '{strategy}'.")
 
         if not query_indices:
-            warnings.warn(
-                f"[AngelSlim Warning] No Query tokens found for strategy '{strategy}'. Retaining all."
-            )
             batch_keep_masks.append(torch.ones_like(ids_single, dtype=torch.bool))
             continue
 
@@ -125,7 +119,10 @@ def special_token_based_attention_pruning(
         k_visual = k_single[:, vision_indices, :]
 
         # GQA/MQA broadcast
-        num_q_heads, num_kv_heads = q_query.shape[0], k_visual.shape[0]
+        num_q_heads, num_kv_heads = (
+            q_query.shape[0],
+            k_visual.shape[0],
+        )
         if num_q_heads != num_kv_heads:
             k_visual = k_visual.repeat_interleave(num_q_heads // num_kv_heads, dim=0)
 

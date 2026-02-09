@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Helper utilities for token merging strategies, specifically for analyzing dialogue structure."""
+from typing import List, Optional, Tuple
 
 import torch
-from typing import Any, Dict, Optional, Tuple, List
+
 from ...base.context import PruningContext
 
 
@@ -29,7 +29,8 @@ def get_dialogue_masks(
     List[bool],
 ]:
     """
-    Analyzes the dialogue structure to split the sequence into physical segments (e.g., individual frames/images).
+    Analyzes the dialogue structure to split the sequence into physical segments
+    (e.g., individual frames/images).
     """
     input_ids = context.input_ids
     if input_ids is None:
@@ -47,7 +48,8 @@ def get_dialogue_masks(
     model_type = identify_model_architecture(context)
     _, _, vision_mask, _ = _extract_and_validate_vision_token_info(context)
 
-    # Calculate physical unit lengths based on cu_seqlens and spatial pooling factor
+    # Calculate physical unit lengths based on cu_seqlens and spatial pooling
+    # factor
     cu_seqlens = context.cu_seqlens_full
     merged_units = []
     if cu_seqlens is not None:

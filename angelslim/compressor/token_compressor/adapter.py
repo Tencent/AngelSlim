@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import torch.nn as nn
 import importlib
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
+
+import torch.nn as nn
 
 from .base.config import TokenCompressorConfig
 from .utils.config_utils import plan_pruning_execution
@@ -61,10 +61,14 @@ class UniversalPruningAdapter:
         return current, parts[-1]
 
     def _get_wrapper_class(self, module_path: str, class_name: str) -> Any:
-        """Dynamically imports the specified wrapper class from the token_compressor package."""
-        # Relative import logic: assumes we are inside the 'token_compressor' package
+        """
+        Dynamically imports the specified wrapper class.
+        """
+        # Relative import logic: assumes we are inside the 'token_compressor'
+        # package
         module = importlib.import_module(
-            module_path, package="angelslim.compressor.token_compressor"
+            module_path,
+            package="angelslim.compressor.token_compressor",
         )
         return getattr(module, class_name)
 
@@ -84,7 +88,8 @@ class UniversalPruningAdapter:
         parent, attr = self._get_parent_and_attr(container_path)
         container = getattr(parent, attr)
 
-        # Use planned indices; if None, default to the entire range of the container
+        # Use planned indices; if None, default to the entire range of the
+        # container
         target_indices = step.get("indices")
         if target_indices is None:
             target_indices = range(len(container))
@@ -127,15 +132,14 @@ class UniversalPruningAdapter:
                     # Instantiate and replace with the prunable wrapper
                     new_module = WrapperClass(original_module, self.strategy_config)
 
-                    # Explicitly inject the layer index for collection components
+                    # Explicitly inject the layer index for collection
+                    # components
                     if idx != -1:
-                        setattr(new_module, "layer_idx", idx)
+                        new_module.layer_idx = idx
 
                     setattr(parent, attr_name, new_module)
 
-            print(
-                f"[UniversalAdapter] '{name}' wrapped successfully ({len(targets)} units)."
-            )
+            print(f"[UniversalAdapter] '{name}' wrapped successfully")
 
         return self.model
 

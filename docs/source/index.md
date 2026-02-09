@@ -130,6 +130,7 @@ getting_started/quickstrat
 features/quantization/index
 features/speculative_decoding/index
 features/diffusion/index
+features/token_compressor/index.md
 :::
 
 % Additional capabilities

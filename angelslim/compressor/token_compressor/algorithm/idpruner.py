@@ -14,21 +14,20 @@
 
 """
 MMR + Vision Selector Pruning Strategy.
-This module implements a greedy selection algorithm that balances Relevance (Importance)
-and Diversity (Similarity) using Maximum Marginal Relevance (MMR).
 """
 
+from typing import Callable, Union
+
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from typing import Dict, Any, Union, Callable, Optional
 
 from ..base.context import PruningContext
 from .utils.utils import _extract_and_validate_vision_token_info
 from .utils.vision_selector_utils import get_universal_selector_scores
 
 
-def _default_similarity_compute(features: torch.Tensor) -> torch.Tensor:
+def _default_similarity_compute(
+    features: torch.Tensor,
+) -> torch.Tensor:
     """Default similarity: Cosine Similarity."""
     features_norm = features / (features.norm(dim=-1, keepdim=True) + 1e-8)
     return torch.matmul(features_norm, features_norm.t())
@@ -50,7 +49,11 @@ def _resolve_callable(
         return func_or_str
     if isinstance(func_or_str, str):
         local_scope = {}
-        global_scope = {"torch": torch, "nn": torch.nn, "F": torch.nn.functional}
+        global_scope = {
+            "torch": torch,
+            "nn": torch.nn,
+            "F": torch.nn.functional,
+        }
         exec(func_or_str, global_scope, local_scope)
         return local_scope["compute"]
     return default_func
@@ -61,10 +64,10 @@ def idpruner(context: PruningContext, **kwargs) -> torch.Tensor:
     Combined MMR algorithm and Vision Selector for redundant token pruning.
 
     Args:
-        context (PruningContext, required): Execution context with embeds.
+        context (PruningContext): Execution context with embeds.
         **kwargs:
-            ratio (float, required): Pruning ratio.
-            selector_path (str, required): Path to the Vision Selector model.
+            ratio (float): Pruning ratio.
+            selector_path (str): Path to the Vision Selector model.
             mmr_lambda (float): Balance coefficient (Importance vs Diversity).
             parallel_k (int): Number of tokens to select per greedy iteration.
 
@@ -140,7 +143,10 @@ def idpruner(context: PruningContext, **kwargs) -> torch.Tensor:
                 max_sim_values = torch.full((N,), -2.0, device=device)
 
                 while len(selected_indices) < num_to_keep:
-                    k_step = min(parallel_k, num_to_keep - len(selected_indices))
+                    k_step = min(
+                        parallel_k,
+                        num_to_keep - len(selected_indices),
+                    )
 
                     if len(selected_indices) == 0:
                         mmr_score = importance.clone()

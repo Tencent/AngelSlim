@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 import torch
-from typing import Dict, Any
 
 from ..base.context import PruningContext
 from .utils.utils import _extract_and_validate_vision_token_info
@@ -24,7 +24,7 @@ def baseline_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
     Baseline strategy: Keep all tokens without any pruning.
 
     Args:
-        context (PruningContext, required): The execution context.
+        context (PruningContext): The execution context.
 
     Returns:
         torch.Tensor: All-True boolean mask.
@@ -41,9 +41,9 @@ def override_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
     Manual override strategy: Apply a pre-defined mask to vision tokens.
 
     Args:
-        context (PruningContext, required): The execution context.
+        context (PruningContext): The execution context.
         **kwargs:
-            mask (torch.Tensor, required): A boolean tensor for vision tokens only.
+            mask (torch.Tensor): A boolean tensor for vision tokens only.
 
     Returns:
         torch.Tensor: Global boolean keep_mask.
@@ -66,7 +66,8 @@ def override_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
     device = input_ids.device
     partial_mask = partial_mask.to(device)
 
-    # Identify vision token indices and the vision_token_mask from context attribute
+    # Identify vision token indices and the vision_token_mask from context
+    # attribute
     vision_indices, _, vision_token_mask, _ = _extract_and_validate_vision_token_info(
         context
     )
@@ -77,11 +78,13 @@ def override_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
             partial_mask = partial_mask.flatten()
         if len(partial_mask) != len(vision_indices):
             raise ValueError(
-                f"[TokenCompressor Error] Provided mask length ({len(partial_mask)}) mismatch "
+                "[TokenCompressor Error] "
+                f"Provided mask length ({len(partial_mask)}) mismatch "
                 f"with vision tokens ({len(vision_indices)})."
             )
 
-    # Build full mask: Keep all non-vision tokens, apply partial_mask to vision positions
+    # Build full mask: Keep all non-vision tokens, apply partial_mask to
+    # vision positions
     full_keep_mask = ~vision_token_mask
     if len(vision_indices) > 0:
         full_keep_mask[vision_indices] = partial_mask
@@ -94,9 +97,9 @@ def random_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
     Random pruning strategy: Randomly discard vision tokens based on a ratio.
 
     Args:
-        context (PruningContext, required): The execution context.
+        context (PruningContext): The execution context.
         **kwargs:
-            ratio (float, required): Ratio of vision tokens to prune [0.0, 1.0].
+            ratio (float): Ratio of vision tokens to prune [0.0, 1.0].
 
     Returns:
         torch.Tensor: Boolean keep_mask of shape [B, seq_len].

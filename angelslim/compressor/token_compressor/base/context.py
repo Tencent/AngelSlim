@@ -12,16 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, Union, List, Tuple
+from typing import Any, Optional
+
+import torch
 
 
 class LayerTensorMap(dict):
     """
-    A dictionary subclass for storing layer-wise tensors that supports relative indexing.
-    
-    Negative keys (e.g., -1 for the last layer) are automatically resolved to absolute 
+    A dictionary subclass for storing layer-wise tensors
+    that supports relative indexing.
+
+    Negative keys (e.g., -1 for the last layer) are automatically resolved to absolute
     indices using the 'total_layers' attribute.
     """
 
@@ -32,20 +34,21 @@ class LayerTensorMap(dict):
     def __getitem__(self, key: int) -> torch.Tensor:
         """
         Retrieves a tensor with support for negative indexing.
-        
+
         Args:
             key (int): The layer index. Supports standard Python negative indexing.
-            
+
         Returns:
             torch.Tensor: The activation tensor for the resolved layer index.
-            
+
         Raises:
             RuntimeError: If negative indexing is used but total_layers is not set.
             KeyError: If the resolved index does not exist in the map.
         """
         if key < 0:
             if self.total_layers is None:
-                # Principle 6: Fail fast if metadata required for indexing is missing
+                # Principle 6: Fail fast if metadata required for indexing is
+                # missing
                 raise RuntimeError(
                     f"[AngelSlim Error] Attempted negative indexing ({key}), "
                     f"but total_layers is None. Ensure 'llm_layer_num' or "
@@ -67,9 +70,10 @@ class LayerTensorMap(dict):
 @dataclass
 class PruningContext:
     """
-    The runtime execution state containing intermediate tensors and metadata for pruning.
-    
-    This class synchronizes layer counts to internal LayerTensorMaps automatically 
+    The runtime execution state containing
+    intermediate tensors and metadata for pruning.
+
+    This class synchronizes layer counts to internal LayerTensorMaps automatically
     via property setters to support dynamic updates during the inference lifecycle.
     """
 
@@ -77,7 +81,8 @@ class PruningContext:
     """Full sequence input token IDs of shape [batch_size, sequence_length]."""
 
     inputs_embeds: torch.Tensor
-    """Multimodal embeddings after the projector of shape [batch_size, sequence_length, hidden_dim]."""
+    """Multimodal embeddings after the projector
+    of shape [batch_size, sequence_length, hidden_dim]."""
 
     vit_q: LayerTensorMap = field(default_factory=LayerTensorMap)
     """Query states from Vision Tower layers."""
@@ -154,14 +159,14 @@ class PruningContext:
 
     def __post_init__(self):
         """
-        Performs post-initialization synchronization. 
-        Ensures that if layer numbers are passed to the constructor, they are 
+        Performs post-initialization synchronization.
+        Ensures that if layer numbers are passed to the constructor, they are
         propagated to the LayerTensorMap instances.
         """
         if self.vit_layer_num is not None:
             # Trigger property setter
             self.vit_layer_num = self.vit_layer_num
-        
+
         if self.llm_layer_num is not None:
             # Trigger property setter
             self.llm_layer_num = self.llm_layer_num
@@ -182,8 +187,10 @@ class PruningContext:
 
     def __repr__(self):
         return (
-            f"PruningContext(vit_layers={self.vit_layer_num}, llm_layers={self.llm_layer_num}, "
-            f"vit_q_keys={list(self.vit_q.keys())}, llm_q_keys={list(self.llm_q.keys())})"
+            f"PruningContext(vit_layers={self.vit_layer_num}, "
+            f"llm_layers={self.llm_layer_num}, "
+            f"vit_q_keys={list(self.vit_q.keys())}, "
+            f"llm_q_keys={list(self.llm_q.keys())})"
         )
 
     def __str__(self):

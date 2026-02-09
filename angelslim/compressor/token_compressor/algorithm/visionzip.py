@@ -14,21 +14,16 @@
 
 """
 VisionZip Merging Strategy module.
-Core Idea:
-1. Dominant: Retain high-importance tokens.
-2. Target: Uniformly sample clustering centers from the remaining tokens.
-3. Contextual: Merge other tokens into the nearest Target tokens based on feature similarity.
 """
+
+from typing import List, Tuple
 
 import torch
 import torch.nn.functional as F
-from typing import Dict, Any, Tuple, List
 
 from ..base.context import PruningContext
-from .utils.utils import (
-    _recompute_attention_maps_for_all_images,
-)
 from .utils.merging_utils import get_dialogue_masks
+from .utils.utils import _recompute_attention_maps_for_all_images
 
 
 def visionzip(
@@ -38,15 +33,16 @@ def visionzip(
     Executes VisionZip merging to compress vision tokens via weighted aggregation.
 
     Args:
-        context (PruningContext, required): The execution context with ViT Q/K and embeds.
+        context (PruningContext): The execution context with ViT Q/K and embeds.
         **kwargs:
-            ratio (float, required): Global compression ratio.
+            ratio (float): Global compression ratio.
             zip_ratio (float): Ratio of Target tokens relative to the total kept tokens.
-            layer_idx (int, required): ViT layer index used for Q/K recomputation.
+            layer_idx (int): ViT layer index used for Q/K recomputation.
 
     Returns:
         Tuple containing:
-            - List[torch.Tensor]: Merge weight matrices [M_i, N_i] for each vision segment.
+            - List[torch.Tensor]:
+                Merge weight matrices [M_i, N_i] for each vision segment.
             - torch.Tensor: Segment sizes on GPU.
             - torch.Tensor: Vision flag mask on GPU.
             - torch.Tensor: Representative fake_mask for metadata synchronization.
@@ -72,13 +68,15 @@ def visionzip(
             "[TokenCompressor Error] 'input_ids' or 'inputs_embeds' missing in context."
         )
 
-    # Retrieve Q/K for the specific layer from LayerTensorMap via attribute access
+    # Retrieve Q/K for the specific layer from LayerTensorMap via attribute
+    # access
     q_tensor_fine = context.vit_q[layer_idx]
     k_tensor_fine = context.vit_k[layer_idx]
 
     if q_tensor_fine is None or k_tensor_fine is None:
         raise ValueError(
-            f"[TokenCompressor Error] VisionZip requires ViT Q/K from layer {layer_idx}."
+            "[TokenCompressor Error] "
+            f"VisionZip requires ViT Q/K from layer {layer_idx}."
         )
 
     device = inputs_embeds.device
@@ -183,7 +181,10 @@ def visionzip(
         )
         index_map[kept_indices] = torch.arange(len(kept_indices), device=device)
         merge_mat = torch.zeros(
-            len(kept_indices), num_vision_tokens, dtype=dtype, device=device
+            len(kept_indices),
+            num_vision_tokens,
+            dtype=dtype,
+            device=device,
         )
         merge_mat.scatter_(1, kept_indices.unsqueeze(1), 1.0)
 
@@ -195,7 +196,11 @@ def visionzip(
             target_row_indices = index_map[target_indices[best_target_local]]
             merge_mat.index_put_(
                 (target_row_indices, contextual_indices),
-                torch.ones(len(contextual_indices), dtype=dtype, device=device),
+                torch.ones(
+                    len(contextual_indices),
+                    dtype=dtype,
+                    device=device,
+                ),
                 accumulate=True,
             )
 

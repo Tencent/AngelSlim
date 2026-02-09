@@ -14,16 +14,11 @@
 
 """
 VisPruner Pruning Strategy.
-Reference: VisPruner (arXiv:2412.01818).
-Implements a two-stage selection process:
-1. Saliency Selection: Top-K based on attention scores.
-2. Diversity Selection: Iterative bipartite matching to reduce redundancy in remaining tokens.
 """
+
 
 import torch
 import torch.nn.functional as F
-from typing import Dict, Any, List, Tuple
-import warnings
 
 from ..base.context import PruningContext
 from .utils.utils import (
@@ -38,11 +33,14 @@ def vispruner_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
     Executes VisPruner's two-stage pruning algorithm.
 
     Args:
-        context (PruningContext, required): The execution context with inputs_embeds and Vit Q/K.
+        context (PruningContext): The execution context with inputs_embeds and Vit Q/K.
         **kwargs:
-            ratio (float, required): Pruning ratio for vision tokens.
-            layer_idx (int, required): ViT layer index for importance scoring.
-            important_ratio_of_kept (float): Ratio of the budget allocated to the saliency stage.
+            ratio (float):
+                Pruning ratio for vision tokens.
+            layer_idx (int):
+                ViT layer index for importance scoring.
+            important_ratio_of_kept (float):
+                Ratio of the budget allocated to the saliency stage.
 
     Returns:
         torch.Tensor: Boolean keep_mask of shape [1, sequence_length].
@@ -55,7 +53,8 @@ def vispruner_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
         keep_ratio = 1.0 - pruning_ratio
     except KeyError as e:
         raise ValueError(
-            f"[TokenCompressor Error] 'vispruner_pruning' missing required parameter: {e}"
+            "[TokenCompressor Error] "
+            f"'vispruner_pruning' missing required parameter: {e}"
         )
 
     # 2. Access context attributes
@@ -74,9 +73,12 @@ def vispruner_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
         )
 
     # Locate visual tokens and distribution metadata
-    vision_indices_global, non_vision_indices_global, _, num_tokens_per_image = (
-        _extract_and_validate_vision_token_info(context)
-    )
+    (
+        vision_indices_global,
+        non_vision_indices_global,
+        _,
+        num_tokens_per_image,
+    ) = _extract_and_validate_vision_token_info(context)
 
     if len(vision_indices_global) == 0:
         return torch.ones_like(input_ids, dtype=torch.bool)
@@ -87,7 +89,8 @@ def vispruner_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
 
     if q_tensor is None or k_tensor is None:
         raise ValueError(
-            f"[TokenCompressor Error] VisPruner requires ViT layer {layer_idx} Q/K states."
+            "[TokenCompressor Error] "
+            f"VisPruner requires ViT layer {layer_idx} Q/K states."
         )
 
     # Recompute importance scores
