@@ -12,6 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .fp8_gemm import fp8_gemm_triton_block
+"""
+FP8 GEMM kernels with automatic backend selection.
 
-__all__ = ["fp8_gemm_triton_block"]
+This module automatically selects between Triton (for Linux/CUDA) and
+PyTorch (for Windows/CPU) implementations based on the runtime environment.
+"""
+
+from angelslim.compressor._platform import use_triton
+
+# Conditional imports based on platform/backend availability
+if use_triton():
+    from .fp8_gemm import fp8_gemm_triton_block
+else:
+    # PyTorch fallback implementation
+    from .fp8_gemm_torch import fp8_gemm_torch_block as fp8_gemm_triton_block
+
+# Also export PyTorch version directly for explicit use
+from .fp8_gemm_torch import fp8_gemm_torch_block
+
+__all__ = ["fp8_gemm_triton_block", "fp8_gemm_torch_block"]

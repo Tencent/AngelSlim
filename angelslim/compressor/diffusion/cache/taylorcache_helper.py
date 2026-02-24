@@ -1,10 +1,26 @@
 import math
-from typing import Any, List, Optional, Set, Tuple
+from typing import Any, Callable, List, Optional, Set, Tuple
 
 import torch
 import torch.nn as nn
 
 from .cache_helper import CacheHelper
+
+# Conditional torch.compile decorator
+# Disabled on Windows and when ANGELSLIM_TORCH_COMPILE=0
+try:
+    from angelslim.compressor._platform import is_torch_compile_supported
+
+    _USE_TORCH_COMPILE = is_torch_compile_supported()
+except ImportError:
+    _USE_TORCH_COMPILE = False
+
+
+def _conditional_compile(func: Callable) -> Callable:
+    """Apply torch.compile only if supported on this platform."""
+    if _USE_TORCH_COMPILE:
+        return torch.compile(func)
+    return func
 
 
 class TaylorCacheHelper(CacheHelper):
@@ -137,7 +153,7 @@ class TaylorCacheHelper(CacheHelper):
         self.taylor_cache.clear_derivatives()
 
 
-@torch.compile
+@_conditional_compile
 def decomposition_FFT(
     x: torch.Tensor, cutoff_ratio: float = 0.1
 ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -188,7 +204,7 @@ def decomposition_FFT(
     return low, high
 
 
-@torch.compile
+@_conditional_compile
 def reconstruction(low_freq: torch.Tensor, high_freq: torch.Tensor) -> torch.Tensor:
     return low_freq + high_freq
 
