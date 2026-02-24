@@ -38,9 +38,7 @@ class PTQHook:
         kv_cache_observer = self.quant_model.quant_algo_dict["kv_cache_observer"]
 
         quant_parent_dict = self.quant_model.get_parent_dict(self.quant_layers_dict)
-        parent_observers = {
-            v: ParentObserver() for v in set(quant_parent_dict.values())
-        }
+        parent_observers = {v: ParentObserver() for v in set(quant_parent_dict.values())}
 
         # apply observers
         for name, sub_layer in self.quant_layers_dict.items():
@@ -104,13 +102,11 @@ class PTQHook:
                                 self.observer_dict[sub_layer].sampled_input
                             )
                             self.quant_model.act_scales_dict[name] = (
-                                self.quant_model.act_scales_dict[name]
-                                / tmp_maxval.type(act_dtype)
+                                self.quant_model.act_scales_dict[name] / tmp_maxval.type(act_dtype)
                             )
                         else:
                             self.quant_model.act_scales_dict[name] = (
-                                self.quant_model.act_scales_dict[name]
-                                / maxval.type(act_dtype)
+                                self.quant_model.act_scales_dict[name] / maxval.type(act_dtype)
                             )
         if self.quant_model.quant_algo_dict["c_quant_algo"] == "fp8":
             for k, v in self.quant_model.kv_cache_scales_dict.items():

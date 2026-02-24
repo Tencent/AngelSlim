@@ -59,12 +59,8 @@ class BaseEagle3Drafter(nn.Module, ABC):
         self.hidden_size = config.hidden_size
         self.early_stop_method = early_stop_method
 
-        self.embed_tokens = nn.Embedding(
-            config.vocab_size, config.hidden_size, self.padding_idx
-        )
-        self.lm_head = nn.Linear(
-            config.hidden_size, config.draft_vocab_size, bias=False
-        )
+        self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
+        self.lm_head = nn.Linear(config.hidden_size, config.draft_vocab_size, bias=False)
 
         # Handle different hidden sizes between target and draft models
         hidden_size_multiplier = 3
@@ -87,9 +83,7 @@ class BaseEagle3Drafter(nn.Module, ABC):
         self.logsoftmax = nn.LogSoftmax(dim=-1)
 
         # Vocabulary mapping buffers
-        self.register_buffer(
-            "d2t", torch.zeros(config.draft_vocab_size, dtype=torch.long)
-        )
+        self.register_buffer("d2t", torch.zeros(config.draft_vocab_size, dtype=torch.long))
         self.register_buffer("t2d", torch.zeros(config.vocab_size, dtype=torch.bool))
 
         # Speculative decoding parameters
@@ -156,9 +150,9 @@ class BaseEagle3Drafter(nn.Module, ABC):
 
     def init_tree(self) -> None:
         """Initialize tree structures for speculative decoding."""
-        self.tree_mask_init = torch.eye(
-            self.top_k, device=self.embed_tokens.weight.device
-        )[None, None]
+        self.tree_mask_init = torch.eye(self.top_k, device=self.embed_tokens.weight.device)[
+            None, None
+        ]
         self.position_ids = torch.zeros(
             self.top_k, device=self.embed_tokens.weight.device, dtype=torch.long
         )
@@ -261,10 +255,8 @@ class BaseEagle3Drafter(nn.Module, ABC):
                 past_key_values,
             )
         # Process the final results
-        draft_tokens, retrieve_indices, tree_mask, tree_position_ids = (
-            self._finalize_results(
-                scores_list, ss_token, sample_token, parents_list, logits_processor
-            )
+        draft_tokens, retrieve_indices, tree_mask, tree_position_ids = self._finalize_results(
+            scores_list, ss_token, sample_token, parents_list, logits_processor
         )
 
         # Delete some used lists and variables to free memory
@@ -287,9 +279,7 @@ class BaseEagle3Drafter(nn.Module, ABC):
             outputs = self(
                 hidden_states,
                 input_ids=input_ids[:, kv_len:],
-                inputs_embeds=(
-                    inputs_embeds[:, kv_len:] if inputs_embeds is not None else None
-                ),
+                inputs_embeds=(inputs_embeds[:, kv_len:] if inputs_embeds is not None else None),
                 past_key_values=self.stable_kv,
                 use_cache=True,
             )
@@ -413,9 +403,7 @@ class BaseEagle3Drafter(nn.Module, ABC):
 
         return draft_tokens[None], retrieve_indices, tree_mask, tree_position_ids
 
-    def _build_tree_mask(
-        self, top_indices: Tensor, parents_list: list
-    ) -> Tuple[Tensor, Tensor]:
+    def _build_tree_mask(self, top_indices: Tensor, parents_list: list) -> Tuple[Tensor, Tensor]:
         """Build the tree attention mask and position IDs."""
         all_parents = torch.cat(parents_list, dim=0)[top_indices // self.top_k].long()
 
@@ -452,10 +440,7 @@ class BaseEagle3Drafter(nn.Module, ABC):
 
         # Build retrieval paths for leaves
         retrieve_indices = (
-            torch.zeros(
-                leaf_num, torch.max(tree_position_ids).item() + 1, dtype=torch.long
-            )
-            - 1
+            torch.zeros(leaf_num, torch.max(tree_position_ids).item() + 1, dtype=torch.long) - 1
         )
         retrieve_indices = retrieve_indices.tolist()
 
@@ -480,6 +465,4 @@ class BaseEagle3Drafter(nn.Module, ABC):
         def custom_sort(lst):
             return [x if x >= 0 else maxitem for x in lst]
 
-        return torch.tensor(
-            sorted(retrieve_indices.tolist(), key=custom_sort), dtype=torch.long
-        )
+        return torch.tensor(sorted(retrieve_indices.tolist(), key=custom_sort), dtype=torch.long)

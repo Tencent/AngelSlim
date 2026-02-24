@@ -102,18 +102,12 @@ class TextDataset(BaseDataset):
                             thinking_data = True
                             break
                 if thinking_data:
-                    text = (
-                        self.processor.bos_token
-                        if self.processor.bos_token is not None
-                        else ""
-                    )
+                    text = self.processor.bos_token if self.processor.bos_token is not None else ""
                     for dic in messages:
                         if dic["role"] == "system":
                             text += dic["content"]
                         elif dic["role"] == "user":
-                            text = (
-                                text + "<｜User｜>" + dic["content"] + "<｜Assistant｜>"
-                            )
+                            text = text + "<｜User｜>" + dic["content"] + "<｜Assistant｜>"
                         elif dic["role"] == "assistant":
                             text = text + dic["content"] + self.processor.eos_token
 
@@ -131,9 +125,7 @@ class TextDataset(BaseDataset):
                 self.data.append(
                     {
                         "input_ids": model_inputs["input_ids"].to(self.device),
-                        "attention_mask": model_inputs["attention_mask"].to(
-                            self.device
-                        ),
+                        "attention_mask": model_inputs["attention_mask"].to(self.device),
                         "labels": labels.to(self.device),
                     }
                 )
@@ -150,9 +142,7 @@ class TextDataset(BaseDataset):
                 and data["system_prompt"]
                 and messages[0]["role"] != "system"
             ):
-                messages = [
-                    {"role": "system", "content": data["system_prompt"]}
-                ] + messages
+                messages = [{"role": "system", "content": data["system_prompt"]}] + messages
         elif "conversations" in data:
             share_gpt_data = data["conversations"]
             messages = [
@@ -160,18 +150,14 @@ class TextDataset(BaseDataset):
                 {"role": "assistant", "content": share_gpt_data[1]["value"]},
             ]
             if "system" in data and data["system"]:
-                messages = [
-                    {"role": "system", "content": data["system_prompt"]}
-                ] + messages
+                messages = [{"role": "system", "content": data["system_prompt"]}] + messages
         else:
             messages = [
                 {"role": "user", "content": data["input"]},
                 {"role": "assistant", "content": data["output"]},
             ]
             if "system_prompt" in data and data["system_prompt"]:
-                messages = [
-                    {"role": "system", "content": data["system_prompt"]}
-                ] + messages
+                messages = [{"role": "system", "content": data["system_prompt"]}] + messages
 
         # Normalize role names
         for item in messages:

@@ -27,7 +27,9 @@ if use_triton():
     from .fp8_per_token_group import fp8_per_token_group_quant_triton
 else:
     # PyTorch fallback implementations
-    from .fp8_per_block_torch import fp8_per_block_quant_torch as fp8_per_block_quant_triton
+    from .fp8_per_block_torch import (
+        fp8_per_block_quant_torch as fp8_per_block_quant_triton,
+    )
     from .fp8_per_token_group_torch import (
         fp8_per_token_group_quant_torch as fp8_per_token_group_quant_triton,
     )

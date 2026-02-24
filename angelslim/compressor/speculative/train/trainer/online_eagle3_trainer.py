@@ -410,9 +410,7 @@ class OnlineTTSEagle3Trainer(Eagle3Trainer):
 
             # Step 7.6: Compute accuracy
             with torch.no_grad():
-                correct = (
-                    logits.argmax(-1) == target_p.argmax(-1)
-                ) * position_mask.squeeze(-1)
+                correct = (logits.argmax(-1) == target_p.argmax(-1)) * position_mask.squeeze(-1)
                 accuracy = correct.sum().item() / (loss_mask.sum().item() + 1e-6)
 
             # Step 7.7: Store loss and accuracy
@@ -429,10 +427,7 @@ class OnlineTTSEagle3Trainer(Eagle3Trainer):
         ploss_weight = [0.8**i for i in range(len(plosses))]
         ploss = sum([ploss_weight[i] * plosses[i] for i in range(len(plosses))])
 
-        log = {
-            f"{log_prefix}/acc_{i}": round(float(acces[i]), 3)
-            for i in range(len(acces))
-        }
+        log = {f"{log_prefix}/acc_{i}": round(float(acces[i]), 3) for i in range(len(acces))}
         log.update(
             {
                 f"{log_prefix}/ploss_{i}": round(float(plosses[i].item()), 3)

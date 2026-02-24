@@ -59,9 +59,7 @@ def load_fp8_scales(
             )
         raise FileNotFoundError(f"quant_scales path does not exist: {quant_scales}")
 
-    raise ValueError(
-        f"Invalid quant_scales type: {type(quant_scales)}. Only str (path) or dict."
-    )
+    raise ValueError(f"Invalid quant_scales type: {type(quant_scales)}. Only str (path) or dict.")
 
 
 def save_quantized_model(model: torch.nn.Module, save_path: str, fp8_scales_map: Dict):
@@ -76,9 +74,7 @@ def save_quantized_model(model: torch.nn.Module, save_path: str, fp8_scales_map:
         try:
             os.makedirs(save_path, exist_ok=True)
         except Exception as e:
-            raise RuntimeError(
-                f"Cannot create directory for save_path: {save_path}. Error: {e}"
-            )
+            raise RuntimeError(f"Cannot create directory for save_path: {save_path}. Error: {e}")
 
     try:
         # If Hugging Face style, use save_pretrained
@@ -101,9 +97,7 @@ def save_quantized_model(model: torch.nn.Module, save_path: str, fp8_scales_map:
         logger.info(f"Saved scales map to {scale_save_path}")
 
     except Exception as e:
-        raise RuntimeError(
-            f"Failed to save model and scales map to {save_path}. Error: {e}"
-        )
+        raise RuntimeError(f"Failed to save model and scales map to {save_path}. Error: {e}")
 
 
 def load_quantized_model(model_class, save_path: str, device: str = "cpu"):

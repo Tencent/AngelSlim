@@ -181,8 +181,7 @@ def parse_args():
         type=int,
         default=2048,
         help=(
-            "Maximum sequence length. "
-            "Sequences will be right padded (and possibly truncated)."
+            "Maximum sequence length. " "Sequences will be right padded (and possibly truncated)."
         ),
     )
     training_group.add_argument(
@@ -201,10 +200,7 @@ def parse_args():
         "--gradient_accumulation_steps",
         type=int,
         default=1,
-        help=(
-            "Number of updates steps to accumulate before "
-            "performing a backward/update pass"
-        ),
+        help=("Number of updates steps to accumulate before " "performing a backward/update pass"),
     )
     training_group.add_argument(
         "--num_train_epochs",
@@ -245,12 +241,8 @@ def parse_args():
     training_group.add_argument(
         "--deepspeed", type=str, default=None, help="DeepSpeed config file"
     )
-    training_group.add_argument(
-        "--fp16", action="store_true", help="Whether to use fp16 training"
-    )
-    training_group.add_argument(
-        "--bf16", action="store_true", help="Whether to use bf16 training"
-    )
+    training_group.add_argument("--fp16", action="store_true", help="Whether to use fp16 training")
+    training_group.add_argument("--bf16", action="store_true", help="Whether to use bf16 training")
     training_group.add_argument(
         "--save_strategy", type=str, default="no", help="Save strategy for checkpoints"
     )
@@ -267,9 +259,7 @@ def parse_args():
             "'polynomial', 'constant', 'constant_with_warmup'"
         ),
     )
-    training_group.add_argument(
-        "--run_name", type=str, default=None, help="Run name for tracking"
-    )
+    training_group.add_argument("--run_name", type=str, default=None, help="Run name for tracking")
     training_group.add_argument(
         "--report_to",
         type=str,
@@ -290,9 +280,7 @@ def train():
     rank0_print("Loading draft model...")
     draft_model_config = DraftModelConfig.from_file(args.draft_model_config_path)
     draft_model = create_draft_model(draft_model_config)
-    draft_model.load_embed_weights(
-        args.target_model_name_or_path, args.embed_weight_key
-    )
+    draft_model.load_embed_weights(args.target_model_name_or_path, args.embed_weight_key)
     draft_model.freeze_embed_weights()
     rank0_print("Draft model loaded successfully")
 
@@ -355,8 +343,7 @@ def train():
         rank0_print("Vocabulary mapping built successfully")
     else:
         rank0_print(
-            "Warning: No online training dataset available, "
-            "skipping vocab mapping build"
+            "Warning: No online training dataset available, " "skipping vocab mapping build"
         )
 
     # Create a TrainingArguments object for the trainer

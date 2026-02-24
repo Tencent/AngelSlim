@@ -110,7 +110,6 @@ def fp8_per_block_quant_torch_fast(
     assert x.dim() == 2, "Input tensor must be 2D"
 
     M, N = x.size()
-    device = x.device
 
     # Pad tensor to be divisible by block_size
     pad_m = (block_size - M % block_size) % block_size

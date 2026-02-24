@@ -41,9 +41,7 @@ class CacheHelper:
             ValueError: Raised when both double_blocks and single_blocks are empty
         """
         if not self.double_blocks and not self.single_blocks:
-            raise ValueError(
-                "At least one of double_blocks or single_blocks must be provided"
-            )
+            raise ValueError("At least one of double_blocks or single_blocks must be provided")
 
         self.reset_states()
         self.wrap_modules()

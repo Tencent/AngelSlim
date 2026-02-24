@@ -69,9 +69,7 @@ class PTQvLLMSaveHF(PTQSaveBase):
         model_save_name = model_base_name + ".safetensors"
         safetensors_metadata = {}
         safetensors_metadata["format"] = "pt"
-        safe_save(
-            state_dict, os.path.join(save_path, model_save_name), safetensors_metadata
-        )
+        safe_save(state_dict, os.path.join(save_path, model_save_name), safetensors_metadata)
         self.quant_model.config.save_pretrained(save_path)
 
 
@@ -81,9 +79,7 @@ class PTQVLMSaveVllmHF(PTQSaveBase):
 
     def save(self, save_path):
         save_name = self.quant_model.quant_config.save_name
-        ignore_field = (
-            "ignore" if save_name == "compressed-tensors" else "ignored_layers"
-        )
+        ignore_field = "ignore" if save_name == "compressed-tensors" else "ignored_layers"
 
         w_quant_algo = self.quant_model.quant_config.quant_algo_info["w"]
         a_quant_algo = self.quant_model.quant_config.quant_algo_info["a"]
@@ -144,9 +140,7 @@ class PTQVLMSaveVllmHF(PTQSaveBase):
                 "type": "float",
             }
         else:
-            raise ValueError(
-                f"{self.quant_model.quant_config.quant_algo} not supported"
-            )
+            raise ValueError(f"{self.quant_model.quant_config.quant_algo} not supported")
         quantization_config = {"quant_method": save_name, ignore_field: ignored_layers}
         if save_name == "compressed-tensors":
             quantization_config.update(
@@ -165,9 +159,7 @@ class PTQVLMSaveVllmHF(PTQSaveBase):
                 }
             )
         else:
-            quantization_config["activation_scheme"] = (
-                "dynamic" if is_dynamic else "static"
-            )
+            quantization_config["activation_scheme"] = "dynamic" if is_dynamic else "static"
 
         quant_dict = {"quantization_config": quantization_config}
         self.quant_model.get_model().config.update(quant_dict)
@@ -186,9 +178,7 @@ class PTQSaveVllmHF(PTQSaveBase):
 
     def save(self, save_path):
         save_name = self.quant_model.quant_config.save_name
-        ignore_field = (
-            "ignore" if save_name == "compressed-tensors" else "ignored_layers"
-        )
+        ignore_field = "ignore" if save_name == "compressed-tensors" else "ignored_layers"
         w_quant_algo = self.quant_model.quant_config.quant_algo_info["w"]
         a_quant_algo = self.quant_model.quant_config.quant_algo_info["a"]
         is_dynamic = "dynamic" in a_quant_algo
@@ -248,9 +238,7 @@ class PTQSaveVllmHF(PTQSaveBase):
                 "type": "float",
             }
         else:
-            raise ValueError(
-                f"{self.quant_model.quant_config.quant_algo} not supported"
-            )
+            raise ValueError(f"{self.quant_model.quant_config.quant_algo} not supported")
 
         quantization_config = {"quant_method": save_name, ignore_field: ignored_layers}
         if save_name == "compressed-tensors":
@@ -270,9 +258,7 @@ class PTQSaveVllmHF(PTQSaveBase):
                 }
             )
         else:
-            quantization_config["activation_scheme"] = (
-                "dynamic" if is_dynamic else "static"
-            )
+            quantization_config["activation_scheme"] = "dynamic" if is_dynamic else "static"
 
         quant_dict = {"quantization_config": quantization_config}
         self.quant_model.get_model().config.update(quant_dict)
@@ -298,9 +284,7 @@ class PTQOnlyScaleSave(PTQSaveBase):
         static_q_dict = {
             "quantization_config": {
                 "quant_method": "fp8",
-                "activation_scheme": (
-                    "dynamic" if "dynamic" in a_quant_algo else "static"
-                ),
+                "activation_scheme": ("dynamic" if "dynamic" in a_quant_algo else "static"),
                 "ignored_layers": ignored_layers,
             }
         }
@@ -437,9 +421,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
 
         if fused_act_scale_dict:
             for k, v in fused_act_scale_dict.items():
-                _save_path = os.path.join(
-                    save_path, "{}.input_scale.{}.pt".format(k, _index)
-                )
+                _save_path = os.path.join(save_path, "{}.input_scale.{}.pt".format(k, _index))
                 if "experts" in k and "shared_experts" not in k:
                     # handle Deepseek EP, do not all reduce
                     _save_path = os.path.join(
@@ -494,13 +476,9 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
                     torch.save(scale, _save_path)
                 else:
                     print_info(f"before all reduce scale = {scale}")
-                    torch.distributed.all_reduce(
-                        scale, op=torch.distributed.ReduceOp.MAX
-                    )
+                    torch.distributed.all_reduce(scale, op=torch.distributed.ReduceOp.MAX)
                     print_info(f"after all reduce scale = {scale}")
-                    _save_path = os.path.join(
-                        save_path, "{}.weight_scale.{}.pt".format(k, _index)
-                    )
+                    _save_path = os.path.join(save_path, "{}.weight_scale.{}.pt".format(k, _index))
                     self._save_ckpt(
                         scale,
                         _save_path,
@@ -516,9 +494,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
         dist.destroy_process_group()
 
         if self.rank == 0:
-            save_model_path = os.path.join(
-                "/".join(save_path.split("/")[:-1]), "checkpoint"
-            )
+            save_model_path = os.path.join("/".join(save_path.split("/")[:-1]), "checkpoint")
             os.makedirs(save_model_path, exist_ok=True)
 
             self.convert_scales_to_safetensors(save_path, tmp_path)
@@ -535,9 +511,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
                 shutil.rmtree(tmp_path)
             if os.path.exists(save_path):
                 shutil.rmtree(save_path)
-            parent_dir = os.path.dirname(
-                self.quant_model.model.ori_model_path.rstrip("/")
-            )
+            parent_dir = os.path.dirname(self.quant_model.model.ori_model_path.rstrip("/"))
             tp_model_path = os.path.join(
                 parent_dir, f"ds_ckpt_tp{self.quant_model.model.world_size}"
             )
@@ -602,21 +576,15 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
                     tensor_wise_scale = fused_max_value.max() / 448.0
                 else:
                     tensor_wise_scale = fused_max_value.max()
-                torch.distributed.all_reduce(
-                    tensor_wise_scale, op=torch.distributed.ReduceOp.MAX
-                )
+                torch.distributed.all_reduce(tensor_wise_scale, op=torch.distributed.ReduceOp.MAX)
                 weight_fp8 = (
-                    (weight_bf16 / tensor_wise_scale)
-                    .clamp(-448, 448)
-                    .to(torch.float8_e4m3fn)
+                    (weight_bf16 / tensor_wise_scale).clamp(-448, 448).to(torch.float8_e4m3fn)
                 )
                 weight_fp8 = weight_fp8.to(layer.weight.device)
 
                 if "fp8" in self.quant_model.quant_config.quant_algo:
                     if "w4a8" in self.quant_model.quant_config.quant_algo:
-                        new_weight_bf16 = (
-                            weight_fp8.to(torch.bfloat16) * tensor_wise_scale
-                        )
+                        new_weight_bf16 = weight_fp8.to(torch.bfloat16) * tensor_wise_scale
                         new_weight_bf16_qdq = fake_quant_dequant(
                             new_weight_bf16,
                             method="groupwise",
@@ -632,18 +600,12 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
                         )
                         new_weight_fp8 = new_weight_fp8.to(layer.weight.device)
                         layer.weight.data = new_weight_fp8
-                        bf16_weight_qdq = (
-                            new_weight_fp8.to(torch.bfloat16) * tensor_wise_scale
-                        )
+                        bf16_weight_qdq = new_weight_fp8.to(torch.bfloat16) * tensor_wise_scale
                     else:
                         layer.weight.data = weight_fp8
-                        bf16_weight_qdq = (
-                            weight_fp8.to(torch.bfloat16) * tensor_wise_scale
-                        )
+                        bf16_weight_qdq = weight_fp8.to(torch.bfloat16) * tensor_wise_scale
 
-                cos_sim = torch.cosine_similarity(
-                    bf16_weight_qdq, ori_bf16_weight
-                ).mean()
+                cos_sim = torch.cosine_similarity(bf16_weight_qdq, ori_bf16_weight).mean()
                 print_info(f"qdq weight cos sim :{cos_sim}")
                 if cos_sim < 0.95:
                     print_info("*** cos sim < 0.95 !!!")
@@ -652,9 +614,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
         world_size = dist.get_world_size() if dist.is_initialized() else 1
         save_model(
             self.quant_model.model,
-            os.path.join(
-                save_model_path, f"model{self.rank}-mp{world_size}.safetensors"
-            ),
+            os.path.join(save_model_path, f"model{self.rank}-mp{world_size}.safetensors"),
         )
         print_info(f"save model{self.rank}-mp{world_size}.safetensors done.")
 
@@ -679,9 +639,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
 
         for mpind in range(mp):
             file_path = os.path.join(input_path, f"model{mpind}-mp{mp}.safetensors")
-            ori_state_dicts[localind] = safe_open(
-                file_path, framework="pt", device="cpu"
-            )
+            ori_state_dicts[localind] = safe_open(file_path, framework="pt", device="cpu")
             localind += 1
 
         # process no_mp_key
@@ -744,9 +702,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
         filename = "model-" + "{:0>{}}".format(model_save_ind, 5) + ".safetensors"
         model_save_ind += 1
         for _, k in enumerate(ori_state_dicts[0].keys()):
-            if any(
-                word if word in k else False for word in ["embed_tokens", "lm_head"]
-            ):
+            if any(word if word in k else False for word in ["embed_tokens", "lm_head"]):
                 param_list = []
                 for i in range(mp):
                     param: torch.Tensor = ori_state_dicts[i].get_tensor(k)
@@ -804,9 +760,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
             new_file_path = os.path.join(save_model_path, "tiktoken.model")
             shutil.copyfile(file_path, new_file_path)
 
-        with open(
-            os.path.join(save_model_path, "model.safetensors.index.json"), "w"
-        ) as f:
+        with open(os.path.join(save_model_path, "model.safetensors.index.json"), "w") as f:
             json.dump(index_dict, f, indent=4)
 
         # setting quantization config
@@ -843,9 +797,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
                             is not supported for w4a8_fp8."
                     )
             else:
-                ignore_layers = self.quant_model.quant_config.quant_algo_info[
-                    "ignore_layers"
-                ]
+                ignore_layers = self.quant_model.quant_config.quant_algo_info["ignore_layers"]
                 if self.quant_model.deploy_backend == "vllm":
                     quant_dict = {
                         "quantization_config": {
@@ -882,9 +834,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
         if "fp8" in self.quant_model.quant_config.quant_algo:
             if not any(
                 substring in param_name
-                for substring in self.quant_model.quant_config.quant_algo_info[
-                    "ignore_layers"
-                ]
+                for substring in self.quant_model.quant_config.quant_algo_info["ignore_layers"]
             ):
                 if param_name.endswith("weight_scale_inv"):
                     return
@@ -895,24 +845,18 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
                         f"{param_name[:-7]}.input_scale"
                     ]
                     index_dict["weight_map"][f"{param_name}_scale"] = str(filename)
-                    index_dict["weight_map"][f"{param_name[:-7]}.input_scale"] = str(
-                        filename
-                    )
+                    index_dict["weight_map"][f"{param_name[:-7]}.input_scale"] = str(filename)
                     if "w4a8" in self.quant_model.quant_config.quant_algo:
                         param = self._packed_weight(
                             param_name,
                             param,
-                            self.quant_model.quant_config.quant_algo_info[
-                                "w_group_size"
-                            ],
+                            self.quant_model.quant_config.quant_algo_info["w_group_size"],
                             scales_dict,
                         )
                         new_save_dict[f"{param_name}_scale.int4"] = scales_dict[
                             f"{param_name}_scale.int4"
                         ]
-                        index_dict["weight_map"][f"{param_name}_scale.int4"] = str(
-                            filename
-                        )
+                        index_dict["weight_map"][f"{param_name}_scale.int4"] = str(filename)
                         param_name = param_name.replace("weight", "qweight")
 
         new_save_dict[param_name] = param
@@ -935,9 +879,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
         assert int4_scale.shape == weight.shape
         quant_weight = torch.clamp(torch.round(bf16_weight / int4_scale), -8, 7)
         packed_weight = pack_weight_to_int8(quant_weight)
-        print_info(
-            f"Packing {weight_name}, packed weight dtype = {packed_weight.dtype}"
-        )
+        print_info(f"Packing {weight_name}, packed weight dtype = {packed_weight.dtype}")
         del bf16_weight
         return packed_weight
 
@@ -948,13 +890,9 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
         weight_map = model_index["weight_map"]
         return weight_map
 
-    def _get_tensor_from_safetensor(
-        self, input_path, weight_name, safetensor_file, loaded_files
-    ):
+    def _get_tensor_from_safetensor(self, input_path, weight_name, safetensor_file, loaded_files):
         if safetensor_file not in loaded_files:
-            current_state_dict = load_file(
-                os.path.join(input_path, safetensor_file), device="cpu"
-            )
+            current_state_dict = load_file(os.path.join(input_path, safetensor_file), device="cpu")
             loaded_files[safetensor_file] = current_state_dict
         weight = loaded_files[safetensor_file][weight_name]
         if len(loaded_files) > 4:
@@ -1030,9 +968,7 @@ class DeepSeekV3PTQSaveSingle(DeepSeekV3PTQSaveMulti):
                             is not supported for w4a8_fp8."
                     )
             else:
-                ignore_layers = self.quant_model.quant_config.quant_algo_info[
-                    "ignore_layers"
-                ]
+                ignore_layers = self.quant_model.quant_config.quant_algo_info["ignore_layers"]
                 if self.quant_model.deploy_backend == "vllm":
                     quant_dict = {
                         "quantization_config": {
@@ -1055,9 +991,7 @@ class DeepSeekV3PTQSaveSingle(DeepSeekV3PTQSaveMulti):
             self.quant_model.get_model().save_pretrained(save_path)
             self.add_mtp_weight(save_path=save_path)
         else:
-            raise ValueError(
-                f"{self.quant_model.quant_config.quant_algo} not supported"
-            )
+            raise ValueError(f"{self.quant_model.quant_config.quant_algo} not supported")
 
 
 class TPManager:
@@ -1210,9 +1144,7 @@ class DeepSeekV3W4A8Int8Save(DeepSeekV3PTQSaveMulti):
         if self.rank == 0:
             out = {}
 
-        device = torch.device(
-            f"cuda:{self.rank}" if torch.cuda.is_available() else "cpu"
-        )
+        device = torch.device(f"cuda:{self.rank}" if torch.cuda.is_available() else "cpu")
 
         for k in list(state.keys()):
             lid = self.router.layer_id(k)
@@ -1252,9 +1184,7 @@ class DeepSeekV3W4A8Int8Save(DeepSeekV3PTQSaveMulti):
         shard_name,
         moe_gather: MoEExpertGather,
     ) -> int:
-        device = torch.device(
-            f"cuda:{self.rank}" if torch.cuda.is_available() else "cpu"
-        )
+        device = torch.device(f"cuda:{self.rank}" if torch.cuda.is_available() else "cpu")
 
         for lid in range(61):
             layer_keys = [k for k in state if self.router.layer_id(k) == lid]
@@ -1280,10 +1210,7 @@ class DeepSeekV3W4A8Int8Save(DeepSeekV3PTQSaveMulti):
                 v = state[k]
 
                 # passthrough
-                if any(
-                    x in k
-                    for x in ("layernorm", "gate.weight", "e_score_correction_bias")
-                ):
+                if any(x in k for x in ("layernorm", "gate.weight", "e_score_correction_bias")):
                     if self.rank == 0:
                         layer_out[k] = v.cpu()
                     del state[k]
@@ -1293,9 +1220,7 @@ class DeepSeekV3W4A8Int8Save(DeepSeekV3PTQSaveMulti):
 
                 dim = self.router.tp_gather_dim(k)
                 if dim is None:
-                    if self.rank == 0 and (
-                        "q_a_proj" in k or "kv_a_proj_with_mqa" in k
-                    ):
+                    if self.rank == 0 and ("q_a_proj" in k or "kv_a_proj_with_mqa" in k):
                         q, s = self.quantizer.quantize(v)
                         layer_out[k] = q
                         layer_out[k + "_scale"] = s
@@ -1474,9 +1399,7 @@ class DeepSeekV3W4A8Int8Save(DeepSeekV3PTQSaveMulti):
             if is_scale_inv(weight_name):
                 continue
 
-            tensor = self._get_tensor_from_safetensor(
-                input_path, weight_name, src_file, cache
-            )
+            tensor = self._get_tensor_from_safetensor(input_path, weight_name, src_file, cache)
 
             if not is_quantizable_weight(weight_name):
                 out_state[weight_name] = tensor

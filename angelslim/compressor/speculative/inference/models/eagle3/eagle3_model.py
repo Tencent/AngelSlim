@@ -187,9 +187,7 @@ class GenerationManager:
             model.current_length_data.zero_()
         else:
             past_key_values, past_key_values_data, current_length_data = (
-                initialize_past_key_values(
-                    model.base_model, max_length=config.max_length
-                )
+                initialize_past_key_values(model.base_model, max_length=config.max_length)
             )
             model.past_key_values = past_key_values
             model.past_key_values_data = past_key_values_data
@@ -350,9 +348,7 @@ class Eagle3Model(nn.Module):
             ]
         base_model = ModelLoader.load_base_model(base_model_path, **kwargs)
         tokenizer = AutoTokenizer.from_pretrained(base_model_path, use_fast=False)
-        tokenizer.stop_think_id = tokenizer.encode(
-            stop_think_token, add_special_tokens=False
-        )[0]
+        tokenizer.stop_think_id = tokenizer.encode(stop_think_token, add_special_tokens=False)[0]
         tokenizer.step_split_ids = []
         for s in step_split_tokens:
             t = tokenizer.encode(s, add_special_tokens=False)
@@ -514,9 +510,7 @@ class Eagle3Model(nn.Module):
                 logits, candidates, state.logits_processor
             )
 
-            new_token_ids = (
-                candidates[None, best_candidate, : accept_length + 1].view(-1).tolist()
-            )
+            new_token_ids = candidates[None, best_candidate, : accept_length + 1].view(-1).tolist()
             if is_thinking and self.tokenizer.stop_think_id in new_token_ids:
                 is_thinking = False
             if is_thinking and self.early_stop_method:
@@ -546,9 +540,7 @@ class Eagle3Model(nn.Module):
                     print(f"Early Stop: scores={scores}")
 
             accept_length_list.append(
-                accept_length.item()
-                if torch.is_tensor(accept_length)
-                else accept_length
+                accept_length.item() if torch.is_tensor(accept_length) else accept_length
             )
 
             # Update inference inputs
@@ -696,9 +688,7 @@ class CosyVoice3Eagle3Model(Eagle3Model):
             ]
         base_model = ModelLoader.load_base_model(base_model_path, **kwargs)
         tokenizer = base_model.frontend.tokenizer
-        tokenizer.stop_think_id = tokenizer.encode(
-            stop_think_token, add_special_tokens=False
-        )[0]
+        tokenizer.stop_think_id = tokenizer.encode(stop_think_token, add_special_tokens=False)[0]
         tokenizer.step_split_ids = []
         for s in step_split_tokens:
             t = tokenizer.encode(s, add_special_tokens=False)
@@ -806,14 +796,10 @@ class CosyVoice3Eagle3Model(Eagle3Model):
             )
             out_tokens.append(input_id)
             input_id = (
-                torch.tensor(input_id, device=state.input_ids.device)
-                .unsqueeze(0)
-                .unsqueeze(0)
+                torch.tensor(input_id, device=state.input_ids.device).unsqueeze(0).unsqueeze(0)
             )
 
-            _, logits = self.base_model.model.llm(
-                input_id, past_key_values=state.past_key_values
-            )
+            _, logits = self.base_model.model.llm(input_id, past_key_values=state.past_key_values)
             state.input_ids = torch.cat([state.input_ids, input_id], dim=-1)
             state.new_token += 1
 

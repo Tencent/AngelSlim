@@ -105,15 +105,11 @@ class BenchmarkEngine:
 
         # Setup result file paths
         model_id_temp = f"{self.config.model_id}-temperature-{self.config.temperature}"
-        self.eagle_file = os.path.join(
-            self.config.output_dir, f"{model_id_temp}-eagle.jsonl"
-        )
+        self.eagle_file = os.path.join(self.config.output_dir, f"{model_id_temp}-eagle.jsonl")
         self.baseline_file = os.path.join(
             self.config.output_dir, f"{model_id_temp}-baseline.jsonl"
         )
-        self.analysis_file = os.path.join(
-            self.config.output_dir, f"{model_id_temp}-analysis.json"
-        )
+        self.analysis_file = os.path.join(self.config.output_dir, f"{model_id_temp}-analysis.json")
 
     def run_benchmark(self, mode: BenchmarkMode = BenchmarkMode.BOTH) -> Dict[str, Any]:
         """
@@ -166,9 +162,7 @@ class BenchmarkEngine:
 
         use_ray = self.config.num_gpus_total // self.config.num_gpus_per_model > 1
         get_answers_func = (
-            ray.remote(num_gpus=self.config.num_gpus_per_model)(
-                get_eagle_answers
-            ).remote
+            ray.remote(num_gpus=self.config.num_gpus_per_model)(get_eagle_answers).remote
             if use_ray
             else get_eagle_answers
         )
@@ -206,9 +200,7 @@ class BenchmarkEngine:
 
         use_ray = self.config.num_gpus_total // self.config.num_gpus_per_model > 1
         get_answers_func = (
-            ray.remote(num_gpus=self.config.num_gpus_per_model)(
-                get_baseline_answers
-            ).remote
+            ray.remote(num_gpus=self.config.num_gpus_per_model)(get_baseline_answers).remote
             if use_ray
             else get_baseline_answers
         )
@@ -240,9 +232,7 @@ class BenchmarkEngine:
 
         # Calculate acceptance length from Eagle results
         if os.path.exists(self.eagle_file):
-            metrics["acceptance_length"] = self._calculate_acceptance_length(
-                self.eagle_file
-            )
+            metrics["acceptance_length"] = self._calculate_acceptance_length(self.eagle_file)
 
         # Calculate speedup ratio if both files exist
         if os.path.exists(self.eagle_file) and os.path.exists(self.baseline_file):
@@ -361,9 +351,7 @@ class BenchmarkEngine:
         """Get question file path"""
         current_file = os.path.abspath(__file__)
         project_root = current_file.split("/AngelSlim/")[0] + "/AngelSlim"
-        return os.path.join(
-            project_root, "dataset", self.config.bench_name, "question.jsonl"
-        )
+        return os.path.join(project_root, "dataset", self.config.bench_name, "question.jsonl")
 
     def _reorg_answer_file(self, answer_file: str):
         """Sort answers by question id and remove duplicates"""
@@ -388,14 +376,11 @@ class BenchmarkEngine:
             return "No benchmark results available."
 
         summary = [
-            "=== Speculative Decoding "
-            f"{self.config.bench_name.upper()} Benchmark Results ===\n"
+            "=== Speculative Decoding " f"{self.config.bench_name.upper()} Benchmark Results ===\n"
         ]
 
         if "acceptance_length" in self.results:
-            summary.append(
-                f"Average Acceptance Length: {self.results['acceptance_length']:.2f}"
-            )
+            summary.append(f"Average Acceptance Length: {self.results['acceptance_length']:.2f}")
 
         if "speedup_ratio" in self.results:
             summary.append(f"Speedup Ratio: {self.results['speedup_ratio']:.2f}x")
@@ -426,9 +411,7 @@ class TTSBenchmarkEngine(BenchmarkEngine):
 
         use_ray = self.config.num_gpus_total // self.config.num_gpus_per_model > 1
         get_answers_func = (
-            ray.remote(num_gpus=self.config.num_gpus_per_model)(
-                get_tts_eagle_answers
-            ).remote
+            ray.remote(num_gpus=self.config.num_gpus_per_model)(get_tts_eagle_answers).remote
             if use_ray
             else get_tts_eagle_answers
         )
@@ -469,9 +452,7 @@ class TTSBenchmarkEngine(BenchmarkEngine):
 
         use_ray = self.config.num_gpus_total // self.config.num_gpus_per_model > 1
         get_answers_func = (
-            ray.remote(num_gpus=self.config.num_gpus_per_model)(
-                get_tts_baseline_answers
-            ).remote
+            ray.remote(num_gpus=self.config.num_gpus_per_model)(get_tts_baseline_answers).remote
             if use_ray
             else get_tts_baseline_answers
         )
@@ -506,9 +487,7 @@ class TTSBenchmarkEngine(BenchmarkEngine):
 
         # Calculate acceptance length from Eagle results
         if os.path.exists(self.eagle_file):
-            metrics["acceptance_length"] = self._calculate_acceptance_length(
-                self.eagle_file
-            )
+            metrics["acceptance_length"] = self._calculate_acceptance_length(self.eagle_file)
 
         return metrics
 

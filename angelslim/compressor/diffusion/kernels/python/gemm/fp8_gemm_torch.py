@@ -67,7 +67,6 @@ def fp8_gemm_torch_block(
     # Dequantize A: expand scales to match tensor dimensions
     # a_s shape is typically [M, K//block_size]
     a_s_2d = a_s.view(M, -1)  # [M, num_k_blocks]
-    num_k_blocks = a_s_2d.shape[1]
 
     # Dequantize by expanding scales
     a_dq = _dequantize_per_group(a_2d, a_s_2d, block_size, K)
@@ -121,9 +120,7 @@ def _dequantize_per_group(
     elif s_expanded.shape[1] < K:
         # Pad with last scale value
         pad_size = K - s_expanded.shape[1]
-        s_expanded = torch.nn.functional.pad(
-            s_expanded, (0, pad_size), mode="replicate"
-        )
+        s_expanded = torch.nn.functional.pad(s_expanded, (0, pad_size), mode="replicate")
 
     return x_float * s_expanded
 
@@ -146,7 +143,6 @@ def _dequantize_blockwise_2d(
     """
     N, K = x.shape
     n_blocks, k_blocks = s.shape
-    device = x.device
 
     x_float = x.to(torch.float32)
     y = torch.empty_like(x_float)

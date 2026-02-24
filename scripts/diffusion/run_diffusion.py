@@ -55,10 +55,7 @@ def parse_args() -> argparse.Namespace:
         type=str,
         nargs="*",
         default=None,
-        help=(
-            "Exclude layers whose names match these patterns "
-            "(supports substring or regex)"
-        ),
+        help=("Exclude layers whose names match these patterns " "(supports substring or regex)"),
     )
     parser.add_argument(
         "--fp8-model-save-path",
@@ -66,9 +63,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="If set, exports the quantized model and fp8_scales.safetensors",
     )
-    parser.add_argument(
-        "--prompt", type=str, default="A cat holding a sign that says hello world"
-    )
+    parser.add_argument("--prompt", type=str, default="A cat holding a sign that says hello world")
     parser.add_argument("--height", type=int, default=1024)
     parser.add_argument("--width", type=int, default=1024)
     parser.add_argument("--steps", type=int, default=4)
@@ -123,9 +118,7 @@ def main():
 
     # Export quantized model if save path is specified
     if args.fp8_model_save_path is not None:
-        quantizer.export_quantized_weight(
-            pipe.transformer, save_path=args.fp8_model_save_path
-        )
+        quantizer.export_quantized_weight(pipe.transformer, save_path=args.fp8_model_save_path)
         return
 
     # Run inference
@@ -148,14 +141,10 @@ def main():
 
     # Generate output filename based on model name and parameters
     model_name_clean = (
-        args.model_name_or_path.replace("/", "-")
-        if args.model_name_or_path
-        else "diffusion"
+        args.model_name_or_path.replace("/", "-") if args.model_name_or_path else "diffusion"
     )
     quant_type_clean = args.quant_type.replace("/", "-")
-    out_name = (
-        f"{model_name_clean}_{quant_type_clean}_" f"{args.height}x{args.width}.png"
-    )
+    out_name = f"{model_name_clean}_{quant_type_clean}_" f"{args.height}x{args.width}.png"
     image.save(out_name)
 
 

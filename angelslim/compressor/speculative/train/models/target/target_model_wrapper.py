@@ -150,9 +150,7 @@ class BaseBackend(ABC):
         # Offset by 1 to skip embedding layer
         embed_offset = 1
 
-        selected_hiddens = [
-            hidden_states[layer_id + embed_offset] for layer_id in aux_layer_ids
-        ]
+        selected_hiddens = [hidden_states[layer_id + embed_offset] for layer_id in aux_layer_ids]
 
         return torch.cat(selected_hiddens, dim=-1)
 
@@ -177,16 +175,12 @@ class TransformersBackend(BaseBackend):
         model_kwargs = self._prepare_model_kwargs(device)
 
         # Load and configure model
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_path, **model_kwargs
-        )
+        self.model = AutoModelForCausalLM.from_pretrained(self.model_path, **model_kwargs)
         self._freeze_model_parameters()
         self.model.eval()
 
         # Load tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            self.model_path, trust_remote_code=True
-        )
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, trust_remote_code=True)
 
     def _prepare_model_kwargs(self, device: str) -> dict:
         """
@@ -238,9 +232,7 @@ class TransformersBackend(BaseBackend):
 
         # Extract auxiliary hidden states
         aux_layer_ids = kwargs.get("aux_hidden_states_layer_ids", None)
-        hidden_states = self._extract_auxiliary_hidden_states(
-            outputs.hidden_states, aux_layer_ids
-        )
+        hidden_states = self._extract_auxiliary_hidden_states(outputs.hidden_states, aux_layer_ids)
 
         # Return hidden states and logits on the same device as input
         return hidden_states, outputs.logits.to(input_ids.device)
@@ -293,10 +285,7 @@ class VLMTransformersBackend(BaseBackend):
     SUPPORT_MODEL_TYPE = ["hunyuan_vl", "qwen3_vl"]
 
     def load_model(self):
-        if (
-            self.target_model_type is None
-            or self.target_model_type not in self.SUPPORT_MODEL_TYPE
-        ):
+        if self.target_model_type is None or self.target_model_type not in self.SUPPORT_MODEL_TYPE:
             raise ValueError(f"{self.target_model_type} is not supported now!")
 
         if self.target_model_type == "hunyuan_vl":
@@ -314,9 +303,7 @@ class VLMTransformersBackend(BaseBackend):
             self.model.eval()
 
             # Load processor
-            self.tokenizer = AutoProcessor.from_pretrained(
-                self.model_path, trust_remote_code=True
-            )
+            self.tokenizer = AutoProcessor.from_pretrained(self.model_path, trust_remote_code=True)
         elif self.target_model_type == "qwen3_vl":
             from transformers import AutoModelForImageTextToText, AutoProcessor
 
@@ -382,17 +369,13 @@ class VLMTransformersBackend(BaseBackend):
 
         def hook(module, args, kwargs):
             if "inputs_embeds" in kwargs and kwargs["inputs_embeds"] is not None:
-                inputs_embeds_list.append(
-                    kwargs["inputs_embeds"].clone().detach().cpu()
-                )
+                inputs_embeds_list.append(kwargs["inputs_embeds"].clone().detach().cpu())
             if "position_ids" in kwargs and kwargs["position_ids"] is not None:
                 position_ids_list.append(kwargs["position_ids"].clone().detach().cpu())
             return args, kwargs
 
         if self.target_model_type == "qwen3_vl":
-            handle = self.model.language_model.register_forward_pre_hook(
-                hook, with_kwargs=True
-            )
+            handle = self.model.language_model.register_forward_pre_hook(hook, with_kwargs=True)
         elif self.target_model_type == "hunyuan_vl":
             handle = self.model.model.register_forward_pre_hook(hook, with_kwargs=True)
         else:
@@ -414,26 +397,18 @@ class VLMTransformersBackend(BaseBackend):
             )
 
         handle.remove()
-        inputs_embeds = (
-            inputs_embeds_list[0].to(input_ids.device) if inputs_embeds_list else None
-        )
+        inputs_embeds = inputs_embeds_list[0].to(input_ids.device) if inputs_embeds_list else None
 
         if self.target_model_type == "hunyuan_vl":
             position_ids = (
-                position_ids_list[0][:, 0, :].to(input_ids.device)
-                if position_ids_list
-                else None
+                position_ids_list[0][:, 0, :].to(input_ids.device) if position_ids_list else None
             )
         else:
-            position_ids = (
-                position_ids_list[0].to(input_ids.device) if position_ids_list else None
-            )
+            position_ids = position_ids_list[0].to(input_ids.device) if position_ids_list else None
 
         # Extract auxiliary hidden states
         aux_layer_ids = kwargs.get("aux_hidden_states_layer_ids", None)
-        hidden_states = self._extract_auxiliary_hidden_states(
-            outputs.hidden_states, aux_layer_ids
-        )
+        hidden_states = self._extract_auxiliary_hidden_states(outputs.hidden_states, aux_layer_ids)
 
         # Return hidden states and logits on the same device as input
         return (
@@ -464,17 +439,13 @@ class VLMTransformersBackend(BaseBackend):
 
         def hook(module, args, kwargs):
             if "inputs_embeds" in kwargs and kwargs["inputs_embeds"] is not None:
-                inputs_embeds_list.append(
-                    kwargs["inputs_embeds"].clone().detach().cpu()
-                )
+                inputs_embeds_list.append(kwargs["inputs_embeds"].clone().detach().cpu())
             if "position_ids" in kwargs and kwargs["position_ids"] is not None:
                 position_ids_list.append(kwargs["position_ids"].clone().detach().cpu())
             return args, kwargs
 
         if self.target_model_type == "qwen3_vl":
-            handle = self.model.language_model.register_forward_pre_hook(
-                hook, with_kwargs=True
-            )
+            handle = self.model.language_model.register_forward_pre_hook(hook, with_kwargs=True)
         elif self.target_model_type == "hunyuan_vl":
             handle = self.model.model.register_forward_pre_hook(hook, with_kwargs=True)
         else:
@@ -497,19 +468,13 @@ class VLMTransformersBackend(BaseBackend):
             )
 
         handle.remove()
-        inputs_embeds = (
-            inputs_embeds_list[0].to(input_ids.device) if inputs_embeds_list else None
-        )
+        inputs_embeds = inputs_embeds_list[0].to(input_ids.device) if inputs_embeds_list else None
         if self.target_model_type == "hunyuan_vl":
             position_ids = (
-                position_ids_list[0][:, 0, :].to(input_ids.device)
-                if position_ids_list
-                else None
+                position_ids_list[0][:, 0, :].to(input_ids.device) if position_ids_list else None
             )
         else:
-            position_ids = (
-                position_ids_list[0].to(input_ids.device) if position_ids_list else None
-            )
+            position_ids = position_ids_list[0].to(input_ids.device) if position_ids_list else None
         # Extract auxiliary hidden states
         aux_layer_ids = kwargs.get("aux_hidden_states_layer_ids", None)
         aux_hidden_states = self._extract_auxiliary_hidden_states(
@@ -537,10 +502,7 @@ class AudioTransformersBackend(BaseBackend):
     SUPPORT_MODEL_TYPE = ["qwen2_audio"]
 
     def load_model(self):
-        if (
-            self.target_model_type is None
-            or self.target_model_type not in self.SUPPORT_MODEL_TYPE
-        ):
+        if self.target_model_type is None or self.target_model_type not in self.SUPPORT_MODEL_TYPE:
             raise ValueError(f"{self.target_model_type} is not supported now!")
 
         if self.target_model_type == "qwen2_audio":
@@ -609,16 +571,12 @@ class AudioTransformersBackend(BaseBackend):
 
         def hook(module, args, kwargs):
             if "inputs_embeds" in kwargs and kwargs["inputs_embeds"] is not None:
-                inputs_embeds_list.append(
-                    kwargs["inputs_embeds"].clone().detach().cpu()
-                )
+                inputs_embeds_list.append(kwargs["inputs_embeds"].clone().detach().cpu())
             if "position_ids" in kwargs and kwargs["position_ids"] is not None:
                 position_ids_list.append(kwargs["position_ids"].clone().detach().cpu())
             return args, kwargs
 
-        handle = self.model.language_model.register_forward_pre_hook(
-            hook, with_kwargs=True
-        )
+        handle = self.model.language_model.register_forward_pre_hook(hook, with_kwargs=True)
         input_features = kwargs.get("input_features", None)
         feature_attention_mask = kwargs.get("feature_attention_mask", None)
         with torch.no_grad():
@@ -633,18 +591,12 @@ class AudioTransformersBackend(BaseBackend):
 
         handle.remove()
 
-        inputs_embeds = (
-            inputs_embeds_list[0].to(input_ids.device) if inputs_embeds_list else None
-        )
-        position_ids = (
-            position_ids_list[0].to(input_ids.device) if position_ids_list else None
-        )
+        inputs_embeds = inputs_embeds_list[0].to(input_ids.device) if inputs_embeds_list else None
+        position_ids = position_ids_list[0].to(input_ids.device) if position_ids_list else None
 
         # Extract auxiliary hidden states
         aux_layer_ids = kwargs.get("aux_hidden_states_layer_ids", None)
-        hidden_states = self._extract_auxiliary_hidden_states(
-            outputs.hidden_states, aux_layer_ids
-        )
+        hidden_states = self._extract_auxiliary_hidden_states(outputs.hidden_states, aux_layer_ids)
 
         # Return hidden states and logits on the same device as input
         return (
@@ -675,16 +627,12 @@ class AudioTransformersBackend(BaseBackend):
 
         def hook(module, args, kwargs):
             if "inputs_embeds" in kwargs and kwargs["inputs_embeds"] is not None:
-                inputs_embeds_list.append(
-                    kwargs["inputs_embeds"].clone().detach().cpu()
-                )
+                inputs_embeds_list.append(kwargs["inputs_embeds"].clone().detach().cpu())
             if "position_ids" in kwargs and kwargs["position_ids"] is not None:
                 position_ids_list.append(kwargs["position_ids"].clone().detach().cpu())
             return args, kwargs
 
-        handle = self.model.language_model.register_forward_pre_hook(
-            hook, with_kwargs=True
-        )
+        handle = self.model.language_model.register_forward_pre_hook(hook, with_kwargs=True)
         input_features = kwargs.get("input_features", None)
         feature_attention_mask = kwargs.get("feature_attention_mask", None)
         with torch.no_grad():
@@ -698,12 +646,8 @@ class AudioTransformersBackend(BaseBackend):
             )
 
         handle.remove()
-        inputs_embeds = (
-            inputs_embeds_list[0].to(input_ids.device) if inputs_embeds_list else None
-        )
-        position_ids = (
-            position_ids_list[0].to(input_ids.device) if position_ids_list else None
-        )
+        inputs_embeds = inputs_embeds_list[0].to(input_ids.device) if inputs_embeds_list else None
+        position_ids = position_ids_list[0].to(input_ids.device) if position_ids_list else None
 
         # Extract auxiliary hidden states
         aux_layer_ids = kwargs.get("aux_hidden_states_layer_ids", None)
@@ -761,9 +705,7 @@ class TTSTransformersBackend(TransformersBackend):
             speech_token_size=6561,
         ).to(self.device)
         self.model.load_state_dict(
-            torch.load(
-                os.path.join(self.model_path, "llm.pt"), map_location=self.device
-            ),
+            torch.load(os.path.join(self.model_path, "llm.pt"), map_location=self.device),
             strict=True,
         )
 
@@ -924,13 +866,9 @@ class TargetModelWrapper:
             ValueError: If tokenizer is not initialized
         """
         if not hasattr(self.backend, "tokenizer"):
-            raise AttributeError(
-                f"Backend '{self.backend_name}' does not support tokenizers"
-            )
+            raise AttributeError(f"Backend '{self.backend_name}' does not support tokenizers")
         if self.backend.tokenizer is None:
-            raise ValueError(
-                f"Tokenizer not initialized for backend '{self.backend_name}'"
-            )
+            raise ValueError(f"Tokenizer not initialized for backend '{self.backend_name}'")
         return self.backend.tokenizer
 
 

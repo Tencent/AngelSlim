@@ -221,61 +221,9 @@ Alternatively, you can clone the repository and install from source in editable 
 cd AngelSlim && python setup.py install
 ```
 
-For more detailed installation instructions, please refer to the [Installation Documentation](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/installation.html).
+For more detailed installation instructions and platform-specific guidance, please refer to the [Installation Documentation](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/installation.html).
 
-#### Windows Installation (with FP8 Triton Support)
 
-AngelSlim supports Windows with FP8 Triton kernels. Follow these steps to build from source:
-
-```batch
-:: Clone the repository
-git clone https://github.com/Tencent/AngelSlim.git
-cd AngelSlim
-
-:: Create and activate virtual environment (Python 3.10 recommended)
-uv venv --python 3.10
-.venv\Scripts\activate
-
-:: Install base dependencies
-uv pip install packaging wheel setuptools ninja numpy==1.26.4 pip build psutil
-
-:: Install PyTorch with CUDA 12.8 support
-uv pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cu128
-
-:: Install Triton for Windows
-uv pip install -U triton-windows
-
-:: Configure Visual Studio build environment
-set INCLUDE=
-set LIB=
-set LIBPATH=
-call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" x64
-
-:: Configure CUDA environment
-set CUDA_HOME=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.8
-set PATH=%CUDA_HOME%\bin;%PATH%
-set DISTUTILS_USE_SDK=1
-
-:: Set target CUDA architectures (adjust based on your GPU)
-set TORCH_CUDA_ARCH_LIST=8.0;8.6;8.9;9.0
-
-:: Build the wheel
-set DG_USE_LOCAL_VERSION=0
-python setup.py bdist_wheel
-
-:: Verify FP8 Triton kernels are working
-python -c "import torch; from angelslim.compressor.diffusion.kernels.python.quantizers import fp8_per_block_quant_triton; from angelslim.compressor.diffusion.kernels.python.gemm import fp8_gemm_triton_block; a,b=torch.randn(128,256,device='cuda'),torch.randn(512,256,device='cuda'); aq,a_s=fp8_per_block_quant_triton(a); bq,b_s=fp8_per_block_quant_triton(b); c=fp8_gemm_triton_block(aq,a_s,bq,b_s); print(f'FP8 GEMM OK: {c.shape}, {c.dtype}')"
-```
-
-**Requirements:**
-- Windows 10/11 with NVIDIA GPU (Ampere or newer recommended)
-- Visual Studio 2022 with C++ build tools
-- CUDA Toolkit 12.8
-- Python 3.10
-
-**Environment Variables:**
-- `ANGELSLIM_BACKEND`: Force backend selection (`triton` or `pytorch`)
-- `ANGELSLIM_TORCH_COMPILE`: Enable/disable torch.compile (`0` or `1`)
 
 ### 2. Quick Start
 

@@ -45,9 +45,7 @@ def quant_analyse(args):
 
 if __name__ == "__main__":
 
-    global_parser = argparse.ArgumentParser(
-        description="Quantization analyse", add_help=True
-    )
+    global_parser = argparse.ArgumentParser(description="Quantization analyse", add_help=True)
     global_parser.add_argument(
         "--analyse-type",
         type=str,
@@ -57,9 +55,7 @@ if __name__ == "__main__":
     )
     global_args, remaining_args = global_parser.parse_known_args()
 
-    parser = argparse.ArgumentParser(
-        description=f"branch {global_args.analyse_type} args"
-    )
+    parser = argparse.ArgumentParser(description=f"branch {global_args.analyse_type} args")
     if global_args.analyse_type == "act":
         parser.add_argument("--model-path", type=str, help="Fp8 path", required=True)
         parser.add_argument("--save-path", type=str, default="./Quant_Scale_SavePath")

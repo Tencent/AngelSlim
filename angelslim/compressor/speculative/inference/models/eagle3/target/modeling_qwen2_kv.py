@@ -129,12 +129,8 @@ def eager_attention_forward(
         causal_mask = attention_mask[:, :, :, : key_states.shape[-2]]
         attn_weights = attn_weights + causal_mask
 
-    attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(
-        query.dtype
-    )
-    attn_weights = nn.functional.dropout(
-        attn_weights, p=dropout, training=module.training
-    )
+    attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query.dtype)
+    attn_weights = nn.functional.dropout(attn_weights, p=dropout, training=module.training)
     attn_output = torch.matmul(attn_weights, value_states)
     attn_output = attn_output.transpose(1, 2).contiguous()
 
@@ -151,9 +147,7 @@ class Qwen2Attention(nn.Module):
         self.head_dim = getattr(
             config, "head_dim", config.hidden_size // config.num_attention_heads
         )
-        self.num_key_value_groups = (
-            config.num_attention_heads // config.num_key_value_heads
-        )
+        self.num_key_value_groups = config.num_attention_heads // config.num_key_value_heads
         self.scaling = self.head_dim**-0.5
         self.attention_dropout = config.attention_dropout
         self.is_causal = True
@@ -187,9 +181,7 @@ class Qwen2Attention(nn.Module):
         value_states = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
 
         cos, sin = position_embeddings
-        query_states, key_states = apply_rotary_pos_emb(
-            query_states, key_states, cos, sin
-        )
+        query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
 
         # [MODIFIED]
         if past_key_value is not None:
@@ -216,9 +208,7 @@ class Qwen2Attention(nn.Module):
                     'eager attention. This warning can be removed using the argument `attn_implementation="eager"` when loading the model.'
                 )
             else:
-                attention_interface = ALL_ATTENTION_FUNCTIONS[
-                    self.config._attn_implementation
-                ]
+                attention_interface = ALL_ATTENTION_FUNCTIONS[self.config._attn_implementation]
 
         attn_output, attn_weights = attention_interface(
             self,
@@ -264,9 +254,7 @@ class Qwen2DecoderLayer(nn.Module):
         self.self_attn = Qwen2Attention(config=config, layer_idx=layer_idx)
         self.mlp = Qwen2MLP(config)
         self.input_layernorm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_attention_layernorm = Qwen2RMSNorm(
-            config.hidden_size, eps=config.rms_norm_eps
-        )
+        self.post_attention_layernorm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         if config.sliding_window and config._attn_implementation != "flash_attention_2":
             logger.warning_once(
                 f"Sliding Window Attention is enabled but not implemented for `{config._attn_implementation}`; "
@@ -286,9 +274,7 @@ class Qwen2DecoderLayer(nn.Module):
             Tuple[torch.Tensor, torch.Tensor]
         ] = None,  # necessary, but kept here for BC
         **kwargs: Unpack[FlashAttentionKwargs],
-    ) -> Tuple[
-        torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]
-    ]:
+    ) -> Tuple[torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]:
         residual = hidden_states
 
         hidden_states = self.input_layernorm(hidden_states)
@@ -325,9 +311,7 @@ class Qwen2RotaryEmbedding(nn.Module):
         super().__init__()
         # BC: "rope_type" was originally "type"
         if hasattr(config, "rope_scaling") and config.rope_scaling is not None:
-            self.rope_type = config.rope_scaling.get(
-                "rope_type", config.rope_scaling.get("type")
-            )
+            self.rope_type = config.rope_scaling.get("rope_type", config.rope_scaling.get("type"))
         else:
             self.rope_type = "default"
         self.max_seq_len_cached = config.max_position_embeddings
@@ -344,22 +328,15 @@ class Qwen2RotaryEmbedding(nn.Module):
     @dynamic_rope_update  # power user: used with advanced RoPE types (e.g. dynamic rope)
     def forward(self, x, position_ids):
         inv_freq_expanded = (
-            self.inv_freq[None, :, None]
-            .float()
-            .expand(position_ids.shape[0], -1, 1)
-            .to(x.device)
+            self.inv_freq[None, :, None].float().expand(position_ids.shape[0], -1, 1).to(x.device)
         )
         position_ids_expanded = position_ids[:, None, :].float()
 
         device_type = (
-            x.device.type
-            if isinstance(x.device.type, str) and x.device.type != "mps"
-            else "cpu"
+            x.device.type if isinstance(x.device.type, str) and x.device.type != "mps" else "cpu"
         )
         with torch.autocast(device_type=device_type, enabled=False):  # Force float32
-            freqs = (
-                inv_freq_expanded.float() @ position_ids_expanded.float()
-            ).transpose(1, 2)
+            freqs = (inv_freq_expanded.float() @ position_ids_expanded.float()).transpose(1, 2)
             emb = torch.cat((freqs, freqs), dim=-1)
             cos = emb.cos() * self.attention_scaling
             sin = emb.sin() * self.attention_scaling
@@ -498,14 +475,9 @@ class Qwen2Model(Qwen2PreTrainedModel):
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
 
-        self.embed_tokens = nn.Embedding(
-            config.vocab_size, config.hidden_size, self.padding_idx
-        )
+        self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
         self.layers = nn.ModuleList(
-            [
-                Qwen2DecoderLayer(config, layer_idx)
-                for layer_idx in range(config.num_hidden_layers)
-            ]
+            [Qwen2DecoderLayer(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
         )
         self.norm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.rotary_emb = Qwen2RotaryEmbedding(config=config)
@@ -536,9 +508,7 @@ class Qwen2Model(Qwen2PreTrainedModel):
         **flash_attn_kwargs: Unpack[FlashAttentionKwargs],
     ) -> BaseModelOutputWithPast:
         output_attentions = (
-            output_attentions
-            if output_attentions is not None
-            else self.config.output_attentions
+            output_attentions if output_attentions is not None else self.config.output_attentions
         )
         output_hidden_states = (
             output_hidden_states
@@ -548,9 +518,7 @@ class Qwen2Model(Qwen2PreTrainedModel):
         use_cache = use_cache if use_cache is not None else self.config.use_cache
 
         if (input_ids is None) ^ (inputs_embeds is not None):
-            raise ValueError(
-                "You must specify exactly one of input_ids or inputs_embeds"
-            )
+            raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
 
         if self.gradient_checkpointing and self.training and use_cache:
             logger.warning_once(
@@ -564,9 +532,7 @@ class Qwen2Model(Qwen2PreTrainedModel):
         # [MODIFIED]
         if cache_position is None:
             past_seen_tokens = (
-                past_key_values[0][0].current_length.item()
-                if past_key_values is not None
-                else 0
+                past_key_values[0][0].current_length.item() if past_key_values is not None else 0
             )
             cache_position = torch.arange(
                 past_seen_tokens,
@@ -594,16 +560,10 @@ class Qwen2Model(Qwen2PreTrainedModel):
         all_hidden_states = () if output_hidden_states else None
         all_self_attns = () if output_attentions else None
 
-        for idx, decoder_layer in enumerate(
-            self.layers[: self.config.num_hidden_layers]
-        ):
+        for idx, decoder_layer in enumerate(self.layers[: self.config.num_hidden_layers]):
             if output_hidden_states:
                 # [MODIFIED]
-                if (
-                    idx == len(self.layers) - 3
-                    or idx == len(self.layers) // 2
-                    or idx == 2
-                ):
+                if idx == len(self.layers) - 3 or idx == len(self.layers) // 2 or idx == 2:
                     all_hidden_states += (hidden_states,)
 
             if self.gradient_checkpointing and self.training:
@@ -659,9 +619,7 @@ class Qwen2Model(Qwen2PreTrainedModel):
     ):
         if self.config._attn_implementation == "flash_attention_2":
             if attention_mask is not None and past_key_values is not None:
-                is_padding_right = (
-                    attention_mask[:, -1].sum().item() != input_tensor.size()[0]
-                )
+                is_padding_right = attention_mask[:, -1].sum().item() != input_tensor.size()[0]
                 if is_padding_right:
                     raise ValueError(
                         "You are attempting to perform batched generation with padding_side='right'"
@@ -677,9 +635,7 @@ class Qwen2Model(Qwen2PreTrainedModel):
         # to infer the attention mask.
         # past_seen_tokens = past_key_values.get_seq_length() if past_key_values is not None else 0
         past_seen_tokens = (
-            past_key_values[0][0].current_length.item()
-            if past_key_values is not None
-            else 0
+            past_key_values[0][0].current_length.item() if past_key_values is not None else 0
         )
 
         using_static_cache = isinstance(past_key_values, StaticCache)
@@ -736,9 +692,7 @@ class Qwen2Model(Qwen2PreTrainedModel):
             # Attend to all tokens in fully masked rows in the causal_mask, for example the relevant first rows when
             # using left padding. This is required by F.scaled_dot_product_attention memory-efficient attention path.
             # Details: https://github.com/pytorch/pytorch/issues/110213
-            causal_mask = AttentionMaskConverter._unmask_unattended(
-                causal_mask, min_dtype
-            )
+            causal_mask = AttentionMaskConverter._unmask_unattended(causal_mask, min_dtype)
 
         return causal_mask
 
@@ -801,14 +755,12 @@ class Qwen2Model(Qwen2PreTrainedModel):
                         not isinstance(past_key_values, SlidingWindowCache)
                         or sequence_length > target_length
                     ):
-                        sliding_attend_mask = torch.arange(
-                            target_length, device=device
-                        ) <= (cache_position.reshape(-1, 1) - config.sliding_window)
+                        sliding_attend_mask = torch.arange(target_length, device=device) <= (
+                            cache_position.reshape(-1, 1) - config.sliding_window
+                        )
                         diagonal_attend_mask.bitwise_or_(sliding_attend_mask)
                 causal_mask *= diagonal_attend_mask
-                causal_mask = causal_mask[None, None, :, :].expand(
-                    batch_size, 1, -1, -1
-                )
+                causal_mask = causal_mask[None, None, :, :].expand(batch_size, 1, -1, -1)
                 if attention_mask is not None:
                     causal_mask = (
                         causal_mask.clone()
@@ -828,16 +780,12 @@ class Qwen2Model(Qwen2PreTrainedModel):
                 causal_mask = torch.zeros(
                     (sequence_length, target_length), dtype=dtype, device=device
                 )
-                causal_mask = causal_mask[None, None, :, :].expand(
-                    batch_size, 1, -1, -1
-                )
+                causal_mask = causal_mask[None, None, :, :].expand(batch_size, 1, -1, -1)
 
                 if hasattr(self, "tree_mask") and self.tree_mask is not None:
                     tree_mask = self.tree_mask
                     tree_len = tree_mask.size(-1)
-                    causal_mask[:, :, -tree_len:, -tree_len:][
-                        tree_mask == 0
-                    ] = min_dtype
+                    causal_mask[:, :, -tree_len:, -tree_len:][tree_mask == 0] = min_dtype
         return causal_mask
 
 
@@ -876,9 +824,7 @@ class Qwen2ForCausalLM(Qwen2PreTrainedModel, GenerationMixin):
     @can_return_tuple
     @deprecate_kwarg("num_logits_to_keep", version="4.50", new_name="logits_to_keep")
     @add_start_docstrings_to_model_forward(QWEN2_INPUTS_DOCSTRING)
-    @replace_return_docstrings(
-        output_type=CausalLMOutputWithPast, config_class=_CONFIG_FOR_DOC
-    )
+    @replace_return_docstrings(output_type=CausalLMOutputWithPast, config_class=_CONFIG_FOR_DOC)
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
@@ -926,9 +872,7 @@ class Qwen2ForCausalLM(Qwen2PreTrainedModel, GenerationMixin):
         "Hey, are you conscious? Can you talk to me?\nI'm not conscious, but I can talk to you."
         ```"""
         output_attentions = (
-            output_attentions
-            if output_attentions is not None
-            else self.config.output_attentions
+            output_attentions if output_attentions is not None else self.config.output_attentions
         )
         output_hidden_states = (
             output_hidden_states
@@ -953,9 +897,7 @@ class Qwen2ForCausalLM(Qwen2PreTrainedModel, GenerationMixin):
         hidden_states = outputs.last_hidden_state
         # Only compute necessary logits, and do not upcast them to float if we are not computing the loss
         slice_indices = (
-            slice(-logits_to_keep, None)
-            if isinstance(logits_to_keep, int)
-            else logits_to_keep
+            slice(-logits_to_keep, None) if isinstance(logits_to_keep, int) else logits_to_keep
         )
         logits = self.lm_head(hidden_states[:, slice_indices, :])
 
@@ -1048,16 +990,12 @@ class Qwen2ForSequenceClassification(Qwen2PreTrainedModel):
             batch_size = inputs_embeds.shape[0]
 
         if self.config.pad_token_id is None and batch_size != 1:
-            raise ValueError(
-                "Cannot handle batch sizes > 1 if no padding token is defined."
-            )
+            raise ValueError("Cannot handle batch sizes > 1 if no padding token is defined.")
         if self.config.pad_token_id is None:
             last_non_pad_token = -1
         elif input_ids is not None:
             # To handle both left- and right- padding, we take the rightmost token that is not equal to pad_token_id
-            non_pad_mask = (input_ids != self.config.pad_token_id).to(
-                logits.device, torch.int32
-            )
+            non_pad_mask = (input_ids != self.config.pad_token_id).to(logits.device, torch.int32)
             token_indices = torch.arange(
                 input_ids.shape[-1], device=logits.device, dtype=torch.int32
             )
@@ -1069,9 +1007,7 @@ class Qwen2ForSequenceClassification(Qwen2PreTrainedModel):
                 "unexpected if using padding tokens in conjunction with `inputs_embeds.`"
             )
 
-        pooled_logits = logits[
-            torch.arange(batch_size, device=logits.device), last_non_pad_token
-        ]
+        pooled_logits = logits[torch.arange(batch_size, device=logits.device), last_non_pad_token]
 
         loss = None
         if labels is not None:

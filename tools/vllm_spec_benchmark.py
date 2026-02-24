@@ -67,14 +67,11 @@ def load_benchmark_dataset(benchmark_name, num_prompts, tokenizer, dataset_base_
 
     # Tokenize prompts
     # add_special_tokens is False to avoid adding bos twice when using chat templates
-    prompt_ids = [
-        tokenizer.encode(prompt, add_special_tokens=False) for prompt in prompts
-    ]
+    prompt_ids = [tokenizer.encode(prompt, add_special_tokens=False) for prompt in prompts]
 
     print(f"Loaded {len(prompt_ids)} prompts from benchmark: {benchmark_name}")
     print(
-        "Average prompt length: "
-        f"{sum(len(p) for p in prompt_ids) / len(prompt_ids):.2f} tokens"
+        "Average prompt length: " f"{sum(len(p) for p in prompt_ids) / len(prompt_ids):.2f} tokens"
     )
 
     return prompt_ids, prompts
@@ -175,9 +172,7 @@ def run_benchmark(args, benchmark_name, llm, tokenizer, sampling_params):
 
     # Load dataset
     current_file_path = os.path.abspath(__file__)
-    dataset_base_dir = os.path.join(
-        os.path.dirname(os.path.dirname(current_file_path)), "dataset"
-    )
+    dataset_base_dir = os.path.join(os.path.dirname(os.path.dirname(current_file_path)), "dataset")
     prompt_ids, _ = load_benchmark_dataset(
         benchmark_name=benchmark_name,
         num_prompts=args.num_prompts,
@@ -208,9 +203,7 @@ def run_benchmark(args, benchmark_name, llm, tokenizer, sampling_params):
         print("Metrics are not supported in the V0 engine.")
         return None
 
-    total_num_output_tokens = sum(
-        len(output.outputs[0].token_ids) for output in outputs
-    )
+    total_num_output_tokens = sum(len(output.outputs[0].token_ids) for output in outputs)
     num_drafts = 0
     num_draft_tokens = 0
     num_accepted_tokens = 0

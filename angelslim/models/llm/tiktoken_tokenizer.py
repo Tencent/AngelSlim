@@ -85,18 +85,14 @@ class TikTokenTokenizer(PreTrainedTokenizer):
                 "<|im_middle|>",
             ]
 
-        special_tokens_mapping = {
-            i: added_tokens_decoder[i].content for i in added_tokens_decoder
-        }
+        special_tokens_mapping = {i: added_tokens_decoder[i].content for i in added_tokens_decoder}
 
         self.vocab_file = vocab_file
         mergeable_ranks = load_tiktoken_bpe(vocab_file)
         num_base_tokens = len(mergeable_ranks)
         self.special_tokens = {
             special_tokens_mapping.get(i, f"<|reserved_token_{i}|>"): i
-            for i in range(
-                num_base_tokens, num_base_tokens + self.num_reserved_special_tokens + 2
-            )
+            for i in range(num_base_tokens, num_base_tokens + self.num_reserved_special_tokens + 2)
         }
 
         self.model = tiktoken.Encoding(
@@ -111,9 +107,7 @@ class TikTokenTokenizer(PreTrainedTokenizer):
         # BOS / EOS token IDs
         self.bos_id: int = self.special_tokens[str(bos_token)]
         self.eos_id: int = self.special_tokens[str(eos_token)]
-        logger.info(
-            f"#words: {self.n_words} - BOS ID: {self.bos_id} - EOS ID: {self.eos_id}"
-        )
+        logger.info(f"#words: {self.n_words} - BOS ID: {self.bos_id} - EOS ID: {self.eos_id}")
 
         self.pad_id: int = self.special_tokens[str(pad_token)]
         self.unk_id: int = self.special_tokens[str(unk_token)]
@@ -127,9 +121,7 @@ class TikTokenTokenizer(PreTrainedTokenizer):
             decoding = "".join(
                 [
                     self.byte_encoder[ord(char)]
-                    for char in self.model.decode_single_token_bytes(i).decode(
-                        "latin-1"
-                    )
+                    for char in self.model.decode_single_token_bytes(i).decode("latin-1")
                 ]
             )
             self.decoder[i] = decoding
@@ -149,9 +141,7 @@ class TikTokenTokenizer(PreTrainedTokenizer):
         )
         self.all_special_ids_set = set(self.all_special_ids)
 
-    def encode(
-        self, text: str, allow_special_tokens: bool = True, **kwargs
-    ) -> List[int]:
+    def encode(self, text: str, allow_special_tokens: bool = True, **kwargs) -> List[int]:
         """
         Encodes a string into a list of token IDs.
 
@@ -291,27 +281,22 @@ class TikTokenTokenizer(PreTrainedTokenizer):
 
     def convert_tokens_to_string(self, tokens: List[str]) -> str:
         text = "".join(tokens)
-        text = bytearray([self.byte_decoder[c] for c in text]).decode(
-            "utf-8", "replace"
-        )
+        text = bytearray([self.byte_decoder[c] for c in text]).decode("utf-8", "replace")
         return text
 
     def save_vocabulary(
         self, save_directory: str, filename_prefix: Optional[str] = None
     ) -> Tuple[str]:
         if not os.path.isdir(save_directory):
-            raise ValueError(
-                f"vocabulary path ({save_directory}) should be a directory"
-            )
+            raise ValueError(f"vocabulary path ({save_directory}) should be a directory")
         out_vocab_file = os.path.join(
             save_directory,
-            (filename_prefix + "-" if filename_prefix else "")
-            + VOCAB_FILES_NAMES["vocab_file"],
+            (filename_prefix + "-" if filename_prefix else "") + VOCAB_FILES_NAMES["vocab_file"],
         )
 
-        if os.path.abspath(self.vocab_file) != os.path.abspath(
-            out_vocab_file
-        ) and os.path.isfile(self.vocab_file):
+        if os.path.abspath(self.vocab_file) != os.path.abspath(out_vocab_file) and os.path.isfile(
+            self.vocab_file
+        ):
             copyfile(self.vocab_file, out_vocab_file)
 
         return (out_vocab_file,)

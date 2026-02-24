@@ -223,7 +223,7 @@ pip install angelslim
 cd AngelSlim && python setup.py install
 ```
 
-更详细的安装说明可参考[安装文档](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/installation.html)。
+更详细的安装说明以及不同平台的安装指引，可参考[安装文档](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/installation.html)。
 
 ### 2、快速开始
 

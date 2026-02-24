@@ -91,9 +91,7 @@ class TargetHead(nn.Module):
             if hasattr(config, sub_config_name):
                 config = getattr(config, sub_config_name)
             else:
-                raise ValueError(
-                    f"Config {config} has no sub-config named {sub_config_name}"
-                )
+                raise ValueError(f"Config {config} has no sub-config named {sub_config_name}")
 
         # Get model dimensions
         if config.model_type in ["qwen3_vl", "qwen3_vl_moe"]:
@@ -110,9 +108,7 @@ class TargetHead(nn.Module):
         try:
             # Read safetensors index to locate lm_head weights
             try:
-                index_path = os.path.join(
-                    model_name_or_path, "model.safetensors.index.json"
-                )
+                index_path = os.path.join(model_name_or_path, "model.safetensors.index.json")
 
                 if not os.path.exists(index_path):
                     raise FileNotFoundError(
@@ -140,8 +136,7 @@ class TargetHead(nn.Module):
 
         except Exception as e:
             raise RuntimeError(
-                f"Failed to load lm_head weights from {model_name_or_path}. "
-                f"Error: {str(e)}"
+                f"Failed to load lm_head weights from {model_name_or_path}. " f"Error: {str(e)}"
             )
 
         # Create TargetHead instance

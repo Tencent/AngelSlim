@@ -142,9 +142,7 @@ class HunyuanVL(BaseLLMModel):
         if dataloader is not None:
             loss_filter = LossFilter(processor=self.processor)
             with torch.no_grad():
-                for batch in tqdm(
-                    dataloader, desc="calibrating...", total=len(dataloader)
-                ):
+                for batch in tqdm(dataloader, desc="calibrating...", total=len(dataloader)):
                     inputs = {k: v.to(device) for k, v in batch.items()}
                     inputs["use_cache"] = False
 
@@ -158,9 +156,7 @@ class HunyuanVL(BaseLLMModel):
                             labels.view(-1),
                             reduction="none",
                         )
-                        attention_mask = (
-                            attention_mask.view(-1).to(logits.device).float()
-                        )
+                        attention_mask = attention_mask.view(-1).to(logits.device).float()
                         loss = loss * attention_mask
                         loss = loss_filter.filter_loss(
                             loss=loss, labels=labels, model_type="HunyuanVL"

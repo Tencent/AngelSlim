@@ -36,9 +36,7 @@ class AbsmaxPertensorObserver(BaseObserver):
         self.step = 0
         self.dtype = None
         self.parent_observer = (
-            kwargs["parent_observer"]
-            if kwargs and "parent_observer" in kwargs
-            else None
+            kwargs["parent_observer"] if kwargs and "parent_observer" in kwargs else None
         )
 
     def forward(self, inputs):
@@ -87,9 +85,7 @@ class AbsmaxPertensorObserver(BaseObserver):
             self._update_min_max(self.parent_observer.min, self.parent_observer.max)
             self.step = self.parent_observer.step
         if self.step == 0:
-            raise ValueError(
-                "AbsmaxPertensorObserver scales must calibrate data first!"
-            )
+            raise ValueError("AbsmaxPertensorObserver scales must calibrate data first!")
         if self._scale is None:
             self.cal_thresholds()
         if self.dtype:
@@ -169,9 +165,7 @@ class AbsmaxPerchannelObserver(BaseObserver):
         self._scale = None
         self._zero_point = None
         self._min = None
-        self._max = (
-            torch.zeros((self._layer.weight.shape[0])) - torch.inf
-        )  # per-outchannel
+        self._max = torch.zeros((self._layer.weight.shape[0])) - torch.inf  # per-outchannel
         self.step = 0
         self.dtype = None
 
@@ -204,9 +198,7 @@ class AbsmaxPerchannelObserver(BaseObserver):
     def scales(self):
         """Return output scales."""
         if self.step == 0:
-            raise ValueError(
-                "AbsmaxPerchannelObserver scales must calibrate data first!"
-            )
+            raise ValueError("AbsmaxPerchannelObserver scales must calibrate data first!")
         if self._scale is None:
             self.cal_thresholds()
         if self.dtype:
@@ -231,9 +223,7 @@ class MoEAbsmaxPertensorObserver(BaseObserver):
         self.step = 0
         self.dtype = None
         self.parent_observer = (
-            kwargs["parent_observer"]
-            if kwargs and "parent_observer" in kwargs
-            else None
+            kwargs["parent_observer"] if kwargs and "parent_observer" in kwargs else None
         )
 
     def forward(self, inputs):
@@ -254,12 +244,8 @@ class MoEAbsmaxPertensorObserver(BaseObserver):
         if inputs.dim() >= 2:
             abs_inputs = torch.abs(inputs)
             batch_size = abs_inputs.shape[0]
-            abs_inputs_flat = abs_inputs.view(
-                batch_size, -1
-            )  # [batch_size, seq_len * hidden_dim]
-            abs_max_val, _ = torch.max(
-                abs_inputs_flat, dim=1, keepdim=True
-            )  # [batch_size, 1]
+            abs_inputs_flat = abs_inputs.view(batch_size, -1)  # [batch_size, seq_len * hidden_dim]
+            abs_max_val, _ = torch.max(abs_inputs_flat, dim=1, keepdim=True)  # [batch_size, 1]
             min_threshold = self._max.to(abs_max_val.device).expand_as(abs_max_val)
             abs_max_val = torch.maximum(abs_max_val, min_threshold)
         else:
@@ -292,9 +278,7 @@ class MoEAbsmaxPertensorObserver(BaseObserver):
             self._update_min_max(self.parent_observer.min, self.parent_observer.max)
             self.step = self.parent_observer.step
         if self.step == 0:
-            raise ValueError(
-                "AbsmaxPertensorObserver scales must calibrate data first!"
-            )
+            raise ValueError("AbsmaxPertensorObserver scales must calibrate data first!")
         if self._scale is None:
             self.cal_thresholds()
         if self.dtype:

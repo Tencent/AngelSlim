@@ -52,12 +52,8 @@ def pil_to_base64(img):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--target_model", type=str, default="Qwen/Qwen3-VL-4B-Instruct")
-    parser.add_argument(
-        "--draft_model", type=str, default=None, help="Path to draft model"
-    )
-    parser.add_argument(
-        "--dataset", type=str, default="lmms-lab/textvqa", help="Dataset to use"
-    )
+    parser.add_argument("--draft_model", type=str, default=None, help="Path to draft model")
+    parser.add_argument("--dataset", type=str, default="lmms-lab/textvqa", help="Dataset to use")
     parser.add_argument(
         "--use_eagle",
         action="store_true",
@@ -76,12 +72,8 @@ def parse_args():
         "--num_spec_tokens", type=int, default=2, help="Number of speculative tokens"
     )
     parser.add_argument("--max_num_seqs", type=int, default=1)
-    parser.add_argument(
-        "--max_model_len", type=int, default=32768, help="Maximum model length"
-    )
-    parser.add_argument(
-        "--temp", type=float, default=0, help="Number of speculative tokens"
-    )
+    parser.add_argument("--max_model_len", type=int, default=32768, help="Maximum model length")
+    parser.add_argument("--temp", type=float, default=0, help="Number of speculative tokens")
     parser.add_argument("--tp", type=int, default=1)
     parser.add_argument("--output_len", type=int, default=1024)
     return parser.parse_args()
@@ -263,9 +255,7 @@ def main():
                 }
             )
 
-    total_num_output_tokens = sum(
-        len(output.outputs[0].token_ids) for output in outputs
-    )
+    total_num_output_tokens = sum(len(output.outputs[0].token_ids) for output in outputs)
 
     output_throughput = total_num_output_tokens / total_time
     metrics_info = {
@@ -279,9 +269,7 @@ def main():
         try:
             metrics = llm.get_metrics()
 
-            total_num_output_tokens = sum(
-                len(output.outputs[0].token_ids) for output in outputs
-            )
+            total_num_output_tokens = sum(len(output.outputs[0].token_ids) for output in outputs)
             num_drafts = 0
             num_accepted_tokens = 0
             acceptance_counts = [0] * args.num_spec_tokens
@@ -297,13 +285,9 @@ def main():
 
             acceptance_rates = {}
             for i in range(len(acceptance_counts)):
-                acceptance_rate = (
-                    acceptance_counts[i] / num_drafts if num_drafts > 0 else 0
-                )
+                acceptance_rate = acceptance_counts[i] / num_drafts if num_drafts > 0 else 0
                 acceptance_rates[f"acceptance_rate_pos_{i}"] = round(acceptance_rate, 4)
-            acceptance_length = (
-                1 + (num_accepted_tokens / num_drafts) if num_drafts > 0 else 1
-            )
+            acceptance_length = 1 + (num_accepted_tokens / num_drafts) if num_drafts > 0 else 1
             metrics_info["mean_acceptance_length"] = acceptance_length
             metrics_info["num_drafts"] = num_drafts
             metrics_info["num_accepted_tokens"] = num_accepted_tokens

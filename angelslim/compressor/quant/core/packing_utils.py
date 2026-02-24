@@ -30,9 +30,7 @@ def unpack_awq(qweight: torch.Tensor, qzeros: torch.Tensor, bits: int):
 
     # unpacking columnwise
     if qzeros is not None:
-        izeros = torch.bitwise_right_shift(
-            qzeros[:, :, None], shifts[None, None, :]
-        ).to(
+        izeros = torch.bitwise_right_shift(qzeros[:, :, None], shifts[None, None, :]).to(
             torch.int8  # smallest dtype available
         )
         izeros = izeros.view(izeros.shape[0], -1)
@@ -64,19 +62,11 @@ def pack_exllama(iweights: torch.Tensor, izeros: torch.Tensor, bits: int):
 
     # packing rowwise
     iweights = iweights.view(iweights.shape[0] // (32 // bits), 32 // bits, -1)
-    qweight = (
-        torch.bitwise_left_shift(iweights, shifts[None, :, None])
-        .sum(dim=1)
-        .to(torch.int32)
-    )
+    qweight = torch.bitwise_left_shift(iweights, shifts[None, :, None]).sum(dim=1).to(torch.int32)
 
     # packing columnwise
     izeros = izeros.view(-1, izeros.shape[1] // (32 // bits), 32 // bits)
-    qzeros = (
-        torch.bitwise_left_shift(izeros, shifts[None, None, :])
-        .sum(dim=-1)
-        .to(torch.int32)
-    )
+    qzeros = torch.bitwise_left_shift(izeros, shifts[None, None, :]).sum(dim=-1).to(torch.int32)
 
     return qweight, qzeros
 

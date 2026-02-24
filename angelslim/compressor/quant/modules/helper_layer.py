@@ -84,9 +84,7 @@ class WQLinearMMFunction(Function):
 
 
 class WQLinearGEMM(nn.Module):
-    def __init__(
-        self, w_bit, group_size, in_features, out_features, bias, dev, training=False
-    ):
+    def __init__(self, w_bit, group_size, in_features, out_features, bias, dev, training=False):
         super().__init__()
 
         if w_bit not in [4]:
@@ -139,9 +137,7 @@ class WQLinearGEMM(nn.Module):
             self.bias = None
 
     @classmethod
-    def from_linear(
-        cls, linear, w_bit, group_size, init_only=False, scales=None, zeros=None
-    ):
+    def from_linear(cls, linear, w_bit, group_size, init_only=False, scales=None, zeros=None):
         awq_linear = cls(
             w_bit,
             group_size,
@@ -244,14 +240,12 @@ class WQLinearGEMM(nn.Module):
         return out.reshape(out_shape)
 
     def extra_repr(self) -> str:
-        return (
-            "in_features={}, out_features={}, bias={}, w_bit={}, group_size={}".format(
-                self.in_features,
-                self.out_features,
-                self.bias is not None,
-                self.w_bit,
-                self.group_size,
-            )
+        return "in_features={}, out_features={}, bias={}, w_bit={}, group_size={}".format(
+            self.in_features,
+            self.out_features,
+            self.bias is not None,
+            self.w_bit,
+            self.group_size,
         )
 
 
@@ -300,9 +294,7 @@ class GPTQQuantLinear(nn.Module):
         )
         self.register_buffer(
             "g_idx",
-            torch.tensor(
-                [i // self.group_size for i in range(infeatures)], dtype=torch.int32
-            ),
+            torch.tensor([i // self.group_size for i in range(infeatures)], dtype=torch.int32),
         )
         if bias:
             self.register_buffer("bias", torch.zeros((outfeatures), dtype=weight_dtype))
@@ -311,9 +303,7 @@ class GPTQQuantLinear(nn.Module):
 
         # is performed by unpacking the weights and using torch.matmul
         if self.bits in [2, 4, 8]:
-            self.wf = torch.tensor(
-                list(range(0, 32, self.bits)), dtype=torch.int32
-            ).unsqueeze(0)
+            self.wf = torch.tensor(list(range(0, 32, self.bits)), dtype=torch.int32).unsqueeze(0)
         elif self.bits == 3:
             self.wf = torch.tensor(
                 [
@@ -343,8 +333,7 @@ class GPTQQuantLinear(nn.Module):
         for idx in range(self.infeatures):
             intweight.append(
                 torch.round(
-                    (w[:, idx] + scale_zeros[self.g_idx[idx]])
-                    / self.scales[self.g_idx[idx]]
+                    (w[:, idx] + scale_zeros[self.g_idx[idx]]) / self.scales[self.g_idx[idx]]
                 ).to(torch.int)[:, None]
             )
         intweight = torch.cat(intweight, dim=1)
@@ -389,9 +378,7 @@ class GPTQQuantLinear(nn.Module):
 
         zeros -= 1
         zeros = zeros.numpy().astype(np.uint32)
-        qzeros = np.zeros(
-            (zeros.shape[0], zeros.shape[1] // 32 * self.bits), dtype=np.uint32
-        )
+        qzeros = np.zeros((zeros.shape[0], zeros.shape[1] // 32 * self.bits), dtype=np.uint32)
         i = 0
         col = 0
         while col < qzeros.shape[1]:
@@ -453,12 +440,8 @@ class GPTQQuantLinear(nn.Module):
                 self.qzeros.shape[0], self.qzeros.shape[1] // 3, 3, 1
             ).expand(-1, -1, -1, 12)
             zeros = zeros >> self.wf.unsqueeze(0)
-            zeros[:, :, 0, 10] = (zeros[:, :, 0, 10] & 0x3) | (
-                (zeros[:, :, 1, 0] << 2) & 0x4
-            )
-            zeros[:, :, 1, 11] = (zeros[:, :, 1, 11] & 0x1) | (
-                (zeros[:, :, 2, 0] << 1) & 0x6
-            )
+            zeros[:, :, 0, 10] = (zeros[:, :, 0, 10] & 0x3) | ((zeros[:, :, 1, 0] << 2) & 0x4)
+            zeros[:, :, 1, 11] = (zeros[:, :, 1, 11] & 0x1) | ((zeros[:, :, 2, 0] << 1) & 0x6)
             zeros = zeros & 0x7
             zeros = torch.cat(
                 [zeros[:, :, 0, :11], zeros[:, :, 1, 1:12], zeros[:, :, 2, 1:11]],
@@ -475,18 +458,14 @@ class GPTQQuantLinear(nn.Module):
             weight[:, 0, 10] = (weight[:, 0, 10] & 0x3) | ((weight[:, 1, 0] << 2) & 0x4)
             weight[:, 1, 11] = (weight[:, 1, 11] & 0x1) | ((weight[:, 2, 0] << 1) & 0x6)
             weight = weight & 0x7
-            weight = torch.cat(
-                [weight[:, 0, :11], weight[:, 1, 1:12], weight[:, 2, 1:11]], dim=1
-            )
+            weight = torch.cat([weight[:, 0, :11], weight[:, 1, 1:12], weight[:, 2, 1:11]], dim=1)
         else:
             raise NotImplementedError("Only 2,3,4,8 bits are supported.")
 
         weight = weight.reshape(weight.shape[0] * weight.shape[1], weight.shape[2])
         num_itr = self.g_idx.shape[0] // x.shape[-1]
         if num_itr == 1:
-            weights = self.scales[self.g_idx.long()] * (
-                weight - zeros[self.g_idx.long()]
-            )
+            weights = self.scales[self.g_idx.long()] * (weight - zeros[self.g_idx.long()])
         else:
             num_dim = self.g_idx.shape[0] // num_itr
             weights = []
@@ -495,9 +474,7 @@ class GPTQQuantLinear(nn.Module):
                 weight_i = weight[:, i * num_dim : (i + 1) * num_dim]
                 zeros_i = zeros[:, i * num_dim : (i + 1) * num_dim]
                 g_idx_i = self.g_idx[i * num_dim : (i + 1) * num_dim]
-                weights.append(
-                    scale_i[g_idx_i.long()] * (weight_i - zeros_i[g_idx_i.long()])
-                )
+                weights.append(scale_i[g_idx_i.long()] * (weight_i - zeros_i[g_idx_i.long()]))
             weights = torch.cat(weights, dim=1)
         out = torch.matmul(x, weights)
         out = out.to(x_dtype)
@@ -513,9 +490,7 @@ class SmoothHelpModule(nn.Module):
         self.weight.all_gather()
         self.layer = layer
         module_shape = self.weight.shape[-1]
-        smooth_data = torch.ones(module_shape, dtype=self.weight.dtype).to(
-            self.weight.device
-        )
+        smooth_data = torch.ones(module_shape, dtype=self.weight.dtype).to(self.weight.device)
         self.smooth_weight = nn.Parameter(smooth_data)
         self.register_parameter("smooth_weight", self.smooth_weight)
 
@@ -544,13 +519,9 @@ class QDQSingleModule(nn.Module):
         for param_name, params in layer.named_parameters():
             if "weight" in param_name:
                 if self.quant_algo == "int8":
-                    qdq_weight = tensor_quant_dequant_int(
-                        params, self.weight_scales, bits=8
-                    )
+                    qdq_weight = tensor_quant_dequant_int(params, self.weight_scales, bits=8)
                 elif self.quant_algo == "fp8":
-                    qdq_weight = tensor_quant_dequant_fp8(
-                        params, self.weight_scales, bits=8
-                    )
+                    qdq_weight = tensor_quant_dequant_fp8(params, self.weight_scales, bits=8)
                 params.data.copy_(qdq_weight)
 
     def forward(self, input):
@@ -580,9 +551,7 @@ class QDQModule(torch.nn.Module):
             if "w4a8" in self.quant_algo:
                 max_value_group_wise = weight_scale.clone()
                 tensor_wise_scale = max_value_group_wise.max() / 448.0
-                quant_weight, _ = quantize_weight_per_tensor_fp8(
-                    weight, tensor_wise_scale
-                )
+                quant_weight, _ = quantize_weight_per_tensor_fp8(weight, tensor_wise_scale)
                 new_weight_bf16 = quant_weight.to(torch.bfloat16) * tensor_wise_scale
 
                 new_weight_bf16_qdq = fake_quant_dequant(
@@ -598,13 +567,9 @@ class QDQModule(torch.nn.Module):
                 )
                 weight_scale = tensor_wise_scale
             else:
-                quant_weight, weight_scale = quantize_weight_per_tensor_fp8(
-                    weight, weight_scale
-                )
+                quant_weight, weight_scale = quantize_weight_per_tensor_fp8(weight, weight_scale)
         elif "int8" in self.quant_algo:
-            quant_weight, weight_scale = quantize_weight_int(
-                weight, weight_scale, bits=8
-            )
+            quant_weight, weight_scale = quantize_weight_int(weight, weight_scale, bits=8)
             quant_weight = quant_weight.to(torch.int8)
         else:
             raise ValueError(f"Unsupported quantization algorithm: {self.quant_algo}")
@@ -623,9 +588,7 @@ class QDQModule(torch.nn.Module):
         else:
             self.input_scale = None
         if self.output_scale:
-            self.output_scale = torch.nn.Parameter(
-                self.output_scale, requires_grad=False
-            )
+            self.output_scale = torch.nn.Parameter(self.output_scale, requires_grad=False)
 
     def forward(self, x):
         if self.input_scale:
@@ -634,9 +597,7 @@ class QDQModule(torch.nn.Module):
             elif "int8" in self.quant_algo:
                 qinput = tensor_quant_dequant_int(x, self.input_scale, bits=8)
             else:
-                raise ValueError(
-                    f"Unsupported quantization algorithm: {self.quant_algo}"
-                )
+                raise ValueError(f"Unsupported quantization algorithm: {self.quant_algo}")
 
         if "fp8" in self.quant_algo:
             output = gemm_fp8(
@@ -648,9 +609,7 @@ class QDQModule(torch.nn.Module):
                 out_dtype=x.dtype,
             )
         elif "int8" in self.quant_algo:
-            output = torch.nn.functional.linear(
-                x, self.weight * self.weight_scale, bias=self.bias
-            )
+            output = torch.nn.functional.linear(x, self.weight * self.weight_scale, bias=self.bias)
         else:
             raise ValueError(f"Unsupported quantization algorithm: {self.quant_algo}")
 
@@ -682,14 +641,10 @@ class QLinear(torch.nn.Module):
         self.quant_algo = quant_algo
         self.weight = weight
 
-        self.weight_scale = (
-            weight_scale.view(-1) if weight_scale.ndim == 0 else weight_scale
-        )
+        self.weight_scale = weight_scale.view(-1) if weight_scale.ndim == 0 else weight_scale
         self.bias = bias
         if input_scale is not None:
-            self.input_scale = (
-                input_scale.view(-1) if input_scale.ndim == 0 else input_scale
-            )
+            self.input_scale = input_scale.view(-1) if input_scale.ndim == 0 else input_scale
         else:
             self.input_scale = None
 
@@ -700,9 +655,7 @@ class QLinear(torch.nn.Module):
             elif "int8" in self.quant_algo:
                 qinput = tensor_quant_dequant_int(x, self.input_scale, bits=8)
             else:
-                raise ValueError(
-                    f"Unsupported quantization algorithm: {self.quant_algo}"
-                )
+                raise ValueError(f"Unsupported quantization algorithm: {self.quant_algo}")
 
         if "fp8" in self.quant_algo:
             output = gemm_fp8(
@@ -714,9 +667,7 @@ class QLinear(torch.nn.Module):
                 out_dtype=x.dtype,
             )
         elif "int8" in self.quant_algo:
-            output = torch.nn.functional.linear(
-                x, self.weight * self.weight_scale, bias=self.bias
-            )
+            output = torch.nn.functional.linear(x, self.weight * self.weight_scale, bias=self.bias)
         else:
             raise ValueError(f"Unsupported quantization algorithm: {self.quant_algo}")
 
@@ -779,14 +730,12 @@ class NVFP4QDQModule(torch.nn.Module):
 
         weight_abs = weight.abs_()
         # Calculate the ordinal value based on the bounds
-        ord = torch.searchsorted(
-            self.e2m1_bounds.to(device), weight_abs, out_int32=True
-        ).to(torch.uint8)
+        ord = torch.searchsorted(self.e2m1_bounds.to(device), weight_abs, out_int32=True).to(
+            torch.uint8
+        )
         # All values equal to e2m1_bounds at odd indices are rounded up
         # and even indices are rounded down
-        round = torch.any(
-            (weight_abs.unsqueeze(-1) == self.e2m1_bounds.to(device)) * mask, dim=-1
-        )
+        round = torch.any((weight_abs.unsqueeze(-1) == self.e2m1_bounds.to(device)) * mask, dim=-1)
         fp4_val = (sign_bit * 0b1000 + ord + round).to(torch.uint8)
         return fp4_val
 
@@ -818,9 +767,7 @@ class NVFP4QDQModule(torch.nn.Module):
 
         # Scale weights
         scaled_weight = weight / (
-            (
-                weights_scaling_factor.to(torch.float32) * weights_scaling_factor_2
-            ).unsqueeze(-1)
+            (weights_scaling_factor.to(torch.float32) * weights_scaling_factor_2).unsqueeze(-1)
         )
 
         # Reshape weights to original
@@ -849,9 +796,7 @@ class NVFP4QDQModule(torch.nn.Module):
         if weights_scaling_factor2 is not None:
             weights_scaling_factor2 = weights_scaling_factor2.to(weight.device)
 
-        assert (
-            block_size is not None
-        ), "Block size not passed. Unable to quantize to NVFP4 format."
+        assert block_size is not None, "Block size not passed. Unable to quantize to NVFP4 format."
         assert (
             weights_scaling_factor2 is not None
         ), "Weights scaling factor 2 not passed. Unable to quantize to NVFP4 format"
@@ -877,17 +822,13 @@ class NVFP4QDQModule(torch.nn.Module):
         """Returns quantized per block input scaling factor."""
         # Get per_block amax
         [n, k] = inputs.shape[-2:]
-        assert (
-            block_size != 0
-        ), "Block size is zero. Cannot return per_block amax for given input."
+        assert block_size != 0, "Block size is zero. Cannot return per_block amax for given input."
 
         assert (
             k % block_size == 0
         ), "input shape is not divisible for block size for block quantiation."
 
-        inputs = inputs.reshape(
-            (*tuple(inputs.shape[:-2]), n, k // block_size, block_size)
-        )
+        inputs = inputs.reshape((*tuple(inputs.shape[:-2]), n, k // block_size, block_size))
         # Get per block amax
         per_block_amax = inputs.abs().amax(dim=-1).float()
         # Get per-block-scale
@@ -932,9 +873,7 @@ class NVFP4QDQModule(torch.nn.Module):
 
         # Scale weights
         scaled_inputs = inputs / (
-            (
-                inputs_scaling_factor.to(torch.float32) * inputs_scaling_factor_2
-            ).unsqueeze(-1)
+            (inputs_scaling_factor.to(torch.float32) * inputs_scaling_factor_2).unsqueeze(-1)
         )
 
         # Reshape weights to original
@@ -1038,20 +977,12 @@ class MoEQDQModule(torch.nn.Module):
         down_proj_input_scale: torch.nn.Parameter,
     ):
         super().__init__()
-        quant_gate_weight, _ = quantize_weight_per_tensor_fp8(
-            gate_proj, gate_proj_weight_scale
-        )
-        quant_up_weight, _ = quantize_weight_per_tensor_fp8(
-            up_proj, up_proj_weight_scale
-        )
-        quant_down_weight, _ = quantize_weight_per_tensor_fp8(
-            down_proj, down_proj_weight_scale
-        )
+        quant_gate_weight, _ = quantize_weight_per_tensor_fp8(gate_proj, gate_proj_weight_scale)
+        quant_up_weight, _ = quantize_weight_per_tensor_fp8(up_proj, up_proj_weight_scale)
+        quant_down_weight, _ = quantize_weight_per_tensor_fp8(down_proj, down_proj_weight_scale)
         quant_gate_up_weight = torch.cat([quant_gate_weight, quant_up_weight], dim=-1)
 
-        self.gate_up_proj = torch.nn.Parameter(
-            quant_gate_up_weight, requires_grad=False
-        )
+        self.gate_up_proj = torch.nn.Parameter(quant_gate_up_weight, requires_grad=False)
         self.down_proj = torch.nn.Parameter(quant_down_weight, requires_grad=False)
 
         gate_proj_weight_scale = (
@@ -1094,9 +1025,7 @@ class MoEQDQModule(torch.nn.Module):
         self.gate_up_proj_input_scale = torch.nn.Parameter(
             gate_up_proj_input_scale, requires_grad=False
         )
-        self.down_proj_input_scale = torch.nn.Parameter(
-            down_proj_input_scale, requires_grad=False
-        )
+        self.down_proj_input_scale = torch.nn.Parameter(down_proj_input_scale, requires_grad=False)
 
     def forward(self, x):
         pass
@@ -1121,9 +1050,7 @@ class W4A8Int8QuantLinear(nn.Module):
         if bits != 4:
             raise NotImplementedError("Only 4-bit weights are supported for W4A8Int8.")
         if group_size != -1:
-            raise RuntimeError(
-                "Only per-channel quantization are supported for W4A8Int8."
-            )
+            raise RuntimeError("Only per-channel quantization are supported for W4A8Int8.")
 
         self.infeatures = infeatures
         self.outfeatures = outfeatures
@@ -1162,9 +1089,7 @@ class W4A8Int8QuantLinear(nn.Module):
         if zeros.dim() == 2:
             zeros = zeros.squeeze(1)
 
-        assert (
-            scales.shape[0] == w.shape[0]
-        ), f"scale shape mismatch: {scales.shape} vs {w.shape}"
+        assert scales.shape[0] == w.shape[0], f"scale shape mismatch: {scales.shape} vs {w.shape}"
 
         # store scale
         self.weight_scale.copy_(scales.float().unsqueeze(1))  # [out, 1]
