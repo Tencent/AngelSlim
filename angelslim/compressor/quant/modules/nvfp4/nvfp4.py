@@ -69,9 +69,7 @@ class NVFP4:
             k % block_size == 0
         ), "Weight shape is not divisible for block size for block quantiation."
 
-        weight = weight.reshape(
-            (*tuple(weight.shape[:-2]), n, k // block_size, block_size)
-        )
+        weight = weight.reshape((*tuple(weight.shape[:-2]), n, k // block_size, block_size))
         # Get per block amax
         per_block_amax = weight.abs().amax(dim=-1).float()
         # Get per-block-scale
@@ -90,9 +88,7 @@ class NVFP4:
     def post_process(self, sub_layer, name):
         # TODO:Fuse observer amax because TRT-LLM requires the qkv,
         # gate and up to share the weight_scale2
-        weight_observer_amax, input_observer_amax = self.model.fuse_observer_amax(
-            sub_layer, name
-        )
+        weight_observer_amax, input_observer_amax = self.model.fuse_observer_amax(sub_layer, name)
 
         weight_scale_2 = self.get_weights_scaling_factor_2(weight_observer_amax)
         self.model.weight_scales_dict_2[name] = weight_scale_2

@@ -28,7 +28,6 @@ import os
 import sys
 from enum import Enum
 from functools import lru_cache
-from typing import Optional
 
 import torch
 
@@ -90,7 +89,7 @@ def is_triton_available() -> bool:
 
     # Try to import triton
     try:
-        import triton
+        import triton  # noqa: F811 F401
 
         # Test if JIT compilation works
         return _test_triton_jit()
@@ -200,7 +199,7 @@ def get_backend_info() -> dict:
         "triton_available": is_triton_available(),
         "torch_compile_supported": is_torch_compile_supported(),
         "cuda_available": torch.cuda.is_available(),
-        "cuda_device": torch.cuda.get_device_name() if torch.cuda.is_available() else None,
+        "cuda_device": (torch.cuda.get_device_name() if torch.cuda.is_available() else None),
         "torch_version": torch.__version__,
         "env_backend": os.environ.get("ANGELSLIM_BACKEND", "auto"),
         "env_torch_compile": os.environ.get("ANGELSLIM_TORCH_COMPILE", "auto"),

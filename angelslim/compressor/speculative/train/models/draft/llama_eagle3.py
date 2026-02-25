@@ -53,20 +53,14 @@ class LlamaRotaryEmbedding(torch.nn.Module):
 
     def _set_cos_sin_cache(self, seq_len, device, dtype):
         self.max_seq_len_cached = seq_len
-        t = torch.arange(
-            self.max_seq_len_cached, device=device, dtype=self.inv_freq.dtype
-        )
+        t = torch.arange(self.max_seq_len_cached, device=device, dtype=self.inv_freq.dtype)
 
         freqs = torch.einsum("i,j->ij", t, self.inv_freq)
         # Different from paper, but it uses a different permutation
         # in order to obtain the same calculation
         emb = torch.cat((freqs, freqs), dim=-1)
-        self.register_buffer(
-            "cos_cached", emb.cos()[None, None, :, :].to(dtype), persistent=False
-        )
-        self.register_buffer(
-            "sin_cached", emb.sin()[None, None, :, :].to(dtype), persistent=False
-        )
+        self.register_buffer("cos_cached", emb.cos()[None, None, :, :].to(dtype), persistent=False)
+        self.register_buffer("sin_cached", emb.sin()[None, None, :, :].to(dtype), persistent=False)
 
     def forward(self, x, seq_len=None, **kwargs) -> Tuple[torch.Tensor, torch.Tensor]:
         # x: [bs, num_attention_heads, seq_len, head_size]
@@ -98,21 +92,15 @@ class LlamaLinearScalingRotaryEmbedding(LlamaRotaryEmbedding):
 
     def _set_cos_sin_cache(self, seq_len, device, dtype):
         self.max_seq_len_cached = seq_len
-        t = torch.arange(
-            self.max_seq_len_cached, device=device, dtype=self.inv_freq.dtype
-        )
+        t = torch.arange(self.max_seq_len_cached, device=device, dtype=self.inv_freq.dtype)
         t = t / self.scaling_factor
 
         freqs = torch.einsum("i,j->ij", t, self.inv_freq)
         # Different from paper, but it uses a different permutation
         # in order to obtain the same calculation
         emb = torch.cat((freqs, freqs), dim=-1)
-        self.register_buffer(
-            "cos_cached", emb.cos()[None, None, :, :].to(dtype), persistent=False
-        )
-        self.register_buffer(
-            "sin_cached", emb.sin()[None, None, :, :].to(dtype), persistent=False
-        )
+        self.register_buffer("cos_cached", emb.cos()[None, None, :, :].to(dtype), persistent=False)
+        self.register_buffer("sin_cached", emb.sin()[None, None, :, :].to(dtype), persistent=False)
 
 
 class LlamaDynamicNTKScalingRotaryEmbedding(LlamaRotaryEmbedding):
@@ -138,25 +126,17 @@ class LlamaDynamicNTKScalingRotaryEmbedding(LlamaRotaryEmbedding):
                 (self.scaling_factor * seq_len / self.max_position_embeddings)
                 - (self.scaling_factor - 1)
             ) ** (self.dim / (self.dim - 2))
-            inv_freq = 1.0 / (
-                base ** (torch.arange(0, self.dim, 2).float().to(device) / self.dim)
-            )
+            inv_freq = 1.0 / (base ** (torch.arange(0, self.dim, 2).float().to(device) / self.dim))
             self.register_buffer("inv_freq", inv_freq, persistent=False)
 
-        t = torch.arange(
-            self.max_seq_len_cached, device=device, dtype=self.inv_freq.dtype
-        )
+        t = torch.arange(self.max_seq_len_cached, device=device, dtype=self.inv_freq.dtype)
 
         freqs = torch.einsum("i,j->ij", t, self.inv_freq)
         # Different from paper, but it uses a different permutation
         # in order to obtain the same calculation
         emb = torch.cat((freqs, freqs), dim=-1)
-        self.register_buffer(
-            "cos_cached", emb.cos()[None, None, :, :].to(dtype), persistent=False
-        )
-        self.register_buffer(
-            "sin_cached", emb.sin()[None, None, :, :].to(dtype), persistent=False
-        )
+        self.register_buffer("cos_cached", emb.cos()[None, None, :, :].to(dtype), persistent=False)
+        self.register_buffer("sin_cached", emb.sin()[None, None, :, :].to(dtype), persistent=False)
 
 
 class MRotaryEmbedding(nn.Module):
@@ -204,23 +184,15 @@ class MRotaryEmbedding(nn.Module):
             # position_ids = position_ids[None].expand(3, position_ids.shape[0], -1)
 
         inv_freq_expanded = (
-            self.inv_freq[None, None, :, None]
-            .float()
-            .expand(3, position_ids.shape[1], -1, 1)
+            self.inv_freq[None, None, :, None].float().expand(3, position_ids.shape[1], -1, 1)
         )
-        position_ids_expanded = position_ids[
-            :, :, None, :
-        ].float()  # shape (3, bs, 1, positions)
+        position_ids_expanded = position_ids[:, :, None, :].float()  # shape (3, bs, 1, positions)
 
         device_type = (
-            x.device.type
-            if isinstance(x.device.type, str) and x.device.type != "mps"
-            else "cpu"
+            x.device.type if isinstance(x.device.type, str) and x.device.type != "mps" else "cpu"
         )
         with torch.autocast(device_type=device_type, enabled=False):  # Force float32
-            freqs = (
-                inv_freq_expanded.float() @ position_ids_expanded.float()
-            ).transpose(2, 3)
+            freqs = (inv_freq_expanded.float() @ position_ids_expanded.float()).transpose(2, 3)
             freqs = self.apply_interleaved_mrope(freqs, self.mrope_section)
             emb = torch.cat((freqs, freqs), dim=-1)
             cos = emb.cos() * self.attention_scaling
@@ -244,18 +216,14 @@ class LlamaAttention(nn.Module):
         self.num_key_value_groups = self.num_heads // self.num_key_value_heads
         self.max_position_embeddings = config.max_position_embeddings
 
-        self.q_proj = nn.Linear(
-            self.hidden_size * 2, self.num_heads * self.head_dim, bias=False
-        )
+        self.q_proj = nn.Linear(self.hidden_size * 2, self.num_heads * self.head_dim, bias=False)
         self.k_proj = nn.Linear(
             self.hidden_size * 2, self.num_key_value_heads * self.head_dim, bias=False
         )
         self.v_proj = nn.Linear(
             self.hidden_size * 2, self.num_key_value_heads * self.head_dim, bias=False
         )
-        self.o_proj = nn.Linear(
-            self.num_heads * self.head_dim, self.hidden_size, bias=False
-        )
+        self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=False)
         self._init_rope()
 
     def _init_rope(self):
@@ -286,9 +254,7 @@ class LlamaAttention(nn.Module):
 
     def _shape(self, tensor: torch.Tensor, seq_len: int, bsz: int):
         return (
-            tensor.view(bsz, seq_len, self.num_heads, self.head_dim)
-            .transpose(1, 2)
-            .contiguous()
+            tensor.view(bsz, seq_len, self.num_heads, self.head_dim).transpose(1, 2).contiguous()
         )
 
     def forward(
@@ -312,9 +278,7 @@ class LlamaAttention(nn.Module):
         # cache_k = [self.k_proj(hidden) for hidden in cache_hidden]
         # cache_v = [self.v_proj(hidden) for hidden in cache_hidden]
 
-        query_states = query_states.view(
-            bsz, q_len, self.num_heads, self.head_dim
-        ).transpose(1, 2)
+        query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
         key_states = key_states.view(
             bsz, q_len, self.num_key_value_heads, self.head_dim
         ).transpose(1, 2)
@@ -365,9 +329,7 @@ class LlamaAttention(nn.Module):
             new_past_key_value = [local_cache_k, local_cache_v]
             return attn_output, new_past_key_value
 
-        attn_weights = torch.matmul(query_states, k0.transpose(2, 3)) / math.sqrt(
-            self.head_dim
-        )
+        attn_weights = torch.matmul(query_states, k0.transpose(2, 3)) / math.sqrt(self.head_dim)
 
         attn_weights = attn_weights + attention_mask
 
@@ -381,9 +343,9 @@ class LlamaAttention(nn.Module):
             attn_weights = torch.cat((attn_weights, attn_weightsi[..., None]), dim=-1)
 
         # upcast attention to fp32
-        attn_weights = nn.functional.softmax(
-            attn_weights, dim=-1, dtype=torch.float32
-        ).to(query_states.dtype)
+        attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(
+            query_states.dtype
+        )
         attn_weights0 = attn_weights[..., :q_len]
 
         attn_output = torch.matmul(attn_weights0, v0)
@@ -423,17 +385,11 @@ class LlamaMLP(nn.Module):
             down_proj_slices = self.down_proj.weight.split(slice, dim=1)
 
             gate_proj = torch.cat(
-                [
-                    F.linear(x, gate_proj_slices[i])
-                    for i in range(self.config.pretraining_tp)
-                ],
+                [F.linear(x, gate_proj_slices[i]) for i in range(self.config.pretraining_tp)],
                 dim=-1,
             )
             up_proj = torch.cat(
-                [
-                    F.linear(x, up_proj_slices[i])
-                    for i in range(self.config.pretraining_tp)
-                ],
+                [F.linear(x, up_proj_slices[i]) for i in range(self.config.pretraining_tp)],
                 dim=-1,
             )
 
@@ -474,9 +430,7 @@ class LlamaDecoderLayeremb(nn.Module):
         self.mlp = LlamaMLP(config)
         self.hidden_norm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.input_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_attention_layernorm = LlamaRMSNorm(
-            config.hidden_size, eps=config.rms_norm_eps
-        )
+        self.post_attention_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
     def forward(
         self,
@@ -488,9 +442,7 @@ class LlamaDecoderLayeremb(nn.Module):
         past_key_value: Optional[Tuple[torch.Tensor]] = None,
         output_attentions: Optional[bool] = False,
         use_cache: Optional[bool] = False,
-    ) -> Tuple[
-        torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]
-    ]:
+    ) -> Tuple[torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]:
         """
         Args:
             hidden_states (`torch.FloatTensor`): input to the layer of shape
@@ -556,9 +508,7 @@ class Eagle3LlamaForCausalLM(Eagle3BaseDraftModel):
         self.hidden_size = config.hidden_size
         self.norm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.fc = nn.Linear(self.hidden_size * 3, self.hidden_size, bias=False)
-        self.embed_tokens = nn.Embedding(
-            config.vocab_size, config.hidden_size, self.padding_idx
-        )
+        self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
 
         # create vocab buffers
         t2d = torch.zeros(self.vocab_size, dtype=torch.bool)
@@ -566,9 +516,7 @@ class Eagle3LlamaForCausalLM(Eagle3BaseDraftModel):
         self.register_buffer("t2d", t2d)
         self.register_buffer("d2t", d2t)
 
-        self.lm_head = nn.Linear(
-            config.hidden_size, config.draft_vocab_size, bias=False
-        )
+        self.lm_head = nn.Linear(config.hidden_size, config.draft_vocab_size, bias=False)
 
     def combine_hidden_states(self, hidden_states: torch.Tensor) -> torch.Tensor:
         return self.fc(hidden_states)
@@ -623,11 +571,7 @@ class Eagle3LlamaForCausalLM(Eagle3BaseDraftModel):
         seq_length_with_past = seq_length
         past_key_values_length = 0
 
-        if (
-            self.training
-            and self.gradient_checkpointing
-            and not hidden_states.requires_grad
-        ):
+        if self.training and self.gradient_checkpointing and not hidden_states.requires_grad:
             hidden_states.requires_grad = True
 
         if hidden_states.shape[-1] != self.hidden_size:
@@ -669,11 +613,7 @@ class Eagle3LlamaForCausalLM(Eagle3BaseDraftModel):
         cache_hidden = [[], []]
 
         inputs_embeds = self.embed_tokens(input_ids)
-        if (
-            self.training
-            and self.gradient_checkpointing
-            and not inputs_embeds.requires_grad
-        ):
+        if self.training and self.gradient_checkpointing and not inputs_embeds.requires_grad:
             inputs_embeds.requires_grad = True
         inputs_embeds = inputs_embeds.to(hidden_states.dtype)
 
@@ -718,9 +658,7 @@ class CosyVoice3Eagle3LlamaForCausalLM(Eagle3LlamaForCausalLM):
         """
         # Handle HuggingFace model identifier
         if not os.path.exists(target_model_name_or_path):
-            target_model_name_or_path = snapshot_download(
-                repo_id=target_model_name_or_path
-            )
+            target_model_name_or_path = snapshot_download(repo_id=target_model_name_or_path)
 
         # Try loading embedding weights
         tensor = torch.load("{}/llm.pt".format(target_model_name_or_path))

@@ -100,9 +100,7 @@ class GlobalConfig:
                 if isinstance(json_data["architectures"], list)
                 else json_data["architectures"]
             ) == "Qwen3OmniMoeForConditionalGeneration":
-                self.hidden_size = json_data["thinker_config"]["text_config"][
-                    "hidden_size"
-                ]
+                self.hidden_size = json_data["thinker_config"]["text_config"]["hidden_size"]
             else:
                 self.hidden_size = json_data["hidden_size"]
         except KeyError:
@@ -297,16 +295,12 @@ class CompressionConfig:
 
         # Ensure name is now a list
         if not isinstance(self.name, list):
-            raise TypeError(
-                f"`name` must be a string or a list of strings, got {type(self.name)}"
-            )
+            raise TypeError(f"`name` must be a string or a list of strings, got {type(self.name)}")
 
         # Validate all elements in the list are strings
         for n in self.name:
             if not isinstance(n, str):
-                raise TypeError(
-                    f"All elements in `name` must be strings, found {type(n)}"
-                )
+                raise TypeError(f"All elements in `name` must be strings, found {type(n)}")
 
         # Further validate against predefined enumeration
         try:
@@ -484,9 +478,7 @@ class SlimConfigParser:
             infer_config=inference_conf,
         )
 
-    def _get_global_config(
-        self, config_dict, model_conf, dataset_conf=None
-    ) -> GlobalConfig:
+    def _get_global_config(self, config_dict, model_conf, dataset_conf=None) -> GlobalConfig:
         """
         Extract global configuration settings from the provided dictionary.
 
@@ -580,9 +572,7 @@ def parse_json_full_config(json_file_path: str) -> FullConfig:
     model_config = ModelConfig(**config_data["model_config"])
 
     # Parse compression configuration section
-    comp_config = parse_json_compression_config_section(
-        config_data["compression_config"]
-    )
+    comp_config = parse_json_compression_config_section(config_data["compression_config"])
 
     # Parse other configuration sections with default fallbacks
     dataset_config, global_config, infer_config = None, None, None

@@ -27,9 +27,7 @@ import torch
 FP8_MAX = 448.0
 
 
-def weight_dequant_torch(
-    x: torch.Tensor, s: torch.Tensor, block_size: int = 128
-) -> torch.Tensor:
+def weight_dequant_torch(x: torch.Tensor, s: torch.Tensor, block_size: int = 128) -> torch.Tensor:
     """
     Pure PyTorch implementation of block-wise weight dequantization.
 
@@ -66,9 +64,7 @@ def weight_dequant_torch(
             n_end = min(n_start + block_size, N)
 
             scale = s[mb, nb]
-            y[m_start:m_end, n_start:n_end] = (
-                x_float[m_start:m_end, n_start:n_end] * scale
-            )
+            y[m_start:m_end, n_start:n_end] = x_float[m_start:m_end, n_start:n_end] * scale
 
     return y
 
@@ -148,7 +144,6 @@ def per_block_weight_quant_torch_fast(
     assert x.dim() == 2, "Input tensor must have 2 dimensions"
 
     M, N = x.size()
-    device = x.device
 
     # Pad tensor to be divisible by block_size
     pad_m = (block_size - M % block_size) % block_size
@@ -165,7 +160,9 @@ def per_block_weight_quant_torch_fast(
 
     # Reshape to blocks: [m_blocks, block_size, n_blocks, block_size]
     x_blocks = x_padded.view(m_blocks, block_size, n_blocks, block_size)
-    x_blocks = x_blocks.permute(0, 2, 1, 3).contiguous()  # [m_blocks, n_blocks, block_size, block_size]
+    x_blocks = x_blocks.permute(
+        0, 2, 1, 3
+    ).contiguous()  # [m_blocks, n_blocks, block_size, block_size]
 
     # Compute max absolute value per block
     x_float = x_blocks.to(torch.float32)
@@ -180,7 +177,9 @@ def per_block_weight_quant_torch_fast(
     y_blocks = (x_float / s_expanded).to(torch.float8_e4m3fn)
 
     # Reshape back: [m_blocks, n_blocks, block_size, block_size] -> [M_padded, N_padded]
-    y_blocks = y_blocks.permute(0, 2, 1, 3).contiguous()  # [m_blocks, block_size, n_blocks, block_size]
+    y_blocks = y_blocks.permute(
+        0, 2, 1, 3
+    ).contiguous()  # [m_blocks, block_size, n_blocks, block_size]
     y_padded = y_blocks.view(M_padded, N_padded)
 
     # Remove padding
@@ -210,7 +209,6 @@ def weight_dequant_torch_fast(
     assert x.dim() == 2 and s.dim() == 2, "Input tensors must have 2 dimensions"
 
     M, N = x.size()
-    device = x.device
 
     # Pad tensor to be divisible by block_size
     pad_m = (block_size - M % block_size) % block_size

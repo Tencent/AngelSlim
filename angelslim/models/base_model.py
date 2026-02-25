@@ -84,9 +84,7 @@ class BaseLLMModel(metaclass=ABCMeta):
                 - compress_config: the configuration for compression.
                 - global_config: the global configuration for the model.
         """
-        quant_config = QuantConfig(
-            slim_config["compress_config"], slim_config["global_config"]
-        )
+        quant_config = QuantConfig(slim_config["compress_config"], slim_config["global_config"])
         self.quant_config = quant_config
         self.act_scales_dict = {}
         self.weight_scales_dict = {}
@@ -141,9 +139,7 @@ class BaseLLMModel(metaclass=ABCMeta):
                 input_scale=act_scale,
             )
         else:
-            print_info(
-                "current {} deploy_backend not support".format(self.deploy_backend)
-            )
+            print_info("current {} deploy_backend not support".format(self.deploy_backend))
             raise NotImplementedError
         return q_linear
 
@@ -169,9 +165,7 @@ class BaseLLMModel(metaclass=ABCMeta):
                 input_scale=act_scale,
             )
         else:
-            print_info(
-                "current {} deploy_backend not support".format(self.deploy_backend)
-            )
+            print_info("current {} deploy_backend not support".format(self.deploy_backend))
             raise NotImplementedError
         return q_linear
 
@@ -184,8 +178,7 @@ class BaseLLMModel(metaclass=ABCMeta):
         return [
             k
             for k in observe_names
-            if k.startswith(self.block_name)
-            and k.split(".")[-2] + "." + k.split(".")[-1] in names
+            if k.startswith(self.block_name) and k.split(".")[-2] + "." + k.split(".")[-1] in names
         ]
 
     def get_quant_config(self):
@@ -210,19 +203,13 @@ class BaseLLMModel(metaclass=ABCMeta):
         w_quant_algo = w.split("_")[0] if w is not None else None
         c_quant_algo = c.split("_")[0] if c is not None else None
         a_quant_bits = (
-            int(re.search(r"\d+", a_quant_algo).group())
-            if a_quant_algo is not None
-            else None
+            int(re.search(r"\d+", a_quant_algo).group()) if a_quant_algo is not None else None
         )
         w_quant_bits = (
-            int(re.search(r"\d+", w_quant_algo).group())
-            if w_quant_algo is not None
-            else None
+            int(re.search(r"\d+", w_quant_algo).group()) if w_quant_algo is not None else None
         )
         c_quant_bits = (
-            int(re.search(r"\d+", c_quant_algo).group())
-            if c_quant_algo is not None
-            else None
+            int(re.search(r"\d+", c_quant_algo).group()) if c_quant_algo is not None else None
         )
         a_quant_method = a.split("_")[1] if a is not None else None
         w_quant_method = w.split("_")[1] if w is not None else None
@@ -282,9 +269,7 @@ class BaseLLMModel(metaclass=ABCMeta):
 
         if dataloader is not None:
             with torch.no_grad():
-                for batch in tqdm(
-                    dataloader, desc="calibrating...", total=len(dataloader)
-                ):
+                for batch in tqdm(dataloader, desc="calibrating...", total=len(dataloader)):
                     inputs = batch["input_ids"].to(device)
                     labels = batch["labels"].to(device)
                     attention_mask = batch["attention_mask"].to(device)
@@ -298,9 +283,7 @@ class BaseLLMModel(metaclass=ABCMeta):
                             reduction="none",
                         )
 
-                        attention_mask = (
-                            attention_mask.view(-1).to(logits.device).float()
-                        )
+                        attention_mask = attention_mask.view(-1).to(logits.device).float()
                         loss = loss * attention_mask
                         avg_loss = loss.mean()
                         ppl = torch.exp(avg_loss)

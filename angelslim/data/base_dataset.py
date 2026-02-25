@@ -22,9 +22,7 @@ from transformers import ProcessorMixin
 class BaseDataset(Dataset):
     """Base class for all datasets"""
 
-    def __init__(
-        self, processor: ProcessorMixin, device: str = "cpu", max_length: int = 4096
-    ):
+    def __init__(self, processor: ProcessorMixin, device: str = "cpu", max_length: int = 4096):
         self.processor = processor
         self.device = device
         self.max_length = max_length

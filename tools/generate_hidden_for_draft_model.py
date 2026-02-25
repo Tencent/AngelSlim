@@ -65,9 +65,7 @@ def cleanup_distributed():
 class HiddenStateGenerator:
     """Generator for creating hidden states from target model."""
 
-    def __init__(
-        self, target_model, output_dir: str, group_size: int = 5000, rank: int = 0
-    ):
+    def __init__(self, target_model, output_dir: str, group_size: int = 5000, rank: int = 0):
         """
         Initialize the hidden state generator.
 
@@ -116,9 +114,7 @@ class HiddenStateGenerator:
 
         # Skip if file already exists
         if output_file.exists():
-            logger.debug(
-                f"Skipping existing file: {output_file}", extra={"rank": self.rank}
-            )
+            logger.debug(f"Skipping existing file: {output_file}", extra={"rank": self.rank})
             return True
 
         try:
@@ -145,9 +141,7 @@ class HiddenStateGenerator:
             return True
 
         except Exception as e:
-            logger.error(
-                f"Error processing sample {idx}: {str(e)}", extra={"rank": self.rank}
-            )
+            logger.error(f"Error processing sample {idx}: {str(e)}", extra={"rank": self.rank})
             return False
 
     def generate(self, dataset) -> Tuple[int, int]:
@@ -277,9 +271,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--dataset_path", type=str, nargs="+", required=True, help="Dataset to use"
     )
-    parser.add_argument(
-        "--model_max_length", type=int, default=2048, help="Maximum token length"
-    )
+    parser.add_argument("--model_max_length", type=int, default=2048, help="Maximum token length")
     parser.add_argument(
         "--chat_template_type", type=str, default="default", help="Chat template type"
     )
@@ -359,9 +351,7 @@ def load_dataset(args: argparse.Namespace, tokenizer, rank: int):
     return dataset
 
 
-def split_dataset_for_rank(
-    dataset, rank: int, world_size: int, start: int = 0, end: int = None
-):
+def split_dataset_for_rank(dataset, rank: int, world_size: int, start: int = 0, end: int = None):
     """
     Split dataset for distributed processing.
 
@@ -392,9 +382,7 @@ def split_dataset_for_rank(
 
     # Validate range
     if start < 0 or end > len(dataset) or start >= end:
-        raise ValueError(
-            f"Invalid range: start={start}, end={end}, dataset_size={len(dataset)}"
-        )
+        raise ValueError(f"Invalid range: start={start}, end={end}, dataset_size={len(dataset)}")
 
     total_samples = end - start
     samples_per_rank = total_samples // world_size
@@ -439,9 +427,7 @@ def main():
         dataset = load_dataset(args, target_model.tokenizer, rank)
 
         # Split dataset for this rank
-        dataset_slice = split_dataset_for_rank(
-            dataset, rank, world_size, args.start, args.end
-        )
+        dataset_slice = split_dataset_for_rank(dataset, rank, world_size, args.start, args.end)
 
         # Generate hidden states
         output_dir = f"{args.outdir}/rank_{rank}"

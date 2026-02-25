@@ -47,9 +47,7 @@ class QuantType:
     @classmethod
     def validate(cls, quant_type: str):
         if quant_type not in cls.VALID_TYPES:
-            raise ValueError(
-                f"Invalid quant_type: {quant_type}. Valid types: {cls.VALID_TYPES}"
-            )
+            raise ValueError(f"Invalid quant_type: {quant_type}. Valid types: {cls.VALID_TYPES}")
 
 
 def replace_module(model: torch.nn.Module, name: str, new_module: torch.nn.Module):
@@ -76,9 +74,7 @@ def cleanup_memory():
     torch.cuda.empty_cache()
 
 
-def _compile_pattern(
-    pattern: Union[str, re.Pattern], case_sensitive: bool = False
-) -> re.Pattern:
+def _compile_pattern(pattern: Union[str, re.Pattern], case_sensitive: bool = False) -> re.Pattern:
     """
     Compile a pattern (string or pre-compiled pattern) into a regex pattern object.
 

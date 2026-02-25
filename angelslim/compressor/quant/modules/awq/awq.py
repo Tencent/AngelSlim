@@ -144,11 +144,7 @@ class AWQ:
             # position embeddings
             if isinstance(v, tuple):
                 layer_kwargs[k] = tuple(
-                    (
-                        item.to(dev)
-                        if isinstance(item, (torch.Tensor, nn.Module))
-                        else item
-                    )
+                    (item.to(dev) if isinstance(item, (torch.Tensor, nn.Module)) else item)
                     for item in v
                 )
 
@@ -167,9 +163,7 @@ class AWQ:
 
         for i in range(len(layers)):
             if torch.cuda.is_available():
-                print_info(
-                    f"GPU Memory: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB"
-                )
+                print_info(f"GPU Memory: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB")
 
             _remove_accelerate_hooks(layers[i])
             layer = layers[i].to(dev)
@@ -243,9 +237,7 @@ class AWQ:
             # Clear GPU memory
             torch.cuda.empty_cache()
 
-            scales_list = self.scale_function.auto_scale(
-                layer, input_feat, layer_kwargs
-            )
+            scales_list = self.scale_function.auto_scale(layer, input_feat, layer_kwargs)
 
             self.scale_function.apply_scale(layer, scales_list, input_feat)
 
@@ -265,9 +257,9 @@ class AWQ:
 
                 for j in range(min(self.inps.shape[1], nsamples)):
                     with torch.no_grad():
-                        outs[j, :, :] = layer(
-                            self.inps[j, :, :].unsqueeze(0), **layer_kwargs
-                        )[0].squeeze(1)
+                        outs[j, :, :] = layer(self.inps[j, :, :].unsqueeze(0), **layer_kwargs)[
+                            0
+                        ].squeeze(1)
             layers[i] = layers[i].cpu()
             layer = layer.cpu()
             torch.cuda.empty_cache()
@@ -294,9 +286,7 @@ class AWQ:
             "version": "gemm",
             "modules_to_not_convert": ["visual"] if self.modal_type == "VLM" else None,
         }
-        self.model.model.config.save_pretrained(
-            save_dir, state_dict=EmptyModule().state_dict()
-        )
+        self.model.model.config.save_pretrained(save_dir, state_dict=EmptyModule().state_dict())
         self.model.model.generation_config.save_pretrained(save_dir)
 
         # Remove empty state dict

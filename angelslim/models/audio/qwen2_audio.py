@@ -156,9 +156,7 @@ class Qwen2_Audio(BaseLLMModel):
         print_info(f"device is {device}")
         if dataloader is not None:
             with torch.no_grad():
-                for batch in tqdm(
-                    dataloader, desc="calibrating...", total=len(dataloader)
-                ):
+                for batch in tqdm(dataloader, desc="calibrating...", total=len(dataloader)):
                     inputs = {k: v.to(device) for k, v in batch.items()}
                     inputs["use_cache"] = False
                     try:

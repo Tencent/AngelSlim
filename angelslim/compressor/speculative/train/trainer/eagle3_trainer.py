@@ -134,9 +134,7 @@ class Eagle3Trainer(Trainer, ABC):
             position_ids = position_ids.view(-1, seq_length).long()
 
         if attention_mask is None:
-            attention_mask = torch.ones(
-                (batch_size, seq_length), dtype=torch.bool, device=device
-            )
+            attention_mask = torch.ones((batch_size, seq_length), dtype=torch.bool, device=device)
 
         attention_mask = self.draft_model.prepare_decoder_attention_mask(
             attention_mask, (batch_size, seq_length), hidden_states, 0
@@ -195,9 +193,7 @@ class Eagle3Trainer(Trainer, ABC):
 
             # Step 7.6: Compute accuracy
             with torch.no_grad():
-                correct = (
-                    logits.argmax(-1) == target_p.argmax(-1)
-                ) * position_mask.squeeze(-1)
+                correct = (logits.argmax(-1) == target_p.argmax(-1)) * position_mask.squeeze(-1)
                 accuracy = correct.sum().item() / (loss_mask.sum().item() + 1e-6)
 
             # Step 7.7: Store loss and accuracy
@@ -214,10 +210,7 @@ class Eagle3Trainer(Trainer, ABC):
         ploss_weight = [0.8**i for i in range(len(plosses))]
         ploss = sum([ploss_weight[i] * plosses[i] for i in range(len(plosses))])
 
-        log = {
-            f"{log_prefix}/acc_{i}": round(float(acces[i]), 3)
-            for i in range(len(acces))
-        }
+        log = {f"{log_prefix}/acc_{i}": round(float(acces[i]), 3) for i in range(len(acces))}
         log.update(
             {
                 f"{log_prefix}/ploss_{i}": round(float(plosses[i].item()), 3)
@@ -229,9 +222,7 @@ class Eagle3Trainer(Trainer, ABC):
         # Step 9: Return loss
         return ploss
 
-    def save_model(
-        self, output_dir: Optional[str] = None, _internal_call: bool = False
-    ):
+    def save_model(self, output_dir: Optional[str] = None, _internal_call: bool = False):
         """
         Override save_model to handle DeepSpeed ZeRO-3 model saving.
 
@@ -271,9 +262,7 @@ class Eagle3Trainer(Trainer, ABC):
         with deepspeed.zero.GatheredParameters(self.model.parameters()):
             state_dict = self.model.state_dict()
 
-        draft_model_state_dict = {
-            k: v for k, v in state_dict.items() if "embed" not in k
-        }
+        draft_model_state_dict = {k: v for k, v in state_dict.items() if "embed" not in k}
 
         # Only main process saves the model
         if self.args.should_save and self.accelerator.is_main_process:

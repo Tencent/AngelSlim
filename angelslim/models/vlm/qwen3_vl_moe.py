@@ -58,17 +58,13 @@ def moe_observer_forward(
     """
     # replace Qwen3VLMoeTextExperts forward function by moe_observer_forward"
     batch_size = hidden_states.shape[0]
-    hidden_states = hidden_states.reshape(
-        -1, self.hidden_size
-    )  # (num_tokens, hidden_size)
+    hidden_states = hidden_states.reshape(-1, self.hidden_size)  # (num_tokens, hidden_size)
     if self.training:
         next_states = torch.zeros_like(
             hidden_states, dtype=hidden_states.dtype, device=hidden_states.device
         )
         with torch.no_grad():
-            expert_mask = torch.nn.functional.one_hot(
-                router_indices, num_classes=self.num_experts
-            )
+            expert_mask = torch.nn.functional.one_hot(router_indices, num_classes=self.num_experts)
             expert_mask = expert_mask.permute(2, 1, 0)
             # we sum on the top_k and on the sequence length to get which experts
             # are hit this time around
@@ -82,9 +78,7 @@ def moe_observer_forward(
             gated_output = up * self.act_fn(gate)
             out = gated_output @ self.down_proj[expert_idx]
             weighted_output = out[0] * routing_weights[token_idx, expert_idx, None]
-            next_states.index_add_(
-                0, token_idx, weighted_output.to(hidden_states.dtype)
-            )
+            next_states.index_add_(0, token_idx, weighted_output.to(hidden_states.dtype))
         next_states = next_states.view(batch_size, -1, self.hidden_size)
     else:
         hidden_states = hidden_states.repeat(self.num_experts, 1)
@@ -97,14 +91,10 @@ def moe_observer_forward(
             down_input = up * self.act_fn(gate)
             self.downobservers(down_input)
         next_states = torch.bmm((up * self.act_fn(gate)), self.down_proj)
-        next_states = next_states.reshape(
-            self.num_experts, batch_size, -1, self.hidden_size
-        )
+        next_states = next_states.reshape(self.num_experts, batch_size, -1, self.hidden_size)
         next_states = (
             next_states
-            * routing_weights.transpose(0, 1).view(self.num_experts, batch_size, -1)[
-                ..., None
-            ]
+            * routing_weights.transpose(0, 1).view(self.num_experts, batch_size, -1)[..., None]
         )
         next_states = next_states.sum(dim=0)
     return next_states
@@ -163,9 +153,7 @@ class Qwen3VLMoE(BaseLLMModel):
     def init_ptq(self, slim_config):
         for _, module in self.model.named_modules():
             if isinstance(module, Qwen3VLMoeTextExperts):
-                module.forward = moe_observer_forward.__get__(
-                    module, Qwen3VLMoeTextExperts
-                )
+                module.forward = moe_observer_forward.__get__(module, Qwen3VLMoeTextExperts)
         super().init_ptq(slim_config)
 
     def get_observer_layers(self):
@@ -195,14 +183,10 @@ class Qwen3VLMoE(BaseLLMModel):
             if result == "mlp.experts":
                 if not hasattr(module, "gateupobservers"):
                     layername = name + ".gate_up"
-                    module.gateupobservers = MoEAbsmaxPertensorObserver(
-                        layer_name=layername
-                    )
+                    module.gateupobservers = MoEAbsmaxPertensorObserver(layer_name=layername)
                 if not hasattr(module, "downobservers"):
                     layername = name + ".down"
-                    module.downobservers = MoEAbsmaxPertensorObserver(
-                        layer_name=layername
-                    )
+                    module.downobservers = MoEAbsmaxPertensorObserver(layer_name=layername)
             else:
                 if block_condition and result in names:
                     observer_layers_dict[name] = module
@@ -278,9 +262,7 @@ class Qwen3VLMoE(BaseLLMModel):
         if dataloader is not None:
             loss_filter = LossFilter(processor=self.processor)
             with torch.no_grad():
-                for batch in tqdm(
-                    dataloader, desc="calibrating...", total=len(dataloader)
-                ):
+                for batch in tqdm(dataloader, desc="calibrating...", total=len(dataloader)):
                     if "pixel_values" in batch:
                         inputs = {
                             "input_ids": batch["input_ids"].to(device),
@@ -308,9 +290,7 @@ class Qwen3VLMoE(BaseLLMModel):
                             reduction="none",
                         )
 
-                        attention_mask = (
-                            attention_mask.view(-1).to(logits.device).float()
-                        )
+                        attention_mask = attention_mask.view(-1).to(logits.device).float()
                         loss = loss * attention_mask
                         loss = loss_filter.filter_loss(
                             loss=loss, labels=labels, model_type="Qwen3VL"

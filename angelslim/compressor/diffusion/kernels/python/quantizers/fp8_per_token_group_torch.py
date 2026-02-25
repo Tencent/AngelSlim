@@ -96,9 +96,7 @@ def fp8_per_token_group_quant_torch(
                 dtype=torch.float32,
             )
             # Transpose and fill
-            scales_transposed = scales.permute(
-                *range(len(orig_shape) - 2), -1, -2
-            ).contiguous()
+            scales_transposed = scales.permute(*range(len(orig_shape) - 2), -1, -2).contiguous()
             x_s[..., : orig_shape[-2]] = scales_transposed
             x_s = x_s.permute(-1, -2)[: orig_shape[-2], :]
         else:
@@ -138,7 +136,6 @@ def fp8_per_token_group_quant_torch_simple(
     fp8_max = finfo.max
     fp8_min = -fp8_max
 
-    device = x.device
     orig_shape = x.shape
     num_groups = orig_shape[-1] // group_size
 

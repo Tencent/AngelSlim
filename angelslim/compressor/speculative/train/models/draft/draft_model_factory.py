@@ -135,9 +135,7 @@ class DraftModelConfig:
             arch = architectures[0]
             if arch not in DraftModelFactory._draft_models:
                 available = DraftModelFactory.get_available_models()
-                raise ValueError(
-                    f"Unknown architecture: {arch}. Available: {available}"
-                )
+                raise ValueError(f"Unknown architecture: {arch}. Available: {available}")
 
             # Get the model class and its config class
             model_class = DraftModelFactory._draft_models[arch]

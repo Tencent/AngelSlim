@@ -61,9 +61,7 @@ class AbsMaxChannelWiseWeightObserver(BaseObserver):
     def scales(self):
         """Return output scales."""
         if self.step == 0:
-            raise ValueError(
-                "AbsMaxChannelWiseWeightObserver scales must calibrate data first!"
-            )
+            raise ValueError("AbsMaxChannelWiseWeightObserver scales must calibrate data first!")
         if self._scale is None:
             self.cal_thresholds()
         if self.dtype:
