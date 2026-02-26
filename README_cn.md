@@ -12,7 +12,7 @@
 </h3>
 
 <p align="center">
-          ✒️ <a href="https://arxiv.org">TechnicalReport</a>&nbsp&nbsp | &nbsp&nbsp 📖 <a href="https://angelslim.readthedocs.io/">Documentation</a>&nbsp&nbsp | &nbsp&nbsp🤗 <a href="https://huggingface.co/AngelSlim">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="https://modelscope.cn/organization/AngelSlim">ModelScope</a>
+          ✒️ <a href="https://arxiv.org/abs/2602.21233">TechnicalReport</a>&nbsp&nbsp | &nbsp&nbsp 📖 <a href="https://angelslim.readthedocs.io/">Documentation</a>&nbsp&nbsp | &nbsp&nbsp🤗 <a href="https://huggingface.co/AngelSlim">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="https://modelscope.cn/organization/AngelSlim">ModelScope</a>
 <br>
 </p>
 
@@ -1031,12 +1031,11 @@ Qwen3-Omni系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`在`aime25`、`gpq
 
 ## 🔗引用
 ```
-@software{AngelSlim2025,
-    title={{AngelSlim}},
-    author={Tencent AngelSlim Project Contributors},
-    year={2025},
-    month={7},
-    url={https://github.com/Tencent/AngelSlim},
+@article{angelslim2026,
+  title={AngelSlim: A more accessible, comprehensive, and efficient toolkit for large model compression},
+  author={Hunyuan AI Infra Team},
+  journal={arXiv preprint arXiv:2602.21233},
+  year={2026}
 }
 ```
 
