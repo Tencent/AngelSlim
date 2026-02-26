@@ -1042,4 +1042,6 @@ The code for this project is open-sourced under the [License for AngelSlim](LICE
 
 ## 💬 Technical Discussion
 
-* AngelSlim is continuously iterating and new features will be released soon. If you have any questions or suggestions, please open an issue on [GitHub Issues](https://github.com/Tencent/AngelSlim/issues) or join our [WeChat discussion group](./docs/source/assets/angel_slim_wechat.png).
+* AngelSlim is developed by the Tencent Hunyuan AI Infra team, with new features being iteratively updated. If you have any questions or suggestions, please submit them on [GitHub Issues](https://github.com/Tencent/AngelSlim/issues) or join our [WeChat discussion group](./docs/source/assets/angel_slim_wechat.png).
+
+* ⭐ Star this repo to follow our latest progress. And if you are interested in joining us for an internship or full-time position, send your resume to: lucayu@tencent.com.

@@ -1042,4 +1042,6 @@ Qwen3-Omni系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`在`aime25`、`gpq
 
 ## 💬技术交流
 
-- AngelSlim正在快速迭代更新中，后续会推出更多的功能，有问题或建议欢迎通过[GitHub Issues](https://github.com/Tencent/AngelSlim/issues)给我们提issue，或者加入[微信技术交流群](./docs/source/assets/angel_slim_wechat.png)。
+- AngelSlim是由腾讯混元AI Infra团队研发，新功能在持续迭代更新中，有问题或建议欢迎通过[GitHub Issues](https://github.com/Tencent/AngelSlim/issues)给我们提issue，或者加入[微信技术交流群](./docs/source/assets/angel_slim_wechat.png)。
+
+- ⭐ 欢迎给这个仓库点Star来关注后续我们的更新。并且如果有兴趣加入团队进行实习或正式工作，可投递简历至邮箱：lucayu@tencent.com。
