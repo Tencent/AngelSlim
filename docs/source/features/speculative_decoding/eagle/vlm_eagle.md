@@ -88,6 +88,15 @@ bash scripts/speculative/hunyuan_ocr/generate_vlm_hidden_for_draft_model.sh
 # For Qwen3-VL series
 bash scripts/speculative/qwen3_vl/generate_vlm_hidden_for_draft_model.sh
 ```
+- 离线hidden_states采集时，如果由于pixel_values数组太长导致 OverflowError: There was an overflow with type <class 'list'>. 请采用分batch处理方式见：
+
+    ```shell
+    # For HunyuanOCR
+    bash scripts/speculative/hunyuan_ocr/generate_vlm_hidden_for_draft_model_batch.sh
+    # For Qwen3-VL series
+    bash scripts/speculative/qwen3_vl/generate_vlm_hidden_for_draft_model_batch.sh
+    ```
+
 > 注意：qwen3_vl系列模型生成hidden states需要更新transformers>=5.0.0,
  或者cherry-pick: https://github.com/huggingface/transformers/pull/42609,
  否则抓取的hidden states不可用！！！
