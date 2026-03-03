@@ -263,20 +263,7 @@ class Qwen3VLMoE(BaseLLMModel):
             loss_filter = LossFilter(processor=self.processor)
             with torch.no_grad():
                 for batch in tqdm(dataloader, desc="calibrating...", total=len(dataloader)):
-                    if "pixel_values" in batch:
-                        inputs = {
-                            "input_ids": batch["input_ids"].to(device),
-                            "attention_mask": batch["attention_mask"].to(device),
-                            "pixel_values": batch["pixel_values"].to(device),
-                            "image_grid_thw": batch["image_grid_thw"].to(device),
-                        }
-                    else:
-                        inputs = {
-                            "input_ids": batch["input_ids"].to(device),
-                            "attention_mask": batch["attention_mask"].to(device),
-                        }
-
-                    inputs = {k: v.to(device) for k, v in inputs.items()}
+                    inputs = {k: v.to(device) for k, v in batch.items()}
                     inputs["use_cache"] = False
                     labels = batch["labels"].to(device)
                     attention_mask = batch["attention_mask"].to(device)
