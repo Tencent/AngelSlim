@@ -27,3 +27,4 @@ from .save import PTQSaveVllmHF  # noqa: F401
 from .save import PTQTorchSave  # noqa: F401
 from .save import PTQvLLMSaveHF  # noqa: F401
 from .save import PTQVLMSaveVllmHF  # noqa: F401
+from .vllm_calibrate_utils import *  # noqa: F401 F403
