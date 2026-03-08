@@ -184,6 +184,18 @@ def main(input_path, int8_path, num_workers):
     if quant_config is not None:
         input_type = quant_config.get("quant_method", input_type)
     print("input_type", input_type)
+
+    with open(model_index_file, "r") as f:
+        model_index = json.load(f)
+    weight_map = model_index["weight_map"]
+
+    ignored_layers = []
+    for name, _ in weight_map.items():
+        if name.endswith(".weight"):
+            if not any(name.endswith(suffix) for suffix in SUFFIX_TO_QUANT):
+                ignored_layers.append(name.removesuffix(".weight"))
+    print(f"Ignored layers: {ignored_layers}")
+
     config["quantization_config"] = {
         "config_groups": {
             "group_0": {
@@ -216,7 +228,8 @@ def main(input_path, int8_path, num_workers):
             }
         },
         "format": "int-quantized",
-        "ignore": ["lm_head"],
+        "ignore": ignored_layers,
+        "modules_to_not_convert": ignored_layers,
         "kv_cache_scheme": None,
         "quant_method": "compressed-tensors",
         "quantization_status": "compressed",
@@ -225,10 +238,6 @@ def main(input_path, int8_path, num_workers):
     with open(config_file, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2, ensure_ascii=False, sort_keys=True)
     print(f"config.json modified and saved to {config_file}")
-
-    with open(model_index_file, "r") as f:
-        model_index = json.load(f)
-    weight_map = model_index["weight_map"]
 
     safetensor_files = list(glob(os.path.join(input_path, "*.safetensors")))
     safetensor_files.sort()
