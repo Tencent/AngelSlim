@@ -188,7 +188,7 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
             if any(v is not None for v in value):
                 cleaned_new_examples[key] = value
 
-        return new_examples
+        return cleaned_new_examples
 
     def _visualize_loss_mask(
         self, input_ids: torch.Tensor, loss_mask: torch.Tensor, conversation: str
@@ -409,7 +409,7 @@ class OnlineVLMHunyuanVLDatasetBuilder(OnlineDatasetBuilder):
         for key, value in new_examples.items():
             if any(v is not None for v in value):
                 cleaned_new_examples[key] = value
-        return new_examples
+        return cleaned_new_examples
 
     def _visualize_loss_mask(
         self, input_ids: torch.Tensor, loss_mask: torch.Tensor, conversation: str
