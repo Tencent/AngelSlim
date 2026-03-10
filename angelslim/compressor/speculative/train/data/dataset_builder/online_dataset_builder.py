@@ -146,7 +146,8 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
                 num_proc=num_proc,
                 desc="Filtering empty input_ids",
             )
-            # Set format to torch, but exclude "image_paths" which is a string field that cannot be converted to tensor
+            # Set format to torch, but exclude "image_paths" which is a string field that
+            # cannot be converted to tensor
             torch_columns = [c for c in processed_ds.column_names if c != "image_paths"]
             processed_ds.set_format(type="torch", columns=torch_columns)
 
