@@ -243,6 +243,7 @@ class CompressionConfig:
     name: Union[str, List[str]]
     quantization: Optional[QuantizationConfig] = None
     cache: Optional[CacheConfig] = None
+    calibrate: Optional["CalibrateConfig"] = None
     # speculative_decoding: Optional[SpeculativeDecodingConfig] = None
 
     @property
@@ -357,12 +358,11 @@ class FullConfig:
     Top-level configuration container for LLM compression.
 
     Attributes:
-        model_config: Model configuration parameters
-        compression_config: Compression configuration parameters
-        dataset_config: Dataset configuration parameters
-        global_config: Global configuration parameters
-        infer_config: Inference configuration parameters
-        calibrate_config: Calibration configuration parameters
+    model_config: Model configuration parameters
+    compression_config: Compression configuration parameters
+    dataset_config: Dataset configuration parameters
+    global_config: Global configuration parameters
+    infer_config: Inference configuration parameters
     """
 
     model_config: ModelConfig
@@ -370,7 +370,6 @@ class FullConfig:
     dataset_config: DatasetConfig
     global_config: GlobalConfig
     infer_config: InferenceConfig
-    calibrate_config: Optional[CalibrateConfig] = None
 
 
 class SlimConfigParser:
@@ -495,11 +494,10 @@ class SlimConfigParser:
             inference_dict = config_dict["inference"]
             inference_conf = InferenceConfig(**inference_dict)
 
-        # Calibration configuration
-        calibrate_conf = None
-        if "calibrate" in config_dict:
-            calibrate_dict = config_dict["calibrate"]
-            calibrate_conf = CalibrateConfig(**calibrate_dict)
+        # Calibration configuration (nested under compression)
+        calibrate_dict = compression_dict.get("calibrate", None)
+        if calibrate_dict:
+            compression_conf.calibrate = CalibrateConfig(**calibrate_dict)
 
         return FullConfig(
             model_config=model_conf,
@@ -507,7 +505,6 @@ class SlimConfigParser:
             dataset_config=dataset_conf,
             global_config=global_config,
             infer_config=inference_conf,
-            calibrate_config=calibrate_conf,
         )
 
     def _get_global_config(self, config_dict, model_conf, dataset_conf=None) -> GlobalConfig:
@@ -615,10 +612,14 @@ def parse_json_full_config(json_file_path: str) -> FullConfig:
     if config_data.get("infer_config", {}):
         infer_config = InferenceConfig(**config_data["infer_config"])
 
-    # Parse calibration configuration section
-    calibrate_config = None
-    if config_data.get("calibrate_config", {}):
-        calibrate_config = CalibrateConfig(**config_data["calibrate_config"])
+    # Parse calibration configuration section (nested under compression)
+    comp_data = config_data.get("compression_config", {})
+    calibrate_data = comp_data.get("calibrate", None)
+    if not calibrate_data and config_data.get("calibrate_config"):
+        # Backward compatibility: support top-level calibrate_config
+        calibrate_data = config_data["calibrate_config"]
+    if calibrate_data:
+        comp_config.calibrate = CalibrateConfig(**calibrate_data)
 
     return FullConfig(
         model_config=model_config,
@@ -626,7 +627,6 @@ def parse_json_full_config(json_file_path: str) -> FullConfig:
         dataset_config=dataset_config,
         global_config=global_config,
         infer_config=infer_config,
-        calibrate_config=calibrate_config,
     )
 
 
@@ -673,11 +673,6 @@ def print_config(config, indent=0):
         else:
             print(f"{prefix}None")
 
-        print(f"{prefix}Calibrate:")
-        if config.calibrate_config:
-            print_config(config.calibrate_config, next_indent)
-        else:
-            print(f"{prefix}None")
         return
 
     # Handle dataclass instances

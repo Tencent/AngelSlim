@@ -26,6 +26,7 @@ import json
 import math
 import multiprocessing as mp
 import os
+import re
 import shutil
 
 import accelerate
@@ -36,7 +37,7 @@ from tqdm import tqdm
 from transformers import AutoConfig, AutoModelForCausalLM
 
 from angelslim.compressor.quant.core.packing_utils import pack_weight_to_int8_gpu
-from angelslim.utils import find_layers
+from angelslim.utils import find_layers, print_info
 
 # Weight name suffixes that should be quantized (FP8 or W4)
 SUFFIX_TO_QUANT = [
@@ -250,14 +251,13 @@ def _process_safetensor_mixed(
     no_quant_layers = no_quant_layers or []
     device = f"cuda:{rank}"
 
-    print(f"  [{file_name}] Opening safetensor file (device={device})...", flush=True)
+    print_info(f"  [{file_name}] Opening safetensor file (device={device})...")
     t_open = time.time()
     # Load tensors directly to GPU to skip CPU→GPU copy for weights that need quantization.
     # Non-quantized tensors (norms, biases, embeddings) are moved back to CPU immediately.
     with safe_open(os.path.join(input_path, file_name), framework="pt", device=device) as f:
-        print(
-            f"  [{file_name}] Opened in {time.time() - t_open:.1f}s, {len(f.keys())} weights",
-            flush=True,
+        print_info(
+            f"  [{file_name}] Opened in {time.time() - t_open:.1f}s, {len(f.keys())} weights"
         )
         t_quant_start = time.time()
         weight_count = 0
@@ -297,10 +297,9 @@ def _process_safetensor_mixed(
                 del weight, quant_weight, scale
                 torch.cuda.empty_cache()
                 if weight_count % 10 == 0:
-                    print(
+                    print_info(
                         f"    [{file_name}] FP8 quant {weight_count} "
-                        f"weights done ({time.time() - t_quant_start:.1f}s)",
-                        flush=True,
+                        f"weights done ({time.time() - t_quant_start:.1f}s)"
                     )
 
             elif is_quantizable and not is_fp8_only:
@@ -335,10 +334,9 @@ def _process_safetensor_mixed(
                 del weight, packed_weight, fp8_scale, int4_scale
                 torch.cuda.empty_cache()
                 if weight_count % 10 == 0:
-                    print(
+                    print_info(
                         f"    [{file_name}] W4 quant {weight_count} "
-                        f"weights done ({time.time() - t_quant_start:.1f}s)",
-                        flush=True,
+                        f"weights done ({time.time() - t_quant_start:.1f}s)"
                     )
 
             else:
@@ -348,17 +346,16 @@ def _process_safetensor_mixed(
                 index[weight_name] = file_name
                 del weight
 
-        print(
+        print_info(
             f"  [{file_name}] All {weight_count} "
-            f"weights quantized in {time.time() - t_quant_start:.1f}s",
-            flush=True,
+            f"weights quantized in {time.time() - t_quant_start:.1f}s"
         )
 
-    print(f"  [{file_name}] Saving ({len(state_dict)} keys)...", flush=True)
+    print_info(f"  [{file_name}] Saving ({len(state_dict)} keys)...")
     t_save = time.time()
     new_safetensor_file = os.path.join(output_path, file_name)
     save_file(state_dict, new_safetensor_file)
-    print(f"  [{file_name}] Saved in {time.time() - t_save:.1f}s", flush=True)
+    print_info(f"  [{file_name}] Saved in {time.time() - t_save:.1f}s")
 
     del state_dict
     torch.cuda.empty_cache()
@@ -382,9 +379,8 @@ def _worker_mixed_quant(
 
     world_size = torch.cuda.device_count()
     gpu_rank = i % world_size
-    print(
-        f"Worker {i} started (GPU {gpu_rank}), processing {len(file_names)} files: {file_names}",
-        flush=True,
+    print_info(
+        f"Worker {i} started (GPU {gpu_rank}), processing {len(file_names)} files: {file_names}"
     )
     for file_name in tqdm(file_names, desc=f"Worker {i}"):
         t0 = time.time()
@@ -399,7 +395,7 @@ def _worker_mixed_quant(
             no_quant_layers,
         )
         return_dict[file_name] = index
-        print(f"Worker {i}: {file_name} done in {time.time() - t0:.1f}s", flush=True)
+        print_info(f"Worker {i}: {file_name} done in {time.time() - t0:.1f}s")
 
 
 def _get_ignored_layers(input_path):
@@ -442,7 +438,7 @@ def _get_ignored_layers(input_path):
         layer_types.append(Qwen3VLMoeTextExperts)
 
     layers = find_layers(model, layer_types)
-    print(f"Found {len(layers)} linear layers")
+    print_info(f"Found {len(layers)} linear layers")
 
     ignored_layers = []
     for name, _ in layers.items():
@@ -450,7 +446,7 @@ def _get_ignored_layers(input_path):
             weight_name = f"{name}.weight"
             if not any(weight_name.endswith(suffix) for suffix in SUFFIX_TO_QUANT):
                 ignored_layers.append(name)
-    print(f"Ignored layers: {ignored_layers}")
+    print_info(f"Ignored layers: {ignored_layers}")
 
     del model
     return ignored_layers
@@ -580,12 +576,12 @@ def mixed_weight_quantize(
         safetensor_files = sorted(set(weight_map.values()))
     else:
         safetensor_files = ["model.safetensors"]
-    print(f"Found {len(safetensor_files)} safetensor files")
+    print_info(f"Found {len(safetensor_files)} safetensor files")
 
     # Determine modules_to_not_convert for config.json
     if modules_to_not_convert:
         ignored_layers = list(modules_to_not_convert)
-        print(f"Using user-specified modules_to_not_convert: {ignored_layers}")
+        print_info(f"Using user-specified modules_to_not_convert: {ignored_layers}")
     else:
         ignored_layers = _get_ignored_layers(input_path)
 
@@ -595,7 +591,7 @@ def mixed_weight_quantize(
     num_workers = min(num_workers, len(safetensor_files))
     file_subsets = [safetensor_files[i::num_workers] for i in range(num_workers)]
 
-    print(f"Spawning {num_workers} worker processes...", flush=True)
+    print_info(f"Spawning {num_workers} worker processes...")
     t_spawn_start = time.time()
     mp.set_start_method("spawn", force=True)
     manager = mp.Manager()
@@ -618,7 +614,7 @@ def mixed_weight_quantize(
         )
         p.start()
         processes.append(p)
-    print(f"All {num_workers} workers spawned in {time.time() - t_spawn_start:.1f}s", flush=True)
+    print_info(f"All {num_workers} workers spawned in {time.time() - t_spawn_start:.1f}s")
     for p in processes:
         p.join()
 
@@ -636,7 +632,7 @@ def mixed_weight_quantize(
             dst_path = os.path.join(output_path, file)
             if os.path.exists(dst_path):
                 continue
-            print(f"cp {src_path} {dst_path}")
+            print_info(f"cp {src_path} {dst_path}")
             shutil.copy2(src_path, dst_path)
 
     # Write quantization config into config.json
@@ -648,7 +644,9 @@ def mixed_weight_quantize(
     model_type = config.get("model_type", "")
     if model_type == "deepseek_v3":
         ignored_layers = _convert_ignored_layers_for_deepseek_v3(ignored_layers, config)
-        print(f"DeepSeek V3 detected, converted ignored_layers to vLLM format: {ignored_layers}")
+        print_info(
+            f"DeepSeek V3 detected, converted ignored_layers to vLLM format: {ignored_layers}"
+        )
 
     # Build ignored_quantization_config for FP8-only layers
     ignored_quant_config = {
@@ -668,7 +666,7 @@ def mixed_weight_quantize(
         "ignored_layers": ignored_layers,
         "ignored_quantization_config": ignored_quant_config,
     }
-    print(f"quant config: {json.dumps(config['quantization_config'], indent=2)}")
+    print_info(f"quant config: {json.dumps(config['quantization_config'], indent=2)}")
     with open(os.path.join(output_path, "config.json"), "w") as f:
         json.dump(config, f, indent=4)
 
@@ -698,7 +696,7 @@ def _process_safetensor_fp8(
     device = f"cuda:{rank}"
 
     with safe_open(os.path.join(input_path, file_name), framework="pt", device=device) as f:
-        print(f"Processing {file_name} with {len(f.keys())} weights")
+        print_info(f"Processing {file_name} with {len(f.keys())} weights")
         for weight_name in f.keys():
             weight = f.get_tensor(weight_name)
             should_quantize = (
@@ -797,15 +795,15 @@ def fp8_blockwise_quantize(
         safetensor_files = sorted(set(weight_map.values()))
     else:
         safetensor_files = ["model.safetensors"]
-    print(f"Found {len(safetensor_files)} safetensor files")
+    print_info(f"Found {len(safetensor_files)} safetensor files")
 
     # Determine modules_to_not_convert for config.json
     if modules_to_not_convert:
         ignored_layers = list(modules_to_not_convert)
-        print(f"Using user-specified modules_to_not_convert: {ignored_layers}")
+        print_info(f"Using user-specified modules_to_not_convert: {ignored_layers}")
     elif fp8_only_layers:
         ignored_layers = list(fp8_only_layers)
-        print(f"Using fp8_only_layers as modules_to_not_convert: {ignored_layers}")
+        print_info(f"Using fp8_only_layers as modules_to_not_convert: {ignored_layers}")
     else:
         ignored_layers = _get_ignored_layers(input_path)
 
@@ -848,7 +846,7 @@ def fp8_blockwise_quantize(
             dst_path = os.path.join(output_path, file)
             if os.path.exists(dst_path):
                 continue
-            print(f"cp {src_path} {dst_path}")
+            print_info(f"cp {src_path} {dst_path}")
             shutil.copy2(src_path, dst_path)
 
     # Write quantization config into config.json
@@ -862,6 +860,189 @@ def fp8_blockwise_quantize(
     }
     if block_size[0] != -1 and block_size[1] != -1:
         config["quantization_config"]["weight_block_size"] = list(block_size)
-    print(f"quant config: {config['quantization_config']}")
+    print_info(f"quant config: {config['quantization_config']}")
     with open(os.path.join(output_path, "config.json"), "w") as f:
         json.dump(config, f, indent=4)
+
+
+def merge_moe_input_scales(
+    moe_expert_stats_path: str,
+    output_dir: str,
+) -> None:
+    """Convert MoE expert stats JSON to input_scale tensors in safetensors.
+
+    Reads the moe_expert_stats.json (with per-expert min/max from vLLM calibration),
+    computes input_scale = max(abs(min), abs(max)) / FP8_MAX for each expert layer,
+    and writes input_scale tensors into the quantized safetensors files.
+    Also updates model.safetensors.index.json and config.json accordingly.
+
+    Handles the gate_up_proj split: vLLM collects stats for the fused
+    "gate_up_proj" layer, but safetensors store separate "gate_proj" and
+    "up_proj" weights. The same input_scale is written for both.
+
+    JSON key format (per-expert):
+        model.layers.X.mlp.experts.N.{gate_up_proj|down_proj}
+    Safetensor key format:
+        model.layers.X.mlp.experts.N.{gate_proj|up_proj|down_proj}.input_scale
+
+    Args:
+        moe_expert_stats_path: Path to moe_expert_stats.json file.
+        output_dir: Path to the quantized model directory (with safetensors).
+    """
+    FP8_MAX = torch.finfo(torch.float8_e4m3fn).max  # 448.0
+
+    # Mapping from JSON proj name -> safetensor proj name(s)
+    # vLLM collects fused gate_up_proj stats, but safetensors have separate gate_proj/up_proj
+    _PROJ_NAME_MAPPING = {
+        "gate_up_proj": ["gate_proj", "up_proj"],
+        "gate_and_up_proj": ["gate_proj", "up_proj"],
+        "down_proj": ["down_proj"],
+    }
+
+    # Load MoE expert stats
+    with open(moe_expert_stats_path, "r") as f:
+        moe_expert_stats = json.load(f)
+    print_info(f"  Loaded {len(moe_expert_stats)} MoE expert activation stats")
+
+    # Load model index to find which safetensor file each weight belongs to
+    index_path = os.path.join(output_dir, "model.safetensors.index.json")
+    if not os.path.exists(index_path):
+        print_info(
+            "  Warning: model.safetensors.index.json not found, " "skipping input_scale generation"
+        )
+        return
+
+    with open(index_path, "r") as f:
+        model_index = json.load(f)
+    weight_map = model_index["weight_map"]
+
+    # Helper: find which safetensor file a given layer belongs to
+    def _find_shard_file(layer_name):
+        # Try exact weight key first
+        weight_key = f"{layer_name}.weight"
+        if weight_key in weight_map:
+            return weight_map[weight_key]
+        # Try qweight (for W4 quantized layers)
+        qweight_key = f"{layer_name}.qweight"
+        if qweight_key in weight_map:
+            return weight_map[qweight_key]
+        # Fallback: find any key with this layer name prefix
+        matching = [k for k in weight_map if k.startswith(layer_name + ".")]
+        if matching:
+            return weight_map[matching[0]]
+        return None
+
+    # Build mapping: safetensor_file -> list of (input_scale_key, scale_value)
+    file_to_scales = {}
+    skipped = 0
+
+    # Pattern for per-expert keys:
+    #   model.layers.X.mlp.experts.N.{gate_up_proj|gate_and_up_proj|down_proj}
+    expert_pattern = re.compile(
+        r"^(.+\.mlp\.experts)\.(\d+)\.(gate_up_proj|gate_and_up_proj|down_proj)$"
+    )
+
+    for layer_name, stats in moe_expert_stats.items():
+        abs_max = max(abs(stats["min"]), abs(stats["max"]))
+        input_scale = abs_max / FP8_MAX
+
+        m = expert_pattern.match(layer_name)
+        if m:
+            experts_prefix = m.group(1)  # model.layers.X.mlp.experts
+            expert_id = m.group(2)  # N
+            proj_name = m.group(3)  # gate_up_proj or down_proj
+
+            sf_proj_names = _PROJ_NAME_MAPPING.get(proj_name, [proj_name])
+            for sf_proj in sf_proj_names:
+                expanded_name = f"{experts_prefix}.{expert_id}.{sf_proj}"
+                input_scale_key = f"{expanded_name}.input_scale"
+                shard_file = _find_shard_file(expanded_name)
+                if shard_file is None:
+                    print_info(
+                        f"  Warning: Cannot find safetensor file for {expanded_name} "
+                        f"(from MoE expert key {layer_name}), skipping"
+                    )
+                    skipped += 1
+                    continue
+                if shard_file not in file_to_scales:
+                    file_to_scales[shard_file] = []
+                file_to_scales[shard_file].append((input_scale_key, input_scale))
+                weight_map[input_scale_key] = shard_file
+        else:
+            # Non-expert key format — apply the same fused proj split logic
+            proj_suffix = layer_name.rsplit(".", 1)[-1] if "." in layer_name else layer_name
+            if proj_suffix in _PROJ_NAME_MAPPING:
+                layer_prefix = layer_name.rsplit(".", 1)[0]
+                for sf_proj in _PROJ_NAME_MAPPING[proj_suffix]:
+                    expanded_name = f"{layer_prefix}.{sf_proj}"
+                    input_scale_key = f"{expanded_name}.input_scale"
+                    shard_file = _find_shard_file(expanded_name)
+                    if shard_file is None:
+                        print_info(
+                            f"  Warning: Cannot find safetensor file for {expanded_name} "
+                            f"(expanded from {layer_name}), skipping"
+                        )
+                        skipped += 1
+                        continue
+                    if shard_file not in file_to_scales:
+                        file_to_scales[shard_file] = []
+                    file_to_scales[shard_file].append((input_scale_key, input_scale))
+                    weight_map[input_scale_key] = shard_file
+            else:
+                # Direct mapping (no split needed)
+                input_scale_key = f"{layer_name}.input_scale"
+                shard_file = _find_shard_file(layer_name)
+                if shard_file is None:
+                    print_info(
+                        f"  Warning: Cannot find safetensor file for {layer_name}, skipping"
+                    )
+                    skipped += 1
+                    continue
+                if shard_file not in file_to_scales:
+                    file_to_scales[shard_file] = []
+                file_to_scales[shard_file].append((input_scale_key, input_scale))
+                weight_map[input_scale_key] = shard_file
+
+    total_scales = sum(len(v) for v in file_to_scales.values())
+    print_info(f"  Total input_scale keys to write: {total_scales} (skipped: {skipped})")
+
+    # Write input_scale tensors into each safetensor file
+    for shard_file, scales in file_to_scales.items():
+        shard_path = os.path.join(output_dir, shard_file)
+        if not os.path.exists(shard_path):
+            print_info(f"  Warning: {shard_path} not found, skipping")
+            continue
+
+        # Load existing tensors
+        existing_tensors = {}
+        with safe_open(shard_path, framework="pt") as f:
+            for key in f.keys():
+                existing_tensors[key] = f.get_tensor(key)
+
+        # Add input_scale tensors
+        for scale_key, scale_value in scales:
+            existing_tensors[scale_key] = torch.tensor(scale_value, dtype=torch.float32)
+
+        # Save back
+        save_file(existing_tensors, shard_path)
+        print_info(f"  Added {len(scales)} input_scale tensors to {shard_file}")
+
+    # Update model.safetensors.index.json
+    with open(index_path, "w") as f:
+        json.dump({"metadata": {}, "weight_map": weight_map}, f, indent=2)
+
+    # Update config.json to mark activation_scheme as static
+    config_path = os.path.join(output_dir, "config.json")
+    if os.path.exists(config_path):
+        with open(config_path, "r") as f:
+            config = json.load(f)
+        if "quantization_config" in config:
+            config["quantization_config"]["activation_scheme"] = "static"
+            # Also update ignored_quantization_config if present (w4a8_awq format)
+            if "ignored_quantization_config" in config["quantization_config"]:
+                # Keep ignored layers' activation_scheme as dynamic (FP8 layers use dynamic)
+                pass
+        with open(config_path, "w") as f:
+            json.dump(config, f, indent=4)
+
+    print_info(f"  Total input_scale tensors written: {total_scales}")

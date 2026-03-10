@@ -37,21 +37,20 @@ compression:
       - "shared_expert"
       - "lm_head"
       - "model.layers.61."
+  # Calibration engine configuration (under compression, parallel to quantization)
+  calibrate:
+    backend: vllm
+    tp_size: 32
+    max_num_seqs: 128
+    distributed_executor_backend: ray
+    skip_weight_loading: false
+    verbose: false
 
 # Dataset for calibration
 dataset:
   name: TextDataset
   data_path: /path/to/dataset
-  max_seq_length: 4096
+  max_seq_length: 16384
   num_samples: 512
   batch_size: 1
-
-# Calibration engine configuration
-calibrate:
-  backend: vllm
-  tp_size: 32
-  max_num_seqs: 128
-  distributed_executor_backend: ray
-  skip_weight_loading: false
-  verbose: false
 

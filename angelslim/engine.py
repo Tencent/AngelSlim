@@ -408,12 +408,12 @@ class VLLMCalibrateEngine:
 
         from .compressor.quant import setup_activation_hooks
 
-        print(f"VLLM_MOE_COLLECT_STATS: {os.environ.get('VLLM_MOE_COLLECT_STATS')}")
-        print("\nConfiguration:")
-        print(f"  Model: {model_path}")
-        print(f"  TP Size: {tp_size}")
-        print(f"  Max Num Seqs: {max_num_seqs}")
-        print(f"  Skip Weight Loading: {skip_weight_loading}")
+        print_info(f"VLLM_MOE_COLLECT_STATS: {os.environ.get('VLLM_MOE_COLLECT_STATS')}")
+        print_info("\nConfiguration:")
+        print_info(f"  Model: {model_path}")
+        print_info(f"  TP Size: {tp_size}")
+        print_info(f"  Max Num Seqs: {max_num_seqs}")
+        print_info(f"  Skip Weight Loading: {skip_weight_loading}")
 
         self.llm = LLM(
             model=model_path,
@@ -429,18 +429,18 @@ class VLLMCalibrateEngine:
         )
 
         if skip_weight_loading:
-            print("\n" + "!" * 80)
-            print("WARNING: Running with dummy weights (random values)!")
-            print("Outputs will NOT make sense. This is for debugging only.")
-            print("!" * 80 + "\n")
+            print_info("\n" + "!" * 80)
+            print_info("WARNING: Running with dummy weights (random values)!")
+            print_info("Outputs will NOT make sense. This is for debugging only.")
+            print_info("!" * 80 + "\n")
 
         # Setup activation hooks on all workers
-        print("\n" + "=" * 80)
-        print("Setting up activation hooks...")
-        print("=" * 80)
+        print_info("\n" + "=" * 80)
+        print_info("Setting up activation hooks...")
+        print_info("=" * 80)
         hook_results = self.llm.apply_model(setup_activation_hooks)
         for i, result in enumerate(hook_results):
-            print(f"Worker {i}: {result}")
+            print_info(f"Worker {i}: {result}")
 
         self.tokenizer = self.llm.get_tokenizer()
         return self.llm
@@ -464,9 +464,9 @@ class VLLMCalibrateEngine:
         if self.llm is None:
             raise RuntimeError("Model not initialized. Call prepare_model() first.")
 
-        print("\n" + "=" * 80)
-        print("Loading dataset and preparing prompts...")
-        print("=" * 80)
+        print_info("\n" + "=" * 80)
+        print_info("Loading dataset and preparing prompts...")
+        print_info("=" * 80)
 
         dataloader = DataLoaderFactory.create_data_loader(
             data_type="TextDataset",
@@ -480,7 +480,7 @@ class VLLMCalibrateEngine:
         )
 
         self.prompts = [self.tokenizer.decode(data["input_ids"][0]) for data in dataloader]
-        print(f"Loaded {len(self.prompts)} prompts from dataset")
+        print_info(f"Loaded {len(self.prompts)} prompts from dataset")
         return self.prompts
 
     def run(
@@ -521,29 +521,29 @@ class VLLMCalibrateEngine:
             max_tokens=1,
         )
 
-        print("\n" + "=" * 80)
-        print("Generating outputs...")
-        print("=" * 80)
+        print_info("\n" + "=" * 80)
+        print_info("Generating outputs...")
+        print_info("=" * 80)
         outputs = self.llm.generate(self.prompts, sampling_params)
 
         # Print sample outputs
-        print("\n" + "=" * 80)
-        print("Sample Generated Outputs (first 5):")
-        print("=" * 80)
+        print_info("\n" + "=" * 80)
+        print_info("Sample Generated Outputs (first 5):")
+        print_info("=" * 80)
         for i, output in enumerate(outputs[:5]):
             generated_text = output.outputs[0].text
-            print(f"[{i+1}] Output: {generated_text!r}")
-        print(f"\nTotal outputs generated: {len(outputs)}")
+            print_info(f"[{i+1}] Output: {generated_text!r}")
+        print_info(f"\nTotal outputs generated: {len(outputs)}")
 
         # Collect and save statistics
-        print("\n" + "=" * 80)
-        print("Collecting Statistics...")
-        print("=" * 80)
+        print_info("\n" + "=" * 80)
+        print_info("Collecting Statistics...")
+        print_info("=" * 80)
 
-        print("\nActivation Statistics:")
+        print_info("\nActivation Statistics:")
         self.llm.apply_model(print_activation_stats)
 
-        print("\nMoE Expert Statistics:")
+        print_info("\nMoE Expert Statistics:")
         self.llm.apply_model(lambda model: print_moe_stats(model, verbose=verbose))
 
         # Create output directory
@@ -563,10 +563,10 @@ class VLLMCalibrateEngine:
             moe_stats, "moe_expert_stats.json", stats_type="MoE expert statistics"
         )
 
-        print("\n" + "=" * 80)
-        print("Calibration completed successfully!")
-        print(f"Results saved to: {output_dir}")
-        print("=" * 80)
+        print_info("\n" + "=" * 80)
+        print_info("Calibration completed successfully!")
+        print_info(f"Results saved to: {output_dir}")
+        print_info("=" * 80)
 
         return {"activation_stats": activation_stats, "moe_stats": moe_stats}
 
@@ -608,13 +608,13 @@ class VLLMCalibrateEngine:
             if os.path.exists(candidate):
                 moe_expert_stats_path = candidate
 
-        print("\n" + "=" * 80)
-        print(f"Quantizing model weights (method: {quant_name})...")
-        print(f"  Input: {model_path}")
-        print(f"  Output: {output_dir}")
+        print_info("\n" + "=" * 80)
+        print_info(f"Quantizing model weights (method: {quant_name})...")
+        print_info(f"  Input: {model_path}")
+        print_info(f"  Output: {output_dir}")
         if moe_expert_stats_path:
-            print(f"  MoE expert stats: {moe_expert_stats_path}")
-        print(f"  Num workers: {num_workers}")
+            print_info(f"  MoE expert stats: {moe_expert_stats_path}")
+        print_info(f"  Num workers: {num_workers}")
 
         if quant_name == "w4a8_fp8":
             # Mixed precision weight quantization in a single pass:
@@ -630,8 +630,8 @@ class VLLMCalibrateEngine:
                     "compression.quantization.quant_method.group_size "
                     "in your YAML config."
                 )
-            print(f"  FP8 block size: {_FP8_BLOCK_SIZE}")
-            print(f"  W4 group size: {group_size}")
+            print_info(f"  FP8 block size: {_FP8_BLOCK_SIZE}")
+            print_info(f"  W4 group size: {group_size}")
 
             # Separate ignore_layers into:
             #   - fp8_only_layers: layers that should be FP8 quantized (skip W4)
@@ -645,12 +645,12 @@ class VLLMCalibrateEngine:
                         no_quant_layers.append(pattern)
                     else:
                         fp8_only_layers.append(pattern)
-            print(f"  FP8-only layers (skip W4): {fp8_only_layers}")
-            print(f"  No-quant layers (skip both FP8 & W4): {no_quant_layers}")
-            print("=" * 80)
+            print_info(f"  FP8-only layers (skip W4): {fp8_only_layers}")
+            print_info(f"  No-quant layers (skip both FP8 & W4): {no_quant_layers}")
+            print_info("=" * 80)
 
             # Step 1: W4A8 mixed quantization (single pass)
-            print("\n[Step 1/2] Mixed precision weight quantization (INT4 + FP8)...")
+            print_info("\n[Step 1/2] Mixed precision weight quantization (INT4 + FP8)...")
             mixed_weight_quantize(
                 input_path=model_path,
                 output_path=output_dir,
@@ -664,11 +664,15 @@ class VLLMCalibrateEngine:
 
             # Step 2: Convert MoE expert stats to input_scale
             if moe_expert_stats_path:
-                print(
+                from .compressor.quant.core.weight_quantize import (
+                    merge_moe_input_scales,
+                )
+
+                print_info(
                     "\n[Step 2/2] Converting MoE expert stats "
                     "to input_scale tensors (static activation)..."
                 )
-                self._moe_expert_stats_to_input_scales(
+                merge_moe_input_scales(
                     moe_expert_stats_path=moe_expert_stats_path,
                     output_dir=output_dir,
                 )
@@ -678,195 +682,9 @@ class VLLMCalibrateEngine:
                 f"Supported: fp8_static, w4a8_fp8"
             )
 
-        print("\n" + "=" * 80)
-        print(f"Quantized model saved to: {output_dir}")
-        print("=" * 80)
-
-    def _moe_expert_stats_to_input_scales(
-        self,
-        moe_expert_stats_path: str,
-        output_dir: str,
-    ) -> None:
-        """Convert MoE expert stats JSON to input_scale tensors in safetensors.
-
-        Reads the moe_expert_stats.json (with per-expert min/max from vLLM calibration),
-        computes input_scale = max(abs(min), abs(max)) / FP8_MAX for each expert layer,
-        and writes input_scale tensors into the quantized safetensors files.
-        Also updates model.safetensors.index.json and config.json accordingly.
-
-        Handles the gate_up_proj split: vLLM collects stats for the fused
-        "gate_up_proj" layer, but safetensors store separate "gate_proj" and
-        "up_proj" weights. The same input_scale is written for both.
-
-        JSON key format (per-expert):
-            model.layers.X.mlp.experts.N.{gate_up_proj|down_proj}
-        Safetensor key format:
-            model.layers.X.mlp.experts.N.{gate_proj|up_proj|down_proj}.input_scale
-
-        Args:
-            moe_expert_stats_path: Path to moe_expert_stats.json file.
-            output_dir: Path to the quantized model directory (with safetensors).
-        """
-        import re
-
-        from safetensors.torch import safe_open, save_file
-
-        FP8_MAX = torch.finfo(torch.float8_e4m3fn).max  # 448.0
-
-        # Mapping from JSON proj name -> safetensor proj name(s)
-        # vLLM collects fused gate_up_proj stats, but safetensors have separate gate_proj/up_proj
-        _PROJ_NAME_MAPPING = {
-            "gate_up_proj": ["gate_proj", "up_proj"],
-            "gate_and_up_proj": ["gate_proj", "up_proj"],
-            "down_proj": ["down_proj"],
-        }
-
-        # Load MoE expert stats
-        with open(moe_expert_stats_path, "r") as f:
-            moe_expert_stats = json.load(f)
-        print(f"  Loaded {len(moe_expert_stats)} MoE expert activation stats")
-
-        # Load model index to find which safetensor file each weight belongs to
-        index_path = os.path.join(output_dir, "model.safetensors.index.json")
-        if not os.path.exists(index_path):
-            print(
-                "  Warning: model.safetensors.index.json not found, "
-                "skipping input_scale generation"
-            )
-            return
-
-        with open(index_path, "r") as f:
-            model_index = json.load(f)
-        weight_map = model_index["weight_map"]
-
-        # Helper: find which safetensor file a given layer belongs to
-        def _find_shard_file(layer_name):
-            # Try exact weight key first
-            weight_key = f"{layer_name}.weight"
-            if weight_key in weight_map:
-                return weight_map[weight_key]
-            # Try qweight (for W4 quantized layers)
-            qweight_key = f"{layer_name}.qweight"
-            if qweight_key in weight_map:
-                return weight_map[qweight_key]
-            # Fallback: find any key with this layer name prefix
-            matching = [k for k in weight_map if k.startswith(layer_name + ".")]
-            if matching:
-                return weight_map[matching[0]]
-            return None
-
-        # Build mapping: safetensor_file -> list of (input_scale_key, scale_value)
-        file_to_scales = {}
-        skipped = 0
-
-        # Pattern for per-expert keys:
-        #   model.layers.X.mlp.experts.N.{gate_up_proj|gate_and_up_proj|down_proj}
-        expert_pattern = re.compile(
-            r"^(.+\.mlp\.experts)\.(\d+)\.(gate_up_proj|gate_and_up_proj|down_proj)$"
-        )
-
-        for layer_name, stats in moe_expert_stats.items():
-            abs_max = max(abs(stats["min"]), abs(stats["max"]))
-            input_scale = abs_max / FP8_MAX
-
-            m = expert_pattern.match(layer_name)
-            if m:
-                experts_prefix = m.group(1)  # model.layers.X.mlp.experts
-                expert_id = m.group(2)  # N
-                proj_name = m.group(3)  # gate_up_proj or down_proj
-
-                sf_proj_names = _PROJ_NAME_MAPPING.get(proj_name, [proj_name])
-                for sf_proj in sf_proj_names:
-                    expanded_name = f"{experts_prefix}.{expert_id}.{sf_proj}"
-                    input_scale_key = f"{expanded_name}.input_scale"
-                    shard_file = _find_shard_file(expanded_name)
-                    if shard_file is None:
-                        print(
-                            f"  Warning: Cannot find safetensor file for {expanded_name} "
-                            f"(from MoE expert key {layer_name}), skipping"
-                        )
-                        skipped += 1
-                        continue
-                    if shard_file not in file_to_scales:
-                        file_to_scales[shard_file] = []
-                    file_to_scales[shard_file].append((input_scale_key, input_scale))
-                    weight_map[input_scale_key] = shard_file
-            else:
-                # Non-expert key format — apply the same fused proj split logic
-                proj_suffix = layer_name.rsplit(".", 1)[-1] if "." in layer_name else layer_name
-                if proj_suffix in _PROJ_NAME_MAPPING:
-                    layer_prefix = layer_name.rsplit(".", 1)[0]
-                    for sf_proj in _PROJ_NAME_MAPPING[proj_suffix]:
-                        expanded_name = f"{layer_prefix}.{sf_proj}"
-                        input_scale_key = f"{expanded_name}.input_scale"
-                        shard_file = _find_shard_file(expanded_name)
-                        if shard_file is None:
-                            print(
-                                f"  Warning: Cannot find safetensor file for {expanded_name} "
-                                f"(expanded from {layer_name}), skipping"
-                            )
-                            skipped += 1
-                            continue
-                        if shard_file not in file_to_scales:
-                            file_to_scales[shard_file] = []
-                        file_to_scales[shard_file].append((input_scale_key, input_scale))
-                        weight_map[input_scale_key] = shard_file
-                else:
-                    # Direct mapping (no split needed)
-                    input_scale_key = f"{layer_name}.input_scale"
-                    shard_file = _find_shard_file(layer_name)
-                    if shard_file is None:
-                        print(f"  Warning: Cannot find safetensor file for {layer_name}, skipping")
-                        skipped += 1
-                        continue
-                    if shard_file not in file_to_scales:
-                        file_to_scales[shard_file] = []
-                    file_to_scales[shard_file].append((input_scale_key, input_scale))
-                    weight_map[input_scale_key] = shard_file
-
-        total_scales = sum(len(v) for v in file_to_scales.values())
-        print(f"  Total input_scale keys to write: {total_scales} (skipped: {skipped})")
-
-        # Write input_scale tensors into each safetensor file
-        for shard_file, scales in file_to_scales.items():
-            shard_path = os.path.join(output_dir, shard_file)
-            if not os.path.exists(shard_path):
-                print(f"  Warning: {shard_path} not found, skipping")
-                continue
-
-            # Load existing tensors
-            existing_tensors = {}
-            with safe_open(shard_path, framework="pt") as f:
-                for key in f.keys():
-                    existing_tensors[key] = f.get_tensor(key)
-
-            # Add input_scale tensors
-            for scale_key, scale_value in scales:
-                existing_tensors[scale_key] = torch.tensor(scale_value, dtype=torch.float32)
-
-            # Save back
-            save_file(existing_tensors, shard_path)
-            print(f"  Added {len(scales)} input_scale tensors to {shard_file}")
-
-        # Update model.safetensors.index.json
-        with open(index_path, "w") as f:
-            json.dump({"metadata": {}, "weight_map": weight_map}, f, indent=2)
-
-        # Update config.json to mark activation_scheme as static
-        config_path = os.path.join(output_dir, "config.json")
-        if os.path.exists(config_path):
-            with open(config_path, "r") as f:
-                config = json.load(f)
-            if "quantization_config" in config:
-                config["quantization_config"]["activation_scheme"] = "static"
-                # Also update ignored_quantization_config if present (w4a8_awq format)
-                if "ignored_quantization_config" in config["quantization_config"]:
-                    # Keep ignored layers' activation_scheme as dynamic (FP8 layers use dynamic)
-                    pass
-            with open(config_path, "w") as f:
-                json.dump(config, f, indent=4)
-
-        print(f"  Total input_scale tensors written: {total_scales}")
+        print_info("\n" + "=" * 80)
+        print_info(f"Quantized model saved to: {output_dir}")
+        print_info("=" * 80)
 
     @staticmethod
     def _extract_stats(stats_data):
@@ -888,15 +706,17 @@ class VLLMCalibrateEngine:
             stats_type: Type of statistics for log messages.
         """
         if stats_data is None:
-            print(f"\nNo {stats_type} available.")
+            print_info(f"\nNo {stats_type} available.")
             if "moe" in stats_type.lower():
-                print("Make sure VLLM_MOE_COLLECT_STATS=1 is set " "and the model has MoE layers.")
+                print_info(
+                    "Make sure VLLM_MOE_COLLECT_STATS=1 is set " "and the model has MoE layers."
+                )
             return
 
         output_file = os.path.join(self.output_dir, filename)
         with open(output_file, "w") as f:
             json.dump(stats_data, f, indent=2)
-        print(f"\n{stats_type.capitalize()} saved to: {output_file}")
+        print_info(f"\n{stats_type.capitalize()} saved to: {output_file}")
 
 
 class SpecEngine:

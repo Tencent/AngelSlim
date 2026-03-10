@@ -13,7 +13,9 @@ export VLLM_MOE_COLLECT_STATS_VERBOSE=0
 # Enable per-expert statistics collection
 export VLLM_MOE_COLLECT_PER_EXPERT_STATS=1
 
-CONFIG=configs/deepseek_r1/w4a8_fp8/deepseek_r1_w4a8_fp8_vllm.yaml
+CONFIG=configs/deepseek_r1/w4a8_fp8/deepseek_r1_w4a8_fp8_vllm.yaml.back
+
+mkdir -p logs
 
 python3 tools/run.py \
     -c $CONFIG \

@@ -20,7 +20,7 @@ import torch
 import torch.distributed as dist
 
 from angelslim.engine import Engine, VLLMCalibrateEngine
-from angelslim.utils import get_yaml_prefix_simple
+from angelslim.utils import get_yaml_prefix_simple, print_info
 from angelslim.utils.config_parser import SlimConfigParser, print_config
 
 
@@ -140,7 +140,7 @@ def vllm_calibrate_run(config):
     model_config = config.model_config
     dataset_config = config.dataset_config
     global_config = config.global_config
-    calibrate_config = config.calibrate_config
+    calibrate_config = config.compression_config.calibrate
     compress_config = config.compression_config
 
     # Check if calibration stats already exist — skip vLLM calibration if so
@@ -151,17 +151,17 @@ def vllm_calibrate_run(config):
     engine = VLLMCalibrateEngine()
 
     if skip_calibration:
-        print("\n" + "=" * 80)
-        print("Calibration stats already exist, skipping vLLM calibration:")
-        print(f"  - {activation_stats_file}")
-        print(f"  - {moe_stats_file}")
-        print("Proceeding directly to weight quantization and input_scale merging.")
-        print("=" * 80)
+        print_info("\n" + "=" * 80)
+        print_info("Calibration stats already exist, skipping vLLM calibration:")
+        print_info(f"  - {activation_stats_file}")
+        print_info(f"  - {moe_stats_file}")
+        print_info("Proceeding directly to weight quantization and input_scale merging.")
+        print_info("=" * 80)
         # Set output_dir so that engine.quantize() can find activation_stats.json
         engine.output_dir = global_config.save_path
     else:
-        print("\n" + "=" * 80)
-        print("Starting vLLM calibration:")
+        print_info("\n" + "=" * 80)
+        print_info("Starting vLLM calibration:")
         engine.prepare_model(
             model_path=model_config.model_path,
             tp_size=calibrate_config.tp_size,
@@ -171,11 +171,7 @@ def vllm_calibrate_run(config):
             skip_weight_loading=calibrate_config.skip_weight_loading,
         )
 
-        engine.prepare_data(
-            ptq_data_path=dataset_config.data_path,
-            max_length=dataset_config.max_seq_length,
-            num_samples=dataset_config.num_samples,
-        )
+        engine.prepare_data(dataset_config)
 
         engine.run(
             output_dir=global_config.save_path,
@@ -218,7 +214,10 @@ def run(config):
     global_config = config.global_config
 
     # Dispatch to vLLM calibration if calibrate config specifies vllm backend
-    if config.calibrate_config and config.calibrate_config.backend == "vllm":
+    if (
+        config.compression_config.calibrate
+        and config.compression_config.calibrate.backend == "vllm"
+    ):
         vllm_calibrate_run(config)
         return
 
