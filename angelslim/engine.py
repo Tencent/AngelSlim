@@ -468,23 +468,18 @@ class VLLMCalibrateEngine:
         print("Loading dataset and preparing prompts...")
         print("=" * 80)
 
-        # Reuse Engine's prepare_data via a temporary Engine instance
-        slim_engine = Engine()
-        slim_engine.slim_model = self.llm
-        slim_engine.series = "LLM"
-        slim_engine.slim_model.tokenizer = self.tokenizer
-        slim_engine.slim_model.model = self.llm
-        slim_engine.slim_model.model.device = "cpu"
-        dataset = slim_engine.prepare_data(
-            data_path=ptq_data_path,
+        dataloader = DataLoaderFactory.create_data_loader(
+            data_type="TextDataset",
+            processor=self.tokenizer,
+            device="cpu",
             max_length=max_length,
-            num_samples=num_samples,
+            batch_size=1,
             shuffle=False,
-            inference_settings=None,
-            use_audio_in_video=False,
+            num_samples=num_samples,
+            data_source=ptq_data_path,
         )
 
-        self.prompts = [self.tokenizer.decode(data["input_ids"][0]) for data in dataset]
+        self.prompts = [self.tokenizer.decode(data["input_ids"][0]) for data in dataloader]
         print(f"Loaded {len(self.prompts)} prompts from dataset")
         return self.prompts
 
