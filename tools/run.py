@@ -171,7 +171,11 @@ def vllm_calibrate_run(config):
             skip_weight_loading=calibrate_config.skip_weight_loading,
         )
 
-        engine.prepare_data(dataset_config)
+        engine.prepare_data(
+            ptq_data_path=dataset_config.data_path,
+            max_length=dataset_config.max_seq_length,
+            num_samples=dataset_config.num_samples,
+        )
 
         engine.run(
             output_dir=global_config.save_path,
