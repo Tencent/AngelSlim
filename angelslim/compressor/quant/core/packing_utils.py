@@ -109,6 +109,18 @@ def dequantize_gemm(qweight, qzeros, scales, bits, group_size):
 
 
 def pack_weight_to_int8(weight):
+    """Pack two INT4 values into one INT8 byte (CPU, numpy-based).
+
+    Original implementation using Python loops for packing.
+    Kept for debugging and fallback.
+    For GPU-accelerated packing, use pack_weight_to_int8_gpu.
+
+    Args:
+        weight: Tensor of shape (out_features, in_features) with values in [-8, 7].
+
+    Returns:
+        Packed INT8 tensor of shape (out_features, in_features // 2) on CPU.
+    """
     weight = weight.t().contiguous().cpu()
     weight = weight.to(torch.float32).numpy().astype(np.int8)
 
@@ -123,4 +135,35 @@ def pack_weight_to_int8(weight):
 
     packed_weight = packed_weight.astype(np.int8)
     packed_weight = torch.from_numpy(packed_weight).t().contiguous()
+    return packed_weight
+
+
+def pack_weight_to_int8_gpu(weight):
+    """Pack two INT4 values into one INT8 byte using pure PyTorch (GPU-accelerated).
+
+    Supports both CPU and GPU tensors — no numpy dependency, so packing
+    can be done directly on GPU without device transfer overhead.
+
+    Input layout (after transpose): rows are paired (row 0,1 -> packed row 0, etc.)
+    Low nibble = even row, high nibble = odd row.
+
+    Args:
+        weight: Tensor of shape (out_features, in_features) with values in [-8, 7].
+            Can be on any device (CPU or CUDA).
+
+    Returns:
+        Packed INT8 tensor of shape (out_features, in_features // 2),
+        on the same device as input.
+    """
+    # Transpose to (in_features, out_features) for row-pair packing
+    weight = weight.t().contiguous().to(torch.int8)
+
+    # Vectorized packing: pair adjacent rows and combine low/high nibbles
+    # Even rows -> low nibble, odd rows -> high nibble
+    even_rows = weight[0::2]  # shape: (rows//2, cols)
+    odd_rows = weight[1::2]  # shape: (rows//2, cols)
+    packed_weight = (even_rows & 0x0F) | ((odd_rows & 0x0F) << 4)
+
+    # Transpose back to (out_features, in_features // 2)
+    packed_weight = packed_weight.t().contiguous()
     return packed_weight

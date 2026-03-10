@@ -311,6 +311,27 @@ class CompressionConfig:
 
 
 @dataclass
+class CalibrateConfig:
+    """Configuration for vLLM-based calibration.
+
+    Attributes:
+        backend: Calibration backend ('hf' or 'vllm')
+        tp_size: Tensor parallel size for vLLM
+        max_num_seqs: Maximum number of sequences per batch for vLLM
+        distributed_executor_backend: Distributed executor backend ('ray' or 'mp')
+        skip_weight_loading: Use dummy weights for fast debug mode
+        verbose: Enable verbose output for debugging
+    """
+
+    backend: str = field(default="hf")
+    tp_size: int = field(default=1)
+    max_num_seqs: int = field(default=128)
+    distributed_executor_backend: str = field(default="ray")
+    skip_weight_loading: bool = field(default=False)
+    verbose: bool = field(default=False)
+
+
+@dataclass
 class InferenceConfig:
     """Configuration for inference parameters.
     Attributes:
@@ -339,6 +360,9 @@ class FullConfig:
         model_config: Model configuration parameters
         compression_config: Compression configuration parameters
         dataset_config: Dataset configuration parameters
+        global_config: Global configuration parameters
+        infer_config: Inference configuration parameters
+        calibrate_config: Calibration configuration parameters
     """
 
     model_config: ModelConfig
@@ -346,6 +370,7 @@ class FullConfig:
     dataset_config: DatasetConfig
     global_config: GlobalConfig
     infer_config: InferenceConfig
+    calibrate_config: Optional[CalibrateConfig] = None
 
 
 class SlimConfigParser:
@@ -470,12 +495,19 @@ class SlimConfigParser:
             inference_dict = config_dict["inference"]
             inference_conf = InferenceConfig(**inference_dict)
 
+        # Calibration configuration
+        calibrate_conf = None
+        if "calibrate" in config_dict:
+            calibrate_dict = config_dict["calibrate"]
+            calibrate_conf = CalibrateConfig(**calibrate_dict)
+
         return FullConfig(
             model_config=model_conf,
             compression_config=compression_conf,
             dataset_config=dataset_conf,
             global_config=global_config,
             infer_config=inference_conf,
+            calibrate_config=calibrate_conf,
         )
 
     def _get_global_config(self, config_dict, model_conf, dataset_conf=None) -> GlobalConfig:
@@ -583,12 +615,18 @@ def parse_json_full_config(json_file_path: str) -> FullConfig:
     if config_data.get("infer_config", {}):
         infer_config = InferenceConfig(**config_data["infer_config"])
 
+    # Parse calibration configuration section
+    calibrate_config = None
+    if config_data.get("calibrate_config", {}):
+        calibrate_config = CalibrateConfig(**config_data["calibrate_config"])
+
     return FullConfig(
         model_config=model_config,
         compression_config=comp_config,
         dataset_config=dataset_config,
         global_config=global_config,
         infer_config=infer_config,
+        calibrate_config=calibrate_config,
     )
 
 
@@ -632,6 +670,12 @@ def print_config(config, indent=0):
         print(f"{prefix}Inference:")
         if config.infer_config:
             print_config(config.infer_config, next_indent)
+        else:
+            print(f"{prefix}None")
+
+        print(f"{prefix}Calibrate:")
+        if config.calibrate_config:
+            print_config(config.calibrate_config, next_indent)
         else:
             print(f"{prefix}None")
         return
