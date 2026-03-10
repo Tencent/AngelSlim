@@ -128,10 +128,13 @@ class HiddenStateGenerator:
                 image_paths = json.loads(row.pop("image_paths"))
                 if image_paths:
                     images = [Image.open(p) for p in image_paths]
-                    # vision_encoding: pixel_values, video_pixel_values, image_grid_thw, video_grid_thw
-                    vision_encoding = self.target_model.tokenizer.image_processor(
-                        images=images, return_tensors="pt"
-                    )
+                    processor = self.target_model.tokenizer
+                    if hasattr(processor, "image_processor"):
+                        # qwen3_vl: get vision encodings from image_processor
+                        vision_encoding = processor.image_processor(images=images, return_tensors="pt")
+                    else:
+                        # hunyuan_vl: get vision encodings directly from processor
+                        vision_encoding = processor(images=images, return_tensors="pt")
                     row["pixel_values"] = vision_encoding["pixel_values"].to(device)
                     if "video_pixel_values" in vision_encoding:
                         row["video_pixel_values"] = vision_encoding["video_pixel_values"].to(device)
