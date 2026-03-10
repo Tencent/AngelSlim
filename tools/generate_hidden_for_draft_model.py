@@ -13,9 +13,9 @@
 # limitations under the License.
 
 import argparse
+import json
 import logging
 import os
-import json
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, Dict, Tuple
@@ -123,7 +123,6 @@ class HiddenStateGenerator:
             # Generate aux and target hiddens
             device = decide_device_for_distributed()
 
-            # for vlm data: if "image_paths" in row, then load images and compute vision encodings; otherwise skip
             if "image_paths" in row:
                 image_paths = json.loads(row.pop("image_paths"))
                 if image_paths:
@@ -131,13 +130,17 @@ class HiddenStateGenerator:
                     processor = self.target_model.tokenizer
                     if hasattr(processor, "image_processor"):
                         # qwen3_vl: get vision encodings from image_processor
-                        vision_encoding = processor.image_processor(images=images, return_tensors="pt")
+                        vision_encoding = processor.image_processor(
+                            images=images, return_tensors="pt"
+                        )
                     else:
                         # hunyuan_vl: get vision encodings directly from processor
                         vision_encoding = processor(images=images, return_tensors="pt")
                     row["pixel_values"] = vision_encoding["pixel_values"].to(device)
                     if "video_pixel_values" in vision_encoding:
-                        row["video_pixel_values"] = vision_encoding["video_pixel_values"].to(device)
+                        row["video_pixel_values"] = vision_encoding["video_pixel_values"].to(
+                            device
+                        )
                     if "image_grid_thw" in vision_encoding:
                         row["image_grid_thw"] = vision_encoding["image_grid_thw"].to(device)
                     if "video_grid_thw" in vision_encoding:
