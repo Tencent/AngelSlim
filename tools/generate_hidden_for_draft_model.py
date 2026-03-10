@@ -15,6 +15,7 @@
 import argparse
 import logging
 import os
+import json
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, Dict, Tuple
@@ -22,6 +23,7 @@ from typing import Any, Dict, Tuple
 import torch
 import torch.distributed as dist
 from tqdm import tqdm
+from transformers.image_utils import load_image
 
 from angelslim.compressor.speculative import DatasetManager, create_target_model
 from angelslim.utils import decide_device_for_distributed
@@ -123,11 +125,9 @@ class HiddenStateGenerator:
 
             # for vlm data: if "image_paths" in row, then load images and compute vision encodings; otherwise skip
             if "image_paths" in row:
-                import json
-                from PIL import Image
                 image_paths = json.loads(row.pop("image_paths"))
                 if image_paths:
-                    images = [Image.open(p) for p in image_paths]
+                    images = [load_image(p) for p in image_paths]
                     processor = self.target_model.tokenizer
                     if hasattr(processor, "image_processor"):
                         # qwen3_vl: get vision encodings from image_processor
