@@ -120,6 +120,28 @@ class HiddenStateGenerator:
         try:
             # Generate aux and target hiddens
             device = decide_device_for_distributed()
+
+            # for vlm data: if "image_paths" in row, then load images and compute vision encodings; otherwise skip
+            if "image_paths" in row:
+                import json
+                from PIL import Image
+                image_paths = json.loads(row.pop("image_paths"))
+                if image_paths:
+                    images = [Image.open(p) for p in image_paths]
+                    # vision_encoding: pixel_values, video_pixel_values, image_grid_thw, video_grid_thw
+                    vision_encoding = self.target_model.tokenizer.image_processor(
+                        images=images, return_tensors="pt"
+                    )
+                    row["pixel_values"] = vision_encoding["pixel_values"].to(device)
+                    if "video_pixel_values" in vision_encoding:
+                        row["video_pixel_values"] = vision_encoding["video_pixel_values"].to(device)
+                    if "image_grid_thw" in vision_encoding:
+                        row["image_grid_thw"] = vision_encoding["image_grid_thw"].to(device)
+                    if "video_grid_thw" in vision_encoding:
+                        row["video_grid_thw"] = vision_encoding["video_grid_thw"].to(device)
+                else:
+                    row.pop("image_paths", None)
+
             for k, v in row.items():
                 if isinstance(v, torch.Tensor) and v is not None:
                     row[k] = v.to(device)

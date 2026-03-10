@@ -146,7 +146,9 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
                 num_proc=num_proc,
                 desc="Filtering empty input_ids",
             )
-            processed_ds.set_format(type="torch")
+            # Set format to torch, but exclude "image_paths" which is a string field that cannot be converted to tensor
+            torch_columns = [c for c in processed_ds.column_names if c != "image_paths"]
+            processed_ds.set_format(type="torch", columns=torch_columns)
 
             return processed_ds
 
@@ -161,10 +163,7 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
             "input_ids": [],
             "attention_mask": [],
             "loss_mask": [],
-            "pixel_values": [],
-            "video_pixel_values": [],
-            "image_grid_thw": [],
-            "video_grid_thw": [],
+            "image_paths": [],
         }
 
         for i in range(len(examples["id"])):
@@ -279,14 +278,16 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
                 "loss_mask": loss_mask.view(1, -1),
             }
 
-            if "pixel_values" in encoding:
-                result_dict["pixel_values"] = encoding["pixel_values"].unsqueeze(0)
-            if "video_pixel_values" in encoding:
-                result_dict["video_pixel_values"] = encoding["video_pixel_values"].unsqueeze(0)
-            if "image_grid_thw" in encoding:
-                result_dict["image_grid_thw"] = encoding["image_grid_thw"]
-            if "video_grid_thw" in encoding:
-                result_dict["video_grid_thw"] = encoding["video_grid_thw"]
+            # 收集图片路径，推迟 pixel_values 计算到 forward 时，避免 arrow 溢出
+            image_paths = []
+            for message in messages:
+                content = message.get("content", [])
+                if not isinstance(content, list):
+                    continue
+                for item in content:
+                    if item.get("type") == "image" and item.get("image"):
+                        image_paths.append(item["image"])
+            result_dict["image_paths"] = json.dumps(image_paths)
 
             return result_dict
 
