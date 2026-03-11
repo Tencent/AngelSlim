@@ -147,7 +147,7 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
                 desc="Filtering empty input_ids",
             )
             torch_columns = [c for c in processed_ds.column_names if c != "image_paths"]
-            processed_ds.set_format(type="torch", columns=torch_columns)
+            processed_ds.set_format(type="torch", columns=torch_columns, output_all_columns=True)
 
             return processed_ds
 
@@ -221,6 +221,16 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
             if not messages:
                 return None
 
+            # extract image paths before apply_chat_template modifies messages in-place
+            image_paths = []
+            for message in messages:
+                content = message.get("content", [])
+                if not isinstance(content, list):
+                    continue
+                for item in content:
+                    if item.get("type") == "image" and item.get("image"):
+                        image_paths.append(item["image"])
+
             # Apply chat template
             assert isinstance(messages, list), f"type(messages)={type(messages)} is not list"
             for message in messages:
@@ -276,18 +286,8 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
                 "input_ids": input_ids.view(1, -1),
                 "attention_mask": attention_mask.view(1, -1),
                 "loss_mask": loss_mask.view(1, -1),
+                "image_paths": json.dumps(image_paths),
             }
-
-            # extract image paths from conversation
-            image_paths = []
-            for message in messages:
-                content = message.get("content", [])
-                if not isinstance(content, list):
-                    continue
-                for item in content:
-                    if item.get("type") == "image" and item.get("image"):
-                        image_paths.append(item["image"])
-            result_dict["image_paths"] = json.dumps(image_paths)
 
             return result_dict
 
@@ -372,7 +372,7 @@ class OnlineVLMHunyuanVLDatasetBuilder(OnlineDatasetBuilder):
                 desc="Filtering empty input_ids",
             )
             torch_columns = [c for c in processed_ds.column_names if c != "image_paths"]
-            processed_ds.set_format(type="torch", columns=torch_columns)
+            processed_ds.set_format(type="torch", columns=torch_columns, output_all_columns=True)
 
             return processed_ds
 
