@@ -155,7 +155,8 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
             raise RuntimeError(f"Dataset building failed for {datapath}") from e
 
     def get_data_collator(self) -> Any:
-        return VLMDataCollatorWithPadding()
+        # for online vlm training: dynamically compute pixel_values during collate stage
+        return VLMDataCollatorWithPadding(processor=self.tokenizer)
 
     def _preprocess_function(self, examples: Dict[str, List]) -> Dict[str, List]:
         new_examples = {
@@ -379,7 +380,8 @@ class OnlineVLMHunyuanVLDatasetBuilder(OnlineDatasetBuilder):
             raise RuntimeError(f"Dataset building failed for {datapath}") from e
 
     def get_data_collator(self) -> Any:
-        return VLMHunyuanDataCollatorWithPadding()
+        # for online training, we need to use VLMHunyuanDataCollatorWithPadding
+        return VLMHunyuanDataCollatorWithPadding(processor=self.tokenizer)
 
     def _preprocess_function(self, examples: Dict[str, List]) -> Dict[str, List]:
         new_examples = {
