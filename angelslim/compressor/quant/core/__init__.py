@@ -15,7 +15,11 @@
 from .config import *  # noqa: F401 F403
 from .hook import PTQHook  # noqa: F401
 from .metrics import LossFilter, mse_loss, snr_loss  # noqa: F401
-from .packing_utils import dequantize_gemm, pack_weight_to_int8  # noqa: F401
+from .packing_utils import (  # noqa: F401
+    dequantize_gemm,
+    pack_weight_to_int8,
+    pack_weight_to_int8_gpu,
+)
 from .quant_func import *  # noqa: F401 F403
 from .sample_func import EMASampler, MultiStepSampler  # noqa: F401
 from .save import DeepSeekV3PTQSaveMulti  # noqa: F401
