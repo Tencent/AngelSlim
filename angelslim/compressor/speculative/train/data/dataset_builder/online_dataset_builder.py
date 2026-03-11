@@ -148,6 +148,9 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
             )
             torch_columns = [c for c in processed_ds.column_names if c != "image_paths"]
             processed_ds.set_format(type="torch", columns=torch_columns, output_all_columns=True)
+            rank0_print(
+                f"processed_ds size:{len(processed_ds)}, columns: {processed_ds.column_names}"
+            )
 
             return processed_ds
 

@@ -448,15 +448,24 @@ def main():
             trust_remote_code=args.trust_remote_code,
             target_model_type=args.target_model_type,
         )
+        logger.info(
+            f"Target model loaded: {args.target_model_name_or_path or args.model_name}",
+            extra={"rank": rank},
+        )
+        logger.info(f"tokenizer: {target_model.tokenizer}")
 
         # Load dataset
         dataset = load_dataset(args, target_model.tokenizer, rank)
+        if len(dataset) == 0:
+            logger.warning("No samples to process after loading dataset", extra={"rank": rank})
+            return
 
         # Split dataset for this rank
         dataset_slice = split_dataset_for_rank(dataset, rank, world_size, args.start, args.end)
 
         # Generate hidden states
         output_dir = f"{args.outdir}/rank_{rank}"
+        logger.info(f"writing hidden states to {output_dir}", extra={"rank": rank})
         generator = HiddenStateGenerator(target_model, output_dir, rank=rank)
         successful, failed = generator.generate(dataset_slice)
 
