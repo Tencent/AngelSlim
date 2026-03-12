@@ -31,9 +31,60 @@ from torch import nn
 from safetensors import safe_open
 from transformers import AutoConfig
 
-from ..models.draft.online_dflash_model import OnlineDFlashModel, create_dflash_block_mask
 from .eagle3_trainer import Eagle3Trainer
 from .trainer_factory import Eagle3TrainerFactory
+
+try:
+    from torch.nn.attention.flex_attention import BlockMask, create_block_mask
+    FLEX_ATTENTION_AVAILABLE = True
+except ImportError:
+    FLEX_ATTENTION_AVAILABLE = False
+    BlockMask = None
+    create_block_mask = None
+
+
+def create_dflash_block_mask(
+    anchor_positions: torch.Tensor,
+    block_keep_mask: torch.Tensor,
+    S: int,
+    block_size: int,
+    device: torch.device,
+):
+    """Construct Flex Attention BlockMask for DFlash training.
+
+    KV: [Context (S tokens) | Block_0 | Block_1 | ... | Block_{n-1}]
+    Q:  [Block_0 | Block_1 | ... | Block_{n-1}]
+
+    Rules:
+      1. Each block sees context strictly before its anchor (kv_idx < anchor_pos).
+      2. Intra-block attention is bidirectional.
+      3. Different blocks are invisible to each other.
+      4. Invalid blocks (block_keep_mask=False) see nothing.
+    """
+
+    def dflash_mask_mod(b, h, q_idx, kv_idx):
+        q_block_id = q_idx // block_size
+        anchor_pos = anchor_positions[b, q_block_id]
+
+        is_context = kv_idx < S
+        # Strictly less than: matches inference where target_hidden[anchor_pos]
+        # is not available as context.
+        mask_context = is_context & (kv_idx < anchor_pos)
+
+        is_draft = kv_idx >= S
+        kv_block_id = (kv_idx - S) // block_size
+        mask_draft = is_draft & (q_block_id == kv_block_id)
+
+        is_valid_block = block_keep_mask[b, q_block_id]
+        return (mask_context | mask_draft) & is_valid_block
+
+    B, N = anchor_positions.shape
+    Q_LEN = N * block_size
+    KV_LEN = S + N * block_size
+
+    return create_block_mask(
+        dflash_mask_mod, B=B, H=None, Q_LEN=Q_LEN, KV_LEN=KV_LEN, device=device
+    )
 
 
 class TargetEmbeddingsAndHead(nn.Module):
@@ -200,7 +251,7 @@ class OnlineDFlashTrainer(Eagle3Trainer):
         self.attention_backend = getattr(
             draft_model_config, "attention_backend", "flex_attention"
         )
-        mask_token_id = dflash_config.get(
+        self.mask_token_id = dflash_config.get(
             "mask_token_id",
             getattr(draft_model_config, "mask_token_id", None),
         )
@@ -228,25 +279,13 @@ class OnlineDFlashTrainer(Eagle3Trainer):
                 device="cuda",
                 trust_remote_code=trust_remote_code,
             )
-            target_lm_head = target_components.lm_head
-            target_embed_tokens = target_components.embed_tokens
+            self.target_lm_head = target_components.lm_head
+            self.target_embed_tokens = target_components.embed_tokens
         else:
             raise ValueError(
                 "target_model_name_or_path must be set in draft_model_config "
                 "or target_model.model_path for DFlash training."
             )
-
-        # Build the OnlineDFlashModel wrapper
-        self.dflash_model = OnlineDFlashModel(
-            draft_model=draft_model,
-            target_lm_head=target_lm_head,
-            target_embed_tokens=target_embed_tokens,
-            block_size=self.block_size,
-            mask_token_id=mask_token_id,
-            attention_backend=self.attention_backend,
-            num_anchors=self.num_anchors,
-            loss_decay_gamma=self.loss_decay_gamma,
-        )
 
     def prepare_data_for_draft_model(self, inputs):
         """Prepare data for DFlash training.
@@ -272,8 +311,87 @@ class OnlineDFlashTrainer(Eagle3Trainer):
             "attention_mask": attention_mask,
         }
 
+    def _sample_anchor_positions(
+        self, seq_len: int, loss_mask: torch.Tensor, device: torch.device
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Randomly sample anchor positions per sample; returns (anchors, keep_mask).
+
+        Returns (None, None) when the batch has no valid anchors (too-short or
+        loss_mask-empty sequences), which is handled gracefully in forward().
+        """
+        bs = self.block_size
+        bsz = loss_mask.shape[0]
+        max_anchor = max(seq_len - bs, 0)
+
+        valid = loss_mask[:, : max_anchor + 1] > 0.5
+        valid_counts = valid.sum(dim=1)
+        max_valid = int(valid_counts.max().item())
+
+        # Need at least 2 valid positions (anchor + at least one prediction target)
+        if max_valid <= 1:
+            return None, None
+
+        max_n = min(self.num_anchors, max_valid - 1)
+
+        indices = (
+            torch.arange(max_anchor + 1, device=device).unsqueeze(0).expand(bsz, -1)
+        )
+        masked_indices = torch.where(
+            valid, indices, torch.tensor(seq_len + 1, device=device)
+        )
+
+        random_vals = torch.rand(bsz, max_anchor + 1, device=device)
+        random_vals = torch.where(valid, random_vals, torch.tensor(2.0, device=device))
+
+        _, sorted_idx = random_vals.sort(dim=1)
+        gathered = torch.gather(masked_indices, 1, sorted_idx)
+        anchors = gathered[:, :max_n].sort(dim=1).values
+
+        keep_mask = torch.arange(max_n, device=device).unsqueeze(
+            0
+        ) < valid_counts.unsqueeze(1).clamp(max=max_n)
+        anchors = torch.where(
+            keep_mask, anchors, torch.tensor(0, dtype=torch.long, device=device)
+        )
+
+        return anchors, keep_mask
+
+    def _create_position_ids(self, anchor_positions: torch.Tensor) -> torch.Tensor:
+        """Create absolute position IDs for parallel draft blocks."""
+        bsz, n_blocks = anchor_positions.shape
+        device = anchor_positions.device
+        offsets = torch.arange(self.block_size, device=device).view(1, 1, -1)
+        pos_ids = anchor_positions.unsqueeze(-1) + offsets
+        return pos_ids.view(bsz, -1)
+
+    def _create_noise_embed(self, input_ids, anchor_positions, block_keep_mask):
+        bsz, seq_len = input_ids.shape
+        n = anchor_positions.shape[1]
+        bs = self.block_size
+        device = input_ids.device
+
+        noise_ids = torch.full(
+            (bsz, n * bs), self.mask_token_id, dtype=torch.long, device=device
+        )
+
+        block_starts = torch.arange(n, device=device) * bs
+        block_starts = block_starts.unsqueeze(0).expand(bsz, -1)
+
+        valid_anchor_positions = anchor_positions.clamp(0, seq_len - 1)
+        anchor_tokens = torch.gather(input_ids, 1, valid_anchor_positions)
+
+        flat_batch_idx = torch.arange(bsz, device=device).unsqueeze(1).expand(bsz, n)
+        noise_ids[flat_batch_idx, block_starts] = torch.where(
+            block_keep_mask,
+            anchor_tokens,
+            torch.tensor(self.mask_token_id, dtype=torch.long, device=device),
+        )
+
+        return self.target_embed_tokens(noise_ids)
+
     def _compute_dflash_loss_and_accuracy(
         self,
+        model: nn.Module,
         input_ids: torch.Tensor,
         hidden_states: torch.Tensor,
         loss_mask: torch.Tensor,
@@ -293,10 +411,9 @@ class OnlineDFlashTrainer(Eagle3Trainer):
         """
         bsz, seq_len = input_ids.shape
         device = input_ids.device
-        model = self.dflash_model  # convenience alias
 
         # ── 1. Anchor sampling ────────────────────────────────────────────────
-        anchor_positions, block_keep_mask = model._sample_anchor_positions(
+        anchor_positions, block_keep_mask = self._sample_anchor_positions(
             seq_len, loss_mask, device
         )
 
@@ -304,13 +421,13 @@ class OnlineDFlashTrainer(Eagle3Trainer):
         if anchor_positions is None:
             zero_loss = sum(
                 p.sum() * 0.0
-                for p in model.draft_model.parameters()
+                for p in model.parameters()
                 if p.requires_grad
             )
             return zero_loss, torch.tensor(0.0, device=device)
 
         # ── 2. Noise embedding ────────────────────────────────────────────────
-        noise_embedding = model._create_noise_embed(
+        noise_embedding = self._create_noise_embed(
             input_ids, anchor_positions, block_keep_mask
         )
 
@@ -318,7 +435,7 @@ class OnlineDFlashTrainer(Eagle3Trainer):
         context_position_ids = (
             torch.arange(seq_len, device=device).unsqueeze(0).expand(bsz, -1)
         )
-        draft_position_ids = model._create_position_ids(anchor_positions)
+        draft_position_ids = self._create_position_ids(anchor_positions)
         full_position_ids = torch.cat([context_position_ids, draft_position_ids], dim=1)
 
         # ── 4. Attention mask (DFlash BlockMask) ─────────────────────────────
@@ -326,20 +443,27 @@ class OnlineDFlashTrainer(Eagle3Trainer):
             anchor_positions=anchor_positions,
             block_keep_mask=block_keep_mask,
             S=seq_len,
-            block_size=model.block_size,
+            block_size=self.block_size,
             device=device,
         )
 
         # ── 5. Draft model forward → logits  [B, N*bs, vocab] ────────────────
-        logits = model(
+        model_dtype = next(model.parameters()).dtype
+        noise_embedding = noise_embedding.to(model_dtype)
+        hidden_states = hidden_states.to(model_dtype)
+
+        output_hidden = model(
             noise_embedding=noise_embedding,
-            hidden_states=hidden_states,
+            target_hidden=hidden_states,
             attention_mask=dflash_attn_mask,
             position_ids=full_position_ids,
         )
+        
+        output_hidden = output_hidden.to(self.target_lm_head.weight.dtype)
+        logits = self.target_lm_head(output_hidden)
 
         # ── 6. Labels: position k in block predicts token at (anchor + k) ────
-        bs = model.block_size
+        bs = self.block_size
         label_offsets = torch.arange(0, bs, device=device).view(1, 1, -1)
         label_indices = anchor_positions.unsqueeze(-1) + label_offsets
         valid_label_mask = label_indices < seq_len
@@ -370,9 +494,9 @@ class OnlineDFlashTrainer(Eagle3Trainer):
         binary_eval_mask = weight_mask.view(-1)   # no decay, used for accuracy
 
         # ── 8. Exponential decay: exp(-(k-1)/γ), k=1 gets weight 1.0 ─────────
-        if model.loss_decay_gamma is not None and model.loss_decay_gamma > 0:
+        if self.loss_decay_gamma is not None and self.loss_decay_gamma > 0:
             k = torch.arange(bs, device=device).view(1, 1, -1)
-            decay = torch.exp(-(k - 1).clamp(min=0).float() / model.loss_decay_gamma)
+            decay = torch.exp(-(k - 1).clamp(min=0).float() / self.loss_decay_gamma)
             weight_mask = weight_mask * decay
 
         # ── 9. Cross-entropy loss ─────────────────────────────────────────────
@@ -406,6 +530,7 @@ class OnlineDFlashTrainer(Eagle3Trainer):
         data = self.prepare_data_for_draft_model(inputs)
 
         loss, accuracy = self._compute_dflash_loss_and_accuracy(
+            model=model,
             input_ids=data["input_ids"],
             hidden_states=data["hidden_states"],
             loss_mask=data["loss_mask"],
@@ -430,6 +555,7 @@ class OnlineDFlashTrainer(Eagle3Trainer):
 
         with torch.no_grad():
             loss, accuracy = self._compute_dflash_loss_and_accuracy(
+                model=model,
                 input_ids=data["input_ids"],
                 hidden_states=data["hidden_states"],
                 loss_mask=data["loss_mask"],
