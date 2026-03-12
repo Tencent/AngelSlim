@@ -34,7 +34,7 @@ torchrun \
     --draft_model_config_path $ROOT_DIR/configs/qwen3_dflash.json \
     --train_hidden_path $TRAIN_HIDDEN_PATH \
     --output_dir $OUTPUT_DIR \
-    --num_train_epochs 6 \
+    --num_train_epochs 12 \
     --per_device_train_batch_size 2 \
     --learning_rate 6e-4 \
     --warmup_ratio 0.04 \

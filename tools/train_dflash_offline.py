@@ -83,37 +83,6 @@ class OfflineDFlashDataset(OfflineEagle3Dataset):
 
 
 # ---------------------------------------------------------------------------
-# Offline DFlash Trainer
-# ---------------------------------------------------------------------------
-
-class OfflineDFlashTrainer(OnlineDFlashTrainer):
-    """
-    DFlash trainer for offline (pre-computed hidden states) training.
-
-    The main difference vs online: hidden_states are loaded directly from the
-    pre-computed .ckpt files, so prepare_data_for_draft_model() just unpacks
-    the batch instead of running a target-model forward pass.
-    """
-
-    def prepare_data_for_draft_model(self, inputs):
-        """
-        Unpack pre-computed hidden states from the offline batch.
-
-        Expected batch keys (from OfflineDFlashDataset):
-            input_ids      [B, S]
-            hidden_states  [B, S, D*L]
-            loss_mask      [B, S]
-            attention_mask [B, S]
-        """
-        return {
-            "input_ids":      inputs["input_ids"],
-            "hidden_states":  inputs["hidden_states"],
-            "loss_mask":      inputs["loss_mask"],
-            "attention_mask": inputs["attention_mask"],
-        }
-
-
-# ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
 
@@ -307,14 +276,16 @@ def train():
     )
 
     # ------------------------------------------------------------------
-    # 5. Trainer -- use OfflineDFlashTrainer (no target model needed at train time)
+    # 5. Trainer -- use Eagle3TrainerFactory
     # ------------------------------------------------------------------
     rank0_print("Initializing trainer...")
-    trainer = OfflineDFlashTrainer(
+    trainer = Eagle3TrainerFactory.create(
+        training_mode="offline",
+        modal_type="DFlash",
         draft_model=draft_model,
-        draft_model_config=draft_model_config,
         target_model=None,   # Not needed — hidden states are pre-computed
         length=args.training_time_test_length,
+        draft_model_config=draft_model_config,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
