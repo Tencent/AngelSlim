@@ -331,15 +331,19 @@ class VLMHunyuanDataCollatorWithPadding:
 
         # Online training: decode image_paths -> pixel_values on-the-fly
         if self.processor is not None and "image_paths" in features[0]:
-            all_pixel_values = []
+            all_pixel_values, all_image_grid_thw = [], []
             for item in features:
                 image_paths = json.loads(item["image_paths"])
                 if image_paths:
                     images = [load_image(p) for p in image_paths]
                     vision_enc = self.processor(images=images, return_tensors="pt")
                     all_pixel_values.append(vision_enc["pixel_values"])
+                    if "image_grid_thw" in vision_enc:
+                        all_image_grid_thw.append(vision_enc["image_grid_thw"])
             if all_pixel_values:
                 batch["pixel_values"] = paddingtensor3D_BHW(all_pixel_values)
+            if all_image_grid_thw:
+                batch["image_grid_thw"] = torch.cat(all_image_grid_thw, dim=0)
         else:
             if "pixel_values" in features[0]:
                 batch["pixel_values"] = paddingtensor3D_BHW(
