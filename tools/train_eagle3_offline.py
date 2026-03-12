@@ -309,6 +309,7 @@ def train():
     )
 
     target_model_type = getattr(draft_model_config, "target_model_type", None)
+    rank0_print(f"target_model_type: {target_model_type}")
 
     dataset_manager = DatasetManager(
         data_args=args,

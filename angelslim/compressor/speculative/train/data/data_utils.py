@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 from typing import Any, Dict, List
 
 import torch
+from transformers.image_utils import load_image
 
 __all__ = [
     "process_token_dict_to_mappings",
@@ -195,6 +197,15 @@ class DataCollatorWithPadding:
 
 class VLMDataCollatorWithPadding:
 
+    def __init__(self, processor=None):
+        """
+        Args:
+            processor: VLM processor (e.g. AutoProcessor for qwen3_vl).
+                       When provided, image_paths in features will be decoded
+                       on-the-fly to pixel_values (used in online training).
+        """
+        self.processor = processor
+
     def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, Any]:
         max_length = max(item["input_ids"].shape[1] for item in features)
         batch_input_ids = torch.cat(
@@ -217,27 +228,53 @@ class VLMDataCollatorWithPadding:
             "position_ids": None,
         }
 
-        if "pixel_values" in features[0]:
-            batch["pixel_values"] = paddingtensor3D_BHW(
-                [item["pixel_values"] for item in features]
-            )
-        if "video_pixel_values" in features[0]:
-            batch["video_pixel_values"] = paddingtensor3D_BHW(
-                [item["video_pixel_values"] for item in features]
-            )
-
-        if all(
-            "image_grid_thw" in item and item["image_grid_thw"] is not None for item in features
-        ):
-            batch["image_grid_thw"] = torch.cat(
-                [item["image_grid_thw"] for item in features], dim=0
-            )
-        if all(
-            "video_grid_thw" in item and item["video_grid_thw"] is not None for item in features
-        ):
-            batch["video_grid_thw"] = torch.cat(
-                [item["video_grid_thw"] for item in features], dim=0
-            )
+        # Online training: decode image_paths -> pixel_values on-the-fly
+        if self.processor is not None and "image_paths" in features[0]:
+            all_pixel_values, all_image_grid_thw = [], []
+            all_video_pixel_values, all_video_grid_thw = [], []
+            for item in features:
+                image_paths = json.loads(item["image_paths"])
+                if image_paths:
+                    images = [load_image(p) for p in image_paths]
+                    vision_enc = self.processor.image_processor(images=images, return_tensors="pt")
+                    all_pixel_values.append(vision_enc["pixel_values"])
+                    if "image_grid_thw" in vision_enc:
+                        all_image_grid_thw.append(vision_enc["image_grid_thw"])
+                    if "video_pixel_values" in vision_enc:
+                        all_video_pixel_values.append(vision_enc["video_pixel_values"])
+                    if "video_grid_thw" in vision_enc:
+                        all_video_grid_thw.append(vision_enc["video_grid_thw"])
+            if all_pixel_values:
+                batch["pixel_values"] = paddingtensor3D_BHW(all_pixel_values)
+            if all_image_grid_thw:
+                batch["image_grid_thw"] = torch.cat(all_image_grid_thw, dim=0)
+            if all_video_pixel_values:
+                batch["video_pixel_values"] = paddingtensor3D_BHW(all_video_pixel_values)
+            if all_video_grid_thw:
+                batch["video_grid_thw"] = torch.cat(all_video_grid_thw, dim=0)
+        else:
+            if "pixel_values" in features[0]:
+                batch["pixel_values"] = paddingtensor3D_BHW(
+                    [item["pixel_values"] for item in features]
+                )
+            if "video_pixel_values" in features[0]:
+                batch["video_pixel_values"] = paddingtensor3D_BHW(
+                    [item["video_pixel_values"] for item in features]
+                )
+            if all(
+                "image_grid_thw" in item and item["image_grid_thw"] is not None
+                for item in features
+            ):
+                batch["image_grid_thw"] = torch.cat(
+                    [item["image_grid_thw"] for item in features], dim=0
+                )
+            if all(
+                "video_grid_thw" in item and item["video_grid_thw"] is not None
+                for item in features
+            ):
+                batch["video_grid_thw"] = torch.cat(
+                    [item["video_grid_thw"] for item in features], dim=0
+                )
 
         # Check if both hidden_states and target_hiddens exist in all features
         if all("hidden_states" in item and "target_hiddens" in item for item in features):
@@ -261,6 +298,15 @@ class VLMDataCollatorWithPadding:
 
 class VLMHunyuanDataCollatorWithPadding:
 
+    def __init__(self, processor=None):
+        """
+        Args:
+            processor: VLM processor (e.g. AutoProcessor for hunyuan_vl).
+                       When provided, image_paths in features will be decoded
+                       on-the-fly to pixel_values (used in online training).
+        """
+        self.processor = processor
+
     def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, Any]:
         max_length = max(item["input_ids"].shape[1] for item in features)
         batch_input_ids = torch.cat(
@@ -283,17 +329,33 @@ class VLMHunyuanDataCollatorWithPadding:
             "input_position_ids": None,
         }
 
-        if "pixel_values" in features[0]:
-            batch["pixel_values"] = paddingtensor3D_BHW(
-                [item["pixel_values"] for item in features]
-            )
-
-        if all(
-            "image_grid_thw" in item and item["image_grid_thw"] is not None for item in features
-        ):
-            batch["image_grid_thw"] = torch.cat(
-                [item["image_grid_thw"] for item in features], dim=0
-            )
+        # Online training: decode image_paths -> pixel_values on-the-fly
+        if self.processor is not None and "image_paths" in features[0]:
+            all_pixel_values, all_image_grid_thw = [], []
+            for item in features:
+                image_paths = json.loads(item["image_paths"])
+                if image_paths:
+                    images = [load_image(p) for p in image_paths]
+                    vision_enc = self.processor(images=images, return_tensors="pt")
+                    all_pixel_values.append(vision_enc["pixel_values"])
+                    if "image_grid_thw" in vision_enc:
+                        all_image_grid_thw.append(vision_enc["image_grid_thw"])
+            if all_pixel_values:
+                batch["pixel_values"] = paddingtensor3D_BHW(all_pixel_values)
+            if all_image_grid_thw:
+                batch["image_grid_thw"] = torch.cat(all_image_grid_thw, dim=0)
+        else:
+            if "pixel_values" in features[0]:
+                batch["pixel_values"] = paddingtensor3D_BHW(
+                    [item["pixel_values"] for item in features]
+                )
+            if all(
+                "image_grid_thw" in item and item["image_grid_thw"] is not None
+                for item in features
+            ):
+                batch["image_grid_thw"] = torch.cat(
+                    [item["image_grid_thw"] for item in features], dim=0
+                )
 
         # Check if both hidden_states and target_hiddens exist in all features
         if all("hidden_states" in item and "target_hiddens" in item for item in features):

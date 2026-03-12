@@ -146,7 +146,11 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
                 num_proc=num_proc,
                 desc="Filtering empty input_ids",
             )
-            processed_ds.set_format(type="torch")
+            torch_columns = [c for c in processed_ds.column_names if c != "image_paths"]
+            processed_ds.set_format(type="torch", columns=torch_columns, output_all_columns=True)
+            rank0_print(
+                f"processed_ds size:{len(processed_ds)}, columns: {processed_ds.column_names}"
+            )
 
             return processed_ds
 
@@ -154,17 +158,15 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
             raise RuntimeError(f"Dataset building failed for {datapath}") from e
 
     def get_data_collator(self) -> Any:
-        return VLMDataCollatorWithPadding()
+        # for online vlm training: dynamically compute pixel_values during collate stage
+        return VLMDataCollatorWithPadding(processor=self.tokenizer)
 
     def _preprocess_function(self, examples: Dict[str, List]) -> Dict[str, List]:
         new_examples = {
             "input_ids": [],
             "attention_mask": [],
             "loss_mask": [],
-            "pixel_values": [],
-            "video_pixel_values": [],
-            "image_grid_thw": [],
-            "video_grid_thw": [],
+            "image_paths": [],
         }
 
         for i in range(len(examples["id"])):
@@ -189,7 +191,7 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
             if any(v is not None for v in value):
                 cleaned_new_examples[key] = value
 
-        return new_examples
+        return cleaned_new_examples
 
     def _visualize_loss_mask(
         self, input_ids: torch.Tensor, loss_mask: torch.Tensor, conversation: str
@@ -221,6 +223,16 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
             messages = self._build_messages(conversation_data)
             if not messages:
                 return None
+
+            # extract image paths before apply_chat_template modifies messages in-place
+            image_paths = []
+            for message in messages:
+                content = message.get("content", [])
+                if not isinstance(content, list):
+                    continue
+                for item in content:
+                    if item.get("type") == "image" and item.get("image"):
+                        image_paths.append(item["image"])
 
             # Apply chat template
             assert isinstance(messages, list), f"type(messages)={type(messages)} is not list"
@@ -277,16 +289,8 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
                 "input_ids": input_ids.view(1, -1),
                 "attention_mask": attention_mask.view(1, -1),
                 "loss_mask": loss_mask.view(1, -1),
+                "image_paths": json.dumps(image_paths),
             }
-
-            if "pixel_values" in encoding:
-                result_dict["pixel_values"] = encoding["pixel_values"].unsqueeze(0)
-            if "video_pixel_values" in encoding:
-                result_dict["video_pixel_values"] = encoding["video_pixel_values"].unsqueeze(0)
-            if "image_grid_thw" in encoding:
-                result_dict["image_grid_thw"] = encoding["image_grid_thw"]
-            if "video_grid_thw" in encoding:
-                result_dict["video_grid_thw"] = encoding["video_grid_thw"]
 
             return result_dict
 
@@ -370,7 +374,8 @@ class OnlineVLMHunyuanVLDatasetBuilder(OnlineDatasetBuilder):
                 num_proc=num_proc,
                 desc="Filtering empty input_ids",
             )
-            processed_ds.set_format(type="torch")
+            torch_columns = [c for c in processed_ds.column_names if c != "image_paths"]
+            processed_ds.set_format(type="torch", columns=torch_columns, output_all_columns=True)
 
             return processed_ds
 
@@ -378,16 +383,15 @@ class OnlineVLMHunyuanVLDatasetBuilder(OnlineDatasetBuilder):
             raise RuntimeError(f"Dataset building failed for {datapath}") from e
 
     def get_data_collator(self) -> Any:
-        return VLMHunyuanDataCollatorWithPadding()
+        # for online training, we need to use VLMHunyuanDataCollatorWithPadding
+        return VLMHunyuanDataCollatorWithPadding(processor=self.tokenizer)
 
     def _preprocess_function(self, examples: Dict[str, List]) -> Dict[str, List]:
         new_examples = {
             "input_ids": [],
             "attention_mask": [],
             "loss_mask": [],
-            "pixel_values": [],
-            "image_grid_thw": [],
-            "position_ids": [],
+            "image_paths": [],
             "input_position_ids": [],
         }
         for i in range(len(examples["id"])):
@@ -409,7 +413,7 @@ class OnlineVLMHunyuanVLDatasetBuilder(OnlineDatasetBuilder):
         for key, value in new_examples.items():
             if any(v is not None for v in value):
                 cleaned_new_examples[key] = value
-        return new_examples
+        return cleaned_new_examples
 
     def _visualize_loss_mask(
         self, input_ids: torch.Tensor, loss_mask: torch.Tensor, conversation: str
@@ -499,10 +503,16 @@ class OnlineVLMHunyuanVLDatasetBuilder(OnlineDatasetBuilder):
                 "input_position_ids": input_position_ids,
             }
 
-            if "pixel_values" in encoding:
-                result_dict["pixel_values"] = encoding["pixel_values"].unsqueeze(0)
-            if "image_grid_thw" in encoding:
-                result_dict["image_grid_thw"] = encoding["image_grid_thw"]
+            # get image_paths
+            image_paths = []
+            for message in messages:
+                content = message.get("content", [])
+                if not isinstance(content, list):
+                    continue
+                for item in content:
+                    if item.get("type") == "image" and item.get("image"):
+                        image_paths.append(item["image"])
+            result_dict["image_paths"] = json.dumps(image_paths)
 
             return result_dict
 
