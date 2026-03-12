@@ -18,9 +18,9 @@ export PYTHONPATH=$ROOT_DIR:$PYTHONPATH
 NUM_GPUS=${1:-8}
 
 # ---- Paths -- modify these to match your environment ----
-TARGET_MODEL_PATH="/apdcephfs_gy5_303770945/share_303770945/jiebin/hf_models/Qwen/Qwen3-4B"
-TRAIN_HIDDEN_PATH="${ROOT_DIR}/outputs/qwen3-4b-dflash-data"   # directory produced by step 1
-OUTPUT_DIR="${ROOT_DIR}/outputs/qwen3-4b-dflash-offline-train"
+TARGET_MODEL_PATH=""
+TRAIN_HIDDEN_PATH=""
+OUTPUT_DIR="${ROOT_DIR}/outputs/"
 
 # WandB configuration
 export WANDB_PROJECT=${WANDB_PROJECT:-"angelslim-qwen3-4b-dflash"}

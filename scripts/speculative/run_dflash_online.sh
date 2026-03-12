@@ -13,15 +13,15 @@ NUM_GPUS=${1:-8}
 ATTENTION_BACKEND=${2:-flex_attention}
 
 # Set paths - modify these to match your environment
-TARGET_MODEL_PATH="/apdcephfs_gy5_303770945/share_303770945/jiebin/hf_models/Qwen/Qwen3-4B"
-TRAIN_DATA_PATH="/cfs_cloud_code/jiebinzhang/SpecForge/cache/dataset/regen_qwen3_4b.jsonl"
-OUTPUT_DIR="${ROOT_DIR}/outputs/qwen3-4b-dflash-train-same-sysprompt"
+TARGET_MODEL_PATH=""
+TRAIN_DATA_PATH=""
+OUTPUT_DIR="${ROOT_DIR}/outputs/"
 
 export CONFIG_DIR=${ROOT_DIR}/angelslim/compressor/speculative/train/configs
 
 # WandB configuration (mirrors SpecForge's --wandb-project / --wandb-name)
 export WANDB_PROJECT=${WANDB_PROJECT:-"angelslim-qwen3-4b-dflash"}
-WANDB_RUN_NAME=${WANDB_RUN_NAME:-"qwen3-4b-dflash-regen-same-sysprompt-filter"}
+WANDB_RUN_NAME=${WANDB_RUN_NAME:-"qwen3-4b-dflash"}
 
 torchrun \
     --standalone \

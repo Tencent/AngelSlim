@@ -20,9 +20,9 @@ export PYTHONPATH=$ROOT_DIR:$PYTHONPATH
 NUM_GPUS=${1:-8}
 
 # ---- Paths -- modify these to match your environment ----
-TARGET_MODEL_PATH="/apdcephfs_gy5_303770945/share_303770945/jiebin/hf_models/Qwen/Qwen3-4B"
-TRAIN_DATA_PATH="/cfs_cloud_code/jiebinzhang/SpecForge/cache/dataset/regen_qwen3_4b.jsonl"
-OUTPUT_DIR="${ROOT_DIR}/outputs/qwen3-4b-dflash-data"  # directory for .ckpt files
+TARGET_MODEL_PATH=""
+TRAIN_DATA_PATH=""
+OUTPUT_DIR="${ROOT_DIR}/outputs/"  # directory for .ckpt files
 
 torchrun \
     --standalone \
