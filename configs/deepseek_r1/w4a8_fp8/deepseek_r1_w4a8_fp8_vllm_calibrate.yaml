@@ -1,0 +1,56 @@
+# Global configuration of pipeline
+global:
+  save_path: /path/to/save
+  deploy_backend: trtllm
+
+# Simplified Configuration for LLM compression
+model:
+  name: DeepSeek
+  model_path: /path/to/model
+  trust_remote_code: true
+  low_cpu_mem_usage: false
+  use_cache: false
+  torch_dtype: fp8
+  device_map: auto
+
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    name: w4a8_fp8         # Supported: fp8_static, w4a8_fp8
+    bits: 8                # Quantization bits (8)
+    low_memory: false  # Use less gpu/cpu memory
+    quant_method:
+      weight: "per-group"
+      group_size: 128
+      activation: "per-tensor"
+      num_workers: 32
+    ignore_layers:         # Skip w4 quantization for these layers
+      - "q_a_proj"
+      - "q_b_proj"
+      - "kv_a_proj_with_mqa"
+      - "kv_b_proj"
+      - "o_proj"
+      - "mlp.gate_proj"
+      - "mlp.up_proj"
+      - "mlp.down_proj"
+      - "shared_expert"
+      - "lm_head"
+      - "model.layers.61."
+  # Calibration engine configuration (under compression, parallel to quantization)
+  calibrate:
+    backend: vllm
+    tp_size: 32
+    max_num_seqs: 128
+    distributed_executor_backend: ray
+    skip_weight_loading: false
+    verbose: false
+
+# Dataset for calibration
+dataset:
+  name: TextDataset
+  data_path: /path/to/dataset
+  max_seq_length: 16384
+  num_samples: 512
+  batch_size: 1
+

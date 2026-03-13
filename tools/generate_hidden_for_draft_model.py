@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import argparse
+import json
 import logging
 import os
 from datetime import timedelta
@@ -22,6 +23,7 @@ from typing import Any, Dict, Tuple
 import torch
 import torch.distributed as dist
 from tqdm import tqdm
+from transformers.image_utils import load_image
 
 from angelslim.compressor.speculative import DatasetManager, create_target_model
 from angelslim.utils import decide_device_for_distributed
@@ -120,6 +122,30 @@ class HiddenStateGenerator:
         try:
             # Generate aux and target hiddens
             device = decide_device_for_distributed()
+
+            if "image_paths" in row:
+                image_paths = json.loads(row.pop("image_paths"))
+                if image_paths:
+                    images = [load_image(p) for p in image_paths]
+                    processor = self.target_model.tokenizer
+                    if hasattr(processor, "image_processor"):
+                        vision_encoding = processor.image_processor(
+                            images=images, return_tensors="pt"
+                        )
+                    else:
+                        vision_encoding = processor(images=images, return_tensors="pt")
+                    row["pixel_values"] = vision_encoding["pixel_values"].to(device)
+                    if "video_pixel_values" in vision_encoding:
+                        row["video_pixel_values"] = vision_encoding["video_pixel_values"].to(
+                            device
+                        )
+                    if "image_grid_thw" in vision_encoding:
+                        row["image_grid_thw"] = vision_encoding["image_grid_thw"].to(device)
+                    if "video_grid_thw" in vision_encoding:
+                        row["video_grid_thw"] = vision_encoding["video_grid_thw"].to(device)
+                else:
+                    row.pop("image_paths", None)
+
             for k, v in row.items():
                 if isinstance(v, torch.Tensor) and v is not None:
                     row[k] = v.to(device)
@@ -422,15 +448,24 @@ def main():
             trust_remote_code=args.trust_remote_code,
             target_model_type=args.target_model_type,
         )
+        logger.info(
+            f"Target model loaded: {args.target_model_name_or_path or args.model_name}",
+            extra={"rank": rank},
+        )
+        logger.info(f"tokenizer: {target_model.tokenizer}")
 
         # Load dataset
         dataset = load_dataset(args, target_model.tokenizer, rank)
+        if len(dataset) == 0:
+            logger.warning("No samples to process after loading dataset", extra={"rank": rank})
+            return
 
         # Split dataset for this rank
         dataset_slice = split_dataset_for_rank(dataset, rank, world_size, args.start, args.end)
 
         # Generate hidden states
         output_dir = f"{args.outdir}/rank_{rank}"
+        logger.info(f"writing hidden states to {output_dir}", extra={"rank": rank})
         generator = HiddenStateGenerator(target_model, output_dir, rank=rank)
         successful, failed = generator.generate(dataset_slice)
 

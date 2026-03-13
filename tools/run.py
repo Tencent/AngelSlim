@@ -19,8 +19,8 @@ from datetime import timedelta
 import torch
 import torch.distributed as dist
 
-from angelslim.engine import Engine
-from angelslim.utils import get_yaml_prefix_simple
+from angelslim.engine import Engine, VLLMCalibrateEngine
+from angelslim.utils import get_yaml_prefix_simple, print_info
 from angelslim.utils.config_parser import SlimConfigParser, print_config
 
 
@@ -124,6 +124,85 @@ def multi_nodes_run(config):
     slim_engine.save(global_config.save_path, config)
 
 
+def vllm_calibrate_run(config):
+    """
+    Run vLLM-based calibration to collect activation and MoE expert statistics,
+    then quantize model weights based on compression config.
+
+    If both activation_stats.json and moe_expert_stats.json already exist in the
+    output directory, the calibration step is skipped and only weight quantization
+    and input_scale merging are performed.
+
+    Args:
+        config (dict): Configuration dictionary containing
+                       parameters for vLLM calibration and compression.
+    """
+    model_config = config.model_config
+    dataset_config = config.dataset_config
+    global_config = config.global_config
+    calibrate_config = config.compression_config.calibrate
+    compress_config = config.compression_config
+
+    # Check if calibration stats already exist — skip vLLM calibration if so
+    activation_stats_file = os.path.join(global_config.save_path, "activation_stats.json")
+    moe_stats_file = os.path.join(global_config.save_path, "moe_expert_stats.json")
+    skip_calibration = os.path.exists(activation_stats_file) and os.path.exists(moe_stats_file)
+
+    engine = VLLMCalibrateEngine()
+
+    if skip_calibration:
+        print_info("\n" + "=" * 80)
+        print_info("Calibration stats already exist, skipping vLLM calibration:")
+        print_info(f"  - {activation_stats_file}")
+        print_info(f"  - {moe_stats_file}")
+        print_info("Proceeding directly to weight quantization and input_scale merging.")
+        print_info("=" * 80)
+        # Set output_dir so that engine.quantize() can find activation_stats.json
+        engine.output_dir = global_config.save_path
+    else:
+        print_info("\n" + "=" * 80)
+        print_info("Starting vLLM calibration:")
+        engine.prepare_model(
+            model_path=model_config.model_path,
+            tp_size=calibrate_config.tp_size,
+            max_num_seqs=calibrate_config.max_num_seqs,
+            max_length=dataset_config.max_seq_length,
+            distributed_executor_backend=calibrate_config.distributed_executor_backend,
+            skip_weight_loading=calibrate_config.skip_weight_loading,
+        )
+
+        engine.prepare_data(
+            ptq_data_path=dataset_config.data_path,
+            max_length=dataset_config.max_seq_length,
+            num_samples=dataset_config.num_samples,
+        )
+
+        engine.run(
+            output_dir=global_config.save_path,
+            verbose=calibrate_config.verbose,
+        )
+
+    # Extract quantization parameters from compression config
+    quant_config = compress_config.quantization if compress_config else None
+    quant_name = quant_config.name if quant_config else "fp8_static"
+    ignore_layers = getattr(quant_config, "ignore_layers", None) if quant_config else None
+
+    # quant_method is a dict with weight/activation/group_size keys
+    quant_method = getattr(quant_config, "quant_method", {}) if quant_config else {}
+    group_size = quant_method.get("group_size", None) if isinstance(quant_method, dict) else None
+    num_workers = quant_method.get("num_workers", 32) if isinstance(quant_method, dict) else 32
+
+    # Quantize model weights based on compression config
+    engine.quantize(
+        model_path=model_config.model_path,
+        output_dir=global_config.save_path,
+        quant_name=quant_name,
+        group_size=group_size,
+        ignore_layers=ignore_layers,
+        num_workers=num_workers,
+    )
+
+
 def run(config):
     """
     Run the LLM compression process based on the provided configuration.
@@ -137,6 +216,14 @@ def run(config):
     dataset_config = config.dataset_config
     compress_config = config.compression_config
     global_config = config.global_config
+
+    # Dispatch to vLLM calibration if calibrate config specifies vllm backend
+    if (
+        config.compression_config.calibrate
+        and config.compression_config.calibrate.backend == "vllm"
+    ):
+        vllm_calibrate_run(config)
+        return
 
     # Step 2: Execute complete pipeline
     slim_engine = Engine()

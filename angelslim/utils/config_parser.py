@@ -243,6 +243,7 @@ class CompressionConfig:
     name: Union[str, List[str]]
     quantization: Optional[QuantizationConfig] = None
     cache: Optional[CacheConfig] = None
+    calibrate: Optional["CalibrateConfig"] = None
     # speculative_decoding: Optional[SpeculativeDecodingConfig] = None
 
     @property
@@ -311,6 +312,27 @@ class CompressionConfig:
 
 
 @dataclass
+class CalibrateConfig:
+    """Configuration for vLLM-based calibration.
+
+    Attributes:
+        backend: Calibration backend ('hf' or 'vllm')
+        tp_size: Tensor parallel size for vLLM
+        max_num_seqs: Maximum number of sequences per batch for vLLM
+        distributed_executor_backend: Distributed executor backend ('ray' or 'mp')
+        skip_weight_loading: Use dummy weights for fast debug mode
+        verbose: Enable verbose output for debugging
+    """
+
+    backend: str = field(default="hf")
+    tp_size: int = field(default=1)
+    max_num_seqs: int = field(default=128)
+    distributed_executor_backend: str = field(default="ray")
+    skip_weight_loading: bool = field(default=False)
+    verbose: bool = field(default=False)
+
+
+@dataclass
 class InferenceConfig:
     """Configuration for inference parameters.
     Attributes:
@@ -336,9 +358,11 @@ class FullConfig:
     Top-level configuration container for LLM compression.
 
     Attributes:
-        model_config: Model configuration parameters
-        compression_config: Compression configuration parameters
-        dataset_config: Dataset configuration parameters
+    model_config: Model configuration parameters
+    compression_config: Compression configuration parameters
+    dataset_config: Dataset configuration parameters
+    global_config: Global configuration parameters
+    infer_config: Inference configuration parameters
     """
 
     model_config: ModelConfig
@@ -470,6 +494,11 @@ class SlimConfigParser:
             inference_dict = config_dict["inference"]
             inference_conf = InferenceConfig(**inference_dict)
 
+        # Calibration configuration (nested under compression)
+        calibrate_dict = compression_dict.get("calibrate", None)
+        if calibrate_dict:
+            compression_conf.calibrate = CalibrateConfig(**calibrate_dict)
+
         return FullConfig(
             model_config=model_conf,
             compression_config=compression_conf,
@@ -583,6 +612,15 @@ def parse_json_full_config(json_file_path: str) -> FullConfig:
     if config_data.get("infer_config", {}):
         infer_config = InferenceConfig(**config_data["infer_config"])
 
+    # Parse calibration configuration section (nested under compression)
+    comp_data = config_data.get("compression_config", {})
+    calibrate_data = comp_data.get("calibrate", None)
+    if not calibrate_data and config_data.get("calibrate_config"):
+        # Backward compatibility: support top-level calibrate_config
+        calibrate_data = config_data["calibrate_config"]
+    if calibrate_data:
+        comp_config.calibrate = CalibrateConfig(**calibrate_data)
+
     return FullConfig(
         model_config=model_config,
         compression_config=comp_config,
@@ -634,6 +672,7 @@ def print_config(config, indent=0):
             print_config(config.infer_config, next_indent)
         else:
             print(f"{prefix}None")
+
         return
 
     # Handle dataclass instances

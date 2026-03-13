@@ -291,7 +291,7 @@ class Eagle3Trainer(Trainer, ABC):
         """
         Perform an evaluation step on `model` using `inputs`.
         """
-        data_for_draft_model = self.prepare_data_for_draft_model(**inputs)
+        data_for_draft_model = self.prepare_data_for_draft_model(inputs)
 
         attention_mask = data_for_draft_model["attention_mask"]
         # inputs_embeds = data_for_draft_model["inputs_embeds"]
