@@ -147,7 +147,6 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
                 num_proc=num_proc,
                 desc="Filtering empty input_ids",
             )
-            # torch_columns = [c for c in processed_ds.column_names if c != "image_paths"]
             if min_loss_tokens is not None:
                 processed_ds = processed_ds.filter(
                     lambda batch: [
@@ -159,7 +158,8 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
                     desc=f"Filtering sequences with loss tokens < {min_loss_tokens}",
                 )
 
-            processed_ds.set_format(type="torch")
+            torch_columns = [c for c in processed_ds.column_names if c != "image_paths"]
+            processed_ds.set_format(type="torch", columns=torch_columns, output_all_columns=True)
 
             return processed_ds
 
@@ -384,7 +384,6 @@ class OnlineVLMHunyuanVLDatasetBuilder(OnlineDatasetBuilder):
                 num_proc=num_proc,
                 desc="Filtering empty input_ids",
             )
-
             if min_loss_tokens is not None:
                 processed_ds = processed_ds.filter(
                     lambda batch: [
@@ -395,8 +394,8 @@ class OnlineVLMHunyuanVLDatasetBuilder(OnlineDatasetBuilder):
                     num_proc=num_proc,
                     desc=f"Filtering sequences with loss tokens < {min_loss_tokens}",
                 )
-
-            processed_ds.set_format(type="torch")
+            torch_columns = [c for c in processed_ds.column_names if c != "image_paths"]
+            processed_ds.set_format(type="torch", columns=torch_columns, output_all_columns=True)
 
             return processed_ds
 
