@@ -18,10 +18,8 @@ import warnings
 
 import torch
 from safetensors.torch import load_file
-try:
-    from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import Qwen3VLMoeTextExperts
-except ImportError:
-    Qwen3VLMoeTextExperts = None  # not available in this transformers version
+
+from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import Qwen3VLMoeTextExperts
 
 
 from ...utils import find_parent_layer_and_sub_name, print_info
