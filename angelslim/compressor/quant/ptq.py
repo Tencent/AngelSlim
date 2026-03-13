@@ -18,10 +18,8 @@ import warnings
 
 import torch
 from safetensors.torch import load_file
-try:
-    from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import Qwen3VLMoeTextExperts
-except ImportError:
-    Qwen3VLMoeTextExperts = None  # not available in this transformers version
+
+from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import Qwen3VLMoeTextExperts
 
 
 from ...utils import find_parent_layer_and_sub_name, print_info
@@ -286,7 +284,7 @@ class PTQ:
         # For qwen3_vl_moe models, we need to insert MoEQDQModule for MOE experts,
         # since these modules contain gate_up_proj and down_proj, which are defined as
         # nn.Parameters, not nn.Linear.
-        if Qwen3VLMoeTextExperts is not None and Qwen3VLMoeTextExperts in self.quant_model.observer_layer_classes:
+       if Qwen3VLMoeTextExperts in self.quant_model.observer_layer_classes:
             for name, sub_layer in self.quant_model.model.named_modules():
                 parent_layer, sub_name = find_parent_layer_and_sub_name(quant_convert_module, name)
                 moe_qdq_module = self.quant_model.get_moe_qdq_module(sub_layer, name)
