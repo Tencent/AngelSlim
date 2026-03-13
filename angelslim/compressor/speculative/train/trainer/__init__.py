@@ -13,6 +13,8 @@
 # limitations under the License.
 
 from .offline_eagle3_trainer import OfflineEagle3Trainer, OfflineVLMEagle3Trainer
+from .online_dflash_trainer import OnlineDFlashTrainer
+from .offline_dflash_trainer import OfflineDFlashTrainer
 from .online_eagle3_trainer import (
     OnlineEagle3Trainer,
     OnlineTTSEagle3Trainer,
@@ -25,6 +27,8 @@ __all__ = [
     "OnlineEagle3Trainer",
     "OnlineVLMEagle3Trainer",
     "OnlineTTSEagle3Trainer",
+    "OnlineDFlashTrainer",
+    "OfflineDFlashTrainer",
     "OfflineEagle3Trainer",
     "OfflineVLMEagle3Trainer",
 ]

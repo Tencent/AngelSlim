@@ -94,6 +94,7 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
         num_proc: int = 8,
         shuffle: bool = True,
         sample_num: Optional[int] = None,
+        min_loss_tokens: Optional[int] = None,
     ) -> Dataset:
         try:
             # Load dataset
@@ -146,11 +147,19 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
                 num_proc=num_proc,
                 desc="Filtering empty input_ids",
             )
+            if min_loss_tokens is not None:
+                processed_ds = processed_ds.filter(
+                    lambda batch: [
+                        sum(sum(x) if isinstance(x, list) else x for x in m) >= min_loss_tokens
+                        for m in batch["loss_mask"]
+                    ],
+                    batched=True,
+                    num_proc=num_proc,
+                    desc=f"Filtering sequences with loss tokens < {min_loss_tokens}",
+                )
+
             torch_columns = [c for c in processed_ds.column_names if c != "image_paths"]
             processed_ds.set_format(type="torch", columns=torch_columns, output_all_columns=True)
-            rank0_print(
-                f"processed_ds size:{len(processed_ds)}, columns: {processed_ds.column_names}"
-            )
 
             return processed_ds
 
@@ -324,6 +333,7 @@ class OnlineVLMHunyuanVLDatasetBuilder(OnlineDatasetBuilder):
         num_proc: int = 8,
         shuffle: bool = True,
         sample_num: Optional[int] = None,
+        min_loss_tokens: Optional[int] = None,
     ) -> Dataset:
         try:
             # Load dataset
@@ -374,6 +384,16 @@ class OnlineVLMHunyuanVLDatasetBuilder(OnlineDatasetBuilder):
                 num_proc=num_proc,
                 desc="Filtering empty input_ids",
             )
+            if min_loss_tokens is not None:
+                processed_ds = processed_ds.filter(
+                    lambda batch: [
+                        sum(sum(x) if isinstance(x, list) else x for x in m) >= min_loss_tokens
+                        for m in batch["loss_mask"]
+                    ],
+                    batched=True,
+                    num_proc=num_proc,
+                    desc=f"Filtering sequences with loss tokens < {min_loss_tokens}",
+                )
             torch_columns = [c for c in processed_ds.column_names if c != "image_paths"]
             processed_ds.set_format(type="torch", columns=torch_columns, output_all_columns=True)
 
@@ -572,6 +592,7 @@ class OnlineAudioDatasetBuilder(OnlineDatasetBuilder):
         num_proc: int = 8,
         shuffle: bool = True,
         sample_num: Optional[int] = None,
+        min_loss_tokens: Optional[int] = None,
     ) -> Dataset:
         try:
             # Load dataset
@@ -623,6 +644,18 @@ class OnlineAudioDatasetBuilder(OnlineDatasetBuilder):
                 num_proc=num_proc,
                 desc="Filtering empty input_ids",
             )
+
+            if min_loss_tokens is not None:
+                processed_ds = processed_ds.filter(
+                    lambda batch: [
+                        sum(sum(x) if isinstance(x, list) else x for x in m) >= min_loss_tokens
+                        for m in batch["loss_mask"]
+                    ],
+                    batched=True,
+                    num_proc=num_proc,
+                    desc=f"Filtering sequences with loss tokens < {min_loss_tokens}",
+                )
+
             processed_ds.set_format(type="torch")
 
             return processed_ds
@@ -886,6 +919,7 @@ class OnlineTTSDatasetBuilder(OnlineDatasetBuilder):
         num_proc: int = 8,
         shuffle: bool = True,
         sample_num: Optional[int] = None,
+        min_loss_tokens: Optional[int] = None,
     ) -> Dataset:
         try:
             if not isinstance(datapath, list):

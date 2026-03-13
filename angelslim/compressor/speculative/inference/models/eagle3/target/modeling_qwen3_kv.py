@@ -15,7 +15,14 @@ from typing import Callable, Optional, Tuple, Union
 import torch
 from torch import nn
 from transformers.activations import ACT2FN
-from transformers.cache_utils import Cache, SlidingWindowCache, StaticCache
+from transformers.cache_utils import Cache, StaticCache
+try:
+    from transformers.cache_utils import SlidingWindowCache
+except ImportError:
+    # SlidingWindowCache was removed/renamed in newer transformers versions.
+    # Define a stub so isinstance() checks below still work (they'll just never match).
+    class SlidingWindowCache:  # type: ignore[no-redef]
+        pass
 from transformers.generation import GenerationMixin
 from transformers.modeling_attn_mask_utils import AttentionMaskConverter
 from transformers.modeling_flash_attention_utils import FlashAttentionKwargs

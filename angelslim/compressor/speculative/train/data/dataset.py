@@ -174,41 +174,56 @@ class DatasetManager:
         if self.display:
             num_proc = None
 
+        # Determine min_loss_tokens for DFlash filtering
+        min_loss_tokens = None
+        if self.data_args.modal_type == "DFlash":
+            block_size = getattr(self.data_args, "block_size", 16)
+            min_loss_tokens = 2 * block_size
+
         # Create training dataset
         train_dataset = None
-        if self.data_args.train_data_path is not None:
+        train_path = getattr(self.data_args, "train_data_path", None)
+        if train_path is not None:
             train_dataset = self.online_dataset_builder.build_dataset(
-                self.data_args.train_data_path,
+                train_path,
                 num_proc=num_proc,
                 shuffle=True,
-                sample_num=self.data_args.sample_num,
+                sample_num=getattr(self.data_args, "sample_num", None),
+                min_loss_tokens=min_loss_tokens,
             )
 
         # Create evaluation dataset
         eval_dataset = None
-        if self.data_args.eval_data_path is not None:
+        eval_path = getattr(self.data_args, "eval_data_path", None)
+        if eval_path is not None:
             eval_dataset = self.online_dataset_builder.build_dataset(
-                self.data_args.eval_data_path,
+                eval_path,
                 num_proc=num_proc,
                 shuffle=False,
-                sample_num=self.data_args.sample_num,
+                sample_num=getattr(self.data_args, "sample_num", None),
+                min_loss_tokens=min_loss_tokens,
             )
 
         data_collator = self.online_dataset_builder.get_data_collator()
 
         return train_dataset, eval_dataset, data_collator
 
-    def _create_offline_datasets(self) -> Tuple[Dataset, Optional[Dataset]]:
+    def _create_offline_datasets(self) -> Tuple[Dataset, Optional[Dataset], Any]:
         """
         Create offline datasets from pre-computed .ckpt files.
 
         Returns:
-            Tuple of (train_dataset, eval_dataset)
+            Tuple of (train_dataset, eval_dataset, data_collator)
         """
+        if self.offline_dataset_builder is None:
+            return None, None, None
+
         # Create train dataset
-        train_dataset = self.offline_dataset_builder.build_dataset(
-            self.data_args.train_hidden_path
-        )
+        train_dataset = None
+        if self.data_args.train_hidden_path is not None:
+            train_dataset = self.offline_dataset_builder.build_dataset(
+                self.data_args.train_hidden_path
+            )
 
         # Create eval dataset if path is provided
         eval_dataset = None
