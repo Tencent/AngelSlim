@@ -8,7 +8,26 @@ from typing import Dict, Iterator, List, Optional, Tuple, Union, cast
 import tiktoken
 from tiktoken.load import load_tiktoken_bpe
 from tokenizers import AddedToken
-from transformers.models.gpt2.tokenization_gpt2 import bytes_to_unicode
+try:
+    from transformers.models.gpt2.tokenization_gpt2 import bytes_to_unicode
+except ImportError:
+    # bytes_to_unicode was removed from newer transformers versions.
+    # Inline the original GPT-2 implementation.
+    def bytes_to_unicode():
+        bs = (
+            list(range(ord("!"), ord("~") + 1))
+            + list(range(ord("¡"), ord("¬") + 1))
+            + list(range(ord("®"), ord("ÿ") + 1))
+        )
+        cs = bs[:]
+        n = 0
+        for b in range(2**8):
+            if b not in bs:
+                bs.append(b)
+                cs.append(2**8 + n)
+                n += 1
+        cs = [chr(c) for c in cs]
+        return dict(zip(bs, cs))
 from transformers.tokenization_utils import PreTrainedTokenizer
 
 logger = getLogger(__name__)

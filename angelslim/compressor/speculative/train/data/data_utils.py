@@ -184,11 +184,13 @@ class DataCollatorWithPadding:
             "target_hiddens": None,
         }
 
-        # Check if both hidden_states and target_hiddens exist in all features
-        if all("hidden_states" in item and "target_hiddens" in item for item in features):
+        # Handle hidden_states and target_hiddens independently
+        if all("hidden_states" in item for item in features):
             batch["hidden_states"] = torch.cat(
                 [paddingtensor(item["hidden_states"], max_length) for item in features]
             )
+
+        if all("target_hiddens" in item for item in features):
             batch["target_hiddens"] = torch.cat(
                 [paddingtensor(item["target_hiddens"], max_length) for item in features]
             )

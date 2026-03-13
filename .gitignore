@@ -13,6 +13,7 @@ dist/
 eval/
 *_ckpt*/
 output/
+outputs/
 outs/
 wandb/
 tools/results/
