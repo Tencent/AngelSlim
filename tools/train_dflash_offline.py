@@ -60,12 +60,12 @@ class OfflineDFlashDataset(OfflineEagle3Dataset):
         try:
             data = torch.load(ckpt_path, map_location="cpu", weights_only=False)
         except Exception as e:
-            warnings.warn(f"Failed to load {ckpt_path}: {e}. Skipping.", RuntimeWarning)
+            warnings.warn(f"Failed to load {ckpt_path}: {e}. Skipping.", RuntimeWarning, stacklevel=2)
             return None
 
         missing = [k for k in self.REQUIRED_KEYS if k not in data]
         if missing:
-            warnings.warn(f"{ckpt_path} missing keys {missing}. Skipping.", RuntimeWarning)
+            warnings.warn(f"{ckpt_path} missing keys {missing}. Skipping.", RuntimeWarning, stacklevel=2)
             return None
 
         # Auto-generate attention_mask if absent
@@ -200,8 +200,8 @@ def train():
     args = parse_args()
     _setup_wandb(args)
 
-    dtype_map = {"float16": torch.float16, "bfloat16": torch.bfloat16, "float32": torch.float32}
-    #torch_dtype = dtype_map.get(args.torch_dtype, torch.bfloat16)
+    #dtype_map = {"float16": torch.float16, "bfloat16": torch.bfloat16, "float32": torch.float32}
+    # torch_dtype = dtype_map.get(args.torch_dtype, torch.bfloat16)
 
     # ------------------------------------------------------------------
     # 1. Draft model config
