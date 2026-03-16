@@ -17,12 +17,8 @@ from tqdm import tqdm
 from transformers import (
     AutoProcessor,
     AutoTokenizer,
+    Qwen3OmniMoeForConditionalGeneration,
 )
-
-try:
-    from transformers import Qwen3OmniMoeForConditionalGeneration
-except ImportError:
-    Qwen3OmniMoeForConditionalGeneration = None  # not available in this transformers version
 
 from ...compressor.quant.core import PTQVLMSaveVllmHF
 from ...utils import find_layers, print_info
