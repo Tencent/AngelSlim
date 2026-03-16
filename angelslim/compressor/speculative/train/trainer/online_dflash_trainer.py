@@ -27,8 +27,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import torch.nn.functional as F
-from torch import nn
 from safetensors import safe_open
+from torch import nn
 from transformers import AutoConfig
 
 from .eagle3_trainer import Eagle3Trainer
@@ -36,6 +36,7 @@ from .trainer_factory import Eagle3TrainerFactory
 
 try:
     from torch.nn.attention.flex_attention import BlockMask, create_block_mask
+
     FLEX_ATTENTION_AVAILABLE = True
 except ImportError:
     FLEX_ATTENTION_AVAILABLE = False
@@ -98,7 +99,8 @@ class TargetEmbeddingsAndHead(nn.Module):
         self.config = config
 
         self.embed_tokens = nn.Embedding(
-            config.vocab_size, config.hidden_size,
+            config.vocab_size,
+            config.hidden_size,
             padding_idx=getattr(config, "pad_token_id", None),
         )
 
@@ -115,9 +117,7 @@ class TargetEmbeddingsAndHead(nn.Module):
         trust_remote_code: bool = False,
     ) -> "TargetEmbeddingsAndHead":
 
-        config = AutoConfig.from_pretrained(
-            model_path, trust_remote_code=trust_remote_code
-        )
+        config = AutoConfig.from_pretrained(model_path, trust_remote_code=trust_remote_code)
         instance = cls(config)
 
         if embed_key is None:
@@ -134,9 +134,7 @@ class TargetEmbeddingsAndHead(nn.Module):
 
         return instance
 
-    def _load_weights(
-        self, model_path: str, embed_key: str, lm_head_key: str, tie_weights: bool
-    ):
+    def _load_weights(self, model_path: str, embed_key: str, lm_head_key: str, tie_weights: bool):
         index_files = glob.glob(os.path.join(model_path, "*.index.json"))
         files_to_load = {}
 
@@ -148,9 +146,7 @@ class TargetEmbeddingsAndHead(nn.Module):
             if embed_key in weight_map:
                 files_to_load[embed_key] = weight_map[embed_key]
             else:
-                raise ValueError(
-                    f"Embedding key '{embed_key}' not found in weight map."
-                )
+                raise ValueError(f"Embedding key '{embed_key}' not found in weight map.")
 
             if not tie_weights:
                 if lm_head_key in weight_map:
@@ -248,9 +244,7 @@ class OnlineDFlashTrainer(Eagle3Trainer):
         self.block_size = getattr(draft_model_config, "block_size", 16)
         self.num_anchors = getattr(draft_model_config, "num_anchors", 512)
         self.loss_decay_gamma = getattr(draft_model_config, "loss_decay_gamma", None)
-        self.attention_backend = getattr(
-            draft_model_config, "attention_backend", "flex_attention"
-        )
+        self.attention_backend = getattr(draft_model_config, "attention_backend", "flex_attention")
         self.mask_token_id = dflash_config.get(
             "mask_token_id",
             getattr(draft_model_config, "mask_token_id", None),
@@ -262,9 +256,7 @@ class OnlineDFlashTrainer(Eagle3Trainer):
         if target_model is not None:
             target_model_path = getattr(target_model, "model_path", None)
         if target_model_path is None:
-            target_model_path = getattr(
-                draft_model_config, "target_model_name_or_path", None
-            )
+            target_model_path = getattr(draft_model_config, "target_model_name_or_path", None)
         embed_weight_key = getattr(
             draft_model_config, "embed_weight_key", "model.embed_tokens.weight"
         )
@@ -333,12 +325,8 @@ class OnlineDFlashTrainer(Eagle3Trainer):
 
         max_n = min(self.num_anchors, max_valid - 1)
 
-        indices = (
-            torch.arange(max_anchor + 1, device=device).unsqueeze(0).expand(bsz, -1)
-        )
-        masked_indices = torch.where(
-            valid, indices, torch.tensor(seq_len + 1, device=device)
-        )
+        indices = torch.arange(max_anchor + 1, device=device).unsqueeze(0).expand(bsz, -1)
+        masked_indices = torch.where(valid, indices, torch.tensor(seq_len + 1, device=device))
 
         random_vals = torch.rand(bsz, max_anchor + 1, device=device)
         random_vals = torch.where(valid, random_vals, torch.tensor(2.0, device=device))
@@ -347,12 +335,10 @@ class OnlineDFlashTrainer(Eagle3Trainer):
         gathered = torch.gather(masked_indices, 1, sorted_idx)
         anchors = gathered[:, :max_n].sort(dim=1).values
 
-        keep_mask = torch.arange(max_n, device=device).unsqueeze(
-            0
-        ) < valid_counts.unsqueeze(1).clamp(max=max_n)
-        anchors = torch.where(
-            keep_mask, anchors, torch.tensor(0, dtype=torch.long, device=device)
-        )
+        keep_mask = torch.arange(max_n, device=device).unsqueeze(0) < valid_counts.unsqueeze(
+            1
+        ).clamp(max=max_n)
+        anchors = torch.where(keep_mask, anchors, torch.tensor(0, dtype=torch.long, device=device))
 
         return anchors, keep_mask
 
@@ -370,9 +356,7 @@ class OnlineDFlashTrainer(Eagle3Trainer):
         bs = self.block_size
         device = input_ids.device
 
-        noise_ids = torch.full(
-            (bsz, n * bs), self.mask_token_id, dtype=torch.long, device=device
-        )
+        noise_ids = torch.full((bsz, n * bs), self.mask_token_id, dtype=torch.long, device=device)
 
         block_starts = torch.arange(n, device=device) * bs
         block_starts = block_starts.unsqueeze(0).expand(bsz, -1)
@@ -419,22 +403,14 @@ class OnlineDFlashTrainer(Eagle3Trainer):
 
         # No valid anchors → return zero loss connected to model params (DDP-safe)
         if anchor_positions is None:
-            zero_loss = sum(
-                p.sum() * 0.0
-                for p in model.parameters()
-                if p.requires_grad
-            )
+            zero_loss = sum(p.sum() * 0.0 for p in model.parameters() if p.requires_grad)
             return zero_loss, torch.tensor(0.0, device=device)
 
         # ── 2. Noise embedding ────────────────────────────────────────────────
-        noise_embedding = self._create_noise_embed(
-            input_ids, anchor_positions, block_keep_mask
-        )
+        noise_embedding = self._create_noise_embed(input_ids, anchor_positions, block_keep_mask)
 
         # ── 3. Position IDs  [B, S + N*block_size] ───────────────────────────
-        context_position_ids = (
-            torch.arange(seq_len, device=device).unsqueeze(0).expand(bsz, -1)
-        )
+        context_position_ids = torch.arange(seq_len, device=device).unsqueeze(0).expand(bsz, -1)
         draft_position_ids = self._create_position_ids(anchor_positions)
         full_position_ids = torch.cat([context_position_ids, draft_position_ids], dim=1)
 
@@ -458,7 +434,7 @@ class OnlineDFlashTrainer(Eagle3Trainer):
             attention_mask=dflash_attn_mask,
             position_ids=full_position_ids,
         )
-        
+
         output_hidden = output_hidden.to(self.target_lm_head.weight.dtype)
         logits = self.target_lm_head(output_hidden)
 
@@ -476,13 +452,11 @@ class OnlineDFlashTrainer(Eagle3Trainer):
         )  # [B, N, bs]
 
         # ── 7. Weight mask: valid block × in-bounds × skip anchor × loss_mask ─
-        weight_mask = (
-            block_keep_mask.unsqueeze(-1).expand(-1, -1, bs).float()
-        )
+        weight_mask = block_keep_mask.unsqueeze(-1).expand(-1, -1, bs).float()
         weight_mask = weight_mask * valid_label_mask.float()
 
         pos_in_block = torch.arange(bs, device=device).view(1, 1, -1)
-        weight_mask = weight_mask * (pos_in_block > 0).float()   # skip pos 0 (anchor)
+        weight_mask = weight_mask * (pos_in_block > 0).float()  # skip pos 0 (anchor)
 
         gathered_loss_mask = torch.gather(
             loss_mask.unsqueeze(1).expand(-1, anchor_positions.size(1), -1),
@@ -491,7 +465,7 @@ class OnlineDFlashTrainer(Eagle3Trainer):
         )
         weight_mask = weight_mask * gathered_loss_mask
 
-        binary_eval_mask = weight_mask.view(-1)   # no decay, used for accuracy
+        binary_eval_mask = weight_mask.view(-1)  # no decay, used for accuracy
 
         # ── 8. Exponential decay: exp(-(k-1)/γ), k=1 gets weight 1.0 ─────────
         if self.loss_decay_gamma is not None and self.loss_decay_gamma > 0:
@@ -500,7 +474,7 @@ class OnlineDFlashTrainer(Eagle3Trainer):
             weight_mask = weight_mask * decay
 
         # ── 9. Cross-entropy loss ─────────────────────────────────────────────
-        flat_logits  = logits.view(-1, logits.size(-1))
+        flat_logits = logits.view(-1, logits.size(-1))
         flat_targets = target_ids.view(-1)
         flat_weights = weight_mask.view(-1)
 
@@ -536,10 +510,12 @@ class OnlineDFlashTrainer(Eagle3Trainer):
             loss_mask=data["loss_mask"],
         )
 
-        self.log({
-            "train/loss":     round(float(loss.item()), 4),
-            "train/accuracy": round(float(accuracy.item()), 4),
-        })
+        self.log(
+            {
+                "train/loss": round(float(loss.item()), 4),
+                "train/accuracy": round(float(accuracy.item()), 4),
+            }
+        )
 
         return loss
 
@@ -561,9 +537,11 @@ class OnlineDFlashTrainer(Eagle3Trainer):
                 loss_mask=data["loss_mask"],
             )
 
-        self.log({
-            "eval/loss":     round(float(loss.item()), 4),
-            "eval/accuracy": round(float(accuracy.item()), 4),
-        })
+        self.log(
+            {
+                "eval/loss": round(float(loss.item()), 4),
+                "eval/accuracy": round(float(accuracy.item()), 4),
+            }
+        )
 
         return loss, None, None

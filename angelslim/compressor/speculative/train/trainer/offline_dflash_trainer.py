@@ -37,8 +37,8 @@ class OfflineDFlashTrainer(OnlineDFlashTrainer):
             attention_mask [B, S]
         """
         return {
-            "input_ids":      inputs["input_ids"],
-            "hidden_states":  inputs["hidden_states"],
-            "loss_mask":      inputs["loss_mask"],
+            "input_ids": inputs["input_ids"],
+            "hidden_states": inputs["hidden_states"],
+            "loss_mask": inputs["loss_mask"],
             "attention_mask": inputs["attention_mask"],
         }

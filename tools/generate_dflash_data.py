@@ -45,36 +45,56 @@ def parse_args():
     parser.add_argument("--target_model_name_or_path", type=str, required=True)
     parser.add_argument("--draft_model_config_path", type=str, required=True)
     parser.add_argument(
-        "--target_backend", type=str, default="hf", choices=["hf"],
+        "--target_backend",
+        type=str,
+        default="hf",
+        choices=["hf"],
         help="Target model backend",
     )
     parser.add_argument(
-        "--torch_dtype", type=str, default="bfloat16",
+        "--torch_dtype",
+        type=str,
+        default="bfloat16",
         choices=["float16", "bfloat16", "float32"],
     )
     parser.add_argument("--trust_remote_code", action="store_true", default=True)
 
     # Data
-    parser.add_argument("--train_data_path", type=str, nargs="+", required=True,
-                        help="Input JSONL file(s)")
-    parser.add_argument("--output_dir", type=str, required=True,
-                        help="Directory to save .ckpt files")
     parser.add_argument(
-        "--chat_template_type", type=str, default="qwen3",
+        "--train_data_path", type=str, nargs="+", required=True, help="Input JSONL file(s)"
+    )
+    parser.add_argument(
+        "--output_dir", type=str, required=True, help="Directory to save .ckpt files"
+    )
+    parser.add_argument(
+        "--chat_template_type",
+        type=str,
+        default="qwen3",
         help=f"Supported: {', '.join(get_supported_chat_template_type_strings())}",
     )
     parser.add_argument("--model_max_length", type=int, default=3072)
-    parser.add_argument("--block_size", type=int, default=16,
-                        help="Block size for DFlash parallel prediction")
-    parser.add_argument("--num_proc", type=int, default=16,
-                        help="Workers for tokenization (dataset.map)")
-    parser.add_argument("--batch_size", type=int, default=1,
-                        help="Samples per forward pass (keep at 1 for variable-length seqs)")
+    parser.add_argument(
+        "--block_size", type=int, default=16, help="Block size for DFlash parallel prediction"
+    )
+    parser.add_argument(
+        "--num_proc", type=int, default=16, help="Workers for tokenization (dataset.map)"
+    )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=1,
+        help="Samples per forward pass (keep at 1 for variable-length seqs)",
+    )
     parser.add_argument("--shuffle_seed", type=int, default=42)
-    parser.add_argument("--sample_num", type=int, default=None,
-                        help="Limit number of samples (for debugging)")
-    parser.add_argument("--shard_size", type=int, default=0,
-                        help="Save a new sub-directory every N files (0 = no sharding)")
+    parser.add_argument(
+        "--sample_num", type=int, default=None, help="Limit number of samples (for debugging)"
+    )
+    parser.add_argument(
+        "--shard_size",
+        type=int,
+        default=0,
+        help="Save a new sub-directory every N files (0 = no sharding)",
+    )
 
     return parser.parse_args()
 
@@ -141,10 +161,11 @@ def main():
     # --------------------------------------------------------------------------
     rank0_print("Building dataset...")
     # Temporarily patch args so DatasetManager picks the correct builder
-    args.modal_type = "LLM"       # DFlash uses the LLM tokenisation path
+    args.modal_type = "LLM"  # DFlash uses the LLM tokenisation path
     args.training_mode = "online"  # We want the text→token builder, not offline .ckpt loader
 
     from transformers import AutoTokenizer
+
     tokenizer = AutoTokenizer.from_pretrained(
         args.target_model_name_or_path, trust_remote_code=True
     )
@@ -155,16 +176,16 @@ def main():
         model_max_length=args.model_max_length,
         chat_template_type=args.chat_template_type,
     )
-    
+
     # Restore modal_type to DFlash so DFlash-specific filtering (min_loss_tokens) applies
     args.modal_type = "DFlash"
-    
+
     (
-        _,           # offline_train_dataset  (unused here)
-        _,           # offline_eval_dataset
+        _,  # offline_train_dataset  (unused here)
+        _,  # offline_eval_dataset
         online_train_dataset,
-        _,           # online_eval_dataset
-        _,           # data_collator
+        _,  # online_eval_dataset
+        _,  # data_collator
     ) = dataset_manager.create_all_datasets()
 
     if online_train_dataset is None:
@@ -216,7 +237,7 @@ def main():
     # --------------------------------------------------------------------------
     # 6. Main loop: forward target model, save hidden states
     # --------------------------------------------------------------------------
-    global_idx = 0          # index within this rank's portion
+    global_idx = 0  # index within this rank's portion
     total = len(dataloader)
     t0 = time.time()
 
@@ -224,7 +245,7 @@ def main():
         input_ids = batch["input_ids"]
         # Shape may be [B, 1, S] or [B, S] depending on how dataset stores it
         if input_ids.dim() == 3:
-            input_ids = input_ids.squeeze(1)    # → [B, S]
+            input_ids = input_ids.squeeze(1)  # → [B, S]
 
         attention_mask = batch.get("attention_mask", torch.ones_like(input_ids))
         if attention_mask.dim() == 3:
@@ -261,10 +282,10 @@ def main():
             ckpt_path = save_dir / f"sample_{sample_idx:08d}_rank{rank}.ckpt"
 
             ckpt = {
-                "input_ids":      input_ids[i : i + 1].cpu(),          # [1, S]
-                "hidden_states":  hidden_states[i : i + 1].cpu().to(torch.bfloat16),  # [1, S, D*L]
-                "loss_mask":      loss_mask[i : i + 1].cpu(),           # [1, S]
-                "attention_mask": attention_mask[i : i + 1].cpu(),      # [1, S]
+                "input_ids": input_ids[i : i + 1].cpu(),  # [1, S]
+                "hidden_states": hidden_states[i : i + 1].cpu().to(torch.bfloat16),  # [1, S, D*L]
+                "loss_mask": loss_mask[i : i + 1].cpu(),  # [1, S]
+                "attention_mask": attention_mask[i : i + 1].cpu(),  # [1, S]
             }
             torch.save(ckpt, ckpt_path)
 
@@ -281,10 +302,7 @@ def main():
     if world_size > 1:
         dist.barrier()
 
-    rank0_print(
-        f"Data generation complete. "
-        f"Saved files to {output_dir}"
-    )
+    rank0_print(f"Data generation complete. " f"Saved files to {output_dir}")
 
 
 if __name__ == "__main__":

@@ -16,7 +16,6 @@ from pathlib import Path
 
 import torch
 import transformers
-from transformers import AutoTokenizer
 
 from angelslim.compressor.speculative import (
     DraftModelConfig,
@@ -24,23 +23,18 @@ from angelslim.compressor.speculative import (
     create_draft_model,
     get_supported_chat_template_type_strings,
 )
-
-from angelslim.compressor.speculative.train.models.draft.online_dflash_model import (
-    OnlineDFlashModel,
-)
-from angelslim.compressor.speculative.train.trainer.online_dflash_trainer import (
-    OnlineDFlashTrainer,
+from angelslim.compressor.speculative.train.data.data_utils import (
+    DataCollatorWithPadding,
 )
 from angelslim.compressor.speculative.train.data.dataset_builder.offline_dataset_builder import (
     OfflineEagle3Dataset,
 )
-from angelslim.compressor.speculative.train.data.data_utils import DataCollatorWithPadding
 from angelslim.utils import rank0_print
-
 
 # ---------------------------------------------------------------------------
 # Offline DFlash Dataset
 # ---------------------------------------------------------------------------
+
 
 class OfflineDFlashDataset(OfflineEagle3Dataset):
     """
@@ -61,6 +55,7 @@ class OfflineDFlashDataset(OfflineEagle3Dataset):
 
     def _load_ckpt(self, idx: int):
         import warnings
+
         ckpt_path = self.ckpt_files[idx]
         try:
             data = torch.load(ckpt_path, map_location="cpu", weights_only=False)
@@ -70,9 +65,7 @@ class OfflineDFlashDataset(OfflineEagle3Dataset):
 
         missing = [k for k in self.REQUIRED_KEYS if k not in data]
         if missing:
-            warnings.warn(
-                f"{ckpt_path} missing keys {missing}. Skipping.", RuntimeWarning
-            )
+            warnings.warn(f"{ckpt_path} missing keys {missing}. Skipping.", RuntimeWarning)
             return None
 
         # Auto-generate attention_mask if absent
@@ -86,6 +79,7 @@ class OfflineDFlashDataset(OfflineEagle3Dataset):
 # Argument parser
 # ---------------------------------------------------------------------------
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Train DFlash draft model (offline mode)")
 
@@ -93,8 +87,9 @@ def parse_args():
     m = parser.add_argument_group("Model Arguments")
     m.add_argument("--target_model_name_or_path", type=str, required=True)
     m.add_argument("--draft_model_config_path", type=str, required=True)
-    m.add_argument("--torch_dtype", type=str, default="bfloat16",
-                   choices=["float16", "bfloat16", "float32"])
+    m.add_argument(
+        "--torch_dtype", type=str, default="bfloat16", choices=["float16", "bfloat16", "float32"]
+    )
     m.add_argument("--trust_remote_code", action="store_true", default=True)
     m.add_argument("--embed_weight_key", type=str, default="model.embed_tokens.weight")
     m.add_argument("--lm_head_key", type=str, default="lm_head.weight")
@@ -105,21 +100,38 @@ def parse_args():
     d.add_argument("--num_anchors", type=int, default=None)
     d.add_argument("--loss_decay_gamma", type=float, default=None)
     d.add_argument("--mask_token_id", type=int, default=None)
-    d.add_argument("--attention_backend", type=str, default=None,
-                   choices=["flex_attention", "sdpa", "eager"])
+    d.add_argument(
+        "--attention_backend", type=str, default=None, choices=["flex_attention", "sdpa", "eager"]
+    )
 
     # Data
     da = parser.add_argument_group("Data Arguments")
-    da.add_argument("--train_hidden_path", type=str, required=True,
-                    help="Directory of pre-computed training .ckpt files")
-    da.add_argument("--eval_hidden_path", type=str, default=None,
-                    help="Directory of pre-computed eval .ckpt files (optional)")
-    da.add_argument("--chat_template_type", type=str, default="qwen3",
-                    help=f"Supported: {', '.join(get_supported_chat_template_type_strings())}")
+    da.add_argument(
+        "--train_hidden_path",
+        type=str,
+        required=True,
+        help="Directory of pre-computed training .ckpt files",
+    )
+    da.add_argument(
+        "--eval_hidden_path",
+        type=str,
+        default=None,
+        help="Directory of pre-computed eval .ckpt files (optional)",
+    )
+    da.add_argument(
+        "--chat_template_type",
+        type=str,
+        default="qwen3",
+        help=f"Supported: {', '.join(get_supported_chat_template_type_strings())}",
+    )
     da.add_argument("--model_max_length", type=int, default=3072)
     da.add_argument("--num_proc", type=int, default=16)
-    da.add_argument("--cache_in_memory", action="store_true", default=False,
-                    help="Cache all .ckpt files in RAM (fast but memory-intensive)")
+    da.add_argument(
+        "--cache_in_memory",
+        action="store_true",
+        default=False,
+        help="Cache all .ckpt files in RAM (fast but memory-intensive)",
+    )
 
     # Training
     t = parser.add_argument_group("Training Arguments")
@@ -169,6 +181,7 @@ def _setup_wandb(args):
     if local_rank == 0:
         try:
             import wandb
+
             wandb.init(
                 project=os.environ.get("WANDB_PROJECT", "angelslim-dflash"),
                 name=run_name,
@@ -182,12 +195,13 @@ def _setup_wandb(args):
 # Main
 # ---------------------------------------------------------------------------
 
+
 def train():
     args = parse_args()
     _setup_wandb(args)
 
     dtype_map = {"float16": torch.float16, "bfloat16": torch.bfloat16, "float32": torch.float32}
-    torch_dtype = dtype_map.get(args.torch_dtype, torch.bfloat16)
+    #torch_dtype = dtype_map.get(args.torch_dtype, torch.bfloat16)
 
     # ------------------------------------------------------------------
     # 1. Draft model config
@@ -218,9 +232,7 @@ def train():
     # ------------------------------------------------------------------
     rank0_print("Loading draft model...")
     draft_model = create_draft_model(draft_model_config)
-    rank0_print(
-        f"Draft model parameters: {sum(p.numel() for p in draft_model.parameters()):,}"
-    )
+    rank0_print(f"Draft model parameters: {sum(p.numel() for p in draft_model.parameters()):,}")
 
     # ------------------------------------------------------------------
     # 3. Offline datasets
@@ -283,7 +295,7 @@ def train():
         training_mode="offline",
         modal_type="DFlash",
         draft_model=draft_model,
-        target_model=None,   # Not needed — hidden states are pre-computed
+        target_model=None,  # Not needed — hidden states are pre-computed
         length=args.training_time_test_length,
         draft_model_config=draft_model_config,
         args=training_args,

@@ -278,9 +278,7 @@ def parse_args():
         default="cosine",
         help="Learning rate scheduler type",
     )
-    training_group.add_argument(
-        "--run_name", type=str, default=None, help="Run name for tracking"
-    )
+    training_group.add_argument("--run_name", type=str, default=None, help="Run name for tracking")
     training_group.add_argument(
         "--report_to",
         type=str,
@@ -320,11 +318,7 @@ def _setup_wandb(args) -> None:
         os.environ["WANDB_PROJECT"] = args.wandb_project
 
     # Resolve run name: --wandb_run_name > --run_name > env WANDB_RUN_NAME
-    run_name = (
-        args.wandb_run_name
-        or args.run_name
-        or os.environ.get("WANDB_RUN_NAME")
-    )
+    run_name = args.wandb_run_name or args.run_name or os.environ.get("WANDB_RUN_NAME")
     if run_name:
         os.environ["WANDB_RUN_NAME"] = run_name
         # Propagate back so TrainingArguments picks it up
@@ -342,10 +336,7 @@ def _setup_wandb(args) -> None:
                 resume="allow",
             )
         except ImportError:
-            print(
-                "[WARNING] wandb not installed. "
-                "Install via: pip install wandb"
-            )
+            print("[WARNING] wandb not installed. " "Install via: pip install wandb")
 
 
 def train():
@@ -380,7 +371,10 @@ def train():
     if args.attention_backend is not None:
         draft_model_config.attention_backend = args.attention_backend
     if args.mask_token_id is not None:
-        if not hasattr(draft_model_config, "dflash_config") or draft_model_config.dflash_config is None:
+        if (
+            not hasattr(draft_model_config, "dflash_config")
+            or draft_model_config.dflash_config is None
+        ):
             draft_model_config.dflash_config = {}
         draft_model_config.dflash_config["mask_token_id"] = args.mask_token_id
 
@@ -412,9 +406,7 @@ def train():
     rank0_print(f"draft_model_config: {draft_model_config}")
     draft_model = create_draft_model(draft_model_config)
     rank0_print("Draft model loaded successfully")
-    rank0_print(
-        f"Draft model parameters: {sum(p.numel() for p in draft_model.parameters()):,}"
-    )
+    rank0_print(f"Draft model parameters: {sum(p.numel() for p in draft_model.parameters()):,}")
 
     # Create datasets using DatasetManager
     rank0_print(
