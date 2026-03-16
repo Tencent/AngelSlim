@@ -25,7 +25,6 @@ from transformers import (
 )
 from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import Qwen3VLMoeTextExperts
 
-
 from angelslim.compressor.quant.core.quant_func import get_fp_maxval
 from angelslim.compressor.quant.observers import MoEAbsmaxPertensorObserver
 
