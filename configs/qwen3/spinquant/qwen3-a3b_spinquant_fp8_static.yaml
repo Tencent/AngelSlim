@@ -1,15 +1,15 @@
 # Global configuration of pipeline
 global:
-  save_path: /root/gavinlee-code/work/w4a8/model/ckpts/w4a8/qwen3_fp8_static
+  save_path: ./output
 
 # Simplified Configuration for LLM compression
 model:
   name: Qwen
-  model_path: Qwen/Qwen3-8B
+  model_path: Qwen/Qwen3-30B-A3B
   trust_remote_code: true
   low_cpu_mem_usage: true
   use_cache: false
-  torch_dtype: auto
+  torch_dtype: float32
   device_map: auto
 
 # Compression configuration
@@ -24,10 +24,20 @@ compression:
     ignore_layers:         # Skip quantization for these layers
       - "lm_head"
 
+# Transform configuration for SpinQuant
+transform:
+  name: SpinQuant
+  spin_config:
+    had_dim: -1
+    rotation_mode: Hadamard   # "Hadamard" or "Random"
+    ignore_layers: []
+  output_log: false
+
+# Dataset for calibration
 # Dataset for calibration
 dataset:
   name: TextDataset
-  data_path: /root/gavinlee-code/work/w4a8/question_format1.jsonl
+  data_path: ./dataset/sharegpt_gpt4_qwen/sharegpt_gpt4-qwen3_a22B_output.jsonl
   max_seq_length: 2048
-  num_samples: 32
+  num_samples: 256
   batch_size: 1

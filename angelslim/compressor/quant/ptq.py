@@ -22,6 +22,7 @@ from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import Qwen3VLMoeTex
 
 from ...utils import find_parent_layer_and_sub_name, print_info
 from ..compressor_factory import CompressorFactory
+from ..transform import TransformFactory
 from .core import PTQHook
 from .modules import AWQ, FP8, GPTQ, INT8, NVFP4, W4A8INT8, LeptoFP8, SmoothQuant
 
@@ -36,6 +37,7 @@ class PTQ:
             model(nn.Moudle, required): the model to be quant.
             slim_config(dict, required): the configuration for quantization.
                 - compress_config: the configuration for compression.
+                - transform_config: the configuration for transform.
                 - global_config: the global configuration for the model.
         """
         self.quant_model = model
@@ -43,7 +45,16 @@ class PTQ:
         self.quant_model.init_ptq(slim_config)
         self.absolute_model_path = slim_config["global_config"].absolute_model_path
         self.quant_algo = self.quant_model.quant_config.quant_algo
+
+        # init transform
+        # TODO(gavinlee) will be deprecated, and move to transform, now only for smoothquant
         self.quant_helpers = self.quant_model.quant_config.quant_helpers
+
+        # create transform, for example, smoothquant
+        self.trasform_runner = TransformFactory.create(self.quant_model, slim_config)
+        # trasform first, then run quantization
+        self.trasform_runner.run()
+
         if "fp8" in self.quant_algo or "int8" in self.quant_algo or "nvfp4" in self.quant_algo:
             # Add ptq observer hook
             self.ptq_hook = PTQHook(self.quant_model)

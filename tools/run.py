@@ -30,6 +30,7 @@ def get_args():
     parser.add_argument("--model-path", type=str, default=None)
     parser.add_argument("--save-path", type=str, default=None)
     parser.add_argument("--multi-nodes", action="store_true")
+    parser.add_argument("--lm-eval", action="store_true")
     args = parser.parse_args()
     return args
 
@@ -76,6 +77,7 @@ def multi_nodes_run(config):
     dataset_config = config.dataset_config
     compress_config = config.compression_config
     global_config = config.global_config
+    transform_config = config.transform_config
 
     # Step 3: Execute complete pipeline
     slim_engine = Engine()
@@ -115,6 +117,7 @@ def multi_nodes_run(config):
         compress_name=compress_config.name,
         compress_config=compress_config,
         global_config=global_config,
+        transform_config=transform_config,
     )
 
     # Step 7: Compress model
@@ -137,6 +140,7 @@ def run(config):
     dataset_config = config.dataset_config
     compress_config = config.compression_config
     global_config = config.global_config
+    transform_config = config.transform_config
 
     # Step 2: Execute complete pipeline
     slim_engine = Engine()
@@ -177,12 +181,42 @@ def run(config):
         compress_name=compress_config.name,
         compress_config=compress_config,
         global_config=global_config,
+        transform_config=transform_config,
     )
 
     # Step 6: Compress model
     slim_engine.run()
 
-    # Step 7: Save compressed model
+    def find_modules_with_hooks(model: torch.nn.Module):
+        """查找并打印模型中所有带有 hook 的子模块"""
+        hooked_modules = {}
+        for name, module in model.named_modules():
+            hooks_info = []
+            if len(module._forward_hooks) > 0:
+                hooks_info.append(f"forward_hooks: {len(module._forward_hooks)}")
+            if len(module._forward_pre_hooks) > 0:
+                hooks_info.append(f"forward_pre_hooks: {len(module._forward_pre_hooks)}")
+            # if len(module._backward_hooks) > 0:
+            #     hooks_info.append(f"backward_hooks: {len(module._backward_hooks)}")
+            # if len(module._backward_pre_hooks) > 0:
+            #     hooks_info.append(f"backward_pre_hooks: {len(module._backward_pre_hooks)}")
+
+            if hooks_info:
+                # 如果 name 为空字符串，代表是模型的最外层(顶层)
+                display_name = name if name else "Top-level Model"
+                hooked_modules[display_name] = hooks_info
+
+        return hooked_modules
+
+    # Step 7: Eval
+    if args.lm_eval:
+        slim_engine.lm_eval(
+            tasks="arc_easy,hellaswag",
+            batch_size=4,
+            num_fewshot=0,
+        )
+
+    # Step 8: Save compressed model
     slim_engine.save(global_config.save_path, config)
 
 

@@ -212,7 +212,7 @@ def main():
     print("=" * 80)
     for i, output in enumerate(outputs[:5]):
         generated_text = output.outputs[0].text
-        print(f"[{i+1}] Output: {generated_text!r}")
+        print(f"[{i + 1}] Output: {generated_text}")
     print(f"\nTotal outputs generated: {len(outputs)}")
 
     # Collect and save statistics

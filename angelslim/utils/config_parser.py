@@ -204,6 +204,22 @@ class QuantizationConfig:
 
 
 @dataclass
+class TransformConfig:
+    """
+    Configuration for transform in LLM compression.
+
+    Attributes:
+        name: Transform method name, e.g. "SpinQuant"
+        spin_config: SpinQuant-specific options
+        output_log: Whether to write a transform log file alongside the saved model
+    """
+
+    name: str
+    spin_config: Optional[Dict[str, Any]] = field(default_factory=dict)
+    output_log: bool = field(default=False)
+
+
+@dataclass
 class CacheConfig:
     """
     Configuration for caching in LLM compression.
@@ -339,13 +355,15 @@ class FullConfig:
         model_config: Model configuration parameters
         compression_config: Compression configuration parameters
         dataset_config: Dataset configuration parameters
+        transform_config: Transform configuration parameters (e.g. SpinQuant)
     """
 
     model_config: ModelConfig
-    compression_config: CompressionConfig
-    dataset_config: DatasetConfig
-    global_config: GlobalConfig
-    infer_config: InferenceConfig
+    compression_config: Optional[CompressionConfig] = field(default=None)
+    dataset_config: Optional[DatasetConfig] = field(default=None)
+    global_config: Optional[GlobalConfig] = field(default=None)
+    infer_config: Optional[InferenceConfig] = field(default=None)
+    transform_config: Optional[TransformConfig] = field(default=None)
 
 
 class SlimConfigParser:
@@ -399,67 +417,73 @@ class SlimConfigParser:
             dataset_dict = config_dict["dataset"]
             dataset_conf = DatasetConfig(**dataset_dict)
 
-        # Get compression section
+        # Parse transform configuration (optional, e.g. for SpinQuant-only runs)
+        transform_conf = None
+        if "transform" in config_dict:
+            transform_conf = self._get_transform_config(config_dict["transform"])
+
+        # Compression section is optional when a transform-only config is provided
         compression_dict = config_dict.get("compression", {})
-        if not compression_dict:
-            raise ValueError("Missing 'compression' section in configuration")
-
-        # Validate compression method
-        compress_name = compression_dict.get("name")
-        # Convert single method to list for consistent processing
-        if isinstance(compress_name, str):
-            compress_names = [compress_name]
-        elif isinstance(compress_name, list):
-            compress_names = compress_name
-        else:
-            raise TypeError(
-                f"Compress method must be a str or list[str], got {type(compress_name)}"
-            )
-        for name in compress_names:
-            if name not in self.supported_methods:
-                raise ValueError(
-                    f"Unsupported compression method: {name}. "
-                    f"Supported methods: {self.supported_methods}"
+        compression_conf = None
+        if compression_dict:
+            # Validate compression method
+            compress_name = compression_dict.get("name")
+            # Convert single method to list for consistent processing
+            if isinstance(compress_name, str):
+                compress_names = [compress_name]
+            elif isinstance(compress_name, list):
+                compress_names = compress_name
+            else:
+                raise TypeError(
+                    f"Compress method must be a str or list[str], got {type(compress_name)}"
                 )
-
-        # Initialize compression config
-        compression_conf = CompressionConfig(name=compress_names)
-
-        # Parse method-specific configurations for each specified method
-        for method_name in compress_names:
-            if method_name in ["PTQ", "QAT"]:
-                # Validate quantization type
-                quant_dict = compression_dict.get("quantization", {})
-                quant_method = quant_dict.get("name")
-
-                # Get supported quantization methods (assuming similar enum exists)
-                if (
-                    quant_method not in self.supported_quant_methods
-                ):  # Keep existing or update similarly
+            for name in compress_names:
+                if name not in self.supported_methods:
                     raise ValueError(
-                        f"Unsupported quantization method: {quant_method}. "
-                        f"Supported: {self.supported_quant_methods}"
+                        f"Unsupported compression method: {name}. "
+                        f"Supported methods: {self.supported_methods}"
                     )
 
-                # Parse quantization config (only set if not already set)
-                if compression_conf.quantization is None:
-                    compression_conf.quantization = QuantizationConfig(**quant_dict)
+            # Initialize compression config
+            compression_conf = CompressionConfig(name=compress_names)
 
-            elif method_name == CompressionMethod.CACHE.value:
-                # Parse cache configuration (only set if not already set)
-                cache_dict = compression_dict.get("cache", {})
-                if compression_conf.cache is None:
-                    compression_conf.cache = CacheConfig(**cache_dict)
-            else:
+            # Parse method-specific configurations for each specified method
+            for method_name in compress_names:
+                if method_name in ["PTQ", "QAT"]:
+                    # Validate quantization type
+                    quant_dict = compression_dict.get("quantization", {})
+                    quant_method = quant_dict.get("name")
+
+                    # Get supported quantization methods (assuming similar enum exists)
+                    if (
+                        quant_method not in self.supported_quant_methods
+                    ):  # Keep existing or update similarly
+                        raise ValueError(
+                            f"Unsupported quantization method: {quant_method}. "
+                            f"Supported: {self.supported_quant_methods}"
+                        )
+
+                    # Parse quantization config (only set if not already set)
+                    if compression_conf.quantization is None:
+                        compression_conf.quantization = QuantizationConfig(**quant_dict)
+
+                elif method_name == CompressionMethod.CACHE.value:
+                    # Parse cache configuration (only set if not already set)
+                    cache_dict = compression_dict.get("cache", {})
+                    if compression_conf.cache is None:
+                        compression_conf.cache = CacheConfig(**cache_dict)
+                else:
+                    raise ValueError(
+                        f"Unsupported compression method: {method_name}. "
+                        f"Supported methods: {self.supported_methods}"
+                    )
+
+            if compression_conf.need_dataset and not dataset_conf:
                 raise ValueError(
-                    f"Unsupported compression method: {method_name}. "
-                    f"Supported methods: {self.supported_methods}"
+                    "Compressor requires dataset, but 'dataset' section is missing in yaml."
                 )
-
-        if compression_conf.need_dataset and not dataset_conf:
-            raise ValueError(
-                "Compressor requires dataset, but 'dataset' section is missing in yaml."
-            )
+        elif transform_conf is None:
+            raise ValueError("Missing 'compression' or 'transform' section in configuration")
 
         # Global properties
         global_config = self._get_global_config(config_dict, model_conf, dataset_conf)
@@ -476,6 +500,28 @@ class SlimConfigParser:
             dataset_config=dataset_conf,
             global_config=global_config,
             infer_config=inference_conf,
+            transform_config=transform_conf,
+        )
+
+    def _get_transform_config(self, transform_dict: dict) -> "TransformConfig":
+        """Parse transform section from YAML into a TransformConfig.
+
+        Args:
+            transform_dict: dict parsed from the ``transform:`` YAML block
+
+        Returns:
+            TransformConfig instance
+        """
+        supported_transforms = ["SpinQuant"]
+        name = transform_dict.get("name")
+        if name not in supported_transforms:
+            raise ValueError(
+                f"Unsupported transform method: {name}. " f"Supported: {supported_transforms}"
+            )
+        return TransformConfig(
+            name=name,
+            spin_config=transform_dict.get("spin_config", {}),
+            output_log=transform_dict.get("output_log", False),
         )
 
     def _get_global_config(self, config_dict, model_conf, dataset_conf=None) -> GlobalConfig:
@@ -632,6 +678,12 @@ def print_config(config, indent=0):
         print(f"{prefix}Inference:")
         if config.infer_config:
             print_config(config.infer_config, next_indent)
+        else:
+            print(f"{prefix}None")
+
+        if config.transform_config:
+            print(f"{prefix}Transform:")
+            print_config(config.transform_config, next_indent)
         else:
             print(f"{prefix}None")
         return
