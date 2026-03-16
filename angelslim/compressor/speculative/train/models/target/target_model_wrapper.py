@@ -193,7 +193,7 @@ class TransformersBackend(BaseBackend):
             Dictionary of model loading arguments
         """
         default_kwargs = {
-            "dtype": torch.bfloat16,
+            "torch_dtype": torch.bfloat16,
             "device_map": device,
             "trust_remote_code": True,
         }
@@ -228,6 +228,7 @@ class TransformersBackend(BaseBackend):
                 attention_mask=attention_mask,
                 output_hidden_states=True,
                 output_logits=True,
+                use_cache=False,  # match SpecForge: no KV-cache during training
             )
 
         # Extract auxiliary hidden states
@@ -914,7 +915,7 @@ def create_target_model(
 
     # Add backend-specific configuration
     if backend == "hf":
-        kwargs["dtype"] = torch_dtype
+        kwargs["torch_dtype"] = torch_dtype
     else:
         raise ValueError(
             f"Unsupported backend: '{backend}'. "

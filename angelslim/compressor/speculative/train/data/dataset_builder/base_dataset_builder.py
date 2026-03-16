@@ -29,7 +29,12 @@ from ..chat_templates import ChatTemplateType, template_manager
 class DatasetBuilder(metaclass=ABCMeta):
     @abstractmethod
     def build_dataset(
-        self, datapath: str, num_proc: int = 8, shuffle: bool = True, **kwargs
+        self,
+        datapath: str,
+        num_proc: int = 8,
+        shuffle: bool = True,
+        min_loss_tokens: Optional[int] = None,
+        **kwargs,
     ) -> Dataset:
         pass
 
@@ -127,6 +132,7 @@ class OnlineDatasetBuilder(DatasetBuilder):
         num_proc: int = 8,
         shuffle: bool = True,
         sample_num: Optional[int] = None,
+        min_loss_tokens: Optional[int] = None,
     ) -> Dataset:
         try:
             # Load dataset
@@ -161,6 +167,18 @@ class OnlineDatasetBuilder(DatasetBuilder):
                 num_proc=num_proc,
                 desc="Filtering empty input_ids",
             )
+
+            if min_loss_tokens is not None:
+                processed_ds = processed_ds.filter(
+                    lambda batch: [
+                        sum(sum(x) if isinstance(x, list) else x for x in m) >= min_loss_tokens
+                        for m in batch["loss_mask"]
+                    ],
+                    batched=True,
+                    num_proc=num_proc,
+                    desc=f"Filtering sequences with loss tokens < {min_loss_tokens}",
+                )
+
             processed_ds.set_format(type="torch")
 
             return processed_ds
