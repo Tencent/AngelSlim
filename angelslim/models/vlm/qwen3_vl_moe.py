@@ -21,14 +21,10 @@ from tqdm import tqdm
 from transformers import (
     AutoProcessor,
     AutoTokenizer,
+    Qwen3VLMoeForConditionalGeneration,
 )
+from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import Qwen3VLMoeTextExperts
 
-try:
-    from transformers import Qwen3VLMoeForConditionalGeneration
-    from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import Qwen3VLMoeTextExperts
-except ImportError:
-    Qwen3VLMoeForConditionalGeneration = None  # not available in this transformers version
-    Qwen3VLMoeTextExperts = None
 
 from angelslim.compressor.quant.core.quant_func import get_fp_maxval
 from angelslim.compressor.quant.observers import MoEAbsmaxPertensorObserver
