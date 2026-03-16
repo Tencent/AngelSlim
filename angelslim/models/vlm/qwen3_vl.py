@@ -15,12 +15,7 @@
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-from transformers import AutoProcessor, AutoTokenizer
-
-try:
-    from transformers import Qwen3VLForConditionalGeneration
-except ImportError:
-    Qwen3VLForConditionalGeneration = None  # not available in this transformers version
+from transformers import AutoProcessor, AutoTokenizer, Qwen3VLForConditionalGeneration
 
 from ...compressor.quant.core import LossFilter, PTQVLMSaveVllmHF
 from ...utils import find_layers, print_info
