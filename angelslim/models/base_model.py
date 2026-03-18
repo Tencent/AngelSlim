@@ -333,6 +333,58 @@ class BaseLLMModel(metaclass=ABCMeta):
 
         return smooth_mapping_layers
 
+    def get_rotation_mapping_layers(
+        self, transform_config, linear_mapping=None, norm_mapping=None
+    ):
+
+        if linear_mapping:
+            targets, ignore = linear_mapping
+            linear_mapping_layers = {}
+            for name, module in self.model.named_modules():
+                for target in targets:
+                    if name.split(".")[-1] == target:
+                        if name not in ignore:
+                            linear_mapping_layers[name] = module
+                        break
+            return linear_mapping_layers
+
+        if norm_mapping:
+            norm_mapping_layers = {}
+
+            for to_linear_list, to_norm in norm_mapping:
+                for norm_name, norm_layer in self.model.named_modules():
+                    if norm_name.split(".")[-1] != to_norm:
+                        continue
+                    linear_layers_list = []
+
+                    for to_linear in to_linear_list:
+                        longest_prefix = 0
+                        linear_layers = []
+
+                        # use common_prefix to support moe experts
+                        for name, layer in self.model.named_modules():
+                            if name.split(".")[-1] != to_linear:
+                                continue
+                            prefix = common_prefix(name, norm_name)
+                            if prefix.count(".") < longest_prefix:
+                                continue
+                            elif prefix.count(".") == longest_prefix:
+                                linear_layers.append((name, layer))
+                            else:
+                                longest_prefix = prefix.count(".")
+                                linear_layers = [(name, layer)]
+
+                        if linear_layers:
+                            linear_layers_list.extend(linear_layers)
+
+                    if linear_layers_list:
+                        norm_mapping_layers[norm_name] = (
+                            norm_layer,
+                            linear_layers_list,
+                        )
+
+            return norm_mapping_layers
+
     def get_parent_dict(self, observer_layers_dict):
         return {}
 
@@ -342,4 +394,4 @@ class BaseLLMModel(metaclass=ABCMeta):
         return weight_observer.scales()
 
     def __getattr__(self, item):
-        return super().__getattr__(item)
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{item}'")

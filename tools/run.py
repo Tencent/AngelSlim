@@ -30,6 +30,7 @@ def get_args():
     parser.add_argument("--model-path", type=str, default=None)
     parser.add_argument("--save-path", type=str, default=None)
     parser.add_argument("--multi-nodes", action="store_true")
+    parser.add_argument("--lm-eval", action="store_true")
     args = parser.parse_args()
     return args
 
@@ -76,6 +77,7 @@ def multi_nodes_run(config):
     dataset_config = config.dataset_config
     compress_config = config.compression_config
     global_config = config.global_config
+    transform_config = config.transform_config
 
     # Step 3: Execute complete pipeline
     slim_engine = Engine()
@@ -115,6 +117,7 @@ def multi_nodes_run(config):
         compress_name=compress_config.name,
         compress_config=compress_config,
         global_config=global_config,
+        transform_config=transform_config,
     )
 
     # Step 7: Compress model
@@ -216,6 +219,7 @@ def run(config):
     dataset_config = config.dataset_config
     compress_config = config.compression_config
     global_config = config.global_config
+    transform_config = config.transform_config
 
     # Dispatch to vLLM calibration if calibrate config specifies vllm backend
     if (
@@ -264,12 +268,21 @@ def run(config):
         compress_name=compress_config.name,
         compress_config=compress_config,
         global_config=global_config,
+        transform_config=transform_config,
     )
 
     # Step 6: Compress model
     slim_engine.run()
 
-    # Step 7: Save compressed model
+    # Step 7: Eval
+    if args.lm_eval:
+        slim_engine.lm_eval(
+            tasks="arc_easy,hellaswag",
+            batch_size=4,
+            num_fewshot=0,
+        )
+
+    # Step 8: Save compressed model
     slim_engine.save(global_config.save_path, config)
 
 

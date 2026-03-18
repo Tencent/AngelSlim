@@ -186,6 +186,7 @@ class Engine:
         compress_name="PTQ",
         global_config=None,
         compress_config=None,
+        transform_config=None,
         default_method=None,
     ) -> Any:
         """
@@ -219,6 +220,7 @@ class Engine:
             slim_config = {
                 "global_config": global_config,
                 "compress_config": compress_config,
+                "transform_config": transform_config,
             }
         self.compress_type = compress_names
         self.only_inference = compress_config.only_inference if compress_config else False
@@ -284,6 +286,69 @@ class Engine:
                 json.dump(config_dict, f, indent=4)
 
         print_info(f"Compressed model saved to {save_path}")
+
+    def lm_eval(
+        self,
+        tasks: str,
+        batch_size: int = 1,
+        num_fewshot: int = 0,
+        limit: Optional[int] = None,
+        apply_chat_template: bool = False,
+        fewshot_as_multiturn: bool = False,
+        output_path: Optional[str] = None,
+    ) -> dict:
+        """Evaluate the (compressed) model with lm-evaluation-harness.
+
+        Args:
+            tasks: Comma-separated list of lm-eval task names, e.g. "arc_easy,hellaswag".
+            batch_size: Batch size for evaluation.
+            num_fewshot: Number of few-shot examples.
+            limit: Maximum number of samples per task (None = all).
+            apply_chat_template: Apply the tokenizer chat template to prompts.
+            fewshot_as_multiturn: Treat few-shot examples as multi-turn conversation.
+            output_path: If provided, save raw results to this path with torch.save().
+
+        Returns:
+            The results dict returned by lm_eval.evaluator.simple_evaluate().
+        """
+        try:
+            from lm_eval import evaluator as lm_evaluator
+            from lm_eval.models.huggingface import HFLM
+        except ImportError as e:
+            raise ImportError(
+                "lm-evaluation-harness is required for test_lm_eval. "
+                "Install it with: pip install lm-eval"
+            ) from e
+
+        if self.slim_model is None or self.slim_model.model is None:
+            raise RuntimeError("Model not initialized. Call prepare_model() first.")
+
+        model = self.slim_model.model
+        tokenizer = self.slim_model.tokenizer
+        tokenizer.pad_token = tokenizer.eos_token
+
+        lm_eval_model = HFLM(model, tokenizer=tokenizer, batch_size=batch_size)
+
+        task_names = tasks.split(",")
+        results = lm_evaluator.simple_evaluate(
+            model=lm_eval_model,
+            tasks=task_names,
+            limit=limit,
+            num_fewshot=num_fewshot,
+            apply_chat_template=apply_chat_template,
+            fewshot_as_multiturn=fewshot_as_multiturn,
+        )
+
+        for key in results["results"]:
+            print(key)
+            print(results["results"][key])
+            print()
+
+        if output_path is not None:
+            torch.save(results, output_path)
+            print_info(f"lm_eval results saved to {output_path}")
+
+        return results
 
 
 class InferEngine(Engine):
