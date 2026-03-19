@@ -75,6 +75,7 @@ def moe_observer_forward(
 
     return final_hidden_states
 
+
 @SlimModelFactory.register
 class Qwen3VLMoE(BaseLLMModel):
     def __init__(
