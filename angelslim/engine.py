@@ -19,6 +19,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Dict, Optional
 
 import torch
+from tqdm import tqdm
 
 from .compressor import CompressorFactory
 from .compressor.speculative.benchmark import pytorch as pytorch_benchmark
@@ -27,6 +28,7 @@ from .data.dataloader import DataLoaderFactory
 from .models import SlimModelFactory
 from .utils import (
     default_compress_config,
+    get_loaders,
     get_package_info,
     parse_json_full_config,
     print_info,
@@ -186,6 +188,7 @@ class Engine:
         compress_name="PTQ",
         global_config=None,
         compress_config=None,
+        training_config=None,
         default_method=None,
     ) -> Any:
         """
@@ -219,6 +222,7 @@ class Engine:
             slim_config = {
                 "global_config": global_config,
                 "compress_config": compress_config,
+                "training_config": training_config,
             }
         self.compress_type = compress_names
         self.only_inference = (
@@ -245,6 +249,8 @@ class Engine:
                 continue
             if compress_type == "PTQ":
                 compressors[idx].calibrate(self.dataloader)
+            elif compress_type == "QAT":
+                compressors[idx].run(self.dataloader)
             else:
                 raise NotImplementedError(
                     f"Compression type {self.compress_type} is not implemented"
@@ -265,7 +271,7 @@ class Engine:
         for idx, compress_type in enumerate(self.compress_type):
             if self.only_inference[idx]:
                 continue
-            if compress_type == "PTQ":
+            if compress_type in ["PTQ", "QAT"]:
                 # Execute model conversion
                 compressors[idx].convert()
 
@@ -273,7 +279,7 @@ class Engine:
             compressors[idx].save(save_path)
 
         # Save all config
-        if config is not None:
+        if config is not None and compress_type != "QAT":
             config_dict = asdict(config)
             config_dict["debug_info"] = {
                 "python": sys.version,
@@ -294,6 +300,121 @@ class Engine:
                 json.dump(config_dict, f, indent=4)
 
         print_info(f"Compressed model saved to {save_path}")
+
+    @torch.no_grad()
+    def ppl_eval(self, tasks, seqlen=2048, cache_dir=None):
+        results = {}
+        model = self.slim_model.model
+        task_names = tasks.split(",")
+
+        for dataset in task_names:
+            testloader = get_loaders(
+                self.slim_model.tokenizer, dataset, seqlen, cache_dir
+            )
+            testenc = testloader if "c4" in dataset else testloader.input_ids
+            nsamples = testenc.numel() // seqlen
+            use_cache = model.config.use_cache
+            model.config.use_cache = False
+            model.eval()
+
+            if hasattr(model, "lm_head") and isinstance(model.lm_head, torch.nn.Linear):
+                classifier = model.lm_head
+            elif hasattr(model.model, "lm_head"):
+                classifier = None
+            elif hasattr(model, "output"):
+                classifier = model.output
+            else:
+                raise NotImplementedError
+
+            nlls = []
+            for i in tqdm(range(nsamples)):
+                batch = testenc[:, (i * seqlen) : ((i + 1) * seqlen)].to(model.device)
+                outputs = model.model(batch)
+                if classifier is not None:
+                    hidden_states = outputs[0]
+                    logits = classifier(hidden_states.to(classifier.weight.dtype))
+                else:
+                    logits = outputs[0]
+                shift_logits = logits[:, :-1, :]
+                shift_labels = testenc[:, (i * seqlen) : ((i + 1) * seqlen)][:, 1:].to(
+                    shift_logits.device
+                )
+                loss_fct = torch.nn.CrossEntropyLoss()
+                loss = loss_fct(
+                    shift_logits.view(-1, shift_logits.size(-1)),
+                    shift_labels.view(-1),
+                )
+                neg_log_likelihood = loss.float() * seqlen
+                nlls.append(neg_log_likelihood)
+
+            results[dataset] = torch.exp(
+                torch.stack(nlls).sum() / (nsamples * seqlen)
+            ).item()
+        model.config.use_cache = use_cache
+
+        print_info(results)
+        return results
+
+    def lm_eval(
+        self,
+        tasks: str,
+        batch_size: int = 1,
+        num_fewshot: int = 0,
+        limit: Optional[int] = None,
+        apply_chat_template: bool = False,
+        fewshot_as_multiturn: bool = False,
+        output_path: Optional[str] = None,
+    ) -> dict:
+        """Evaluate the (compressed) model with lm-evaluation-harness.
+
+        Args:
+            tasks: Comma-separated list of lm-eval task names.
+            batch_size: Batch size for evaluation.
+            num_fewshot: Number of few-shot examples.
+            limit: Maximum number of samples per task (None = all).
+            apply_chat_template: Apply the tokenizer chat template to prompts.
+            fewshot_as_multiturn: Treat few-shot examples as multi-turn conversation.
+            output_path: If provided, save raw results to this path with torch.save().
+
+        Returns:
+            The results dict returned by lm_eval.evaluator.simple_evaluate().
+        """
+        try:
+            from lm_eval import evaluator as lm_evaluator
+            from lm_eval.models.huggingface import HFLM
+            from lm_eval.utils import make_table
+        except ImportError as e:
+            raise ImportError(
+                "lm-evaluation-harness is required for test_lm_eval. "
+                "Install it with: pip install lm-eval"
+            ) from e
+
+        if self.slim_model is None or self.slim_model.model is None:
+            raise RuntimeError("Model not initialized. Call prepare_model() first.")
+
+        model = self.slim_model.model
+        tokenizer = self.slim_model.tokenizer
+        tokenizer.pad_token = tokenizer.eos_token
+
+        lm_eval_model = HFLM(model, tokenizer=tokenizer, batch_size=batch_size)
+
+        task_names = tasks.split(",")
+        results = lm_evaluator.simple_evaluate(
+            model=lm_eval_model,
+            tasks=task_names,
+            limit=limit,
+            num_fewshot=num_fewshot,
+            apply_chat_template=apply_chat_template,
+            fewshot_as_multiturn=fewshot_as_multiturn,
+        )
+
+        print_info(make_table(results))
+
+        if output_path is not None:
+            torch.save(results, output_path)
+            print_info(f"lm_eval results saved to {output_path}")
+
+        return results
 
 
 class InferEngine(Engine):

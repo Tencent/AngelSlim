@@ -337,6 +337,32 @@ class InferenceConfig:
 
 
 @dataclass
+class PluginConfig:
+    enable_rotation: bool = field(default=False)
+    enable_scale: bool = field(default=False)
+    quant_config: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class TrainingConfig:
+    """
+    QAT (Quantization-Aware Training) configuration.
+    """
+
+    training_mode: str = field(default="end2end")
+    dist_mode: str = field(default="hf")
+    block_wise_config: Dict[str, Any] = field(default_factory=dict)
+    save_format: str = field(default="")
+    plugin_config: PluginConfig = field(default_factory=PluginConfig)
+    cache_dir: str = field(default="")
+    hf_dataset: str = field(default="")
+    max_length: int = field(default=2048)
+    do_train: bool = field(default=True)
+    resume_ckpt_dir: str = field(default="")
+    hf_args: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class FullConfig:
     """
     Top-level configuration container for LLM compression.
@@ -345,6 +371,9 @@ class FullConfig:
         model_config: Model configuration parameters
         compression_config: Compression configuration parameters
         dataset_config: Dataset configuration parameters
+        global_config: Global configuration parameters
+        infer_config: Inference configuration parameters
+        training_config: Training configuration parameters (for QAT)
     """
 
     model_config: ModelConfig
@@ -352,6 +381,7 @@ class FullConfig:
     dataset_config: DatasetConfig
     global_config: GlobalConfig
     infer_config: InferenceConfig
+    training_config: Optional[TrainingConfig] = field(default=None)
 
 
 class SlimConfigParser:
@@ -476,12 +506,19 @@ class SlimConfigParser:
             inference_dict = config_dict["inference"]
             inference_conf = InferenceConfig(**inference_dict)
 
+        # Training configuration (for QAT)
+        training_conf = None
+        if "training" in config_dict:
+            training_dict = config_dict["training"]
+            training_conf = TrainingConfig(**training_dict)
+
         return FullConfig(
             model_config=model_conf,
             compression_config=compression_conf,
             dataset_config=dataset_conf,
             global_config=global_config,
             infer_config=inference_conf,
+            training_config=training_conf,
         )
 
     def _get_global_config(
@@ -585,13 +622,20 @@ def parse_json_full_config(json_file_path: str) -> FullConfig:
     )
 
     # Parse other configuration sections with default fallbacks
-    dataset_config, global_config, infer_config = None, None, None
+    dataset_config, global_config, infer_config, training_config = (
+        None,
+        None,
+        None,
+        None,
+    )
     if config_data.get("dataset_config", {}):
         dataset_config = DatasetConfig(**config_data["dataset_config"])
     if config_data.get("global_config", {}):
         global_config = GlobalConfig(**config_data["global_config"])
     if config_data.get("infer_config", {}):
         infer_config = InferenceConfig(**config_data["infer_config"])
+    if config_data.get("training_config", {}):
+        training_config = TrainingConfig(**config_data["training_config"])
 
     return FullConfig(
         model_config=model_config,
@@ -599,6 +643,7 @@ def parse_json_full_config(json_file_path: str) -> FullConfig:
         dataset_config=dataset_config,
         global_config=global_config,
         infer_config=infer_config,
+        training_config=training_config,
     )
 
 
@@ -620,6 +665,7 @@ def print_config(config, indent=0):
         and hasattr(config, "dataset_config")
         and hasattr(config, "global_config")
         and hasattr(config, "infer_config")
+        and hasattr(config, "training_config")
     ):
         print(f"{prefix}model:")
         print_config(config.model_config, next_indent)
@@ -642,6 +688,12 @@ def print_config(config, indent=0):
         print(f"{prefix}Inference:")
         if config.infer_config:
             print_config(config.infer_config, next_indent)
+        else:
+            print(f"{prefix}None")
+
+        print(f"{prefix}Training:")
+        if config.training_config:
+            print_config(config.training_config, next_indent)
         else:
             print(f"{prefix}None")
         return

@@ -30,6 +30,8 @@ def get_args():
     parser.add_argument("--model-path", type=str, default=None)
     parser.add_argument("--save-path", type=str, default=None)
     parser.add_argument("--multi-nodes", action="store_true")
+    parser.add_argument("--lm-eval", action="store_true")
+    parser.add_argument("--ppl-eval", action="store_true")
     args = parser.parse_args()
     return args
 
@@ -137,6 +139,7 @@ def run(config):
     dataset_config = config.dataset_config
     compress_config = config.compression_config
     global_config = config.global_config
+    training_config = config.training_config
 
     # Step 2: Execute complete pipeline
     slim_engine = Engine()
@@ -177,12 +180,28 @@ def run(config):
         compress_name=compress_config.name,
         compress_config=compress_config,
         global_config=global_config,
+        training_config=training_config,
     )
 
     # Step 6: Compress model
     slim_engine.run()
 
-    # Step 7: Save compressed model
+    # Step 7: Eval
+    if args.ppl_eval:
+        slim_engine.ppl_eval(
+            tasks="wikitext2,c4",
+            seqlen=training_config.max_length,
+            cache_dir=training_config.cache_dir,
+        )
+
+    if args.lm_eval:
+        slim_engine.lm_eval(
+            tasks="piqa,arc_easy,arc_challenge,hellaswag,winogrande",
+            batch_size=32,
+            num_fewshot=0,
+        )
+
+    # Step 8: Save compressed model
     slim_engine.save(global_config.save_path, config)
 
 
