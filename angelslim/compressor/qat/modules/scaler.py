@@ -30,9 +30,7 @@ def ampscaler_get_grad_norm(parameters, norm_type: float = 2.0) -> torch.Tensor:
         total_norm = max(p.grad.detach().abs().max().to(device) for p in parameters)
     else:
         total_norm = torch.norm(
-            torch.stack(
-                [torch.norm(p.grad.detach(), norm_type).to(device) for p in parameters]
-            ),
+            torch.stack([torch.norm(p.grad.detach(), norm_type).to(device) for p in parameters]),
             norm_type,
         )
     return total_norm
@@ -55,9 +53,7 @@ class NativeScalerWithGradNormCount:
         update_grad=True,
         retain_graph=False,
     ):
-        self._scaler.scale(loss).backward(
-            create_graph=create_graph, retain_graph=retain_graph
-        )
+        self._scaler.scale(loss).backward(create_graph=create_graph, retain_graph=retain_graph)
         if update_grad:
             if clip_grad is not None:
                 assert parameters is not None

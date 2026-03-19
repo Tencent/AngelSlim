@@ -70,9 +70,7 @@ class End2EndTrainer:
                 optimizers=(self.optimizer, None),
             )
         else:
-            raise NotImplementedError(
-                f"Unsupported distribution mode: {self.tc.dist_mode}"
-            )
+            raise NotImplementedError(f"Unsupported distribution mode: {self.tc.dist_mode}")
 
     def prepare_dataset(self, dataloader):
         if self.tc.hf_dataset:
@@ -85,9 +83,7 @@ class End2EndTrainer:
                 is_opensource=True,
             )
         else:
-            self.train_dataset = QATDataset(
-                dataloader.dataset, self.quant_model.tokenizer
-            )
+            self.train_dataset = QATDataset(dataloader.dataset, self.quant_model.tokenizer)
 
     def run(self, dataloader):
         self.prepare_dataset(dataloader)

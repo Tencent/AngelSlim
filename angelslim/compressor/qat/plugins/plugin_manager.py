@@ -34,8 +34,7 @@ class PluginManager:
     def register_plugin(self, name: str, **kwargs):
         if name not in self._plugin_registry:
             raise ValueError(
-                f"Unknown plugin type: {name}. "
-                f"Available: {list(self._plugin_registry.keys())}"
+                f"Unknown plugin type: {name}. " f"Available: {list(self._plugin_registry.keys())}"
             )
 
         plugin_class = self._plugin_registry[name]

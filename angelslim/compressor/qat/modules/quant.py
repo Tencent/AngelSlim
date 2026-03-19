@@ -147,9 +147,7 @@ class Quantizer(nn.Module):
                     f"dim 1 ({x.shape[1]}) not divisible by group_size ({group_size})"
                 )
             x_g = x.view(x.shape[0], x.shape[1] // group_size, group_size)
-            s = torch.clamp(
-                x_g.abs().max(dim=-1)[0], min=1e-8
-            )  # shape: [out_channels, n_groups]
+            s = torch.clamp(x_g.abs().max(dim=-1)[0], min=1e-8)  # shape: [out_channels, n_groups]
 
         elif granularity == "per-token":
             rx = x.reshape(-1, x.shape[-1])
@@ -165,9 +163,7 @@ class Quantizer(nn.Module):
 
         return s / self.qmax
 
-    def _compute_scales_and_zero_points(
-        self, x, granularity="per-tensor", group_size=-1
-    ):
+    def _compute_scales_and_zero_points(self, x, granularity="per-tensor", group_size=-1):
         if granularity == "per-tensor":
             xmin = min(torch.min(x.flatten()), 0.0)
             xmax = max(torch.max(x.flatten()), 0.0)
@@ -195,9 +191,7 @@ class Quantizer(nn.Module):
                     f"dim 1 ({x.shape[1]}) not divisible by group_size ({group_size})"
                 )
             x_g = x.view(x.shape[0], x.shape[1] // group_size, group_size)
-            tmp = torch.zeros(
-                x_g.shape[0], x_g.shape[1], device=x.device, dtype=x.dtype
-            )
+            tmp = torch.zeros(x_g.shape[0], x_g.shape[1], device=x.device, dtype=x.dtype)
             xmin = torch.minimum(x_g.min(dim=-1)[0], tmp)
             xmax = torch.maximum(x_g.max(dim=-1)[0], tmp)
             mask = xmin == xmax
@@ -231,13 +225,9 @@ class Quantizer(nn.Module):
             self.overall_zero_point = []
 
         if self.is_sym:
-            self.overall_scale.append(
-                self._compute_scales(x, self.granularity, self.group_size)
-            )
+            self.overall_scale.append(self._compute_scales(x, self.granularity, self.group_size))
         else:
-            scale, zp = self._compute_scales_and_zero_points(
-                x, self.granularity, self.group_size
-            )
+            scale, zp = self._compute_scales_and_zero_points(x, self.granularity, self.group_size)
             self.overall_scale.append(scale)
             self.overall_zero_point.append(zp)
 
@@ -250,9 +240,7 @@ class Quantizer(nn.Module):
         zp = self.overall_zero_point[max_idx] if not self.is_sym else None
         self._set_quant_parameters(max_scale, zp)
 
-        print_info(
-            f"Lazy init done, scale: {self.scale.item()}, samples: {self.calib_count}"
-        )
+        print_info(f"Lazy init done, scale: {self.scale.item()}, samples: {self.calib_count}")
         del self.overall_scale, self.overall_zero_point, self.calib_count
 
     def _expand_scale_zp(self, scale, zero_point, x):
@@ -263,9 +251,7 @@ class Quantizer(nn.Module):
 
         if self.granularity == "per-channel":
             # scale: [out_channels, 1] -> [out_channels, in_features]
-            target = (
-                x.shape if len(x.shape) == 2 else (x.shape[0], x.flatten(1).shape[1])
-            )
+            target = x.shape if len(x.shape) == 2 else (x.shape[0], x.flatten(1).shape[1])
             scale = _expand(scale, target)
             zero_point = _expand(zero_point, target)
 
@@ -273,9 +259,7 @@ class Quantizer(nn.Module):
             # scale: [out_channels, n_groups] -> [out_channels, in_features]
             group_size = self.group_size
             scale = (
-                scale.unsqueeze(-1)
-                .expand(*scale.shape, group_size)
-                .reshape(scale.shape[0], -1)
+                scale.unsqueeze(-1).expand(*scale.shape, group_size).reshape(scale.shape[0], -1)
             )
             if zero_point is not None:
                 zero_point = (
@@ -300,9 +284,7 @@ class Quantizer(nn.Module):
     def fake_quant(self, x):
         scale = clamp_ste(self.scale, 1e-4, 1e4)
         round_zero_point = (
-            None
-            if self.is_sym
-            else clamp_ste(round_ste(self.zero_point), self.qmin, self.qmax)
+            None if self.is_sym else clamp_ste(round_ste(self.zero_point), self.qmin, self.qmax)
         )
         scale, round_zero_point = self._expand_scale_zp(scale, round_zero_point, x)
 
@@ -358,9 +340,7 @@ class QuantLinear(nn.Module):
             self.act_quantizer = Quantizer(config, quant_info, is_act=True)
 
     def forward(self, input: torch.Tensor):
-        weight = (
-            self.weight_quantizer(self.weight) if self.use_weight_quant else self.weight
-        )
+        weight = self.weight_quantizer(self.weight) if self.use_weight_quant else self.weight
         if self.use_act_quant:
             input = self.act_quantizer(input)
         return self.fwd_func(input, weight, self.bias)

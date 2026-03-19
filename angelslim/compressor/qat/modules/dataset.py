@@ -67,9 +67,7 @@ class QATDataset(IterableDataset):
 
 class BlockTrainDataset(Dataset):
     def __init__(self, size, seqlen, hidden_size, batch_size, dtype):
-        self.data = torch.zeros(
-            (size // batch_size, batch_size, seqlen, hidden_size), dtype=dtype
-        )
+        self.data = torch.zeros((size // batch_size, batch_size, seqlen, hidden_size), dtype=dtype)
 
     def __len__(self):
         return self.data.shape[0]

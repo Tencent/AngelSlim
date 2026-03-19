@@ -97,9 +97,7 @@ def quant_parameters(model):
 def set_weight_parameters(model, requires_grad):
     params = []
     for n, m in model.named_parameters():
-        if n.find("weight") > -1 and not (
-            n.find("scale") > -1 or n.find("zero_point") > -1
-        ):
+        if n.find("weight") > -1 and not (n.find("scale") > -1 or n.find("zero_point") > -1):
             m.requires_grad = requires_grad
     return iter(params)
 
@@ -107,9 +105,7 @@ def set_weight_parameters(model, requires_grad):
 def weight_parameters(model):
     params = []
     for n, m in model.named_parameters():
-        if n.find("weight") > -1 and not (
-            n.find("scale") > -1 or n.find("zero_point") > -1
-        ):
+        if n.find("weight") > -1 and not (n.find("scale") > -1 or n.find("zero_point") > -1):
             params.append(m)
     return iter(params)
 

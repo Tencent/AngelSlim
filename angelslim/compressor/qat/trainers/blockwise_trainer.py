@@ -98,13 +98,13 @@ class BlockwiseTrainer(End2EndTrainer):
                 dataset.update_data(index, new_data)
 
     def _move_embeddings_to(self, dev):
-        self.quant_model.model.model.embed_tokens = (
-            self.quant_model.model.model.embed_tokens.to(dev)
+        self.quant_model.model.model.embed_tokens = self.quant_model.model.model.embed_tokens.to(
+            dev
         )
         self.quant_model.model.model.norm = self.quant_model.model.model.norm.to(dev)
         if hasattr(self.quant_model.model.model, "rotary_emb"):
-            self.quant_model.model.model.rotary_emb = (
-                self.quant_model.model.model.rotary_emb.to(dev)
+            self.quant_model.model.model.rotary_emb = self.quant_model.model.model.rotary_emb.to(
+                dev
             )
 
     def _capture_first_layer_inputs(self, layers, dev):
@@ -116,9 +116,7 @@ class BlockwiseTrainer(End2EndTrainer):
         with torch.no_grad():
             for i in range(iters):
                 data = []
-                for j in range(
-                    i * self.args.batch_size, (i + 1) * self.args.batch_size
-                ):
+                for j in range(i * self.args.batch_size, (i + 1) * self.args.batch_size):
                     sample = self.train_dataset[j]
                     data.append(torch.tensor(sample["input_ids"]).unsqueeze(0).to(dev))
                 data = torch.cat(data, dim=0)
@@ -133,11 +131,7 @@ class BlockwiseTrainer(End2EndTrainer):
             # position embeddings
             if isinstance(v, tuple):
                 layer_kwargs[k] = tuple(
-                    (
-                        item.to(dev)
-                        if isinstance(item, (torch.Tensor, nn.Module))
-                        else item
-                    )
+                    (item.to(dev) if isinstance(item, (torch.Tensor, nn.Module)) else item)
                     for item in v
                 )
         layers[0] = layers[0].module
@@ -166,9 +160,7 @@ class BlockwiseTrainer(End2EndTrainer):
             param_groups.append(
                 {"params": quant_parameters(qlayer), "lr": float(self.args.quant_lr)}
             )
-            schedulers[idx] = self._make_scheduler(
-                float(self.args.quant_lr), total_iters
-            )
+            schedulers[idx] = self._make_scheduler(float(self.args.quant_lr), total_iters)
         else:
             set_quant_parameters(qlayer, False)
 
@@ -178,16 +170,12 @@ class BlockwiseTrainer(End2EndTrainer):
             param_groups.append(
                 {"params": weight_parameters(qlayer), "lr": float(self.args.weight_lr)}
             )
-            schedulers[idx] = self._make_scheduler(
-                float(self.args.weight_lr), total_iters
-            )
+            schedulers[idx] = self._make_scheduler(float(self.args.weight_lr), total_iters)
         else:
             set_weight_parameters(qlayer, False)
 
         assert param_groups
-        optimizer = torch.optim.AdamW(
-            param_groups, weight_decay=float(self.args.weight_decay)
-        )
+        optimizer = torch.optim.AdamW(param_groups, weight_decay=float(self.args.weight_decay))
         loss_scaler = NativeScalerWithGradNormCount()
 
         for epoch in range(self.args.epochs):
@@ -205,9 +193,7 @@ class BlockwiseTrainer(End2EndTrainer):
 
                 loss_list.append(loss.detach().cpu())
                 optimizer.zero_grad()
-                norm = loss_scaler(
-                    loss, optimizer, parameters=trainable_parameters(qlayer)
-                ).cpu()
+                norm = loss_scaler(loss, optimizer, parameters=trainable_parameters(qlayer)).cpu()
                 norm_list.append(norm.data)
 
                 for idx, sched in schedulers.items():
@@ -231,9 +217,7 @@ class BlockwiseTrainer(End2EndTrainer):
         del optimizer
 
     def train(self):
-        self._set_quant_state(
-            self.quant_model.model, weight_quant=False, act_quant=False
-        )
+        self._set_quant_state(self.quant_model.model, weight_quant=False, act_quant=False)
         set_quant_parameters(self.quant_model.model, requires_grad=False)
         set_weight_parameters(self.quant_model.model, requires_grad=False)
         ds_kwargs = dict(
@@ -264,20 +248,14 @@ class BlockwiseTrainer(End2EndTrainer):
             if self.args.epochs > 0:
                 self._update_dataset(qlayer, self.fp_train_inps, dev, **layer_kwargs)
 
-            self._set_quant_state(
-                qlayer, weight_quant=True, act_quant=self.use_act_quant
-            )
+            self._set_quant_state(qlayer, weight_quant=True, act_quant=self.use_act_quant)
 
             if self.args.epochs > 0:
-                self._train_single_block(
-                    qlayer, block_index, dev, loss_func, **layer_kwargs
-                )
+                self._train_single_block(qlayer, block_index, dev, loss_func, **layer_kwargs)
 
             qlayer.half()
             quant_inplace(qlayer)
-            self._set_quant_state(
-                qlayer, weight_quant=False, act_quant=self.use_act_quant
-            )
+            self._set_quant_state(qlayer, weight_quant=False, act_quant=self.use_act_quant)
 
             if self.args.epochs > 0:
                 self._update_dataset(qlayer, self.quant_train_inps, dev, **layer_kwargs)
