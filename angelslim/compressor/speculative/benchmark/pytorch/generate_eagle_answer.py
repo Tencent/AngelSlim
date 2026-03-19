@@ -207,23 +207,17 @@ def process_tts_conversation_turn(
 
             input_ids = torch.concat(
                 [
-                    model.base_model.model.llm.sos_id.unsqueeze(dim=0)
-                    .to(dtype)
-                    .to(device),
+                    model.base_model.model.llm.sos_id.unsqueeze(dim=0).to(dtype).to(device),
                     model_input["prompt_text"],
                     model_input["text"],
-                    model.base_model.model.llm.task_token.unsqueeze(dim=0)
-                    .to(dtype)
-                    .to(device),
+                    model.base_model.model.llm.task_token.unsqueeze(dim=0).to(dtype).to(device),
                     model_input["llm_prompt_speech_token"],
                 ],
                 dim=1,
             )
 
             # concat llm input embedding
-            text = torch.concat(
-                [model_input["prompt_text"], model_input["text"]], dim=1
-            )
+            text = torch.concat([model_input["prompt_text"], model_input["text"]], dim=1)
             text_emb = model.base_model.model.llm.llm.model.model.embed_tokens(text)
             sos_emb = model.base_model.model.llm.speech_embedding.weight[
                 model.base_model.model.llm.sos
@@ -370,9 +364,7 @@ def warmup_tts_lm(
     """Warm up the model before actual evaluation"""
     for _ in range(3):
         torch.manual_seed(0)
-        process_tts_conversation_turn(
-            model, model_id, question, temperature, path, is_cosyvoice3
-        )
+        process_tts_conversation_turn(model, model_id, question, temperature, path, is_cosyvoice3)
     print("Warmup done")
 
 
@@ -569,34 +561,20 @@ def parse_args() -> argparse.Namespace:
         help="Path to the weights (local folder or Hugging Face repo ID)",
     )
     parser.add_argument("--base-model-path", type=str, default="")
-    parser.add_argument(
-        "--load-in-8bit", action="store_false", help="Use 8-bit quantization"
-    )
+    parser.add_argument("--load-in-8bit", action="store_false", help="Use 8-bit quantization")
     parser.add_argument("--model-id", type=str, default="")
     parser.add_argument(
         "--bench-name", type=str, default="mt_bench", help="Benchmark question set name"
     )
-    parser.add_argument(
-        "--question-begin", type=int, help="Begin index of questions (debug)"
-    )
-    parser.add_argument(
-        "--question-end", type=int, help="End index of questions (debug)"
-    )
+    parser.add_argument("--question-begin", type=int, help="Begin index of questions (debug)")
+    parser.add_argument("--question-end", type=int, help="End index of questions (debug)")
     parser.add_argument("--answer-file", type=str, help="Output answer file path")
-    parser.add_argument(
-        "--max-new-token", type=int, default=1024, help="Max new generated tokens"
-    )
-    parser.add_argument(
-        "--total-token", type=int, default=60, help="Total nodes in draft tree"
-    )
+    parser.add_argument("--max-new-token", type=int, default=1024, help="Max new generated tokens")
+    parser.add_argument("--total-token", type=int, default=60, help="Total nodes in draft tree")
     parser.add_argument("--depth", type=int, default=5)
     parser.add_argument("--top-k", type=int, default=10)
-    parser.add_argument(
-        "--num-choices", type=int, default=1, help="Number of completion choices"
-    )
-    parser.add_argument(
-        "--num-gpus-per-model", type=int, default=1, help="GPUs per model"
-    )
+    parser.add_argument("--num-choices", type=int, default=1, help="Number of completion choices")
+    parser.add_argument("--num-gpus-per-model", type=int, default=1, help="GPUs per model")
     parser.add_argument("--num-gpus-total", type=int, default=1, help="Total GPUs")
     parser.add_argument("--max-gpu-memory", type=str, help="Max GPU memory per GPU")
     parser.add_argument("--temperature", type=float, default=1.0)

@@ -53,9 +53,9 @@ class AudioDataset(BaseDataset):
                     break
 
                 data = json.loads(line.strip())
-                if data["audio_path"].startswith("http://") or data[
-                    "audio_path"
-                ].startswith("https://"):
+                if data["audio_path"].startswith("http://") or data["audio_path"].startswith(
+                    "https://"
+                ):
                     audio_path = data["audio_path"]
                 else:
                     audio_path = os.path.join(audio_dir, data["audio_path"])

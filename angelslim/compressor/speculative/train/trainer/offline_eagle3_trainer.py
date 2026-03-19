@@ -31,9 +31,7 @@ class OfflineEagle3Trainer(Eagle3Trainer):
     avoiding the need for online target model inference.
     """
 
-    def __init__(
-        self, draft_model: nn.Module, target_head: nn.Module, length: int, **kwargs
-    ):
+    def __init__(self, draft_model: nn.Module, target_head: nn.Module, length: int, **kwargs):
         """
         Initialize the OnlineEagle3Trainer.
 
@@ -109,9 +107,7 @@ class OfflineVLMEagle3Trainer(Eagle3Trainer):
     avoiding the need for online target model inference.
     """
 
-    def __init__(
-        self, draft_model: nn.Module, target_head: nn.Module, length: int, **kwargs
-    ):
+    def __init__(self, draft_model: nn.Module, target_head: nn.Module, length: int, **kwargs):
         """
         Initialize the OnlineEagle3Trainer.
 

@@ -160,9 +160,9 @@ def get_hf_model_path(model_path) -> str:
 
 
 def common_prefix(str1, str2):
-    return "".join(
-        x[0] for x in takewhile(lambda x: x[0] == x[1], zip(str1, str2))
-    ).rpartition(".")[0]
+    return "".join(x[0] for x in takewhile(lambda x: x[0] == x[1], zip(str1, str2))).rpartition(
+        "."
+    )[0]
 
 
 def get_package_info(package_name: str) -> dict:
@@ -289,9 +289,7 @@ def decide_device_for_distributed():
 
 def get_loaders(tokenizer, name, seed=0, seqlen=2048, cache_dir=None):
     if "wikitext2" in name:
-        testdata = load_dataset(
-            "wikitext", "wikitext-2-raw-v1", split="test", cache_dir=cache_dir
-        )
+        testdata = load_dataset("wikitext", "wikitext-2-raw-v1", split="test", cache_dir=cache_dir)
         return tokenizer("\n\n".join(testdata["text"]), return_tensors="pt")
     elif "c4" in name:
         valdata = load_dataset(

@@ -49,9 +49,7 @@ class HunyuanMoE(BaseLLMModel):
             r"model\.layers\.\d+\.mlp\.experts\.\d+\.down_proj",
         ]
 
-        observer_layers_dict = find_layers(
-            self.model, layers=self.observer_layer_classes
-        )
+        observer_layers_dict = find_layers(self.model, layers=self.observer_layer_classes)
 
         compiled_patterns = [re.compile(pattern) for pattern in expert_pattern]
 

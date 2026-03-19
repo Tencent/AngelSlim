@@ -22,6 +22,7 @@ from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import Qwen3VLMoeTex
 
 from ...utils import find_parent_layer_and_sub_name, print_info
 from ..compressor_factory import CompressorFactory
+from ..transform import TransformFactory
 from .core import PTQHook
 from .modules import AWQ, FP8, GPTQ, INT8, NVFP4, W4A8INT8, LeptoFP8, SmoothQuant
 
@@ -36,6 +37,7 @@ class PTQ:
             model(nn.Moudle, required): the model to be quant.
             slim_config(dict, required): the configuration for quantization.
                 - compress_config: the configuration for compression.
+                - transform_config: the configuration for transform.
                 - global_config: the global configuration for the model.
         """
         self.quant_model = model
@@ -43,12 +45,17 @@ class PTQ:
         self.quant_model.init_ptq(slim_config)
         self.absolute_model_path = slim_config["global_config"].absolute_model_path
         self.quant_algo = self.quant_model.quant_config.quant_algo
+
+        # init transform
+        # TODO(gavinlee) will be deprecated, and move to transform, now only for smoothquant
         self.quant_helpers = self.quant_model.quant_config.quant_helpers
-        if (
-            "fp8" in self.quant_algo
-            or "int8" in self.quant_algo
-            or "nvfp4" in self.quant_algo
-        ):
+
+        # create transform, for example, smoothquant
+        self.trasform_runner = TransformFactory.create(self.quant_model, slim_config)
+        # trasform first, then run quantization
+        self.trasform_runner.run()
+
+        if "fp8" in self.quant_algo or "int8" in self.quant_algo or "nvfp4" in self.quant_algo:
             # Add ptq observer hook
             self.ptq_hook = PTQHook(self.quant_model)
             self.ptq_hook.apply_hook()
@@ -56,9 +63,7 @@ class PTQ:
         if "gptq" in self.quant_algo or "gptaq" in self.quant_algo:
             max_seq_length = self.quant_model.quant_config.max_seq_length
             hidden_size = self.quant_model.quant_config.hidden_size
-            self.gptq = GPTQ(
-                self.quant_model, seq_length=max_seq_length, hidden_size=hidden_size
-            )
+            self.gptq = GPTQ(self.quant_model, seq_length=max_seq_length, hidden_size=hidden_size)
         elif "w4a8i8" in self.quant_algo:
             max_seq_length = self.quant_model.quant_config.max_seq_length
             hidden_size = self.quant_model.quant_config.hidden_size
@@ -113,9 +118,7 @@ class PTQ:
         elif "nvfp4" in self.quant_algo:
             self.nvfp4 = NVFP4(self.quant_model)
         else:
-            raise NotImplementedError(
-                f"[AngelSlim Error] algo {self.quant_algo} is not support"
-            )
+            raise NotImplementedError(f"[AngelSlim Error] algo {self.quant_algo} is not support")
 
         if "smooth" in self.quant_helpers:
             self.smooth = SmoothQuant(
@@ -202,15 +205,13 @@ class PTQ:
         # 1. get act, weight and kv-cache scale
         for name, sub_layer in self.ptq_hook.quant_layers_dict.items():
             if (
-                getattr(  # noqa: B009
-                    self.ptq_hook.observer_dict[sub_layer], "act_observer"
-                )
+                getattr(self.ptq_hook.observer_dict[sub_layer], "act_observer")  # noqa: B009
                 is not None
             ):
                 try:
-                    self.quant_model.act_scales_dict[name] = (
-                        self.ptq_hook.observer_dict[sub_layer].act_observer.scales()
-                    )
+                    self.quant_model.act_scales_dict[name] = self.ptq_hook.observer_dict[
+                        sub_layer
+                    ].act_observer.scales()
                 except ValueError:
                     self.quant_model.act_scales_dict[name] = torch.tensor(
                         1.0, device=torch.cuda.current_device()
@@ -221,25 +222,19 @@ class PTQ:
                         stacklevel=2,
                     )
             if (
-                getattr(  # noqa: B009
-                    self.ptq_hook.observer_dict[sub_layer], "kv_cache_observer"
-                )
+                getattr(self.ptq_hook.observer_dict[sub_layer], "kv_cache_observer")  # noqa: B009
                 is not None
             ):
-                self.quant_model.kv_cache_scales_dict[name] = (
-                    self.ptq_hook.observer_dict[sub_layer].kv_cache_observer.scales()
-                )
+                self.quant_model.kv_cache_scales_dict[name] = self.ptq_hook.observer_dict[
+                    sub_layer
+                ].kv_cache_observer.scales()
             if (
-                getattr(  # noqa: B009
-                    self.ptq_hook.observer_dict[sub_layer], "weight_observer"
-                )
+                getattr(self.ptq_hook.observer_dict[sub_layer], "weight_observer")  # noqa: B009
                 is not None
             ):
                 if sub_layer.weight.device.type == "meta":
                     with open(
-                        os.path.join(
-                            self.absolute_model_path, "model.safetensors.index.json"
-                        ),
+                        os.path.join(self.absolute_model_path, "model.safetensors.index.json"),
                         "r",
                     ) as f:
                         model_index = json.load(f)
@@ -259,9 +254,7 @@ class PTQ:
                                 model_index["weight_map"][name + ".bias"],
                             )
                             orign_b = load_file(orign_b_file, device="cpu")
-                            print_info(
-                                f"Load meta bias {name} from file {orign_b_file}"
-                            )
+                            print_info(f"Load meta bias {name} from file {orign_b_file}")
                             sub_layer.bias.data = orign_b[name + ".bias"]
                         else:
                             print_info(f"{name + '.bias'} not found. Set bias to None.")
@@ -282,9 +275,7 @@ class PTQ:
             self.quant_model.get_observer_values()
         # 2. insert qdq module
         for name, sub_layer in self.ptq_hook.quant_layers_dict.items():
-            parent_layer, sub_name = find_parent_layer_and_sub_name(
-                quant_convert_module, name
-            )
+            parent_layer, sub_name = find_parent_layer_and_sub_name(quant_convert_module, name)
 
             if self.quant_model.quant_config.cpu_convert:
                 sub_layer = sub_layer.to("cpu")
@@ -304,9 +295,7 @@ class PTQ:
         # nn.Parameters, not nn.Linear.
         if Qwen3VLMoeTextExperts in self.quant_model.observer_layer_classes:
             for name, sub_layer in self.quant_model.model.named_modules():
-                parent_layer, sub_name = find_parent_layer_and_sub_name(
-                    quant_convert_module, name
-                )
+                parent_layer, sub_name = find_parent_layer_and_sub_name(quant_convert_module, name)
                 moe_qdq_module = self.quant_model.get_moe_qdq_module(sub_layer, name)
                 if moe_qdq_module is not sub_layer:
                     setattr(parent_layer, sub_name, moe_qdq_module)

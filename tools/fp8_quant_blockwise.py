@@ -135,9 +135,7 @@ def process_safetensor(rank, file_name, input_path, output_path, block_size=(128
     count = 0
 
     # Load tensors on CPU first to avoid GPU memory issues
-    with safe_open(
-        os.path.join(input_path, file_name), framework="pt", device="cpu"
-    ) as f:
+    with safe_open(os.path.join(input_path, file_name), framework="pt", device="cpu") as f:
         print(f"Processing {file_name} with {len(f.keys())} weights")
         for weight_name in f.keys():
             weight = f.get_tensor(weight_name)
@@ -181,9 +179,7 @@ def process_safetensor(rank, file_name, input_path, output_path, block_size=(128
 def worker(i, file_names, input_path, output_path, block_size, return_dict):
     world_size = torch.cuda.device_count()
     for file_name in tqdm(file_names, desc=f"Worker {i}"):
-        index = process_safetensor(
-            i % world_size, file_name, input_path, output_path, block_size
-        )
+        index = process_safetensor(i % world_size, file_name, input_path, output_path, block_size)
         return_dict[file_name] = index
 
 
@@ -229,9 +225,7 @@ def main(input_path, output_path, block_size):
     del model
 
     args.num_workers = min(args.num_workers, len(safetensor_files))
-    file_subsets = [
-        safetensor_files[i :: args.num_workers] for i in range(args.num_workers)
-    ]
+    file_subsets = [safetensor_files[i :: args.num_workers] for i in range(args.num_workers)]
     mp.set_start_method("spawn", force=True)
     manager = mp.Manager()
     return_dict = manager.dict()

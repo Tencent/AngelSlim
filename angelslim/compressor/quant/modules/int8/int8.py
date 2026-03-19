@@ -83,9 +83,7 @@ class INT8:
         )
         cache = {"i": 0}
         layers[0] = layers[0].to(dev)
-        self.model.model.model.embed_tokens = self.model.model.model.embed_tokens.to(
-            dev
-        )
+        self.model.model.model.embed_tokens = self.model.model.model.embed_tokens.to(dev)
         layers[0] = Catcher(layers[0], self.inps, cache)
         self.model.model_forward(dataloader)
         layer_kwargs = layers[0].layer_kwargs
@@ -94,11 +92,7 @@ class INT8:
             # position embeddings
             if isinstance(v, tuple):
                 layer_kwargs[k] = tuple(
-                    (
-                        item.to(dev)
-                        if isinstance(item, (torch.Tensor, nn.Module))
-                        else item
-                    )
+                    (item.to(dev) if isinstance(item, (torch.Tensor, nn.Module)) else item)
                     for item in v
                 )
 
@@ -116,9 +110,7 @@ class INT8:
         self.inps = self.inps.to("cpu")
         for i in range(len(layers)):
             if torch.cuda.is_available():
-                print_info(
-                    f"GPU Memory: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB"
-                )
+                print_info(f"GPU Memory: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB")
 
             layer = layers[i].to(dev)
             outs = outs.to(dev)

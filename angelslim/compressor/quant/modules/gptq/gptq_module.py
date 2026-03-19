@@ -38,9 +38,7 @@ class GPTQModule:
         self.w = layer.weight.data.clone()
         self.rows = self.w.shape[0]
         self.columns = self.w.shape[1]
-        self.h = torch.zeros(
-            (self.columns, self.columns), device=self.dev, dtype=torch.float32
-        )
+        self.h = torch.zeros((self.columns, self.columns), device=self.dev, dtype=torch.float32)
         self.nsamples = 0
         self.quant_bits = quant_bits
 
@@ -155,9 +153,7 @@ class GPTQModule:
                         weight_zero = zero[idx // group_size]
 
                 maxq = torch.tensor(2**self.quant_bits - 1)
-                q = torch.clamp(
-                    torch.round(w.unsqueeze(1) / weight_scale) + weight_zero, 0, maxq
-                )
+                q = torch.clamp(torch.round(w.unsqueeze(1) / weight_scale) + weight_zero, 0, maxq)
                 q = weight_scale * (q - weight_zero)
                 q = q.flatten()
                 q1[:, i] = q

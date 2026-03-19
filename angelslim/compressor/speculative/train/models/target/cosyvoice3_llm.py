@@ -53,13 +53,9 @@ def make_pad_mask(lengths: torch.Tensor, max_len: int = 0) -> torch.Tensor:
     return mask
 
 
-def get_qwen_tokenizer(
-    token_path: str, skip_special_tokens: bool, version: str = "cosyvoice3"
-):
+def get_qwen_tokenizer(token_path: str, skip_special_tokens: bool, version: str = "cosyvoice3"):
     if version == "cosyvoice3":
-        return CosyVoice3Tokenizer(
-            token_path=token_path, skip_special_tokens=skip_special_tokens
-        )
+        return CosyVoice3Tokenizer(token_path=token_path, skip_special_tokens=skip_special_tokens)
     else:
         raise ValueError
 
@@ -69,9 +65,7 @@ class Qwen2Encoder(torch.nn.Module):
         super().__init__()
         self.model = Qwen2ForCausalLM.from_pretrained(pretrain_path)
 
-    def forward(
-        self, xs: torch.Tensor, xs_lens: torch.Tensor, output_hidden_states: bool
-    ):
+    def forward(self, xs: torch.Tensor, xs_lens: torch.Tensor, output_hidden_states: bool):
         T = xs.size(1)
         masks = ~make_pad_mask(xs_lens, T)
         outs = self.model(
@@ -134,9 +128,9 @@ class CosyVoice3Tokenizer:
 
     def decode(self, tokens):
         tokens = torch.tensor(tokens, dtype=torch.int64)
-        text = self.tokenizer.batch_decode(
-            [tokens], skip_special_tokens=self.skip_special_tokens
-        )[0]
+        text = self.tokenizer.batch_decode([tokens], skip_special_tokens=self.skip_special_tokens)[
+            0
+        ]
         return text
 
 
@@ -159,14 +153,10 @@ class CosyVoice3LM(torch.nn.Module):
         self.fill_token = speech_token_size + 3
 
         self.llm = Qwen2Encoder(os.path.join(model_path, "CosyVoice-BlankEN"))
-        self.llm_decoder = nn.Linear(
-            llm_output_size, speech_token_size + 200, bias=False
-        )
+        self.llm_decoder = nn.Linear(llm_output_size, speech_token_size + 200, bias=False)
 
         # [Optional] build speech token related modules
-        self.speech_embedding = torch.nn.Embedding(
-            speech_token_size + 200, llm_input_size
-        )
+        self.speech_embedding = torch.nn.Embedding(speech_token_size + 200, llm_input_size)
         self.stop_token_ids = [speech_token_size + i for i in range(200)]
 
         # tokenizer
@@ -220,9 +210,7 @@ class CosyVoice3LM(torch.nn.Module):
         )
 
         # run lm forward
-        outputs, lm_output_mask = self.llm(
-            lm_input, lm_input_len.to(device), output_hidden_states
-        )
+        outputs, lm_output_mask = self.llm(lm_input, lm_input_len.to(device), output_hidden_states)
         lm_output = outputs.hidden_states[-1]
         logits = self.llm_decoder(lm_output)
         hidden_states = torch.cat(outputs.hidden_states[:-1], dim=-1)
@@ -251,9 +239,7 @@ class CosyVoice3LM(torch.nn.Module):
         prompt_speech_token_emb = unpad_sequence(
             prompt_speech_token_emb, prompt_speech_token_len.cpu(), batch_first=True
         )
-        speech_token = unpad_sequence(
-            speech_token, speech_token_len.cpu(), batch_first=True
-        )
+        speech_token = unpad_sequence(speech_token, speech_token_len.cpu(), batch_first=True)
         speech_token_emb = unpad_sequence(
             speech_token_emb, speech_token_len.cpu(), batch_first=True
         )

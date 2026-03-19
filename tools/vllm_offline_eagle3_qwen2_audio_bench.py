@@ -80,10 +80,7 @@ def run_qwen2_audio(args, question: str, audio_count: int) -> ModelRequestData:
     )
 
     audio_in_prompt = "".join(
-        [
-            f"Audio {idx + 1}: <|audio_bos|><|AUDIO|><|audio_eos|>\n"
-            for idx in range(audio_count)
-        ]
+        [f"Audio {idx + 1}: <|audio_bos|><|AUDIO|><|audio_eos|>\n" for idx in range(audio_count)]
     )
 
     prompt = (
@@ -101,12 +98,8 @@ def run_qwen2_audio(args, question: str, audio_count: int) -> ModelRequestData:
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--target_model", type=str, default=None, help="Path to target model"
-    )
-    parser.add_argument(
-        "--draft_model", type=str, default=None, help="Path to draft model"
-    )
+    parser.add_argument("--target_model", type=str, default=None, help="Path to target model")
+    parser.add_argument("--draft_model", type=str, default=None, help="Path to draft model")
     parser.add_argument(
         "--use_eagle",
         action="store_true",
@@ -116,12 +109,8 @@ def parse_args():
         "--num_spec_tokens", type=int, default=2, help="Number of speculative tokens"
     )
     parser.add_argument("--max_num_seqs", type=int, default=1)
-    parser.add_argument(
-        "--max_model_len", type=int, default=16384, help="Maximum model length"
-    )
-    parser.add_argument(
-        "--num_prompts", type=int, default=100, help="Number of prompts to run"
-    )
+    parser.add_argument("--max_model_len", type=int, default=16384, help="Maximum model length")
+    parser.add_argument("--num_prompts", type=int, default=100, help="Number of prompts to run")
     parser.add_argument("--output_file", type=str, default="None", help="Output file")
     parser.add_argument("--temp", type=float, default=0, help="./results")
     parser.add_argument(
@@ -149,14 +138,10 @@ def parse_args():
 def main():
     args = parse_args()
     if args.tp is not None and args.tp < 1:
-        raise ValueError(
-            f"tensor_parallel_size must be a positive integer, " f"got {args.tp}"
-        )
+        raise ValueError(f"tensor_parallel_size must be a positive integer, " f"got {args.tp}")
     audio_count = 1
 
-    req_data = run_qwen2_audio(
-        args, "Transcribe speech to text. <|en|>", audio_count=audio_count
-    )
+    req_data = run_qwen2_audio(args, "Transcribe speech to text. <|en|>", audio_count=audio_count)
 
     # Disable other modalities to save memory
     default_limits = {"image": 0, "video": 0, "audio": 0}
@@ -190,9 +175,7 @@ def main():
                 mm_data = {}
                 if audio_count > 0:
                     audio_path = data_line["conversations"][0]["content"][0]["audio"]
-                    audio_path = os.path.join(
-                        os.path.dirname(args.test_data_path), audio_path
-                    )
+                    audio_path = os.path.join(os.path.dirname(args.test_data_path), audio_path)
                     mm_data = {"audio": [Audio.from_file(audio_path).audio_array]}
             inputs = {"multi_modal_data": mm_data}
 
@@ -220,9 +203,7 @@ def main():
         print("Metrics are not supported in the V0 engine.")
         return None
 
-    total_num_output_tokens = sum(
-        len(output.outputs[0].token_ids) for output in outputs
-    )
+    total_num_output_tokens = sum(len(output.outputs[0].token_ids) for output in outputs)
     num_drafts = 0
     num_draft_tokens = 0
     num_accepted_tokens = 0

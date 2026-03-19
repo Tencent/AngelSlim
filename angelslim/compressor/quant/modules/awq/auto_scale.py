@@ -61,9 +61,7 @@ class AutoLayerScale:
     def apply_scale(self, module, scales_list, input_feat_dict=None):
         print_info("[apply scale] start")
         for prev_op_name, layer_names, scales in scales_list:
-            print_info(
-                f"[apply scale] {prev_op_name} -> {layer_names},scales:{scales[0]}"
-            )
+            print_info(f"[apply scale] {prev_op_name} -> {layer_names},scales:{scales[0]}")
             prev_op = get_op_by_name(module, prev_op_name)
             layers = [get_op_by_name(module, name) for name in layer_names]
 
@@ -127,23 +125,17 @@ class AutoLayerScale:
     def auto_scale(self, module, input_feat, cache):
         print_info("[auto scale] start")
 
-        def _auto_get_scale(
-            layer_name, prev_op, layers, inp, module2inspect=None, cache=None
-        ):
+        def _auto_get_scale(layer_name, prev_op, layers, inp, module2inspect=None, cache=None):
             if module2inspect is None:
                 assert len(layers) == 1
                 module2inspect = layers[0]
             if not self.low_memory:
                 inp = inp.to(prev_op.weight.device)
             if self.merge_samples:
-                act_abs_max = (
-                    inp.abs().reshape(-1, inp.shape[-1]).mean(0).reshape(1, -1)
-                )
+                act_abs_max = inp.abs().reshape(-1, inp.shape[-1]).mean(0).reshape(1, -1)
             else:
                 all_inp = inp
-                act_abs_max = (
-                    all_inp.abs().reshape(-1, all_inp.shape[-1]).mean(0).reshape(1, -1)
-                )
+                act_abs_max = all_inp.abs().reshape(-1, all_inp.shape[-1]).mean(0).reshape(1, -1)
                 del all_inp
 
             print_info(f"[auto scale] {layer_name} act_abs_max: {act_abs_max}")
@@ -211,10 +203,7 @@ class AutoLayerScale:
             )
 
             # attention output
-            if (
-                module.self_attn.v_proj.weight.shape
-                == module.self_attn.o_proj.weight.shape
-            ):
+            if module.self_attn.v_proj.weight.shape == module.self_attn.o_proj.weight.shape:
                 scales_list.append(
                     _auto_get_scale(
                         layer_name="attn.o",

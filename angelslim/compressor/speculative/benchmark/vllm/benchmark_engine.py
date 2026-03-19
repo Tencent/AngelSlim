@@ -83,23 +83,17 @@ class BenchmarkEngine:
         if not self.config.output_dir:
             script_dir = os.path.dirname(__file__)
             parent_dir = os.path.dirname(os.path.dirname(script_dir))
-            self.config.output_dir = os.path.join(
-                parent_dir, "output", self.config.bench_name
-            )
+            self.config.output_dir = os.path.join(parent_dir, "output", self.config.bench_name)
 
         os.makedirs(self.config.output_dir, exist_ok=True)
 
         # Setup result file paths
         model_id_temp = f"{self.config.model_id}-temperature-{self.config.temperature}"
-        self.eagle_file = os.path.join(
-            self.config.output_dir, f"{model_id_temp}-eagle.jsonl"
-        )
+        self.eagle_file = os.path.join(self.config.output_dir, f"{model_id_temp}-eagle.jsonl")
         self.baseline_file = os.path.join(
             self.config.output_dir, f"{model_id_temp}-baseline.jsonl"
         )
-        self.analysis_file = os.path.join(
-            self.config.output_dir, f"{model_id_temp}-analysis.json"
-        )
+        self.analysis_file = os.path.join(self.config.output_dir, f"{model_id_temp}-analysis.json")
 
     def run_benchmark(self, mode: BenchmarkMode = BenchmarkMode.BOTH) -> Dict[str, Any]:
         """
@@ -114,9 +108,7 @@ class BenchmarkEngine:
         print(f"Starting vLLM benchmark in {mode.value} mode...")
 
         # Initialize Ray if needed
-        use_multiprocessing = (
-            self.config.num_gpus_total // self.config.num_gpus_per_model > 1
-        )
+        use_multiprocessing = self.config.num_gpus_total // self.config.num_gpus_per_model > 1
         print(f"Using multiprocessing: {use_multiprocessing}")
         if use_multiprocessing:
             mp.set_start_method("spawn", force=True)
@@ -187,9 +179,9 @@ class BenchmarkEngine:
 
             avg_accept_lengths = [r for r in results_list if r is not None]
             if avg_accept_lengths:
-                self.results["average_acceptance_length"] = sum(
+                self.results["average_acceptance_length"] = sum(avg_accept_lengths) / len(
                     avg_accept_lengths
-                ) / len(avg_accept_lengths)
+                )
         else:
             result = get_eagle_answers(
                 f"{self.config.model_id}-temperature-{self.config.temperature}",
@@ -332,13 +324,9 @@ class BenchmarkEngine:
                         baseline_speeds.append(total_tokens / total_time)
 
         avg_eagle_speed = sum(eagle_speeds) / len(eagle_speeds) if eagle_speeds else 0
-        avg_baseline_speed = (
-            sum(baseline_speeds) / len(baseline_speeds) if baseline_speeds else 0
-        )
+        avg_baseline_speed = sum(baseline_speeds) / len(baseline_speeds) if baseline_speeds else 0
 
-        speedup_ratio = (
-            avg_eagle_speed / avg_baseline_speed if avg_baseline_speed > 0 else 0
-        )
+        speedup_ratio = avg_eagle_speed / avg_baseline_speed if avg_baseline_speed > 0 else 0
         return speedup_ratio
 
     def _create_args_namespace(self, mode: str) -> argparse.Namespace:
@@ -368,9 +356,7 @@ class BenchmarkEngine:
         """Get question file path"""
         current_file = os.path.abspath(__file__)
         project_root = current_file.split("/AngelSlim/")[0] + "/AngelSlim"
-        return os.path.join(
-            project_root, "dataset", self.config.bench_name, "question.jsonl"
-        )
+        return os.path.join(project_root, "dataset", self.config.bench_name, "question.jsonl")
 
     def _reorg_answer_file(self, answer_file: str):
         """Sort answers by question id and remove duplicates"""

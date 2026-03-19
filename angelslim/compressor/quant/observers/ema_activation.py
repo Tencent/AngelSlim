@@ -56,8 +56,6 @@ class EMAObserver(AbsmaxPertensorObserver):
         else:
             v_ema = self.ema_beta * self.sampled + (1.0 - self.ema_beta) * abs_max_val
             self.sampled = v_ema
-            v_ema_corr = v_ema / float(
-                (1.0 - np.power(self.ema_beta, self.ema_step + 1.0))
-            )
+            v_ema_corr = v_ema / float((1.0 - np.power(self.ema_beta, self.ema_step + 1.0)))
         self.ema_step += 1
         return 0, torch.tensor(v_ema_corr, dtype=self.dtype).to(inputs.device)

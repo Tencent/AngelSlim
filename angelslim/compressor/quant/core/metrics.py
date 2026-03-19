@@ -15,9 +15,7 @@
 import torch
 
 
-def mse_loss(
-    y_pred: torch.Tensor, y_real: torch.Tensor, reduction: str = "mean"
-) -> torch.Tensor:
+def mse_loss(y_pred: torch.Tensor, y_real: torch.Tensor, reduction: str = "mean") -> torch.Tensor:
     if y_pred.shape != y_real.shape:
         raise ValueError(
             f"Can not compute mse loss for tensors with different shape. "
@@ -36,9 +34,7 @@ def mse_loss(
         raise ValueError("Unsupported reduction method.")
 
 
-def snr_loss(
-    y_pred: torch.Tensor, y_real: torch.Tensor, reduction: str = "mean"
-) -> torch.Tensor:
+def snr_loss(y_pred: torch.Tensor, y_real: torch.Tensor, reduction: str = "mean") -> torch.Tensor:
     """
     Compute SNR between y_pred(tensor) and y_real(tensor)
 

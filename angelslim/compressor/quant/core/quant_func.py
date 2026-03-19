@@ -34,9 +34,7 @@ def _ensure_triton():
     from angelslim.compressor._platform import use_triton
 
     if not use_triton():
-        raise ImportError(
-            "Triton is not available. Use PyTorch fallback functions instead."
-        )
+        raise ImportError("Triton is not available. Use PyTorch fallback functions instead.")
 
     import triton
     import triton.language as tl
@@ -75,13 +73,9 @@ def pseudo_quantize_tensor(
     assert torch.isnan(w).sum() == 0
 
     if inplace:
-        (
-            (w.div_(scales).round_().add_(zeros)).clamp_(min_int, max_int).sub_(zeros)
-        ).mul_(scales)
+        ((w.div_(scales).round_().add_(zeros)).clamp_(min_int, max_int).sub_(zeros)).mul_(scales)
     else:
-        w = (
-            torch.clamp(torch.round(w / scales) + zeros, min_int, max_int) - zeros
-        ) * scales
+        w = (torch.clamp(torch.round(w / scales) + zeros, min_int, max_int) - zeros) * scales
     assert torch.isnan(w).sum() == 0
 
     w = w.reshape(org_w_shape)
@@ -112,9 +106,7 @@ def quantize_weight_per_tensor_fp8(
     return qweight, scale
 
 
-def quantize_activation_per_tensor_fp8(
-    tensor: torch.Tensor, scale: float
-) -> torch.Tensor:
+def quantize_activation_per_tensor_fp8(tensor: torch.Tensor, scale: float) -> torch.Tensor:
     finfo = torch.finfo(torch.float8_e4m3fn)
     qweight = (tensor / scale).clamp(min=finfo.min, max=finfo.max)
     return qweight.to(torch.float8_e4m3fn)
@@ -123,9 +115,7 @@ def quantize_activation_per_tensor_fp8(
 def gemm_fp8(act, act_scale, weight, weight_scale, bias, out_dtype):
     if act.numel() == 0:
         # Deal with empty tensors (triggeted by empty MoE experts)
-        return torch.empty(
-            size=(0, weight.shape[0]), dtype=out_dtype, device=act.device
-        )
+        return torch.empty(size=(0, weight.shape[0]), dtype=out_dtype, device=act.device)
 
     # TODO: Disable native fp8 gemm for now, always just dequantize
     # native_fp8_support = (
@@ -149,9 +139,7 @@ def gemm_fp8(act, act_scale, weight, weight_scale, bias, out_dtype):
             bias=bias,
         )
         if need_reshape:
-            output = output.reshape(
-                batch_size, output.shape[0] // batch_size, output.shape[1]
-            )
+            output = output.reshape(batch_size, output.shape[0] // batch_size, output.shape[1])
     else:
         output = torch.nn.functional.linear(
             act.to(out_dtype) * act_scale.to(out_dtype),
@@ -406,9 +394,7 @@ def _weight_dequant_triton(
 # This function is copied from DeepSeek-V3 (MIT License):
 # Copyright (c) 2023 DeepSeek-AI
 # Original source: https://github.com/deepseek-ai/DeepSeek-V3
-def weight_dequant(
-    x: torch.Tensor, s: torch.Tensor, block_size: int = 128
-) -> torch.Tensor:
+def weight_dequant(x: torch.Tensor, s: torch.Tensor, block_size: int = 128) -> torch.Tensor:
     """
     Dequantizes the given weight tensor using the provided scale tensor.
 

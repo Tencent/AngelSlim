@@ -1,0 +1,48 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output
+
+# Simplified Configuration for LLM compression
+model:
+  name: Qwen
+  model_path: Qwen/Qwen3-8B
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    name: int4_awq
+    bits: 4
+    quant_method:
+      weight: "per-group"
+      group_size: 128
+      zero_point: true
+      mse_range: false
+    ignore_layers:         # Skip quantization for these layers
+      - "lm_head"
+
+# Transform configuration for SpinQuant
+transform:
+  name: SpinQuant
+  spin_config:
+    had_dim: -1
+    rotation_mode: Hadamard   # "Hadamard" or "Random"
+    rotation:
+      - R1
+      - R2
+      - R4
+    ignore_layers: []
+  output_log: false
+
+# Dataset for calibration
+dataset:
+  name: TextDataset
+  data_path: ./dataset/sharegpt_gpt4_qwen/sharegpt_gpt4-qwen3_a22B_output.jsonl
+  max_seq_length: 2048
+  num_samples: 256
+  batch_size: 1
