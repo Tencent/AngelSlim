@@ -75,7 +75,6 @@ def moe_observer_forward(
 
     return final_hidden_states
 
-
 @SlimModelFactory.register
 class Qwen3VLMoE(BaseLLMModel):
     def __init__(
@@ -158,6 +157,7 @@ class Qwen3VLMoE(BaseLLMModel):
             result = ".".join(parts[-2:])
             if result == "mlp.experts":
                 if not hasattr(module, "gateupobservers"):
+<<<<<<< HEAD
                     parent = ParentObserver()
                     module.gateupobservers = nn.ModuleList(
                         [
@@ -177,6 +177,13 @@ class Qwen3VLMoE(BaseLLMModel):
                             for i in range(module.num_experts)
                         ]
                     )
+=======
+                    layername = name + ".gate_up"
+                    module.gateupobservers = MoEAbsmaxPertensorObserver(layer_name=layername)
+                if not hasattr(module, "downobservers"):
+                    layername = name + ".down"
+                    module.downobservers = MoEAbsmaxPertensorObserver(layer_name=layername)
+>>>>>>> upstream/main
             else:
                 if block_condition and result in names:
                     observer_layers_dict[name] = module
