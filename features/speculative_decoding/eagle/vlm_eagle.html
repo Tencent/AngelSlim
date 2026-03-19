@@ -534,16 +534,6 @@ bash<span class="w"> </span>scripts/speculative/hunyuan_ocr/generate_vlm_hidden_
 bash<span class="w"> </span>scripts/speculative/qwen3_vl/generate_vlm_hidden_for_draft_model.sh
 </pre></div>
 </div>
-<ul>
-<li><p>离线hidden_states采集时，如果由于pixel_values数组太长导致 OverflowError: There was an overflow with type &lt;class ‘list’&gt;. 请采用分batch处理方式见：</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># For HunyuanOCR</span>
-bash<span class="w"> </span>scripts/speculative/hunyuan_ocr/generate_vlm_hidden_for_draft_model_batch.sh
-<span class="c1"># For Qwen3-VL series</span>
-bash<span class="w"> </span>scripts/speculative/qwen3_vl/generate_vlm_hidden_for_draft_model_batch.sh
-</pre></div>
-</div>
-</li>
-</ul>
 <blockquote>
 <div><p>注意：qwen3_vl系列模型生成hidden states需要更新transformers&gt;=5.0.0,
 或者cherry-pick: https://github.com/huggingface/transformers/pull/42609,
@@ -553,7 +543,8 @@ bash<span class="w"> </span>scripts/speculative/qwen3_vl/generate_vlm_hidden_for
 <p>在使用前，需要在脚本中配置以下参数：</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">DATASET_PATH</span></code>: 输入数据集的HF名称或本地路径</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">MODEL_NAME</span></code>: 目标模型的HF名称或本地路径</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">TARGET_MODEL_NAME_OR_PATH</span></code>: 目标模型的HF名称或本地路径</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">DRAFT_MODEL_CONFIG_PATH</span></code>: 草稿模型的config路径</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">TARGET_BACKEND</span></code>: 目标模型后端，目前仅支持HF</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">MODEL_MAX_LENGTH</span></code>: 生成数据的上下文长度</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">CHAT_TEMPLATE_TYPE</span></code>: 目标模型的目标类型，目前支持qwen3_vl/hunyuan_vl</p></li>
@@ -602,7 +593,6 @@ bash<span class="w"> </span>scripts/speculative/qwen3_vl/train_eagle3_vlm_offlin
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">TARGET_MODEL_NAME_OR_PATH</span></code>: 目标模型的HF名称或本地名称</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">DRAFT_MODEL_CONFIG_PATH</span></code>: 草稿模型的config路径</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">TRAIN_DATA_PATH</span></code>: 训练数据路径,.jsonl格式</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">TRAIN_HIDDEN_PATH</span></code>: 训练hidden states数据路径</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">EVAL_HIDDEN_PATH</span></code>: 验证hidden states数据路径</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">OUTPUT_DIR</span></code>: Eagle3模型输出路径</p></li>
@@ -619,7 +609,8 @@ bash<span class="w"> </span>scripts/speculative/qwen3_vl/train_eagle3_vlm_offlin
 <section id="vllm">
 <h3>4.1 vLLM基准测试<a class="headerlink" href="#vllm" title="Link to this heading">#</a></h3>
 <blockquote>
-<div><p>vLLM 适配参考: <a class="reference external" href="https://github.com/vllm-project/vllm/pull/32230">Support Eagle3 for HunyuanOCR &amp; Qwen3-VL</a></p>
+<div><p>vLLM 建议版本0.16.0以上，已支持Hunyuan/HunyuanVL/Qwen3-VL。
+HunyuanOCR &amp; Qwen3VLMoe &amp; Qwen2Audio 适配需要cherry-pick这个PR: <a class="reference external" href="https://github.com/vllm-project/vllm/pull/32230">feature: support eagle3 for HunyuanOCR &amp; Qwen3VLMoe &amp; Qwen2Audio</a></p>
 </div></blockquote>
 <section id="id10">
 <h4>4.1.1 基本用法<a class="headerlink" href="#id10" title="Link to this heading">#</a></h4>
@@ -641,7 +632,7 @@ bash<span class="w"> </span>scripts/speculative/qwen3_vl/train_eagle3_vlm_offlin
 </ul>
 <p><strong>基准测试配置：</strong></p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">--dataset</span></code>: 基准数据集名称，默认为 <code class="docutils literal notranslate"><span class="pre">lmms-lab/textvqa</span></code>, 可选【<code class="docutils literal notranslate"><span class="pre">lmms-lab/textvqa</span></code>,<code class="docutils literal notranslate"><span class="pre">MMMU/MMMU</span></code>,<code class="docutils literal notranslate"><span class="pre">Lin-Chen/MMStar</span></code>,<code class="docutils literal notranslate"><span class="pre">opendatalab/OmniDocBench</span></code>,<code class="docutils literal notranslate"><span class="pre">Lin-Chen/MMStar</span></code>】</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--dataset</span></code>: 基准数据集名称，默认为 <code class="docutils literal notranslate"><span class="pre">lmms-lab/textvqa</span></code>, 可选【<code class="docutils literal notranslate"><span class="pre">lmms-lab/textvqa</span></code>,<code class="docutils literal notranslate"><span class="pre">MMMU/MMMU</span></code>,<code class="docutils literal notranslate"><span class="pre">Lin-Chen/MMStar</span></code>,<code class="docutils literal notranslate"><span class="pre">opendatalab/OmniDocBench</span></code>,<code class="docutils literal notranslate"><span class="pre">Lin-Chen/MMStar</span></code>】。也支持本地的数据集路径，格式见: 2.1 数据组织形式</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--use_eagle</span></code>: 运行Eagle3推理，默认为False</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--output_file</span></code>: 输出结果文件路径</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--num_prompts</span></code>: 测试用例数量，默认为100</p></li>
@@ -679,10 +670,9 @@ bash<span class="w"> </span>scripts/speculative/qwen3_vl/train_eagle3_vlm_offlin
 <span class="w">    </span>--output_file<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$OUTPUT_FILE</span><span class="s2">&quot;</span>
 </pre></div>
 </div>
-<p><strong>Baseline基准测试：</strong></p>
+<p><strong>Baseline基准测试（不使用投机采样）：</strong></p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/vllm_offline_eagle3_vlm_batch.py<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--target_model<span class="w"> </span>Qwen/Qwen3-VL-2B-Instruct<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--num_spec_tokens<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--dataset<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$task</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--num_prompts<span class="w"> </span><span class="m">80</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--temp<span class="w"> </span><span class="m">0</span><span class="w"> </span><span class="se">\</span>
