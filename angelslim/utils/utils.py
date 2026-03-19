@@ -158,9 +158,9 @@ def get_hf_model_path(model_path) -> str:
 
 
 def common_prefix(str1, str2):
-    return "".join(
-        x[0] for x in takewhile(lambda x: x[0] == x[1], zip(str1, str2))
-    ).rpartition(".")[0]
+    return "".join(x[0] for x in takewhile(lambda x: x[0] == x[1], zip(str1, str2))).rpartition(
+        "."
+    )[0]
 
 
 def get_package_info(package_name: str) -> dict:

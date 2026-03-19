@@ -60,10 +60,12 @@ def fp8_per_token_group_quant(
     scale_tma_aligned: bool = False,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    Per-token-group FP8 quantization using triton kernel.
+    Per-token-group FP8 quantization with automatic backend selection.
+
+    Uses Triton kernel on GPU when available, otherwise falls back to PyTorch.
 
     Args:
-        x: Input tensor on GPU
+        x: Input tensor
         group_size: Size of each quantization group
         eps: Small value to avoid division by zero
         dtype: Target FP8 data type
@@ -72,11 +74,9 @@ def fp8_per_token_group_quant(
 
     Returns:
         Tuple of (quantized_tensor, scale_tensor)
-
-    Raises:
-        AssertionError: If input tensor is not on GPU
     """
-    assert x.is_cuda, "x must be on GPU for fp8_per_token_group_quant_triton"
+    # fp8_per_token_group_quant_triton is automatically selected based on
+    # backend availability (Triton vs PyTorch) via __init__.py
     return fp8_per_token_group_quant_triton(
         x,
         group_size,
@@ -260,9 +260,7 @@ def fp8_gemm_torch_tensor_token(
         output = output[0]
 
     if need_reshape:
-        output = output.reshape(
-            batch_size, output.shape[0] // batch_size, output.shape[1]
-        )
+        output = output.reshape(batch_size, output.shape[0] // batch_size, output.shape[1])
 
     return output
 
@@ -369,9 +367,7 @@ def fp8_gemm(
             return fp8_gemm_sgl_token(A, A_scale, B, B_scale, out_dtype, bias)
         elif quant_type == QuantType.FP8_PER_BLOCK:
             # Use deepgemm accelerated blockwise fp8 GEMM
-            return fp8_gemm_deepgemm_block(
-                A, A_scale, B, B_scale, out_dtype, bias, origin_shape
-            )
+            return fp8_gemm_deepgemm_block(A, A_scale, B, B_scale, out_dtype, bias, origin_shape)
     else:
         if quant_type == QuantType.FP8_PER_BLOCK:
             # Use triton kernel for blockwise fp8 quantization

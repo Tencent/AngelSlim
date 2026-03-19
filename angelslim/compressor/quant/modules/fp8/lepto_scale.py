@@ -49,14 +49,10 @@ class AutoLayerScale:
 
             inp = inp.to(layers[0].weight.device)
             if self.merge_samples:
-                act_abs_max = (
-                    inp.abs().reshape(-1, inp.shape[-1]).mean(0).reshape(1, -1)
-                )
+                act_abs_max = inp.abs().reshape(-1, inp.shape[-1]).mean(0).reshape(1, -1)
             else:
                 all_inp = inp
-                act_abs_max = (
-                    all_inp.abs().reshape(-1, all_inp.shape[-1]).mean(0).reshape(1, -1)
-                )
+                act_abs_max = all_inp.abs().reshape(-1, all_inp.shape[-1]).mean(0).reshape(1, -1)
                 del all_inp
 
             print_info(f"[auto scale] {layer_name} act_abs_max: {act_abs_max}")
@@ -169,9 +165,7 @@ class AutoLayerScale:
         sorted_indices = torch.argsort(tensor.abs())
         closest_indices = sorted_indices[n]
 
-        cut_np_fp8w1 = max(
-            orig_fp8w[closest_indices].float().abs(), get_fp_maxval(bits=8) / 7
-        )
+        cut_np_fp8w1 = max(orig_fp8w[closest_indices].float().abs(), get_fp_maxval(bits=8) / 7)
 
         step = (get_fp_maxval(bits=8) - cut_np_fp8w1) / self.search_step
         break_point = min(cut_np_fp8w1 + (step * (ratio + 1)), get_fp_maxval(bits=8))
@@ -256,9 +250,7 @@ class AutoLayerScale:
                     new_out[j, :, :] = self._get_out(layer_name, new_act, block, cache)
 
                 loss = self.loss_function(origin_out, new_out).to(torch.float32)
-                print_info(
-                    "ratio: {}, adscale: {}, loss: {}".format(ratio, adapt_scale, loss)
-                )
+                print_info("ratio: {}, adscale: {}, loss: {}".format(ratio, adapt_scale, loss))
                 if loss < best_error:
                     best_error = loss
                     best_ratio = ratio

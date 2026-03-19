@@ -10,6 +10,7 @@ from .models import (
     TargetHead,
     create_draft_model,
     create_target_model,
+    infer_model_params,
 )
 from .trainer import Eagle3TrainerFactory
 
@@ -24,4 +25,5 @@ __all__ = [
     "DatasetManager",
     "get_supported_chat_template_type_strings",
     "TargetHead",
+    "infer_model_params",
 ]

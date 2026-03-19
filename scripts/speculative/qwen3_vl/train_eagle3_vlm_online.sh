@@ -1,14 +1,14 @@
 #!/bin/bash
 
-export CONFIG_DIR=angelslim/compressor/speculative/train/configs
-export TARGET_MODEL_NAME_OR_PATH=Qwen/Qwen3-VL-4B-Instruct
-export DRAFT_MODEL_CONFIG_PATH=$CONFIG_DIR/qwen3-vl-4b-eagle3-mrope.json
-export TRAIN_DATA_PATH=
-export EVAL_DATA_PATH=
-export OUTPUT_DIR=
-export EMBED_WEIGHT_KEY="model.language_model.embed_tokens.weight"
-export MODEL_MAX_LENGTH=4096
-export CHAT_TEMPLATE_TYPE=qwen3_vl
+CONFIG_DIR=angelslim/compressor/speculative/train/configs
+TARGET_MODEL_NAME_OR_PATH=Qwen/Qwen3-VL-4B-Instruct
+DRAFT_MODEL_CONFIG_PATH=$CONFIG_DIR/qwen3-vl-4b-eagle3-mrope.json
+TRAIN_DATA_PATH=
+EVAL_DATA_PATH=
+OUTPUT_DIR=
+EMBED_WEIGHT_KEY="model.language_model.embed_tokens.weight"
+MODEL_MAX_LENGTH=4096
+CHAT_TEMPLATE_TYPE=qwen3_vl
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 
 torchrun --nproc_per_node=8 tools/train_eagle3_online.py \

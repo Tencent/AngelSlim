@@ -102,9 +102,7 @@ class DeepSeek(BaseLLMModel):
 
     def get_observer_layers(self):
         names = self.quant_config.quant_algo_info["ignore_layers"]
-        observer_layers_dict = find_layers(
-            self.model, layers=self.observer_layer_classes
-        )
+        observer_layers_dict = find_layers(self.model, layers=self.observer_layer_classes)
         observer_layers_dict = {
             k: v
             for k, v in observer_layers_dict.items()
@@ -185,9 +183,7 @@ class DeepSeek(BaseLLMModel):
         calibrated_cnt = 0
         if dataloader is not None:
             with torch.no_grad():
-                for batch in tqdm(
-                    dataloader, desc="calibrating...", total=len(dataloader)
-                ):
+                for batch in tqdm(dataloader, desc="calibrating...", total=len(dataloader)):
                     inputs = batch["input_ids"].to(device)
                     labels = batch["labels"].to(device)
                     attention_mask = batch["attention_mask"].to(device)
@@ -198,9 +194,7 @@ class DeepSeek(BaseLLMModel):
                             labels.view(-1),
                             reduction="none",
                         )
-                        attention_mask = (
-                            attention_mask.view(-1).to(logits.device).float()
-                        )
+                        attention_mask = attention_mask.view(-1).to(logits.device).float()
                         loss = loss * attention_mask
                         avg_loss = loss.mean()
                         ppl = torch.exp(avg_loss)

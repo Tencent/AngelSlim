@@ -39,9 +39,7 @@ class OfflineEagle3Dataset(Dataset):
     hidden_states, and loss_mask.
     """
 
-    def __init__(
-        self, data_dir: str, file_pattern: str = "*.ckpt", cache_in_memory: bool = False
-    ):
+    def __init__(self, data_dir: str, file_pattern: str = "*.ckpt", cache_in_memory: bool = False):
         """
         Initialize the OfflineEagle3Dataset.
 
@@ -192,16 +190,13 @@ class OfflineEagle3Dataset(Dataset):
                     self.valid_indices.remove(actual_idx)
                     if len(self.valid_indices) == 0:
                         raise RuntimeError(
-                            "All checkpoint files failed to load. "
-                            "Cannot continue training."
+                            "All checkpoint files failed to load. " "Cannot continue training."
                         )
                     # Try next index
                     idx += 1
 
             # If all retries failed, raise error
-            raise RuntimeError(
-                f"Failed to load any valid checkpoint after {max_retries} attempts"
-            )
+            raise RuntimeError(f"Failed to load any valid checkpoint after {max_retries} attempts")
 
 
 class OfflineVLMEagle3Dataset(OfflineEagle3Dataset):
@@ -266,9 +261,7 @@ class OfflineVLMEagle3Dataset(OfflineEagle3Dataset):
 
 @DatasetBuilderFactory.register("offline", "LLM")
 class OfflineLLMDatasetBuilder(DatasetBuilder):
-    def __init__(
-        self, file_pattern: str = "*.ckpt", cache_in_memory: bool = False, **kwargs: Any
-    ):
+    def __init__(self, file_pattern: str = "*.ckpt", cache_in_memory: bool = False, **kwargs: Any):
         self.file_pattern = file_pattern
         self.cache_in_memory = cache_in_memory
 
@@ -288,9 +281,7 @@ class OfflineLLMDatasetBuilder(DatasetBuilder):
 
 @DatasetBuilderFactory.register("offline", "VLM", "qwen3_vl")
 class OfflineVLMDatasetBuilder(DatasetBuilder):
-    def __init__(
-        self, file_pattern: str = "*.ckpt", cache_in_memory: bool = False, **kwargs: Any
-    ):
+    def __init__(self, file_pattern: str = "*.ckpt", cache_in_memory: bool = False, **kwargs: Any):
         self.file_pattern = file_pattern
         self.cache_in_memory = cache_in_memory
 
@@ -310,9 +301,7 @@ class OfflineVLMDatasetBuilder(DatasetBuilder):
 
 @DatasetBuilderFactory.register("offline", "VLM", "hunyuan_vl")
 class OfflineVLMHunyuanVLDatasetBuilder(DatasetBuilder):
-    def __init__(
-        self, file_pattern: str = "*.ckpt", cache_in_memory: bool = False, **kwargs: Any
-    ):
+    def __init__(self, file_pattern: str = "*.ckpt", cache_in_memory: bool = False, **kwargs: Any):
         self.file_pattern = file_pattern
         self.cache_in_memory = cache_in_memory
 

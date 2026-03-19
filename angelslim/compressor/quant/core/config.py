@@ -74,9 +74,7 @@ class QuantConfig:
                 is_dynamic or act_quant_method is not None
             ), "[Error] fp8_static need act_quant_method"
             self.act_observer = (
-                ACT_OBSERVERS_CLASS[act_quant_method]
-                if "static" in is_dynamic
-                else None
+                ACT_OBSERVERS_CLASS[act_quant_method] if "static" in is_dynamic else None
             )
             self.weight_observer = WEIGHT_OBSERVERS_CLASS[weight_quant_method]
             self.kv_cache_observer = None
@@ -103,15 +101,20 @@ class QuantConfig:
             self.low_memory = config.quantization.low_memory
             self.quant_analyse = config.quantization.quant_analyse
             self.quant_vit = config.quantization.quant_vit
+        elif "w4a8i8" in self.quant_algo:
+            group_size = quantization_args.quant_method["group_size"]
+            self.quant_algo_info = {
+                "group_size": group_size,
+                "ignore_layers": quantization_args.ignore_layers,
+            }
+            self.low_memory = config.quantization.low_memory
         elif "int8" in self.quant_algo:
             is_dynamic = "dynamic" if "dynamic" in self.quant_algo else "static"
             assert (
                 is_dynamic or act_quant_method is not None
             ), "[Error] int8_static need act_quant_method"
             self.act_observer = (
-                ACT_OBSERVERS_CLASS[act_quant_method]
-                if "static" in is_dynamic
-                else None
+                ACT_OBSERVERS_CLASS[act_quant_method] if "static" in is_dynamic else None
             )
             self.weight_observer = WEIGHT_OBSERVERS_CLASS[weight_quant_method]
             self.kv_cache_observer = None
@@ -156,9 +159,7 @@ class QuantConfig:
             assert (
                 is_dynamic or act_quant_method is not None
             ), "[Error] nvfp4 need act_quant_method"
-            self.act_observer = (
-                AbsmaxPertensorObserver if "static" in is_dynamic else None
-            )
+            self.act_observer = AbsmaxPertensorObserver if "static" in is_dynamic else None
             self.weight_observer = AbsmaxPertensorObserver
             self.kv_cache_observer = None
             block_size = (
@@ -196,9 +197,7 @@ class QuantConfig:
             act_observer if act_observer in ACT_OBSERVERS_CLASS else self.act_observer
         )
         self.weight_observer = (
-            weight_observer
-            if weight_observer in WEIGHT_OBSERVERS_CLASS
-            else self.weight_observer
+            weight_observer if weight_observer in WEIGHT_OBSERVERS_CLASS else self.weight_observer
         )
         self.kv_cache_observer = (
             kv_cache_observer

@@ -37,9 +37,7 @@ class CompressorFactory:
             """Register a class using its own name as the key"""
             key = compress_cls.__name__
             if key in cls._compress_methods:
-                print_info(
-                    f"Compression method '{key}' already exists, will be overwritten."
-                )
+                print_info(f"Compression method '{key}' already exists, will be overwritten.")
             cls._compress_methods[key] = compress_cls
             return compress_cls
 

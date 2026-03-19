@@ -30,9 +30,7 @@ class HistObserver(BaseObserver):
         sign=True,
         symmetric=True,
     ):
-        super(HistObserver, self).__init__(
-            quant_bits=quant_bits, sign=sign, symmetric=symmetric
-        )
+        super(HistObserver, self).__init__(quant_bits=quant_bits, sign=sign, symmetric=symmetric)
         self._layer = layer
         self._bins_count = bins_count
         self._percent = percent
@@ -83,9 +81,7 @@ class HistObserver(BaseObserver):
         hist = self._hist / np.sum(self._hist, dtype=np.float64)
         cumsumed_hist = np.cumsum(hist)
         max_idx = np.argwhere(cumsumed_hist >= min(self._percent, cumsumed_hist[-1]))[0]
-        min_idx = np.argwhere(
-            cumsumed_hist >= max(1 - self._percent, cumsumed_hist[0])
-        )[0]
+        min_idx = np.argwhere(cumsumed_hist >= max(1 - self._percent, cumsumed_hist[0]))[0]
         bin_width = (self._hist_max - self._hist_min) / hist.shape[0]
         _max = self._hist_min + float((max_idx - 0.5) * bin_width)
         _min = self._hist_min + float((min_idx - 0.5) * bin_width)
@@ -100,9 +96,7 @@ class HistObserver(BaseObserver):
         _min, _max = self._min_max(inputs)
         hist = None
         if _max > _min:
-            hist, _ = np.histogram(
-                inputs.numpy(), bins=self._bins_count, range=(_min, _max)
-            )
+            hist, _ = np.histogram(inputs.numpy(), bins=self._bins_count, range=(_min, _max))
             hist = hist.astype(np.float32)
 
         return hist
@@ -137,9 +131,7 @@ class HistObserver(BaseObserver):
         if (_new_max - _new_min) == 0.0:
             return _origin_min, _origin_max, origin_hist
         elif _origin_max - _origin_min == 0.0:
-            new_hist, _ = np.histogram(
-                tensor.numpy(), range=(_new_min, _new_max), bins=bins_count
-            )
+            new_hist, _ = np.histogram(tensor.numpy(), range=(_new_min, _new_max), bins=bins_count)
             new_hist = new_hist.astype(np.float32)
             return _new_min, _new_max, new_hist
         elif _new_max <= _origin_max and _new_min >= _origin_min:
@@ -166,9 +158,7 @@ class HistObserver(BaseObserver):
                 upsample_bins_count,
             )
 
-            new_hist, _ = np.histogram(
-                tensor.numpy(), range=(_new_min, _new_max), bins=bins_count
-            )
+            new_hist, _ = np.histogram(tensor.numpy(), range=(_new_min, _new_max), bins=bins_count)
 
             merged_histogram = self._merge_histograms(
                 new_hist,
@@ -192,9 +182,9 @@ class HistObserver(BaseObserver):
         """Merge two histograms."""
         upsampled_histogram = np.repeat(origin_hist, upsample_bins_count)
         expanded_hist = np.zeros((bins_count * downsample_bins_count), dtype=np.float32)
-        expanded_hist[
-            start_bin_idx : bins_count * upsample_bins_count + start_bin_idx
-        ] = upsampled_histogram
+        expanded_hist[start_bin_idx : bins_count * upsample_bins_count + start_bin_idx] = (
+            upsampled_histogram
+        )
 
         cumsumed_hist = np.cumsum(expanded_hist, dtype=np.float64)[
             downsample_bins_count - 1 :: downsample_bins_count
@@ -211,9 +201,7 @@ class HistObserver(BaseObserver):
     ) -> Tuple[float, float, int, int]:
         """Relax the min and max values of the histogram."""
         _bin_width = (origin_max - origin_min) / (bins_count * upsample_bins_count)
-        downsample_bins_count = int(
-            np.ceil((new_max - new_min) / (bins_count * _bin_width))
-        )
+        downsample_bins_count = int(np.ceil((new_max - new_min) / (bins_count * _bin_width)))
         error = downsample_bins_count * bins_count * _bin_width - (new_max - new_min)
         new_max += error
         start_bin_idx = round((origin_min - new_min) / _bin_width)

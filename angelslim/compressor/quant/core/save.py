@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import gc
 import json
 import os
 import re
@@ -19,6 +20,7 @@ import shutil
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy
 from glob import glob
+from typing import Dict
 
 import torch
 import torch.distributed as dist
@@ -30,7 +32,7 @@ from transformers.models.deepseek_v3 import DeepseekV3Config
 
 from ....utils import print_info
 from .packing_utils import pack_weight_to_int8
-from .quant_func import fake_quant_dequant, weight_dequant
+from .quant_func import Int8PerChannelQuantizer, fake_quant_dequant, weight_dequant
 
 __all__ = ["PTQvLLMSaveHF"]
 
@@ -67,9 +69,7 @@ class PTQvLLMSaveHF(PTQSaveBase):
         model_save_name = model_base_name + ".safetensors"
         safetensors_metadata = {}
         safetensors_metadata["format"] = "pt"
-        safe_save(
-            state_dict, os.path.join(save_path, model_save_name), safetensors_metadata
-        )
+        safe_save(state_dict, os.path.join(save_path, model_save_name), safetensors_metadata)
         self.quant_model.config.save_pretrained(save_path)
 
 
@@ -79,9 +79,7 @@ class PTQVLMSaveVllmHF(PTQSaveBase):
 
     def save(self, save_path):
         save_name = self.quant_model.quant_config.save_name
-        ignore_field = (
-            "ignore" if save_name == "compressed-tensors" else "ignored_layers"
-        )
+        ignore_field = "ignore" if save_name == "compressed-tensors" else "ignored_layers"
 
         w_quant_algo = self.quant_model.quant_config.quant_algo_info["w"]
         a_quant_algo = self.quant_model.quant_config.quant_algo_info["a"]
@@ -142,9 +140,7 @@ class PTQVLMSaveVllmHF(PTQSaveBase):
                 "type": "float",
             }
         else:
-            raise ValueError(
-                f"{self.quant_model.quant_config.quant_algo} not supported"
-            )
+            raise ValueError(f"{self.quant_model.quant_config.quant_algo} not supported")
         quantization_config = {"quant_method": save_name, ignore_field: ignored_layers}
         if save_name == "compressed-tensors":
             quantization_config.update(
@@ -163,9 +159,7 @@ class PTQVLMSaveVllmHF(PTQSaveBase):
                 }
             )
         else:
-            quantization_config["activation_scheme"] = (
-                "dynamic" if is_dynamic else "static"
-            )
+            quantization_config["activation_scheme"] = "dynamic" if is_dynamic else "static"
 
         quant_dict = {"quantization_config": quantization_config}
         self.quant_model.get_model().config.update(quant_dict)
@@ -173,7 +167,7 @@ class PTQVLMSaveVllmHF(PTQSaveBase):
 
         os.makedirs(save_path, exist_ok=True)
 
-        self.quant_model.get_model().save_pretrained(save_path)
+        self.quant_model.get_model().save_pretrained(save_path, max_shard_size="5GB")
         self.quant_model.processor.save_pretrained(save_path)
         self.quant_model.tokenizer.save_pretrained(save_path)
 
@@ -184,9 +178,7 @@ class PTQSaveVllmHF(PTQSaveBase):
 
     def save(self, save_path):
         save_name = self.quant_model.quant_config.save_name
-        ignore_field = (
-            "ignore" if save_name == "compressed-tensors" else "ignored_layers"
-        )
+        ignore_field = "ignore" if save_name == "compressed-tensors" else "ignored_layers"
         w_quant_algo = self.quant_model.quant_config.quant_algo_info["w"]
         a_quant_algo = self.quant_model.quant_config.quant_algo_info["a"]
         is_dynamic = "dynamic" in a_quant_algo
@@ -246,9 +238,7 @@ class PTQSaveVllmHF(PTQSaveBase):
                 "type": "float",
             }
         else:
-            raise ValueError(
-                f"{self.quant_model.quant_config.quant_algo} not supported"
-            )
+            raise ValueError(f"{self.quant_model.quant_config.quant_algo} not supported")
 
         quantization_config = {"quant_method": save_name, ignore_field: ignored_layers}
         if save_name == "compressed-tensors":
@@ -268,16 +258,14 @@ class PTQSaveVllmHF(PTQSaveBase):
                 }
             )
         else:
-            quantization_config["activation_scheme"] = (
-                "dynamic" if is_dynamic else "static"
-            )
+            quantization_config["activation_scheme"] = "dynamic" if is_dynamic else "static"
 
         quant_dict = {"quantization_config": quantization_config}
         self.quant_model.get_model().config.update(quant_dict)
         print_info("Save quantization_config: {}".format(quant_dict))
 
         os.makedirs(save_path, exist_ok=True)
-        self.quant_model.get_model().save_pretrained(save_path)
+        self.quant_model.get_model().save_pretrained(save_path, max_shard_size="5GB")
 
         with open(os.path.join(save_path, "hf_quant_config.json"), "w") as f:
             json.dump(trtllm_config, f, indent=4)
@@ -296,9 +284,7 @@ class PTQOnlyScaleSave(PTQSaveBase):
         static_q_dict = {
             "quantization_config": {
                 "quant_method": "fp8",
-                "activation_scheme": (
-                    "dynamic" if "dynamic" in a_quant_algo else "static"
-                ),
+                "activation_scheme": ("dynamic" if "dynamic" in a_quant_algo else "static"),
                 "ignored_layers": ignored_layers,
             }
         }
@@ -435,9 +421,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
 
         if fused_act_scale_dict:
             for k, v in fused_act_scale_dict.items():
-                _save_path = os.path.join(
-                    save_path, "{}.input_scale.{}.pt".format(k, _index)
-                )
+                _save_path = os.path.join(save_path, "{}.input_scale.{}.pt".format(k, _index))
                 if "experts" in k and "shared_experts" not in k:
                     # handle Deepseek EP, do not all reduce
                     _save_path = os.path.join(
@@ -492,13 +476,9 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
                     torch.save(scale, _save_path)
                 else:
                     print_info(f"before all reduce scale = {scale}")
-                    torch.distributed.all_reduce(
-                        scale, op=torch.distributed.ReduceOp.MAX
-                    )
+                    torch.distributed.all_reduce(scale, op=torch.distributed.ReduceOp.MAX)
                     print_info(f"after all reduce scale = {scale}")
-                    _save_path = os.path.join(
-                        save_path, "{}.weight_scale.{}.pt".format(k, _index)
-                    )
+                    _save_path = os.path.join(save_path, "{}.weight_scale.{}.pt".format(k, _index))
                     self._save_ckpt(
                         scale,
                         _save_path,
@@ -514,9 +494,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
         dist.destroy_process_group()
 
         if self.rank == 0:
-            save_model_path = os.path.join(
-                "/".join(save_path.split("/")[:-1]), "checkpoint"
-            )
+            save_model_path = os.path.join("/".join(save_path.split("/")[:-1]), "checkpoint")
             os.makedirs(save_model_path, exist_ok=True)
 
             self.convert_scales_to_safetensors(save_path, tmp_path)
@@ -533,9 +511,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
                 shutil.rmtree(tmp_path)
             if os.path.exists(save_path):
                 shutil.rmtree(save_path)
-            parent_dir = os.path.dirname(
-                self.quant_model.model.ori_model_path.rstrip("/")
-            )
+            parent_dir = os.path.dirname(self.quant_model.model.ori_model_path.rstrip("/"))
             tp_model_path = os.path.join(
                 parent_dir, f"ds_ckpt_tp{self.quant_model.model.world_size}"
             )
@@ -600,21 +576,15 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
                     tensor_wise_scale = fused_max_value.max() / 448.0
                 else:
                     tensor_wise_scale = fused_max_value.max()
-                torch.distributed.all_reduce(
-                    tensor_wise_scale, op=torch.distributed.ReduceOp.MAX
-                )
+                torch.distributed.all_reduce(tensor_wise_scale, op=torch.distributed.ReduceOp.MAX)
                 weight_fp8 = (
-                    (weight_bf16 / tensor_wise_scale)
-                    .clamp(-448, 448)
-                    .to(torch.float8_e4m3fn)
+                    (weight_bf16 / tensor_wise_scale).clamp(-448, 448).to(torch.float8_e4m3fn)
                 )
                 weight_fp8 = weight_fp8.to(layer.weight.device)
 
                 if "fp8" in self.quant_model.quant_config.quant_algo:
                     if "w4a8" in self.quant_model.quant_config.quant_algo:
-                        new_weight_bf16 = (
-                            weight_fp8.to(torch.bfloat16) * tensor_wise_scale
-                        )
+                        new_weight_bf16 = weight_fp8.to(torch.bfloat16) * tensor_wise_scale
                         new_weight_bf16_qdq = fake_quant_dequant(
                             new_weight_bf16,
                             method="groupwise",
@@ -630,18 +600,12 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
                         )
                         new_weight_fp8 = new_weight_fp8.to(layer.weight.device)
                         layer.weight.data = new_weight_fp8
-                        bf16_weight_qdq = (
-                            new_weight_fp8.to(torch.bfloat16) * tensor_wise_scale
-                        )
+                        bf16_weight_qdq = new_weight_fp8.to(torch.bfloat16) * tensor_wise_scale
                     else:
                         layer.weight.data = weight_fp8
-                        bf16_weight_qdq = (
-                            weight_fp8.to(torch.bfloat16) * tensor_wise_scale
-                        )
+                        bf16_weight_qdq = weight_fp8.to(torch.bfloat16) * tensor_wise_scale
 
-                cos_sim = torch.cosine_similarity(
-                    bf16_weight_qdq, ori_bf16_weight
-                ).mean()
+                cos_sim = torch.cosine_similarity(bf16_weight_qdq, ori_bf16_weight).mean()
                 print_info(f"qdq weight cos sim :{cos_sim}")
                 if cos_sim < 0.95:
                     print_info("*** cos sim < 0.95 !!!")
@@ -650,9 +614,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
         world_size = dist.get_world_size() if dist.is_initialized() else 1
         save_model(
             self.quant_model.model,
-            os.path.join(
-                save_model_path, f"model{self.rank}-mp{world_size}.safetensors"
-            ),
+            os.path.join(save_model_path, f"model{self.rank}-mp{world_size}.safetensors"),
         )
         print_info(f"save model{self.rank}-mp{world_size}.safetensors done.")
 
@@ -677,9 +639,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
 
         for mpind in range(mp):
             file_path = os.path.join(input_path, f"model{mpind}-mp{mp}.safetensors")
-            ori_state_dicts[localind] = safe_open(
-                file_path, framework="pt", device="cpu"
-            )
+            ori_state_dicts[localind] = safe_open(file_path, framework="pt", device="cpu")
             localind += 1
 
         # process no_mp_key
@@ -742,9 +702,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
         filename = "model-" + "{:0>{}}".format(model_save_ind, 5) + ".safetensors"
         model_save_ind += 1
         for _, k in enumerate(ori_state_dicts[0].keys()):
-            if any(
-                word if word in k else False for word in ["embed_tokens", "lm_head"]
-            ):
+            if any(word if word in k else False for word in ["embed_tokens", "lm_head"]):
                 param_list = []
                 for i in range(mp):
                     param: torch.Tensor = ori_state_dicts[i].get_tensor(k)
@@ -802,9 +760,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
             new_file_path = os.path.join(save_model_path, "tiktoken.model")
             shutil.copyfile(file_path, new_file_path)
 
-        with open(
-            os.path.join(save_model_path, "model.safetensors.index.json"), "w"
-        ) as f:
+        with open(os.path.join(save_model_path, "model.safetensors.index.json"), "w") as f:
             json.dump(index_dict, f, indent=4)
 
         # setting quantization config
@@ -841,9 +797,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
                             is not supported for w4a8_fp8."
                     )
             else:
-                ignore_layers = self.quant_model.quant_config.quant_algo_info[
-                    "ignore_layers"
-                ]
+                ignore_layers = self.quant_model.quant_config.quant_algo_info["ignore_layers"]
                 if self.quant_model.deploy_backend == "vllm":
                     quant_dict = {
                         "quantization_config": {
@@ -880,9 +834,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
         if "fp8" in self.quant_model.quant_config.quant_algo:
             if not any(
                 substring in param_name
-                for substring in self.quant_model.quant_config.quant_algo_info[
-                    "ignore_layers"
-                ]
+                for substring in self.quant_model.quant_config.quant_algo_info["ignore_layers"]
             ):
                 if param_name.endswith("weight_scale_inv"):
                     return
@@ -893,24 +845,18 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
                         f"{param_name[:-7]}.input_scale"
                     ]
                     index_dict["weight_map"][f"{param_name}_scale"] = str(filename)
-                    index_dict["weight_map"][f"{param_name[:-7]}.input_scale"] = str(
-                        filename
-                    )
+                    index_dict["weight_map"][f"{param_name[:-7]}.input_scale"] = str(filename)
                     if "w4a8" in self.quant_model.quant_config.quant_algo:
                         param = self._packed_weight(
                             param_name,
                             param,
-                            self.quant_model.quant_config.quant_algo_info[
-                                "w_group_size"
-                            ],
+                            self.quant_model.quant_config.quant_algo_info["w_group_size"],
                             scales_dict,
                         )
                         new_save_dict[f"{param_name}_scale.int4"] = scales_dict[
                             f"{param_name}_scale.int4"
                         ]
-                        index_dict["weight_map"][f"{param_name}_scale.int4"] = str(
-                            filename
-                        )
+                        index_dict["weight_map"][f"{param_name}_scale.int4"] = str(filename)
                         param_name = param_name.replace("weight", "qweight")
 
         new_save_dict[param_name] = param
@@ -933,9 +879,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
         assert int4_scale.shape == weight.shape
         quant_weight = torch.clamp(torch.round(bf16_weight / int4_scale), -8, 7)
         packed_weight = pack_weight_to_int8(quant_weight)
-        print_info(
-            f"Packing {weight_name}, packed weight dtype = {packed_weight.dtype}"
-        )
+        print_info(f"Packing {weight_name}, packed weight dtype = {packed_weight.dtype}")
         del bf16_weight
         return packed_weight
 
@@ -946,13 +890,9 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
         weight_map = model_index["weight_map"]
         return weight_map
 
-    def _get_tensor_from_safetensor(
-        self, input_path, weight_name, safetensor_file, loaded_files
-    ):
+    def _get_tensor_from_safetensor(self, input_path, weight_name, safetensor_file, loaded_files):
         if safetensor_file not in loaded_files:
-            current_state_dict = load_file(
-                os.path.join(input_path, safetensor_file), device="cpu"
-            )
+            current_state_dict = load_file(os.path.join(input_path, safetensor_file), device="cpu")
             loaded_files[safetensor_file] = current_state_dict
         weight = loaded_files[safetensor_file][weight_name]
         if len(loaded_files) > 4:
@@ -1028,9 +968,7 @@ class DeepSeekV3PTQSaveSingle(DeepSeekV3PTQSaveMulti):
                             is not supported for w4a8_fp8."
                     )
             else:
-                ignore_layers = self.quant_model.quant_config.quant_algo_info[
-                    "ignore_layers"
-                ]
+                ignore_layers = self.quant_model.quant_config.quant_algo_info["ignore_layers"]
                 if self.quant_model.deploy_backend == "vllm":
                     quant_dict = {
                         "quantization_config": {
@@ -1053,6 +991,457 @@ class DeepSeekV3PTQSaveSingle(DeepSeekV3PTQSaveMulti):
             self.quant_model.get_model().save_pretrained(save_path)
             self.add_mtp_weight(save_path=save_path)
         else:
-            raise ValueError(
-                f"{self.quant_model.quant_config.quant_algo} not supported"
+            raise ValueError(f"{self.quant_model.quant_config.quant_algo} not supported")
+
+
+class TPManager:
+    def __init__(self, world_size: int):
+        self.world_size = world_size
+
+    @torch.no_grad()
+    def gather(self, local: torch.Tensor, dim: int):
+        if self.world_size == 1:
+            return local.cpu()
+
+        if dim != 0:
+            local = local.transpose(0, dim).contiguous()
+
+        shape = list(local.shape)
+        shape[0] *= self.world_size
+
+        full = torch.empty(
+            shape,
+            dtype=local.dtype,
+            device=local.device,
+        )
+
+        dist.all_gather_into_tensor(full, local)
+
+        if dim != 0:
+            full = full.transpose(0, dim).contiguous()
+
+        return full.cpu()
+
+
+class MoEExpertGather:
+    """EP gather using gather_object (CPU only)."""
+
+    def __init__(self, rank, world_size):
+        self.rank = rank
+        self.world_size = world_size
+
+    def gather(
+        self,
+        key: str,
+        local_tensor: torch.Tensor,
+        on_rank0_callback,
+    ):
+        obj = {
+            "key": key,
+            "tensor": local_tensor.cpu(),
+        }
+        gathered = [None] * self.world_size if self.rank == 0 else None
+
+        dist.gather_object(
+            obj,
+            gathered,
+            dst=0,
+        )
+
+        if self.rank == 0:
+            for item in gathered:
+                on_rank0_callback(
+                    item["key"],
+                    item["tensor"],
+                )
+
+
+class DeepSeekKeyRouter:
+    def __init__(self):
+        self.dim0_keys = [
+            ".q_proj.",
+            ".q_b_proj.",
+            ".kv_b_proj.",
+            ".mlp.gate_proj",
+            ".mlp.up_proj",
+            ".mlp.shared_experts.gate_proj",
+            ".mlp.shared_experts.up_proj",
+        ]
+
+        self.dim1_keys = [
+            ".o_proj.",
+            ".mlp.down_proj",
+            ".mlp.shared_experts.down_proj",
+        ]
+
+    def layer_id(self, key: str):
+        if key.startswith("model.embed_tokens") or key.startswith("lm_head"):
+            return -1
+        if key.startswith("model.norm"):
+            return -2
+        m = re.search(r"model\.layers\.(\d+)\.", key)
+        return int(m.group(1)) if m else None
+
+    def is_moe_expert(self, key: str):
+        return "mlp.experts" in key
+
+    def tp_gather_dim(self, key: str):
+        if any(x in key for x in self.dim0_keys):
+            return 0
+        if any(x in key for x in self.dim1_keys):
+            return 1
+        return None
+
+
+class DeepSeekV3W4A8Int8Save(DeepSeekV3PTQSaveMulti):
+    """
+    DeepSeek R1 PTQ weight saver
+    - TP layers: all_gather -> quantize -> save
+    - EP (MoE experts): gather_object -> save
+    """
+
+    def __init__(self, quant_model, check_scales=False):
+        super().__init__(quant_model=quant_model)
+
+        self.rank = dist.get_rank() if dist.is_initialized() else 0
+        self.world_size = dist.get_world_size() if dist.is_initialized() else 1
+
+        self.router = DeepSeekKeyRouter()
+        self.quantizer = Int8PerChannelQuantizer()
+        self.tp_mgr = TPManager(self.world_size)
+
+    @torch.no_grad()
+    def save(self, save_path: str):
+        os.makedirs(save_path, exist_ok=True)
+        state = self.quant_model.model.state_dict()
+        moe_gather = MoEExpertGather(self.rank, self.world_size)
+
+        safetensors_index: Dict[str, str] = {}
+        shard_idx = 1
+        n_shards = 63
+
+        def shard_name(i):
+            return f"model-{i:05d}-of-{n_shards:05d}.safetensors"
+
+        shard_idx = self._save_embeddings_and_norm(
+            state, safetensors_index, save_path, shard_idx, shard_name
+        )
+        shard_idx = self._save_transformer_layers(
+            state, safetensors_index, save_path, shard_idx, shard_name, moe_gather
+        )
+
+        if self.rank == 0:
+            self._finalize(save_path, safetensors_index, shard_idx, shard_name)
+
+    def _save_embeddings_and_norm(
+        self,
+        state: Dict[str, torch.Tensor],
+        index: Dict[str, str],
+        save_path: str,
+        shard_idx: int,
+        shard_name,
+    ) -> int:
+        if self.rank == 0:
+            out = {}
+
+        device = torch.device(f"cuda:{self.rank}" if torch.cuda.is_available() else "cpu")
+
+        for k in list(state.keys()):
+            lid = self.router.layer_id(k)
+            if lid not in (-1, -2):
+                continue
+
+            if lid == -2:  # model.norm
+                if self.rank == 0:
+                    full = state[k]
+            else:  # embed / lm_head (TP)
+                v = state[k].to(device)
+                full = self.tp_mgr.gather(v, 0)
+
+            if self.rank == 0:
+                out[k] = full
+                index[k] = shard_name(shard_idx)
+
+            del state[k]
+
+        if self.rank == 0:
+            safe_save(out, os.path.join(save_path, shard_name(shard_idx)))
+            shard_idx += 1
+            del out
+            gc.collect()
+
+        if dist.is_initialized():
+            dist.barrier()
+
+        return shard_idx
+
+    def _save_transformer_layers(
+        self,
+        state: Dict[str, torch.Tensor],
+        index: Dict[str, str],
+        save_path: str,
+        shard_idx: int,
+        shard_name,
+        moe_gather: MoEExpertGather,
+    ) -> int:
+        device = torch.device(f"cuda:{self.rank}" if torch.cuda.is_available() else "cpu")
+
+        for lid in range(61):
+            layer_keys = [k for k in state if self.router.layer_id(k) == lid]
+
+            # ---------------- EP ----------------
+            expert_out = {} if self.rank == 0 else None
+
+            def on_moe(k, t):
+                expert_out[k] = t  # noqa: B023
+
+            for k in layer_keys:
+                if self.router.is_moe_expert(k):
+                    moe_gather.gather(k, state[k], on_moe)
+                    del state[k]
+
+            # ---------------- TP / local ----------------
+            layer_out = {} if self.rank == 0 else None
+
+            for k in layer_keys:
+                if self.router.is_moe_expert(k):
+                    continue
+
+                v = state[k]
+
+                # passthrough
+                if any(x in k for x in ("layernorm", "gate.weight", "e_score_correction_bias")):
+                    if self.rank == 0:
+                        layer_out[k] = v.cpu()
+                    del state[k]
+                    continue
+
+                assert k.endswith("weight"), f"Unexpected param: {k}"
+
+                dim = self.router.tp_gather_dim(k)
+                if dim is None:
+                    if self.rank == 0 and ("q_a_proj" in k or "kv_a_proj_with_mqa" in k):
+                        q, s = self.quantizer.quantize(v)
+                        layer_out[k] = q
+                        layer_out[k + "_scale"] = s
+                    del state[k]
+                    continue
+
+                v = v.to(device)
+                full = self.tp_mgr.gather(v, dim)
+                del v
+
+                if self.rank == 0:
+                    q, s = self.quantizer.quantize(full)
+                    layer_out[k] = q
+                    layer_out[k + "_scale"] = s
+
+                del state[k]
+                del full
+                torch.cuda.empty_cache()
+
+            if self.rank == 0:
+                if expert_out:
+                    layer_out.update(expert_out)
+
+                safe_save(layer_out, os.path.join(save_path, shard_name(shard_idx)))
+
+                for k in layer_out:
+                    index[k] = shard_name(shard_idx)
+
+                shard_idx += 1
+                del layer_out
+                gc.collect()
+                torch.cuda.empty_cache()
+
+            if dist.is_initialized():
+                dist.barrier()
+
+        return shard_idx
+
+    def _finalize(self, save_path, index, shard_idx, shard_name):
+        self._save_quantization_config(save_path)
+        self._copy_additional_files(self.quant_model.model.ori_model_path, save_path)
+
+        with open(os.path.join(save_path, "model.safetensors.index.json"), "w") as f:
+            json.dump({"metadata": {}, "weight_map": index}, f, indent=2)
+
+        self.save_mtp_int8_from_fp8(
+            self.quant_model.model.ori_model_path,
+            save_path,
+            shard_name(shard_idx),
+        )
+
+    def _save_quantization_config(self, save_path):
+        quantization_config = {
+            "quant_method": "compressed-tensors",
+            "format": "int-quantized",
+            "quantization_status": "compressed",
+            "kv_cache_scheme": None,
+            "ignore": ["lm_head"],
+            "config_groups": {
+                "group_0": {
+                    "targets": ["Linear"],
+                    "weights": {
+                        "num_bits": 4,
+                        "strategy": "channel",
+                        "symmetric": True,
+                        "type": "int",
+                    },
+                    "input_activations": {
+                        "num_bits": 8,
+                        "strategy": "token",
+                        "symmetric": True,
+                        "type": "int",
+                        "dynamic": True,
+                    },
+                },
+                "group_1": {
+                    "targets": [
+                        "re:.*(self_attn|shared_experts).*",
+                        "re:.*(mlp\\.gate_up_proj|mlp\\.down_proj).*",
+                        "re:model\\.layers\\.61.*",
+                    ],
+                    "weights": {
+                        "num_bits": 8,
+                        "strategy": "channel",
+                        "symmetric": True,
+                        "type": "int",
+                    },
+                    "input_activations": {
+                        "num_bits": 8,
+                        "strategy": "token",
+                        "symmetric": True,
+                        "type": "int",
+                        "dynamic": True,
+                    },
+                },
+            },
+        }
+
+        config = self.quant_model.model.config
+        if hasattr(config, "quantization_config"):
+            delattr(config, "quantization_config")
+
+        config.update({"quantization_config": quantization_config})
+        config.save_pretrained(save_path)
+
+    def _copy_additional_files(self, source_path: str, target_path: str):
+        """
+        Copy additional files with specific suffixes,
+        but NEVER override config.json generated by quantization.
+        """
+        import os
+        import shutil
+
+        os.makedirs(target_path, exist_ok=True)
+
+        VALID_SUFFIX = (".py", ".json")
+        SKIP_FILES = {"config.json"}
+
+        for fname in os.listdir(source_path):
+            if fname in SKIP_FILES:
+                continue
+            if not fname.endswith(VALID_SUFFIX):
+                continue
+
+            src = os.path.join(source_path, fname)
+            dst = os.path.join(target_path, fname)
+
+            if os.path.isfile(src):
+                shutil.copy2(src, dst)
+                print_info(f"Copied {fname}")
+
+    @torch.no_grad()
+    def save_mtp_int8_from_fp8(
+        self,
+        input_path: str,
+        save_path: str,
+        shard_name: str,
+    ):
+        """
+        Convert MTP (model.layers.61) fp8 weights into int8 per-channel
+        and save as a new safetensors shard.
+        """
+        weight_map = self._read_weight_map(input_path)
+
+        cache = {}
+        out_state = {}
+        new_weight_map = {}
+
+        def is_mtp(name: str) -> bool:
+            return name.startswith("model.layers.61.")
+
+        def is_scale_inv(name: str) -> bool:
+            return name.endswith("_scale_inv")
+
+        def is_quantizable_weight(name: str) -> bool:
+            """
+            Only real GEMM weights should be quantized.
+            """
+            if not name.endswith(".weight"):
+                return False
+
+            skip_keywords = [
+                "norm",
+                "embed_tokens",
+                "shared_head",
+                "e_score_correction_bias",
+                "eh_proj",
+                "mlp.gate",
+            ]
+            return not any(k in name for k in skip_keywords)
+
+        for weight_name, src_file in weight_map.items():
+            if not is_mtp(weight_name):
+                continue
+
+            if is_scale_inv(weight_name):
+                continue
+
+            tensor = self._get_tensor_from_safetensor(input_path, weight_name, src_file, cache)
+
+            if not is_quantizable_weight(weight_name):
+                out_state[weight_name] = tensor
+                new_weight_map[weight_name] = shard_name
+                continue
+
+            # ---------- fp8 weight ----------
+            scale_inv_name = weight_name + "_scale_inv"
+            assert scale_inv_name in weight_map, f"Missing {scale_inv_name}"
+
+            scale_inv = self._get_tensor_from_safetensor(
+                input_path,
+                scale_inv_name,
+                weight_map[scale_inv_name],
+                cache,
             )
+
+            # ---------- fp8 → bf16 (block dequant) ----------
+            w_bf16 = weight_dequant(tensor.cuda(), scale_inv.cuda()).cpu()
+
+            # ---------- bf16 → int8 per-channel ----------
+            q, scale = self.quantizer.quantize(w_bf16)
+
+            out_state[weight_name] = q
+            out_state[weight_name + "_scale"] = scale
+
+            new_weight_map[weight_name] = shard_name
+            new_weight_map[weight_name + "_scale"] = shard_name
+
+            del tensor, scale_inv, w_bf16, q, scale
+
+        # ---------- save safetensors ----------
+        safe_save(out_state, os.path.join(save_path, shard_name))
+
+        # ---------- update index ----------
+        index_file = os.path.join(save_path, "model.safetensors.index.json")
+        with open(index_file, "r") as f:
+            index = json.load(f)
+
+        index["weight_map"].update(new_weight_map)
+
+        with open(index_file, "w") as f:
+            json.dump(index, f, indent=2)
+
+        print(f"[Done] Saved MTP int8 shard: {shard_name}")

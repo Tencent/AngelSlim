@@ -1,14 +1,14 @@
 #!/bin/bash
 
-export CONFIG_DIR=angelslim/compressor/speculative/train/configs
-export TARGET_MODEL_NAME_OR_PATH=tencent/HunyuanOCR
-export DRAFT_MODEL_CONFIG_PATH=$CONFIG_DIR/hunyuan_ocr-eagle3.json
-export TRAIN_DATA_PATH=
-export EVAL_DATA_PATH=
-export OUTPUT_DIR=
-export EMBED_WEIGHT_KEY="model.embed_tokens.weight"
-export MODEL_MAX_LENGTH=8192
-export CHAT_TEMPLATE_TYPE=hunyuan_vl
+CONFIG_DIR=angelslim/compressor/speculative/train/configs
+TARGET_MODEL_NAME_OR_PATH=tencent/HunyuanOCR
+DRAFT_MODEL_CONFIG_PATH=$CONFIG_DIR/hunyuan_ocr-eagle3.json
+TRAIN_DATA_PATH=
+EVAL_DATA_PATH=
+OUTPUT_DIR=
+EMBED_WEIGHT_KEY="model.embed_tokens.weight"
+MODEL_MAX_LENGTH=8192
+CHAT_TEMPLATE_TYPE=hunyuan_vl
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 
 torchrun --nproc_per_node=8 tools/train_eagle3_online.py \

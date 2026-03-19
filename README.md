@@ -12,11 +12,17 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
 </h3>
 
 <p align="center">
-          📖 <a href="https://angelslim.readthedocs.io/">Documentation</a>&nbsp&nbsp | &nbsp&nbsp🤗 <a href="https://huggingface.co/AngelSlim">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="https://modelscope.cn/organization/AngelSlim">ModelScope</a>&nbsp&nbsp | &nbsp&nbsp💬 <a href="./docs/source/assets/angel_slim_wechat.png">WeChat</a> | &nbsp&nbsp🫨 <a href="https://discord.com/invite/dHVNeuNdFt">Discord</a>
+          ✒️ <a href="https://arxiv.org/abs/2602.21233">TechnicalReport</a>&nbsp&nbsp | &nbsp&nbsp 📖 <a href="https://angelslim.readthedocs.io/">Documentation</a>&nbsp&nbsp | &nbsp&nbsp🤗 <a href="https://huggingface.co/AngelSlim">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="https://modelscope.cn/organization/AngelSlim">ModelScope</a>
+<br>
+</p>
+
+<p align="center">
+          💬 <a href="./docs/source/assets/angel_slim_wechat.png">WeChat</a> | &nbsp&nbsp🫨 <a href="https://discord.com/invite/dHVNeuNdFt">Discord</a>
 <br>
 </p>
 
 ## 📣Latest News
+- [26/02/09] We have released HY-1.8B-2Bit, 2bit on-device large language model,[[Huggingface]](https://huggingface.co/AngelSlim/HY-1.8B-2Bit).
 - [26/01/13] We have released v0.3. We support the training and deployment of Eagle3 for all-scale LLMs/VLMs/Audio models, as detailed in the [guidance documentation](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html). And We released **Sherry**, the hardware-efficient 1.25 bit quantization algorithm [[Paper]](https://arxiv.org/abs/2601.07892) | [[Code]](https://github.com/Tencent/AngelSlim/tree/sherry/Sherry)🔥🔥🔥
 - [25/11/05] We have released v0.2. Quantization support for new models, such as `GLM-4.6`, `Qwen3-VL` and `Qwen3-Omni`, open-sources the Eagle3 speculative decoding training framework, and updates the Diffusion model quantization tools.
 - [25/09/30] We have released **SpecExit**, the reasoning early-exit algorithm: [[Paper]](http://arxiv.org/abs/2509.24248) | [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html) | [[vLLM Code]](https://github.com/vllm-project/vllm/pull/27192)
@@ -215,7 +221,9 @@ Alternatively, you can clone the repository and install from source in editable 
 cd AngelSlim && python setup.py install
 ```
 
-For more detailed installation instructions, please refer to the [Installation Documentation](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/installation.html).
+For more detailed installation instructions and platform-specific guidance, please refer to the [Installation Documentation](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/installation.html).
+
+
 
 ### 2. Quick Start
 
@@ -371,7 +379,7 @@ We evaluated the Eagle3 model trained by AngelSlim on tasks including code gener
 
 #### 1.1 Qwen3 Series Models
 
-Benchmark results for Qwen3 series models using Eagle3 speculative decoding on vLLM (v0.11.2) across **MT-bench**, **HumanEval**, **GSM8K** and **Alpaca**, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=2, batch_size=1, output_len=1024**).
+Benchmark results for Qwen3 series models using Eagle3 speculative decoding on vLLM (v0.11.2) across **MT-bench**, **HumanEval**, **GSM8K** and **Alpaca**, using a single GPU (**tp=1, ep=1, num_speculative_tokens=2, batch_size=1, output_len=1024**).
 
 <table>
   <thead>
@@ -511,7 +519,7 @@ Benchmark results for Qwen3 series models using Eagle3 speculative decoding on v
 
 ##### 1.2.1 Qwen3-VL Series Models
 
-Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding on vLLM (v0.12.0) across language and multimodal tasks, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
+Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding on vLLM (v0.12.0) across language and multimodal tasks, using a single GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
 
 <table><thead>
   <tr>
@@ -668,7 +676,7 @@ Benchmark results for Qwen3-VL series models using Eagle3 speculative decoding o
 
 ##### 1.2.2 HunyuanOCR Model
 
-Benchmark results for HunyuanOCR using Eagle3 speculative decoding on vLLM (v0.13.0) across **[OmniDocBench](https://huggingface.co/datasets/opendatalab/OmniDocBench)** dataset, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
+Benchmark results for HunyuanOCR using Eagle3 speculative decoding on vLLM (v0.13.0) across **[OmniDocBench](https://huggingface.co/datasets/opendatalab/OmniDocBench)** dataset, using a single GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
 
 <table><thead>
   <tr>
@@ -701,7 +709,7 @@ Benchmark results for HunyuanOCR using Eagle3 speculative decoding on vLLM (v0.1
 
 ##### 1.3.1 Qwen2-Audio Model
 
-Benchmark results for Qwen2-Audio using Eagle3 speculative decoding on vLLM (v0.12.0) across **[LibriSpeech](https://www.openslr.org/12)** dataset, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
+Benchmark results for Qwen2-Audio using Eagle3 speculative decoding on vLLM (v0.12.0) across **[LibriSpeech](https://www.openslr.org/12)** dataset, using a single GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
 
 <table><thead>
   <tr>
@@ -732,7 +740,7 @@ Benchmark results for Qwen2-Audio using Eagle3 speculative decoding on vLLM (v0.
 
 ##### 1.3.2 Fun-CosyVoice3 Model
 
-Benchmark results for Fun-CosyVoice3 using Eagle3 speculative decoding across **[LibriTTS](https://www.openslr.org/60/)** dataset, using a single NVIDIA H20 GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
+Benchmark results for Fun-CosyVoice3 using Eagle3 speculative decoding across **[LibriTTS](https://www.openslr.org/60/)** dataset, using a single GPU (**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**).
 
 <table><thead>
   <tr>
@@ -1023,15 +1031,16 @@ The code for this project is open-sourced under the [License for AngelSlim](LICE
 ## 🔗 Citation
 
 ```
-@software{AngelSlim2025,
-    title={{AngelSlim}},
-    author={Tencent AngelSlim Project Contributors},
-    year={2025},
-    month={6},
-    url={https://github.com/Tencent/AngelSlim},
+@article{angelslim2026,
+  title={AngelSlim: A more accessible, comprehensive, and efficient toolkit for large model compression},
+  author={Hunyuan AI Infra Team},
+  journal={arXiv preprint arXiv:2602.21233},
+  year={2026}
 }
 ```
 
 ## 💬 Technical Discussion
 
-* AngelSlim is continuously iterating and new features will be released soon. If you have any questions or suggestions, please open an issue on [GitHub Issues](https://github.com/Tencent/AngelSlim/issues) or join our [WeChat discussion group](./docs/source/assets/angel_slim_wechat.png).
+* AngelSlim is developed by the Tencent Hunyuan AI Infra team, with new features being iteratively updated. If you have any questions or suggestions, please submit them on [GitHub Issues](https://github.com/Tencent/AngelSlim/issues) or join our [WeChat discussion group](./docs/source/assets/angel_slim_wechat.png).
+
+* ⭐ Star this repo to follow our latest progress. And if you are interested in joining us for an internship or full-time position, send your resume to: lucayu@tencent.com.

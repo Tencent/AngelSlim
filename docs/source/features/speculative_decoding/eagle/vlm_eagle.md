@@ -4,7 +4,7 @@
 本项目包括Eagle3的训练以及benchmark测试，并开源了HunyuanOCR和Qwen3-VL系列的[Eagle3权重](https://huggingface.co/collections/AngelSlim/eagle3)。
 
 我们训练的HunyuanOCR和Qwen3-VL系列Eagle3模型的表现可以参见基准测试[benchmarks](../../../performance/speculative_decoding/benchmarks.md)，
-其中全部数据都是在单张H20上使用vLLM推理获得。
+其中全部数据都是在单张GPU上使用vLLM推理获得。
 ## 1. 支持模型列表
 - `HunyuanOCR`
 - `Qwen3-VL`
@@ -88,14 +88,18 @@ bash scripts/speculative/hunyuan_ocr/generate_vlm_hidden_for_draft_model.sh
 # For Qwen3-VL series
 bash scripts/speculative/qwen3_vl/generate_vlm_hidden_for_draft_model.sh
 ```
-> 注意：qwen3_vl系列模型生成hidden states需要更新transformers库: `pip install git+https://github.com/huggingface/transformers.git`
+
+> 注意：qwen3_vl系列模型生成hidden states需要更新transformers>=5.0.0,
+ 或者cherry-pick: https://github.com/huggingface/transformers/pull/42609,
+ 否则抓取的hidden states不可用！！！
 
 **脚本参数说明：**
 
 在使用前，需要在脚本中配置以下参数：
 
 - `DATASET_PATH`: 输入数据集的HF名称或本地路径
-- `MODEL_NAME`: 目标模型的HF名称或本地路径
+- `TARGET_MODEL_NAME_OR_PATH`: 目标模型的HF名称或本地路径
+- `DRAFT_MODEL_CONFIG_PATH`: 草稿模型的config路径
 - `TARGET_BACKEND`: 目标模型后端，目前仅支持HF
 - `MODEL_MAX_LENGTH`: 生成数据的上下文长度
 - `CHAT_TEMPLATE_TYPE`: 目标模型的目标类型，目前支持qwen3_vl/hunyuan_vl
@@ -148,7 +152,6 @@ bash scripts/speculative/qwen3_vl/train_eagle3_vlm_offline.sh
 
 - `TARGET_MODEL_NAME_OR_PATH`: 目标模型的HF名称或本地名称
 - `DRAFT_MODEL_CONFIG_PATH`: 草稿模型的config路径
-- `TRAIN_DATA_PATH`: 训练数据路径,.jsonl格式
 - `TRAIN_HIDDEN_PATH`: 训练hidden states数据路径
 - `EVAL_HIDDEN_PATH`: 验证hidden states数据路径
 - `OUTPUT_DIR`: Eagle3模型输出路径
@@ -164,7 +167,8 @@ AngelSlim提供了HunyuanOCR和Qwen3-VL系列模型vLLM backend的Eagle3基准�
 
 ### 4.1 vLLM基准测试
 
-> vLLM 适配参考: [Support Eagle3 for HunyuanOCR & Qwen3-VL](https://github.com/vllm-project/vllm/pull/32230)
+> vLLM 建议版本0.16.0以上，已支持Hunyuan/HunyuanVL/Qwen3-VL。
+> HunyuanOCR & Qwen3VLMoe & Qwen2Audio 适配需要cherry-pick这个PR: [feature: support eagle3 for HunyuanOCR & Qwen3VLMoe & Qwen2Audio](https://github.com/vllm-project/vllm/pull/32230)
 
 #### 4.1.1 基本用法
 
@@ -186,7 +190,7 @@ python3 tools/vllm_offline_eagle3_vlm_batch.py \
 - `--draft_model`: Eagle辅助模型路径（必需）
 
 **基准测试配置：**
-- `--dataset`: 基准数据集名称，默认为 `lmms-lab/textvqa`, 可选【`lmms-lab/textvqa`,`MMMU/MMMU`,`Lin-Chen/MMStar`,`opendatalab/OmniDocBench`,`Lin-Chen/MMStar`】
+- `--dataset`: 基准数据集名称，默认为 `lmms-lab/textvqa`, 可选【`lmms-lab/textvqa`,`MMMU/MMMU`,`Lin-Chen/MMStar`,`opendatalab/OmniDocBench`,`Lin-Chen/MMStar`】。也支持本地的数据集路径，格式见: 2.1 数据组织形式
 - `--use_eagle`: 运行Eagle3推理，默认为False
 - `--output_file`: 输出结果文件路径
 - `--num_prompts`: 测试用例数量，默认为100
@@ -222,11 +226,10 @@ python3 tools/vllm_offline_eagle3_vlm_batch.py \
     --output_file "$OUTPUT_FILE"
 ```
 
-**Baseline基准测试：**
+**Baseline基准测试（不使用投机采样）：**
 ```shell
 python3 tools/vllm_offline_eagle3_vlm_batch.py \
     --target_model Qwen/Qwen3-VL-2B-Instruct \
-    --num_spec_tokens 4 \
     --dataset "$task" \
     --num_prompts 80 \
     --temp 0 \

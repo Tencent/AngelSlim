@@ -13,7 +13,8 @@ dist/
 eval/
 *_ckpt*/
 output/
+outputs/
 outs/
 wandb/
 tools/results/
-__pycache__/
+__pycache__/outputs/

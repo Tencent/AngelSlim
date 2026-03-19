@@ -38,12 +38,8 @@ def parse_args() -> argparse.Namespace:
     )
 
     # Model configuration
-    parser.add_argument(
-        "--base-model-path", type=str, required=True, help="Path to base model"
-    )
-    parser.add_argument(
-        "--eagle-model-path", type=str, required=True, help="Path to Eagle model"
-    )
+    parser.add_argument("--base-model-path", type=str, required=True, help="Path to base model")
+    parser.add_argument("--eagle-model-path", type=str, required=True, help="Path to Eagle model")
     parser.add_argument("--model-id", type=str, required=True, help="Model identifier")
 
     # Deploy backend
@@ -69,24 +65,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", type=str, help="Output directory for results")
 
     # Generation parameters
-    parser.add_argument(
-        "--num-choices", type=int, default=1, help="Number of completion choices"
-    )
+    parser.add_argument("--num-choices", type=int, default=1, help="Number of completion choices")
     parser.add_argument(
         "--batch-size",
         type=int,
         default=200,
         help="Batch size in vLLM offline generation",
     )
-    parser.add_argument(
-        "--temperature", type=float, default=1.0, help="Sampling temperature"
-    )
+    parser.add_argument("--temperature", type=float, default=1.0, help="Sampling temperature")
     parser.add_argument(
         "--max-new-token", type=int, default=1024, help="Maximum new tokens to generate"
     )
-    parser.add_argument(
-        "--total-token", type=int, default=60, help="Total nodes in draft tree"
-    )
+    parser.add_argument("--total-token", type=int, default=60, help="Total nodes in draft tree")
     parser.add_argument("--depth", type=int, default=5, help="Tree depth")
     parser.add_argument("--top-k", type=int, default=10, help="Top-k sampling")
     parser.add_argument("--top-p", type=float, default=1.0, help="Top-p sampling")
@@ -95,9 +85,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--num-gpus-per-model", type=int, default=1, help="Number of GPUs per model"
     )
-    parser.add_argument(
-        "--num-gpus-total", type=int, default=1, help="Total number of GPUs"
-    )
+    parser.add_argument("--num-gpus-total", type=int, default=1, help="Total number of GPUs")
     parser.add_argument("--max-gpu-memory", type=str, help="Maximum GPU memory per GPU")
 
     # Question range (for debugging)
@@ -121,9 +109,7 @@ def parse_args() -> argparse.Namespace:
         default=1,
         help="Tensor parallel size for draft model (vllm only)",
     )
-    parser.add_argument(
-        "--is-tts", action="store_true", help="whether or not TTS model"
-    )
+    parser.add_argument("--is-tts", action="store_true", help="whether or not TTS model")
     parser.add_argument(
         "--generate-audio", action="store_true", help="whether or not generate audio"
     )

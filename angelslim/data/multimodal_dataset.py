@@ -37,10 +37,12 @@ class MultiModalDataset(BaseDataset):
         data_source: Union[str, Dict] = None,
         is_hf_dataset: bool = False,
         model_name: str = None,
+        quantization_config: str = None,
     ):
         super().__init__(processor, device, max_length)
         self.is_hf_dataset = is_hf_dataset
         self.model_name = model_name
+        self.quant_algo = quantization_config.name if quantization_config else None
 
         if is_hf_dataset:
             self._load_hf_dataset(data_source, num_samples)
@@ -81,9 +83,7 @@ class MultiModalDataset(BaseDataset):
                     [
                         {
                             "role": "system",
-                            "content": [
-                                {"type": "text", "text": data["system_prompt"]}
-                            ],
+                            "content": [{"type": "text", "text": data["system_prompt"]}],
                         }
                     ]
                 )
@@ -151,9 +151,7 @@ class MultiModalDataset(BaseDataset):
         """Load dataset from Hugging Face format"""
         dataset = load_dataset(dataset, split="test")
         total_samples = (
-            min(num_samples, len(dataset["query"]))
-            if num_samples > 0
-            else len(dataset["query"])
+            min(num_samples, len(dataset["query"])) if num_samples > 0 else len(dataset["query"])
         )
 
         for i in tqdm(range(total_samples), desc="Processing HF Dataset"):
@@ -174,14 +172,21 @@ class MultiModalDataset(BaseDataset):
 
     def _process_and_append(self, messages: List[Dict], tools=None):
         """Process messages and append to dataset"""
-        if self.model_name in ["Qwen3VL", "Qwen3VLMoE"]:
+
+        # max_length padding for int4 gptq, gptaq and awq
+        if "int4_" in self.quant_algo:
+            padding = "max_length"
+        else:
+            padding = True
+
+        if self.model_name in ["Qwen3VL", "Qwen3VLMoE", "Qwen3_5"]:
             inputs = self.processor.apply_chat_template(
                 messages,
                 tools=tools,
                 tokenize=True,
                 add_generation_prompt=True,
                 return_dict=True,
-                padding="max_length",
+                padding=padding,
                 truncation=True,
                 return_tensors="pt",
                 max_length=self.max_length,
@@ -196,7 +201,7 @@ class MultiModalDataset(BaseDataset):
             inputs = self.processor(
                 text=[text],
                 images=image_inputs,
-                padding="max_length",
+                padding=padding,
                 truncation=True,
                 return_tensors="pt",
                 max_length=self.max_length,
@@ -214,7 +219,7 @@ class MultiModalDataset(BaseDataset):
                 text=[text],
                 images=image_inputs,
                 videos=video_inputs,
-                padding="max_length",
+                padding=padding,
                 truncation=True,
                 return_tensors="pt",
                 max_length=self.max_length,
@@ -244,9 +249,7 @@ class MultiModalDataset(BaseDataset):
                             img = Image.open(item["image"])
                             image_paths.append(img)
                         except ValueError as e:
-                            raise ValueError(
-                                f"Could not open image file: {item['image']}, {e}"
-                            )
+                            raise ValueError(f"Could not open image file: {item['image']}, {e}")
                     elif isinstance(item["image"], Image.Image):
                         image_paths.append(item["image"])
                 elif item.get("type") == "video":

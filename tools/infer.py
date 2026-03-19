@@ -54,9 +54,7 @@ def infer(config, args):
     Evaluate the compression process.
     This function is a placeholder for future evaluation logic.
     """
-    assert (
-        config or args.model_path
-    ), "Please provide a model path or a configuration file."
+    assert config or args.model_path, "Please provide a model path or a configuration file."
     slim_engine = InferEngine()
 
     if config:
