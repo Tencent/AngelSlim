@@ -180,8 +180,8 @@ class MRotaryEmbedding(nn.Module):
     @torch.no_grad()
     def forward(self, x, position_ids, **kwargs) -> Tuple[torch.Tensor, torch.Tensor]:
         if position_ids.ndim == 2:
-            position_ids = position_ids.unsqueeze(1)
-            # position_ids = position_ids[None].expand(3, position_ids.shape[0], -1)
+            # expand (batch, seq_len) to (3, batch, seq_len), match MRoPE T/H/W layout
+            position_ids = position_ids[None].expand(3, position_ids.shape[0], -1)
 
         inv_freq_expanded = (
             self.inv_freq[None, None, :, None].float().expand(3, position_ids.shape[1], -1, 1)

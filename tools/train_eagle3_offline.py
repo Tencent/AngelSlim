@@ -26,6 +26,7 @@ from angelslim.compressor.speculative import (
     TargetHead,
     create_draft_model,
     get_supported_chat_template_type_strings,
+    infer_model_params,
 )
 from angelslim.utils import rank0_print
 
@@ -85,14 +86,24 @@ def parse_args():
     model_group.add_argument(
         "--lm_head_key",
         type=str,
-        default="lm_head.weight",
-        help="Key for lm head in model config",
+        default=None,
+        help=(
+            "Key for lm head in model config. you can find it in model.safetensors.index.json. "
+            "If not specified, will be auto deduced from target_model's model_type. "
+            "Examples: lm_head.weight (default LLM), model.embed_tokens.weight (HunyuanOCR), "
+            "model.language_model.embed_tokens.weight (Qwen3-VL)"
+        ),
     )
     model_group.add_argument(
         "--embed_weight_key",
         type=str,
-        default="model.embed_tokens.weight",
-        help="Key for embedding weights in model config",
+        default=None,
+        help=(
+            "Key for embedding weights in model config. "
+            "If not specified, will be auto deduced from target_model's model_type. "
+            "Examples: model.embed_tokens.weight (default LLM/HunyuanOCR), "
+            "model.language_model.embed_tokens.weight (Qwen3-VL)"
+        ),
     )
     model_group.add_argument(
         "--sub_config_name",
@@ -103,19 +114,6 @@ def parse_args():
 
     # Data arguments
     data_group = parser.add_argument_group("Data Arguments")
-    data_group.add_argument(
-        "--train_data_path",
-        type=str,
-        nargs="+",
-        required=True,
-        help="Path to training data file(s) (JSON format). Can specify multiple files.",
-    )
-    data_group.add_argument(
-        "--eval_data_path",
-        type=str,
-        default=None,
-        help="Path to evaluation data file",
-    )
     data_group.add_argument(
         "--train_hidden_path",
         type=str,
@@ -131,9 +129,10 @@ def parse_args():
     data_group.add_argument(
         "--chat_template_type",
         type=str,
-        default="qwen3",
+        default=None,
         help=(
-            f"Chat template type for conversation formatting. "
+            "Chat template type for conversation formatting. "
+            "If not specified, will be auto deduced from target_model's model_type. "
             f"Supported types: {', '.join(get_supported_chat_template_type_strings())}"
         ),
     )
@@ -276,6 +275,32 @@ def parse_args():
 def train():
     args = parse_args()
 
+    inferred_lm_head_key, inferred_embed_weight_key, inferred_chat_template_type = (
+        infer_model_params(args.target_model_name_or_path)
+    )
+    if args.lm_head_key is None:
+        if inferred_lm_head_key is None:
+            raise ValueError("lm_head_key not specified and cannot be auto deduced")
+        else:
+            args.lm_head_key = inferred_lm_head_key
+            rank0_print(f"lm_head_key not specified, auto deduced: {args.lm_head_key}")
+
+    if args.embed_weight_key is None:
+        if inferred_embed_weight_key is None:
+            raise ValueError("embed_weight_key not specified and cannot be auto deduced")
+        else:
+            args.embed_weight_key = inferred_embed_weight_key
+            rank0_print(f"embed_weight_key not specified, auto deduced: {args.embed_weight_key}")
+
+    if args.chat_template_type is None:
+        if inferred_chat_template_type is None:
+            raise ValueError("chat_template_type not specified and cannot be auto deduced")
+        else:
+            args.chat_template_type = inferred_chat_template_type
+            rank0_print(
+                f"chat_template_type not specified, auto deduced: {args.chat_template_type}"
+            )
+
     # Create draft model
     rank0_print("Loading draft model...")
     draft_model_config = DraftModelConfig.from_file(args.draft_model_config_path)
@@ -322,10 +347,8 @@ def train():
     (
         offline_train_dataset,
         offline_eval_dataset,
-        online_train_dataset,
-        online_eval_dataset,
         data_collator,
-    ) = dataset_manager.create_all_datasets()
+    ) = dataset_manager.create_offline_datasets()
 
     rank0_print(
         f"Offline train dataset size: {len(offline_train_dataset)}, "
@@ -333,19 +356,15 @@ def train():
         f"{len(offline_eval_dataset) if offline_eval_dataset else 0}"
     )
 
-    # Build vocabulary mapping for draft model using online training dataset
-    rank0_print("Building vocabulary mapping for draft model...")
-    if online_train_dataset is not None:
-        cache_path = os.path.join(args.output_dir, "vocab_mapping_cache.pt")
-        draft_model.build_vocab_mapping(
-            dataset=online_train_dataset,
-            cache_path=cache_path,
-        )
-        rank0_print("Vocabulary mapping built successfully")
+    # Build vocabulary mapping for draft model from pre-computed vocab mapping
+    rank0_print("Loading vocabulary mapping for draft model...")
+    vocab_mapping_path = os.path.join(args.train_hidden_path, "vocab_mapping.pt")
+    if os.path.exists(vocab_mapping_path):
+        rank0_print(f"Loading vocab mapping from {vocab_mapping_path}...")
+        draft_model.load_vocab_mapping(vocab_mapping_path=vocab_mapping_path)
+        rank0_print("Vocabulary mapping loaded successfully")
     else:
-        rank0_print(
-            "Warning: No online training dataset available, " "skipping vocab mapping build"
-        )
+        raise ValueError(f"vocab_mapping.pt not found at {vocab_mapping_path}")
 
     # Create a TrainingArguments object for the trainer
     # Organize training arguments by category
@@ -424,6 +443,12 @@ def train():
         rank0_print("Starting training...")
         trainer.train()
     rank0_print("Training completed!")
+
+    # Save final model to output_dir
+    rank0_print(f"Saving final model to {training_args.output_dir}...")
+    trainer.save_model()
+    trainer.save_state()
+    rank0_print("Final model saved successfully!")
 
 
 if __name__ == "__main__":

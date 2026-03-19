@@ -205,3 +205,16 @@ class Eagle3BaseDraftModel(PreTrainedModel, ABC):
 
         self.t2d.copy_(t2d)
         self.d2t.copy_(d2t)
+
+    def load_vocab_mapping(self, vocab_mapping_path):
+        """
+        Load pre-computed vocab mapping directly from disk.
+
+        Args:
+            vocab_mapping_path: Path to the vocab_mapping.pt file saved by generate_hidden
+        """
+        cache = torch.load(vocab_mapping_path)
+        d2t = cache["d2t"]
+        t2d = cache["t2d"]
+        self.t2d.copy_(t2d)
+        self.d2t.copy_(d2t)
