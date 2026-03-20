@@ -22,8 +22,7 @@ angelslim/compressor/qat/
 ├── qat.py                          # QAT 主入口类
 ├── modules/
 │   ├── __init__.py
-│   ├── dataset.py                  # 数据集封装（QATDataset / BlockTrainDataset）
-│   ├── quant.py                    # 量化核心：Quantizer + QuantLinear
+│   ├── quantizer.py                # 量化核心：Quantizer + QuantLinear
 │   └── scaler.py                   # AMP 梯度缩放器
 ├── plugins/
 │   ├── __init__.py
@@ -35,6 +34,9 @@ angelslim/compressor/qat/
     ├── blockwise_trainer.py        # 逐块训练器
     ├── end2end_trainer.py          # 端到端训练器
     └── trainer_factory.py          # 训练器工厂
+
+angelslim/data/
+└── qat_dataset.py                  # 数据集封装（QATDataset / BlockTrainDataset）
 ```
 
 ### 核心架构图
@@ -54,13 +56,13 @@ angelslim/compressor/qat/
                     │  _init_trainer → run → convert   │
                     └───┬───────────┬──────────┬───────┘
                         │           │          │
-         ┌──────────────▼──-┐  ┌────▼─────┐  ┌─▼──────────────┐
-         │  PluginManager   │  │ Trainer  │  │ modules/quant  │
-         │ ┌──────────────┐ │  │ Factory  │  │ ┌────────────┐ │
-         │ │ Learnable    │ │  │ ┌──────┐ │  │ │ Quantizer  │ │
-         │ │ ScalePlugin  │ │  │ │E2E   │ │  │ │ QuantLinear│ │
-         │ └──────────────┘ │  │ │Block │ │  │ └────────────┘ │
-         └──────────────────┘  │ └──────┘ │  └────────────────┘
+         ┌──────────────▼──-┐  ┌────▼─────┐  ┌─▼──────────────-┐
+         │  PluginManager   │  │ Trainer  │  │modules/quantizer│
+         │ ┌──────────────┐ │  │ Factory  │  │ ┌────────────┐  │
+         │ │ Learnable    │ │  │ ┌──────┐ │  │ │ Quantizer  │  │
+         │ │ ScalePlugin  │ │  │ │E2E   │ │  │ │ QuantLinear│  │
+         │ └──────────────┘ │  │ │Block │ │  │ └────────────┘  │
+         └──────────────────┘  │ └──────┘ │  └────────────────-┘
                                └──────────┘
 ```
 
@@ -78,7 +80,7 @@ angelslim/compressor/qat/
 
 ## 参数配置说明
 
-QAT 的配置文件遵循 AngelSlim 标准 YAML 格式，分为 `model`、`compression`、`dataset`、`training`、`global` 五个部分。以下详细说明 QAT 相关的配置参数。
+QAT 的配置文件遵循 AngelSlim 标准 YAML 格式，分为 `model`、`compression`、`dataset`、`global` 四个部分。其中 QAT 的训练相关配置嵌套在 `compression.QAT` 下。以下详细说明 QAT 相关的配置参数。
 
 ### model — 模型配置
 
@@ -97,7 +99,7 @@ model:
 
 ```yaml
 compression:
-  name: ["QAT"]                     # 压缩方法，QAT 固定填写 "QAT"
+  name: QAT                         # 压缩方法，QAT 固定填写 "QAT"
   quantization:
     name: "w4a8_fp8"                # 量化算法名称
     bits: 8                         # 量化位宽
@@ -105,7 +107,6 @@ compression:
       weight: "per-group"           # 权重量化粒度
       activation: "per-tensor"      # 激活量化粒度
       group_size: 128               # 分组量化的组大小（per-group 时需要）
-    low_memory: false               # 是否使用低内存模式
     ignore_layers:                  # 忽略量化的层列表
       - "lm_head"
       - "embed_tokens"
@@ -140,23 +141,22 @@ dataset:
   batch_size: 1                     # 批量大小
 ```
 
-### training — 训练配置
+### QAT 训练配置
 
-这是 QAT 的核心配置部分：
+这是 QAT 的核心配置部分，统一嵌套在 `compression.QAT` 下：
 
 ```yaml
-training:
+# 以下配置统一位于 compression.QAT 下
   # ========== 基础配置 ==========
   training_mode: "end2end"          # 训练模式："end2end" 或 "blockwise"
   dist_mode: "hf"                   # 分布式模式："hf"（HuggingFace Trainer）
-  max_length: 2048                  # 训练序列最大长度
   do_train: true                    # 是否执行训练
-  save_format: "real"               # 保存格式："fake" / "real" / 不设置或者设置为''则跳过保存
-  resume_ckpt_dir: ""               # checkpoint 恢复路径，加载的 save_format 为 fake 的权重
+  save_format: "real"               # 保存格式："fake" / "real" / 不设置表示跳过保存
+  resume_ckpt_dir: ""               # checkpoint 恢复路径，用于加载 save_format 为 fake 的权重。不设置表示不使用 resume
 
   # ========== 数据集配置 ==========
-  hf_dataset: "Salesforce/wikitext,wikitext-2-raw-v1"  # HuggingFace 数据集（可选）
-  cache_dir: /path/to/cache         # 数据集缓存目录
+  hf_dataset: "Salesforce/wikitext,wikitext-2-raw-v1"  # HuggingFace 数据集（可选，逗号分隔路径和子集名）
+  hf_cache_dir: /path/to/cache      # HuggingFace 数据集缓存目录
 
   # ========== 插件配置 ==========
   plugin_config:
@@ -165,59 +165,88 @@ training:
     quant_config:
       use_weight_quant: true        # 是否量化权重
       use_activation_quant: true    # 是否量化激活
-      lazy_init_samples: 20         # activation 校准所需的样本数
-      # 可选：覆盖默认量化配置
-      # weight:
-      #   qtype: int4               # 权重量化类型
-      #   granularity: per-group    # 权重量化粒度
-      #   group_size: 128           # 分组大小
-      #   is_sym: true              # 是否对称量化
-      # activation:
-      #   qtype: fp8                # 激活量化类型
-      #   granularity: per-tensor   # 激活量化粒度
-      #   is_sym: true              # 是否对称量化
-      #   dynamic: false            # 是否动态量化
+      lazy_init_samples: 60         # activation 校准所需的样本数（默认 10）
+      # 可选：覆盖 compression.quantization 中的默认量化配置
+      weight:
+        qtype: int8                 # 权重量化类型（如 int4, int8, fp8）
+        granularity: per-tensor     # 权重量化粒度
+        group_size: 128             # 分组大小（per-group 时需要）
+        is_sym: true                # 是否对称量化
+      activation:
+        qtype: int8                 # 激活量化类型（如 int8, fp8）
+        granularity: per-tensor     # 激活量化粒度
+        is_sym: true                # 是否对称量化
+        dynamic: false              # 是否动态量化
 
 ```
 
 #### End-to-End 训练专属配置
 
-端到端训练使用 HuggingFace `Seq2SeqTrainer`，需要额外配置 `hf_args`，详情可参考 [TrainingArguments](https://huggingface.co/docs/transformers/v5.1.0/en/main_classes/trainer#transformers.Seq2SeqTrainingArguments)：
+端到端训练使用 HuggingFace `Seq2SeqTrainer`，QAT 相关配置嵌套在 `compression.QAT` 下，需要额外配置 `hf_args`，详情可参考 [TrainingArguments](https://huggingface.co/docs/transformers/v5.1.0/en/main_classes/trainer#transformers.Seq2SeqTrainingArguments)：
 
 ```yaml
-training:
-  training_mode: "end2end"
-  hf_args:
-    output_dir: /path/to/output     # 训练输出目录
-    logging_steps: 1                # 日志打印步数
-    logging_first_step: true        # 是否打印第一步日志
-    per_device_train_batch_size: 2  # 每设备训练批量
-    gradient_accumulation_steps: 16 # 梯度累积步数
-    learning_rate: 1e-4             # 学习率（仅应用于 scale/zero_point 参数）
-    weight_decay: 0.0               # 权重衰减
-    lr_scheduler_type: constant     # 学习率调度器类型
-    num_train_epochs: 1             # 训练轮数
-    torch_compile: true             # 是否使用 torch.compile 加速
-    save_strategy: "no"             # 保存策略
-    report_to: "none"               # 日志报告目标（none / wandb）
-    # fsdp: shard_grad_op           # 可选：FSDP 分布式策略
+compression:
+  name: QAT
+  quantization:
+    # ...量化配置...
+  QAT:
+    training_mode: "end2end"
+    hf_dataset: Salesforce/wikitext,wikitext-2-raw-v1
+    hf_cache_dir: /path/to/cache
+    dist_mode: hf
+    save_format: fake
+    do_train: true
+    resume_ckpt_dir: ''
+    plugin_config:
+      enable_scale: true
+      quant_config:
+        use_weight_quant: true
+        use_activation_quant: true
+        lazy_init_samples: 60
+    hf_args:
+      output_dir: /path/to/output     # 训练输出目录
+      logging_steps: 1                # 日志打印步数
+      logging_first_step: true        # 是否打印第一步日志
+      per_device_train_batch_size: 2  # 每设备训练批量
+      gradient_accumulation_steps: 16 # 梯度累积步数
+      learning_rate: 1e-3             # 学习率（仅应用于 scale/zero_point 参数）
+      lr_scheduler_type: constant     # 学习率调度器类型
+      num_train_epochs: 1             # 训练轮数
 ```
 
 #### Blockwise 训练专属配置
 
-逐块训练将模型按 Transformer Block 逐层训练，显存占用更低：
+逐块训练将模型按 Transformer Block 逐层训练，显存占用更低。逐块模式下 QAT 配置同样位于 `compression.QAT` 下：
 
 ```yaml
-training:
-  training_mode: "blockwise"
-  block_wise_config:
-    epochs: 20                      # 每个 block 的训练轮数
-    batch_size: 2                   # 批量大小
-    train_size: 4096                # 训练样本数量
-    quant_lr: 1e-4                  # scale/zero_point 参数学习率
-    weight_lr: 1e-3                 # 权重参数学习率（0 则冻结权重）
-    min_lr_factor: 20               # CosineAnnealing 最小学习率因子（lr / factor）
-    wd: 0.0                         # 权重衰减
+compression:
+  name: QAT
+  quantization:
+    # ...量化配置...
+  QAT:
+    training_mode: "blockwise"
+    hf_dataset: Salesforce/wikitext,wikitext-2-raw-v1
+    hf_cache_dir: /path/to/cache
+    dist_mode: hf
+    save_format: fake
+    do_train: true
+    resume_ckpt_dir: ''
+    block_wise_config:
+      epochs: 10                      # 每个 block 的训练轮数（默认 20）
+      batch_size: 2                   # 批量大小（默认 1）
+      train_size: 4096                # 训练样本数量（默认 128）
+      val_size: 64                    # 验证样本数量（默认 64）
+      training_seqlen: 2048           # 训练序列长度（默认 2048）
+      quant_lr: 1e-4                  # scale/zero_point 参数学习率
+      weight_lr: 1e-4                 # 权重参数学习率（0 则冻结权重，默认 1e-3）
+      min_lr_factor: 20               # CosineAnnealing 最小学习率因子（lr / factor）
+      wd: 0                           # 权重衰减
+    plugin_config:
+      enable_scale: true
+      quant_config:
+        use_weight_quant: true
+        use_activation_quant: true
+        lazy_init_samples: 60
 ```
 
 ### global — 全局配置
@@ -234,7 +263,7 @@ global:
 
 ### Quantizer — 量化器
 
-`Quantizer` 位于 `modules/quant.py`，负责执行伪量化（Fake Quantization）操作。
+`Quantizer` 位于 `modules/quantizer.py`，负责执行伪量化（Fake Quantization）操作。
 
 **关键特性**：
 
@@ -253,10 +282,13 @@ x → x / scale → round_ste → clamp(qmin, qmax) → × scale → x_quant
 `QuantLinear` 是 `nn.Linear` 的量化替换层，在前向传播中分别对权重和激活执行伪量化：
 
 ```python
-def forward(self, input):
-    weight = self.weight_quantizer(self.weight) if self.use_weight_quant else self.weight # 权重伪量化
+def forward(self, input: torch.Tensor):
+    if input.shape[0] == 0:
+        return self.fwd_func(input, self.weight, self.bias)
+
+    weight = self.weight_quantizer(self.weight) if self.use_weight_quant else self.weight  # 权重伪量化
     if self.use_act_quant:
-        input = self.act_quantizer(input) # 激活伪量化
+        input = self.act_quantizer(input)  # 激活伪量化
     return self.fwd_func(input, weight, self.bias)
 ```
 
@@ -276,35 +308,38 @@ def forward(self, input):
 
 | `training_mode` | 训练器类 | 描述 |
 |-----------------|---------|------|
-| `end2end` | `End2EndTrainer` | 到端训练，使用 HuggingFace Trainer |
-| `blockwise` | `BlockwiseTrainer` | 逐 Transformer Block 训练 |
+| `end2end` | `End2EndTrainer` | 端到端训练，使用 HuggingFace Trainer |
+| `blockwise` | `BlockwiseTrainer` | 逐 Transformer Block 训练，继承自 `End2EndTrainer` |
 
 ### End-to-End 训练器
 
 - 使用 HuggingFace `Seq2SeqTrainer` 进行训练
-- 优化器仅针对 `scale` 和 `zero_point` 参数
-- 支持 HuggingFace 生态的各种训练参数（学习率调度、梯度累积、FSDP 等）
+- 使用 `AdamW` 优化器，仅针对 `scale` 和 `zero_point` 参数（默认学习率 1e-5）
+- 支持 HuggingFace 生态的各种训练参数（学习率调度、梯度累积等）
+- 完整执行流程：`prepare_dataset` → `prepare_trainer` → `call_before_train` → 可选 `resume` → `train` → `call_after_train`
 
 ### Blockwise 训练器
 
-逐块训练器的工作原理：
+`BlockwiseTrainer` 继承自 `End2EndTrainer`，其工作原理：
 
-1. **捕获输入**：使用 `_Catcher` 截获第一个 Transformer Block 的输入激活
-2. **逐层训练**：对每个 Block 依次执行：
-   - 用 FP（全精度）模型获取该层的原始输出
+1. **数据集准备**：创建 `BlockTrainDataset` 存储每层的输入激活（`fp_train_inps` 和 `quant_train_inps`）
+2. **捕获输入**：使用 `_Catcher` 截获第一个 Transformer Block 的输入激活及 `layer_kwargs`（如 position embeddings）
+3. **逐层训练**：对每个 Block 依次执行：
+   - 先用 FP（全精度）前向得到该层的原始输出，更新 `fp_train_inps`
    - 开启量化状态，用 MSE Loss 对齐量化层输出与 FP 层输出
-   - 支持量化参数（`quant_lr`）和权重参数（`weight_lr`）的分离学习率
-   - 使用 CosineAnnealingLR 调度器
-3. **量化固化**：训练完成后对权重执行就地量化（`quant_inplace`）
-4. **传播更新**：将量化后的输出作为下一层的输入
+   - 使用 `AdamW` 优化器，支持量化参数（`quant_lr`）和权重参数（`weight_lr`）的分离学习率
+   - 使用 `CosineAnnealingLR` 调度器，最小学习率为 `lr / min_lr_factor`
+   - 使用 `NativeScalerWithGradNormCount` 进行混合精度梯度缩放
+4. **量化固化**：每个 Block 训练完成后转为半精度并执行就地量化（`quant_inplace`）
+5. **传播更新**：将量化后的输出更新到 `quant_train_inps`，作为下一层的输入
 
-**优势**：显存占用远低于端到端训练，单卡即可训练大模型。
+
 
 ---
 
 ## 评测功能
 
-AngelSLim 内置了模型评测器，支持以下评测任务：
+AngelSlim 内置了模型评测器，支持以下评测任务：
 
 | 评测指标 | 数据集 |
 |--------|------|
@@ -316,7 +351,7 @@ AngelSLim 内置了模型评测器，支持以下评测任务：
 运行示例：
 
 ```python
-python3 tools/run.py -c configs/qat_end2end.yaml --lm-eval --ppl-eval
+python3 tools/run.py -c configs/qat/qat_end2end.yaml --lm-eval --ppl-eval
 ```
 
 ---
@@ -352,9 +387,10 @@ class MyPlugin(BasePlugin):
 然后在配置中启用：
 
 ```yaml
-training:
-  plugin_config:
-    enable_my_custom_plugin: true
+compression:
+  QAT:
+    plugin_config:
+      enable_my_custom_plugin: true
 ```
 
 ### 扩展新训练器

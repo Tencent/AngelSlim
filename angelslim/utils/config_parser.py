@@ -247,6 +247,24 @@ class CacheConfig:
 
 
 @dataclass
+class QATTrainingConfig:
+    """
+    QAT (Quantization-Aware Training) configuration.
+    """
+
+    training_mode: str = field(default="end2end")
+    dist_mode: str = field(default="hf")
+    block_wise_config: Dict[str, Any] = field(default_factory=dict)
+    save_format: Optional[str] = None
+    plugin_config: Dict[str, Any] = field(default_factory=dict)
+    hf_cache_dir: Optional[str] = None
+    hf_dataset: Optional[str] = None
+    do_train: bool = field(default=True)
+    resume_ckpt_dir: Optional[str] = None
+    hf_args: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class CompressionConfig:
     """
     Compression configurations container for LLM.
@@ -261,6 +279,7 @@ class CompressionConfig:
     quantization: Optional[QuantizationConfig] = None
     cache: Optional[CacheConfig] = None
     calibrate: Optional["CalibrateConfig"] = None
+    QAT: Optional[QATTrainingConfig] = None
     # speculative_decoding: Optional[SpeculativeDecodingConfig] = None
 
     @property
@@ -370,32 +389,6 @@ class InferenceConfig:
 
 
 @dataclass
-class PluginConfig:
-    enable_rotation: bool = field(default=False)
-    enable_scale: bool = field(default=False)
-    quant_config: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class TrainingConfig:
-    """
-    QAT (Quantization-Aware Training) configuration.
-    """
-
-    training_mode: str = field(default="end2end")
-    dist_mode: str = field(default="hf")
-    block_wise_config: Dict[str, Any] = field(default_factory=dict)
-    save_format: str = field(default="")
-    plugin_config: PluginConfig = field(default_factory=PluginConfig)
-    cache_dir: str = field(default="")
-    hf_dataset: str = field(default="")
-    max_length: int = field(default=2048)
-    do_train: bool = field(default=True)
-    resume_ckpt_dir: str = field(default="")
-    hf_args: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
 class FullConfig:
     """
     Top-level configuration container for LLM compression.
@@ -406,7 +399,6 @@ class FullConfig:
     dataset_config: Dataset configuration parameters
     global_config: Global configuration parameters
     infer_config: Inference configuration parameters
-    training_config: Training configuration parameters (for QAT)
     transform_config: Transform configuration parameters (e.g. SpinQuant)
     """
 
@@ -416,7 +408,6 @@ class FullConfig:
     global_config: Optional[GlobalConfig] = field(default=None)
     infer_config: Optional[InferenceConfig] = field(default=None)
     transform_config: Optional[TransformConfig] = field(default=None)
-    training_config: Optional[TrainingConfig] = field(default=None)
 
 
 class SlimConfigParser:
@@ -545,6 +536,11 @@ class SlimConfigParser:
         if calibrate_dict:
             compression_conf.calibrate = CalibrateConfig(**calibrate_dict)
 
+        # QAT configuration (nested under compression)
+        qat_dict = compression_dict.get("QAT", None)
+        if qat_dict:
+            compression_conf.QAT = QATTrainingConfig(**qat_dict)
+
         # Transform configuration (e.g. SpinQuant)
         transform_conf = None
         if "transform" in config_dict:
@@ -554,12 +550,6 @@ class SlimConfigParser:
             if spin_dict is not None:
                 transform_conf.spin_config = SpinConfig(**spin_dict)
 
-        # Training configuration (for QAT)
-        training_conf = None
-        if "training" in config_dict:
-            training_dict = config_dict["training"]
-            training_conf = TrainingConfig(**training_dict)
-
         return FullConfig(
             model_config=model_conf,
             compression_config=compression_conf,
@@ -567,7 +557,6 @@ class SlimConfigParser:
             global_config=global_config,
             infer_config=inference_conf,
             transform_config=transform_conf,
-            training_config=training_conf,
         )
 
     def _get_global_config(self, config_dict, model_conf, dataset_conf=None) -> GlobalConfig:
@@ -667,8 +656,7 @@ def parse_json_full_config(json_file_path: str) -> FullConfig:
     comp_config = parse_json_compression_config_section(config_data["compression_config"])
 
     # Parse other configuration sections with default fallbacks
-    dataset_config, global_config, infer_config, training_config = (
-        None,
+    dataset_config, global_config, infer_config = (
         None,
         None,
         None,
@@ -679,8 +667,6 @@ def parse_json_full_config(json_file_path: str) -> FullConfig:
         global_config = GlobalConfig(**config_data["global_config"])
     if config_data.get("infer_config", {}):
         infer_config = InferenceConfig(**config_data["infer_config"])
-    if config_data.get("training_config", {}):
-        training_config = TrainingConfig(**config_data["training_config"])
 
     # Parse calibration configuration section (nested under compression)
     comp_data = config_data.get("compression_config", {})
@@ -724,7 +710,6 @@ def parse_json_full_config(json_file_path: str) -> FullConfig:
         global_config=global_config,
         infer_config=infer_config,
         transform_config=transform_config,
-        training_config=training_config,
     )
 
 
@@ -746,7 +731,6 @@ def print_config(config, indent=0):
         and hasattr(config, "dataset_config")
         and hasattr(config, "global_config")
         and hasattr(config, "infer_config")
-        and hasattr(config, "training_config")
     ):
         print(f"{prefix}model:")
         print_config(config.model_config, next_indent)
@@ -777,13 +761,6 @@ def print_config(config, indent=0):
             print_config(config.transform_config, next_indent)
         else:
             print(f"{prefix}None")
-
-        print(f"{prefix}Training:")
-        if config.training_config:
-            print_config(config.training_config, next_indent)
-        else:
-            print(f"{prefix}None")
-        return
 
     # Handle dataclass instances
     if hasattr(config, "__dataclass_fields__"):

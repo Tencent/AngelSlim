@@ -12,15 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import re
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from ....utils import print_info
-from ...quant.core import tensor_quant_dequant_fp8
 
 FP8_E4M3_QMIN = -448
 FP8_E4M3_QMAX = 448
@@ -47,25 +43,21 @@ def _parse_bits_and_dtype(qtype_str):
 
 
 class Quantizer(nn.Module):
-    def __init__(self, config, quant_info, x=None, is_act=False):
+    def __init__(self, config, quant_info, x=None, is_act=False, resume=False):
         super().__init__()
         self.is_act = is_act
         info = quant_info.quant_algo_info["w"]
         self.group_size = quant_info.quant_algo_info.get("w_group_size", -1)
-        quant_config = config["training_config"].plugin_config["quant_config"]
-        rewrite_conf = quant_config.get("weight", {})
+        rewrite_conf = config.get("weight", {})
 
         self.is_w4a8_fp8 = (
             not self.is_act and not rewrite_conf and "w4a8_fp8" in quant_info.quant_algo
         )
 
         if self.is_act:
-            self.lazy_init_samples = quant_config.get("lazy_init_samples", 10)
             info = quant_info.quant_algo_info["a"]
-            rewrite_conf = quant_config.get("activation", {})
-            self.resume = os.path.isdir(config["training_config"].resume_ckpt_dir)
-
-        self.do_train = config["training_config"].do_train
+            rewrite_conf = config.get("activation", {})
+            self.resume = resume
 
         self._apply_settings(info, rewrite_conf)
         self._set_quant_range()
@@ -224,24 +216,16 @@ class Quantizer(nn.Module):
             self.overall_scale = []
             self.overall_zero_point = []
 
+        if len(x.shape) == 2:  # for MoE
+            x = x.unsqueeze(0)
+
         if self.is_sym:
             self.overall_scale.append(self._compute_scales(x, self.granularity, self.group_size))
         else:
             scale, zp = self._compute_scales_and_zero_points(x, self.granularity, self.group_size)
             self.overall_scale.append(scale)
             self.overall_zero_point.append(zp)
-
         self.calib_count += x.shape[0]
-        if self.calib_count < self.lazy_init_samples:
-            return
-
-        max_scale = max(self.overall_scale)
-        max_idx = self.overall_scale.index(max_scale)
-        zp = self.overall_zero_point[max_idx] if not self.is_sym else None
-        self._set_quant_parameters(max_scale, zp)
-
-        print_info(f"Lazy init done, scale: {self.scale.item()}, samples: {self.calib_count}")
-        del self.overall_scale, self.overall_zero_point, self.calib_count
 
     def _expand_scale_zp(self, scale, zero_point, x):
         def _expand(t, target_shape):
@@ -292,10 +276,12 @@ class Quantizer(nn.Module):
             x_int4 = round_ste(x / scale)
             x_int4 = clamp_ste(x_int4, self.qmin, self.qmax).mul(scale)
             fp8_scale = scale.max() * self.qmax / FP8_E4M3_QMAX
-            return tensor_quant_dequant_fp8(x_int4, fp8_scale)
+            weight_fp8 = (x_int4 / fp8_scale).clamp(-448, 448).to(torch.float8_e4m3fn)
+            return weight_fp8.to(torch.bfloat16) * fp8_scale
 
         if self.dtype == "fp8":
-            return tensor_quant_dequant_fp8(x, scale)
+            weight_fp8 = (x / scale).clamp(-448, 448).to(torch.float8_e4m3fn)
+            return weight_fp8.to(torch.bfloat16) * scale
 
         x_int = round_ste(x / scale)
         if round_zero_point is not None:
@@ -325,7 +311,9 @@ class Quantizer(nn.Module):
 
 
 class QuantLinear(nn.Module):
-    def __init__(self, org_module, config, quant_info, use_weight_quant, use_act_quant):
+    def __init__(
+        self, org_module, config, quant_info, use_weight_quant, use_act_quant, resume=False
+    ):
         super().__init__()
         self.fwd_func = F.linear
         self.register_parameter("weight", org_module.weight)
@@ -337,9 +325,12 @@ class QuantLinear(nn.Module):
         if self.use_weight_quant:
             self.weight_quantizer = Quantizer(config, quant_info, x=org_module.weight)
         if self.use_act_quant:
-            self.act_quantizer = Quantizer(config, quant_info, is_act=True)
+            self.act_quantizer = Quantizer(config, quant_info, is_act=True, resume=resume)
 
     def forward(self, input: torch.Tensor):
+        if input.shape[0] == 0:
+            return self.fwd_func(input, self.weight, self.bias)
+
         weight = self.weight_quantizer(self.weight) if self.use_weight_quant else self.weight
         if self.use_act_quant:
             input = self.act_quantizer(input)

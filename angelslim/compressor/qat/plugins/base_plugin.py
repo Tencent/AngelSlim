@@ -14,7 +14,7 @@
 
 
 class BasePlugin:
-    def __init__(self, config, quant_model):
+    def __init__(self, config=None, quant_model=None):
         self.config = config
         self.quant_model = quant_model
 

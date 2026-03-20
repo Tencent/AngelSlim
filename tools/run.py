@@ -220,7 +220,6 @@ def run(config):
     dataset_config = config.dataset_config
     compress_config = config.compression_config
     global_config = config.global_config
-    training_config = config.training_config
     transform_config = config.transform_config
 
     # Dispatch to vLLM calibration if calibrate config specifies vllm backend
@@ -271,7 +270,6 @@ def run(config):
         compress_config=compress_config,
         global_config=global_config,
         transform_config=transform_config,
-        training_config=training_config,
     )
 
     # Step 6: Compress model
@@ -281,8 +279,8 @@ def run(config):
     if args.ppl_eval:
         slim_engine.ppl_eval(
             tasks="wikitext2,c4",
-            seqlen=training_config.max_length,
-            cache_dir=training_config.cache_dir,
+            seqlen=dataset_config.max_seq_length,
+            cache_dir=compress_config.QAT.hf_cache_dir,
         )
 
     if args.lm_eval:

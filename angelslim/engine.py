@@ -189,7 +189,6 @@ class Engine:
         global_config=None,
         compress_config=None,
         transform_config=None,
-        training_config=None,
         default_method=None,
     ) -> Any:
         """
@@ -224,7 +223,6 @@ class Engine:
                 "global_config": global_config,
                 "compress_config": compress_config,
                 "transform_config": transform_config,
-                "training_config": training_config,
             }
         self.compress_type = compress_names
         self.only_inference = compress_config.only_inference if compress_config else False
@@ -300,7 +298,9 @@ class Engine:
         task_names = tasks.split(",")
 
         for dataset in task_names:
-            testloader = get_loaders(self.slim_model.tokenizer, dataset, seqlen, cache_dir)
+            testloader = get_loaders(
+                self.slim_model.tokenizer, dataset, seqlen=seqlen, cache_dir=cache_dir
+            )
             testenc = testloader if "c4" in dataset else testloader.input_ids
             nsamples = testenc.numel() // seqlen
             use_cache = model.config.use_cache
@@ -383,6 +383,7 @@ class Engine:
         model = self.slim_model.model
         tokenizer = self.slim_model.tokenizer
         tokenizer.pad_token = tokenizer.eos_token
+        model.eval()
 
         lm_eval_model = HFLM(model, tokenizer=tokenizer, batch_size=batch_size)
 

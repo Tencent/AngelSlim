@@ -20,14 +20,14 @@ import torch
 import torch.nn as nn
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
+from ....data.qat_dataset import BlockTrainDataset
 from ....utils import print_info
-from ..modules.dataset import BlockTrainDataset
-from ..modules.quant import QuantLinear
 from ..modules.scaler import NativeScalerWithGradNormCount
 from ..plugins.learnable_scale import (
     quant_inplace,
     quant_parameters,
     set_quant_parameters,
+    set_quant_state,
     set_weight_parameters,
     trainable_parameters,
     weight_parameters,
@@ -61,11 +61,12 @@ class _Catcher(nn.Module):
 class BlockwiseTrainer(End2EndTrainer):
     def __init__(self, quant_model, config, plugin_manager):
         super().__init__(quant_model, config, plugin_manager)
-        self.use_act_quant = self.tc.plugin_config["quant_config"].get(
-            "use_activation_quant", True
+        self.use_act_quant = (
+            self.config["compress_config"]
+            .QAT.plugin_config.get("quant_config", {})
+            .get("use_act_quant", False)
         )
-
-        bc = self.tc.block_wise_config
+        bc = self.config["compress_config"].QAT.block_wise_config
         self.args = type(
             "Args",
             (),
@@ -74,18 +75,13 @@ class BlockwiseTrainer(End2EndTrainer):
                 "batch_size": bc.get("batch_size", 1),
                 "train_size": bc.get("train_size", 128),
                 "val_size": bc.get("val_size", 64),
-                "training_seqlen": self.tc.max_length,
+                "training_seqlen": bc.get("training_seqlen", 2048),
                 "quant_lr": bc.get("quant_lr", 1e-4),
                 "weight_lr": bc.get("weight_lr", 1e-3),
                 "min_lr_factor": bc.get("min_lr_factor", 20),
                 "weight_decay": bc.get("wd", 0.0),
             },
         )()
-
-    def _set_quant_state(self, model, weight_quant=False, act_quant=False):
-        for module in model.modules():
-            if isinstance(module, QuantLinear):
-                module.set_quant_state(weight_quant=weight_quant, act_quant=act_quant)
 
     @torch.no_grad()
     def _update_dataset(self, layer, dataset, dev, **kwargs):
@@ -217,7 +213,7 @@ class BlockwiseTrainer(End2EndTrainer):
         del optimizer
 
     def train(self):
-        self._set_quant_state(self.quant_model.model, weight_quant=False, act_quant=False)
+        set_quant_state(self.quant_model.model, weight_quant=False, act_quant=False)
         set_quant_parameters(self.quant_model.model, requires_grad=False)
         set_weight_parameters(self.quant_model.model, requires_grad=False)
         ds_kwargs = dict(
@@ -248,14 +244,14 @@ class BlockwiseTrainer(End2EndTrainer):
             if self.args.epochs > 0:
                 self._update_dataset(qlayer, self.fp_train_inps, dev, **layer_kwargs)
 
-            self._set_quant_state(qlayer, weight_quant=True, act_quant=self.use_act_quant)
+            set_quant_state(qlayer, weight_quant=True, act_quant=self.use_act_quant)
 
             if self.args.epochs > 0:
                 self._train_single_block(qlayer, block_index, dev, loss_func, **layer_kwargs)
 
             qlayer.half()
             quant_inplace(qlayer)
-            self._set_quant_state(qlayer, weight_quant=False, act_quant=self.use_act_quant)
+            set_quant_state(qlayer, weight_quant=False, act_quant=self.use_act_quant)
 
             if self.args.epochs > 0:
                 self._update_dataset(qlayer, self.quant_train_inps, dev, **layer_kwargs)

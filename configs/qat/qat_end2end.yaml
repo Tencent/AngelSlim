@@ -20,6 +20,40 @@ compression:
       activation: per-tensor
       group_size: 128 # or -1
     ignore_layers: ["lm_head", "embed_tokens"] # Skip quantization for these layers
+  # QAT-specific configuration
+  QAT:
+    hf_dataset: Salesforce/wikitext,wikitext-2-raw-v1 # hf dataset name, will overwrite dataset.data_path
+    hf_cache_dir: '' # your cache path, default is None
+    training_mode: end2end
+    dist_mode: hf # "hf" is using hf Trainer
+    save_format: fake # or real. Default is None(skip save)
+    do_train: true
+    resume_ckpt_dir: '' # resume for fake checkpoint, when save_format=='fake'. Default is None
+    plugin_config:
+      enable_scale: true
+      quant_config:
+        use_weight_quant: true
+        use_activation_quant: true
+        lazy_init_samples: 60
+        weight: # can overwrite compression.quantization
+          qtype: int8
+          granularity: per-tensor
+          group_size: 128
+          is_sym: true
+        activation: # can overwrite compression.quantization
+          qtype: int8
+          granularity: per-tensor
+          is_sym: true
+          dynamic: false
+    hf_args: # hf trainer args
+      output_dir: ./output
+      logging_steps: 1
+      logging_first_step: true
+      per_device_train_batch_size: 2
+      gradient_accumulation_steps: 16
+      learning_rate: 1e-3
+      lr_scheduler_type: constant
+      num_train_epochs: 1
 
 dataset:
   name: TextDataset
@@ -27,40 +61,4 @@ dataset:
   max_seq_length: 2048
   num_samples: 256
   batch_size: 1
-
-# QAT-specific configuration
-training:
-  hf_dataset: Salesforce/wikitext,wikitext-2-raw-v1 # hf dataset name
-  cache_dir: None # your cache path
-  max_length: 2048
-  training_mode: end2end  # or blockwise
-  dist_mode: hf # "hf" is using hf Trainer
-  save_format: fake # real or ''(not set for skip)
-  do_train: true
-  resume_ckpt_dir: '' # resume for fake checkpoint, when save_format=='fake'
-  plugin_config:
-    enable_scale: true
-    quant_config:
-      use_weight_quant: true
-      use_activation_quant: true
-      lazy_init_samples: 60
-      weight: # can overwrite compression.quantization
-        qtype: int8
-        granularity: per-tensor
-        group_size: 128
-        is_sym: true
-      activation: # can overwrite compression.quantization
-        qtype: int8
-        granularity: per-tensor
-        is_sym: true
-        dynamic: false
-  hf_args: # hf trainer args
-    output_dir: ./output
-    logging_steps: 1
-    logging_first_step: true
-    per_device_train_batch_size: 2
-    gradient_accumulation_steps: 16
-    learning_rate: 1e-3
-    lr_scheduler_type: constant
-    num_train_epochs: 1
 
