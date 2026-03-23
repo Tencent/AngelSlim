@@ -12,9 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import gc
+import json
+import os
+import re
 
 import torch
 import torch.nn.functional as F
+from safetensors.torch import load_file
+from safetensors.torch import save_file as safe_save
 from tqdm import tqdm
 from transformers import AutoModelForImageTextToText, AutoProcessor, AutoTokenizer
 from transformers.models.qwen3_5_moe.modeling_qwen3_5_moe import (
@@ -27,6 +32,74 @@ from ...utils import print_info
 from ...utils.utils import find_layers, find_parent_layer_and_sub_name
 from ..llm.qwen import Qwen, QwenMoeExpertsWithLinear
 from ..model_factory import SlimModelFactory
+
+
+class PTQQwen3_5SaveVllmHF(PTQVLMSaveVllmHF):
+    """PTQVLMSaveVllmHF subclass for Qwen3.5.
+
+    Extends the base VLM save by copying mtp.* weights verbatim from the
+    original checkpoint into the quantized output directory, since those
+    tensors are not part of the quantized model graph and would otherwise
+    be silently dropped.
+    """
+
+    # Key prefix that must be carried over without quantization
+    MTP_PREFIX = "mtp."
+
+    def save(self, save_path):
+        super().save(save_path)
+        self._copy_mtp_weights(save_path)
+
+    def _copy_mtp_weights(self, save_path):
+        model_path = getattr(self.quant_model, "model_path", None)
+        if model_path is None:
+            print_info("Warning: model_path not set on quant_model, skipping mtp weight copy.")
+            return
+
+        orig_index_file = os.path.join(model_path, "model.safetensors.index.json")
+        quant_index_file = os.path.join(save_path, "model.safetensors.index.json")
+        if not os.path.exists(orig_index_file) or not os.path.exists(quant_index_file):
+            return
+
+        with open(orig_index_file, "r") as f:
+            orig_weight_map = json.load(f)["weight_map"]
+        with open(quant_index_file, "r") as f:
+            quant_index = json.load(f)
+
+        # Collect only the explicitly named mtp.* keys
+        mtp_keys = [k for k in orig_weight_map if k.startswith(self.MTP_PREFIX)]
+        if not mtp_keys:
+            return
+
+        print_info(f"Copying {len(mtp_keys)} mtp.* weights from original checkpoint.")
+
+        # Collect shard files that actually exist in save_path for naming
+        existing_shards = [
+            f for f in os.listdir(save_path) if re.match(r"model-\d+-of-\d+\.safetensors", f)
+        ]
+        next_idx = len(existing_shards) + 1
+        mtp_file_name = f"model-{next_idx:05d}-of-{next_idx:05d}.safetensors"
+
+        loaded_shards = {}
+        state_dict = {}
+        add_weight_map = {}
+
+        for weight_name in mtp_keys:
+            shard_file = orig_weight_map[weight_name]
+            if shard_file not in loaded_shards:
+                loaded_shards[shard_file] = load_file(
+                    os.path.join(model_path, shard_file), device="cpu"
+                )
+            state_dict[weight_name] = loaded_shards[shard_file][weight_name]
+            add_weight_map[weight_name] = mtp_file_name
+
+        safe_save(state_dict, os.path.join(save_path, mtp_file_name))
+
+        quant_index["weight_map"].update(add_weight_map)
+        with open(quant_index_file, "w") as f:
+            json.dump(quant_index, f, indent=2)
+
+        print_info(f"mtp weights saved to {mtp_file_name}, index updated.")
 
 
 @SlimModelFactory.register
@@ -91,6 +164,7 @@ class Qwen3_5(Qwen):
             trust_remote_code=trust_remote_code,
             low_cpu_mem_usage=low_cpu_mem_usage,
         )
+        self.model_path = model_path
 
         # Load tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(
@@ -195,7 +269,7 @@ class Qwen3_5(Qwen):
 
     def get_save_func(self):
         if self.deploy_backend in ["vllm", "huggingface"]:
-            return PTQVLMSaveVllmHF
+            return PTQQwen3_5SaveVllmHF
         else:
             raise NotImplementedError(
                 f"deploy_backend {self.deploy_backend} is not supported for saving."
