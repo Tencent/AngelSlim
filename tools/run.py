@@ -206,6 +206,53 @@ def vllm_calibrate_run(config):
     )
 
 
+def fp8_blockwise_run(config):
+    """
+    Run FP8 block-wise quantization directly on safetensors files.
+
+    This path does NOT load the model into GPU memory for calibration —
+    it reads safetensors shards, quantizes weights block-wise to FP8, and
+    writes the quantized shards to the output directory.
+
+    The YAML config must contain:
+      - model.model_path: input model directory
+      - global.save_path: output directory
+      - compression.quantization.quant_method.block_size: [128, 128] (optional)
+      - compression.quantization.quant_method.num_workers: int (optional, default 8)
+    """
+    import sys
+
+    # fp8_quant_blockwise.py lives alongside run.py in tools/
+    tools_dir = os.path.dirname(os.path.abspath(__file__))
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
+    from fp8_quant_blockwise import main as fp8_main
+
+    model_config = config.model_config
+    global_config = config.global_config
+    compress_config = config.compression_config
+
+    input_path = model_config.model_path
+    output_path = global_config.save_path
+
+    # Extract block_size and num_workers from quant_method dict (optional)
+    quant_method = {}
+    if compress_config and compress_config.quantization:
+        qm = compress_config.quantization.quant_method
+        if isinstance(qm, dict):
+            quant_method = qm
+
+    block_size = tuple(quant_method.get("block_size", [128, 128]))
+    num_workers = int(quant_method.get("num_workers", 8))
+
+    print_info(f"FP8BlockWise quantization: {input_path} -> {output_path}")
+    print_info(f"  block_size={block_size}, num_workers={num_workers}")
+
+    fp8_main(input_path, output_path, block_size, num_workers)
+
+    print_info(f"FP8BlockWise quantized model saved to: {output_path}")
+
+
 def run(config):
     """
     Run the LLM compression process based on the provided configuration.
@@ -227,6 +274,11 @@ def run(config):
         and config.compression_config.calibrate.backend == "vllm"
     ):
         vllm_calibrate_run(config)
+        return
+
+    # Dispatch to FP8 block-wise quantization (no model loading required)
+    if "FP8BlockWise" in config.compression_config.name:
+        fp8_blockwise_run(config)
         return
 
     # Step 2: Execute complete pipeline

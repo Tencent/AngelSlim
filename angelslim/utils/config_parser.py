@@ -30,6 +30,7 @@ class CompressionMethod(str, Enum):
     PTQ = "PTQ"
     QAT = "QAT"
     SPECULATIVE_DECODING = "speculative_decoding"
+    FP8_BLOCKWISE = "FP8BlockWise"
 
 
 class QuantizationMethod(str, Enum):
@@ -528,6 +529,9 @@ class SlimConfigParser:
                     cache_dict = compression_dict.get("cache", {})
                     if compression_conf.cache is None:
                         compression_conf.cache = CacheConfig(**cache_dict)
+                elif method_name == CompressionMethod.FP8_BLOCKWISE.value:
+                    # FP8BlockWise does not require quantization or dataset config
+                    pass
                 else:
                     raise ValueError(
                         f"Unsupported compression method: {method_name}. "

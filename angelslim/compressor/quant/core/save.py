@@ -167,7 +167,7 @@ class PTQVLMSaveVllmHF(PTQSaveBase):
 
         os.makedirs(save_path, exist_ok=True)
 
-        self.quant_model.get_model().save_pretrained(save_path)
+        self.quant_model.get_model().save_pretrained(save_path, max_shard_size="5GB")
         self.quant_model.processor.save_pretrained(save_path)
         self.quant_model.tokenizer.save_pretrained(save_path)
 
@@ -265,7 +265,7 @@ class PTQSaveVllmHF(PTQSaveBase):
         print_info("Save quantization_config: {}".format(quant_dict))
 
         os.makedirs(save_path, exist_ok=True)
-        self.quant_model.get_model().save_pretrained(save_path)
+        self.quant_model.get_model().save_pretrained(save_path, max_shard_size="5GB")
 
         with open(os.path.join(save_path, "hf_quant_config.json"), "w") as f:
             json.dump(trtllm_config, f, indent=4)
