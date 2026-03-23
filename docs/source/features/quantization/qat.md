@@ -74,7 +74,7 @@ angelslim/data/
 4. **训练**：根据配置选择端到端训练或逐块训练模式
 5. **插件 `after_train`**：执行训练后处理
 6. **转换**：`convert()` 将 `QuantLinear` 替换为推理用的 `QDQModule`
-7. **保存**：支持 `fake`（仅 state_dict）和 `real`（真实量化模型）两种保存格式
+7. **保存**：支持 `fake`（仅伪量化的 state_dict）和 `real`（真实量化模型）两种保存格式
 
 ---
 
@@ -101,9 +101,9 @@ model:
 compression:
   name: QAT                         # 压缩方法，QAT 固定填写 "QAT"
   quantization:
-    name: "w4a8_fp8"                # 量化算法名称
-    bits: 8                         # 量化位宽
-    quant_method:
+    name: "w4a8_fp8"                # 量化算法名称,可选
+    bits: 8                         # 量化位宽,可选
+    quant_method:                   # 可选
       weight: "per-group"           # 权重量化粒度
       activation: "per-tensor"      # 激活量化粒度
       group_size: 128               # 分组量化的组大小（per-group 时需要）
@@ -191,27 +191,10 @@ compression:
     # ...量化配置...
   QAT:
     training_mode: "end2end"
-    hf_dataset: Salesforce/wikitext,wikitext-2-raw-v1
-    hf_cache_dir: /path/to/cache
     dist_mode: hf
-    save_format: fake
-    do_train: true
-    resume_ckpt_dir: ''
-    plugin_config:
-      enable_scale: true
-      quant_config:
-        use_weight_quant: true
-        use_activation_quant: true
-        lazy_init_samples: 60
     hf_args:
-      output_dir: /path/to/output     # 训练输出目录
-      logging_steps: 1                # 日志打印步数
-      logging_first_step: true        # 是否打印第一步日志
-      per_device_train_batch_size: 2  # 每设备训练批量
-      gradient_accumulation_steps: 16 # 梯度累积步数
-      learning_rate: 1e-3             # 学习率（仅应用于 scale/zero_point 参数）
-      lr_scheduler_type: constant     # 学习率调度器类型
-      num_train_epochs: 1             # 训练轮数
+      # output_dir: /path/to/output   训练输出目录，不需要再指定，同 global.save_path
+      # 其余参数同 HF 的 TrainingArguments
 ```
 
 #### Blockwise 训练专属配置
@@ -225,12 +208,6 @@ compression:
     # ...量化配置...
   QAT:
     training_mode: "blockwise"
-    hf_dataset: Salesforce/wikitext,wikitext-2-raw-v1
-    hf_cache_dir: /path/to/cache
-    dist_mode: hf
-    save_format: fake
-    do_train: true
-    resume_ckpt_dir: ''
     block_wise_config:
       epochs: 10                      # 每个 block 的训练轮数（默认 20）
       batch_size: 2                   # 批量大小（默认 1）
@@ -241,12 +218,7 @@ compression:
       weight_lr: 1e-4                 # 权重参数学习率（0 则冻结权重，默认 1e-3）
       min_lr_factor: 20               # CosineAnnealing 最小学习率因子（lr / factor）
       wd: 0                           # 权重衰减
-    plugin_config:
-      enable_scale: true
-      quant_config:
-        use_weight_quant: true
-        use_activation_quant: true
-        lazy_init_samples: 60
+
 ```
 
 ### global — 全局配置
@@ -254,7 +226,6 @@ compression:
 ```yaml
 global:
   save_path: /path/to/save/model    # 模型保存路径
-  # save_format 设置为 fake 时，该路径指定为 .pt 后缀的文件名
 ```
 
 ---
@@ -351,7 +322,7 @@ AngelSlim 内置了模型评测器，支持以下评测任务：
 运行示例：
 
 ```python
-python3 tools/run.py -c configs/qat/qat_end2end.yaml --lm-eval --ppl-eval
+python3 tools/run.py -c "configs/qwen3/qat/int4_weight_only/learn_scale/qwen3-4b_int4_weight_only_end2end_learn_scale.yaml" --lm-eval --ppl-eval
 ```
 
 ---

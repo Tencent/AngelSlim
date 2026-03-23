@@ -2,8 +2,8 @@ global:
   save_path: ./output
 
 model:
-  name: Qwen # angelslim model name
-  model_path: Qwen/Qwen3-4B # your model path or hf model name
+  name: Qwen
+  model_path: Qwen/Qwen3-4B
   trust_remote_code: true
   torch_dtype: auto
   device_map: auto
@@ -13,22 +13,14 @@ model:
 compression:
   name: QAT
   quantization:
-    name: w4a8_fp8 # or fp8_static or fp8_dynamic
-    bits: 8
-    quant_method:
-      weight: per-group # or per-tensor
-      activation: per-tensor
-      group_size: 128 # or -1
     ignore_layers: ["lm_head", "embed_tokens"] # Skip quantization for these layers
-  # QAT-specific configuration
   QAT:
     hf_dataset: Salesforce/wikitext,wikitext-2-raw-v1 # hf dataset name, will overwrite dataset.data_path
-    hf_cache_dir: '' # your cache path, default is None
+    # hf_cache_dir: Specify your cache path, or not set(default)
     training_mode: blockwise
-    dist_mode: hf # "hf" is using hf Trainer
-    save_format: fake # or real. Default is None(skip save)
+    save_format: fake # Set "fake" or "real", or not set(skip save)
     do_train: true
-    resume_ckpt_dir: '' # resume for fake checkpoint, when save_format=='fake'. Default is None
+    # resume_ckpt_dir: '' # resume for fake checkpoint, when save_format=='fake'. Default is None
     block_wise_config:
       epochs: 10
       batch_size: 2
@@ -42,18 +34,12 @@ compression:
       enable_scale: true
       quant_config:
         use_weight_quant: true
-        use_activation_quant: true
-        lazy_init_samples: 60
+        use_activation_quant: false
         weight: # can overwrite compression.quantization
-          qtype: int8
-          granularity: per-tensor
+          qtype: int4
+          granularity: per-group
           group_size: 128
           is_sym: true
-        activation: # can overwrite compression.quantization
-          qtype: int8
-          granularity: per-tensor
-          is_sym: true
-          dynamic: false
 
 dataset:
   name: TextDataset
