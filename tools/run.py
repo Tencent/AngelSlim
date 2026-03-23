@@ -245,6 +245,7 @@ def run(config):
         use_audio_in_video=model_config.use_audio_in_video,
         attn_implementation=model_config.attn_implementation,
         deploy_backend=global_config.deploy_backend,
+        build_model=compress_config.need_build_model,
     )
 
     # Step 4: Prepare data (optional custom dataloader)

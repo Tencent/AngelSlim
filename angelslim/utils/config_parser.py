@@ -38,6 +38,7 @@ class QuantizationMethod(str, Enum):
     FP8_STATIC = "fp8_static"
     FP8_DYNAMIC = "fp8_dynamic"
     FP8_LEPTO = "fp8_lepto"
+    DAQ = "daq"
     INT4_AWQ = "int4_awq"
     INT4_GPTQ = "int4_gptq"
     INT8_DYNAMIC = "int8_dynamic"
@@ -218,6 +219,15 @@ class QuantizationConfig:
     ignore_layers: List[str] = field(default_factory=list)
     quant_analyse: bool = field(default=False)
     quant_vit: bool = field(default=False)
+    # DAQ-specific fields
+    base_model_path: Optional[str] = field(default=None)
+    base_is_fp8: bool = field(default=False)
+    metric: str = field(default="sign")
+    quantization_method: str = field(default="blockwise")
+    scale_search: Optional[Dict[str, Any]] = field(default=None)
+    num_workers: int = field(default=8)
+    gpus: Optional[str] = field(default=None)
+    base_model_repo: Optional[str] = field(default=None)
 
 
 @dataclass
@@ -272,6 +282,9 @@ class CompressionConfig:
         for method in self.name:
             # PTQ/QAT usually need calibration dataset
             if method in ["PTQ", "QAT"]:
+                # DAQ is data-free, no calibration dataset needed
+                if self.quantization and self.quantization.name == "daq":
+                    continue
                 # Check if specific quantization helpers need dataset
                 if (
                     self.quantization
@@ -285,6 +298,20 @@ class CompressionConfig:
                 # Default PTQ/QAT needs dataset
                 return True
         return False
+
+    @property
+    def need_build_model(self) -> bool:
+        """Check if any of the methods requires building the model."""
+        if not self.name:
+            return True
+
+        for method in self.name:
+            # PTQ/QAT usually need calibration dataset
+            if method in ["PTQ"]:
+                # DAQ is data-free, no calibration dataset needed
+                if self.quantization and self.quantization.name == "daq":
+                    return False
+        return True
 
     @property
     def only_inference(self) -> Union[bool, List[bool]]:
@@ -486,6 +513,15 @@ class SlimConfigParser:
                     # Parse quantization config (only set if not already set)
                     if compression_conf.quantization is None:
                         compression_conf.quantization = QuantizationConfig(**quant_dict)
+                    # DAQ-specific validation: base_model_path is required
+                    if quant_method == "daq":
+                        if not compression_conf.quantization.base_model_path:
+                            raise ValueError(
+                                "DAQ quantization (daq) requires 'base_model_path' "
+                                "to be specified in the quantization config. "
+                                "This should point to the base model directory "
+                                "used to compute delta weights."
+                            )
 
                 elif method_name == CompressionMethod.CACHE.value:
                     # Parse cache configuration (only set if not already set)
