@@ -176,6 +176,12 @@ class QuantConfig:
 
             if act_quant_method is not None:
                 self.quant_algo_info["a"] = f"nvfp4_{act_quant_method}-{is_dynamic}"
+        elif "daq" in self.quant_algo:
+            self.quant_algo_info = {
+                "ignore_layers": quantization_args.ignore_layers,
+            }
+            self.low_memory = False
+            self._quantization_config = quantization_args
 
         if "smooth" in self.quant_helpers:
             self.smooth_alpha = quantization_args.smooth_alpha

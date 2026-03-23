@@ -24,7 +24,7 @@ from ...utils import find_parent_layer_and_sub_name, print_info
 from ..compressor_factory import CompressorFactory
 from ..transform import TransformFactory
 from .core import PTQHook
-from .modules import AWQ, FP8, GPTQ, INT8, NVFP4, W4A8INT8, LeptoFP8, SmoothQuant
+from .modules import AWQ, DAQ, FP8, GPTQ, INT8, NVFP4, W4A8INT8, LeptoFP8, SmoothQuant
 
 __all__ = ["PTQ"]
 
@@ -117,6 +117,10 @@ class PTQ:
             )
         elif "nvfp4" in self.quant_algo:
             self.nvfp4 = NVFP4(self.quant_model)
+        elif "daq" in self.quant_algo:
+            self.daq = DAQ(
+                self.quant_model.quant_config._quantization_config, self.absolute_model_path
+            )
         else:
             raise NotImplementedError(f"[AngelSlim Error] algo {self.quant_algo} is not support")
 
@@ -140,6 +144,8 @@ class PTQ:
             self.int8.run(dataloader)
         elif "nvfp4" in self.quant_algo:
             self.nvfp4.run(dataloader)
+        elif "daq" in self.quant_algo:
+            pass
         else:
             raise AssertionError(
                 f"[AngelSlim Error] algo {self.quant_algo} is not support calibrate"
@@ -149,6 +155,10 @@ class PTQ:
         """
         Saves scales and inserts QDQ modules.
         """
+        if "daq" in self.quant_algo:
+            print_info("DAQ: skipping convert (quantization is performed during save)")
+            return
+
         print_info("Start convert model...")
         if "gptq" in self.quant_algo or "gptaq" in self.quant_algo:
             self.gptq.convert()
@@ -197,6 +207,8 @@ class PTQ:
             self.w4a8i8.save(save_path)
         elif "awq" in self.quant_algo:
             self.awq.save(save_path)
+        elif "daq" in self.quant_algo:
+            self.daq.save(save_path)
         else:
             save_func = self.quant_model.get_save_func()(self.quant_model)
             save_func.save(save_path)

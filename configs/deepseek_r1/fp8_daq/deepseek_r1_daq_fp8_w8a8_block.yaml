@@ -1,0 +1,43 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output
+
+# Simplified Configuration for LLM compression
+model:
+  name: DeepSeek
+  model_path: deepseek-ai/DeepSeek-R1  # SFT model path
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    name: daq
+    bits: 8
+    # DAQ-specific: path to the base (pretrained) model
+    base_model_path: deepseek-ai/DeepSeek-R1-Base
+    base_model_repo: deepseek-ai/DeepSeek-R1
+    # Set to true if the base model is FP8 format
+    base_is_fp8: true
+    # Optimization metric: "sign" (sign preservation rate),
+    # "cosine" (delta cosine similarity), or "mse" (negative MSE)
+    metric: cosine
+    # Quantization granularity: "blockwise" (128x128 blocks) or "per_channel"
+    quantization_method: blockwise
+    # Scale search hyper-parameters (optional, shown with defaults)
+    scale_search:
+      min_range: 0.8
+      max_range: 1.5
+      coarse_intervals: 5
+      fine_intervals: 10
+      delta_threshold: 1.0e-5
+    # Multi-process parallelism
+    num_workers: 8
+    gpus: "0,1,2,3"
+    # Skip quantization for these layers
+    ignore_layers:
+      - "lm_head"
