@@ -179,7 +179,7 @@ class MultiModalDataset(BaseDataset):
         else:
             padding = True
 
-        if self.model_name in ["Qwen3VL", "Qwen3VLMoE"]:
+        if self.model_name in ["Qwen3VL", "Qwen3VLMoE", "Qwen3_5"]:
             inputs = self.processor.apply_chat_template(
                 messages,
                 tools=tools,
