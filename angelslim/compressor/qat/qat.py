@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 import torch
 
 from ...utils import print_info, set_op_by_name
@@ -110,7 +112,7 @@ class QAT:
     def save(self, save_path: str):
         if self.save_fmt == "fake":
             parts = save_path.rsplit("/")
-            save_path = "/".join(parts[:-1])
+            save_path = os.path.join("/".join(parts[:-1]), parts[-1] + "_fake_quant_model.pt")
             print_info(f"Start save QAT fake ckpt to: {save_path}")
 
             cpu_state = self.trainer.external_trainer.model.state_dict()
@@ -118,7 +120,7 @@ class QAT:
 
         elif self.save_fmt == "real":
             save_func = self.quant_model.get_save_func()(self.quant_model)
-            save_func.save(save_path)
+            save_func.save(os.path.join(save_path, "final_quant_checkpoint"))
 
         else:
             print_info("Save format not specified, skip save.")

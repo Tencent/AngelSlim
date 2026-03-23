@@ -36,28 +36,10 @@ class End2EndTrainer:
         self.do_train = config["compress_config"].QAT.do_train
         self.external_trainer = None
 
-    def _init_optimizer(self):
-        lr = float(self.config["compress_config"].QAT.hf_args.get("learning_rate", 1e-5))
-        wd = float(self.config["compress_config"].QAT.hf_args.get("weight_decay", 0))
-        params = [
-            {
-                "params": [
-                    p
-                    for n, p in self.quant_model.model.named_parameters()
-                    if "scale" in n or "zero_point" in n
-                ],
-                "weight_decay": wd,
-                "lr": lr,
-            }
-        ]
-        self.optimizer = torch.optim.AdamW(params)
-        print_info(f"Init optimizer with lr={lr} weight_decay={wd}")
-
     def prepare_trainer(self):
         if self.training_mode == "blockwise":
             return
         if self.training_mode == "end2end" and self.dist_mode == "hf":
-            self._init_optimizer()
             self.external_trainer = Seq2SeqTrainer(
                 model=self.quant_model.model,
                 tokenizer=self.quant_model.tokenizer,
@@ -67,7 +49,6 @@ class End2EndTrainer:
                 ),
                 train_dataset=self.train_dataset,
                 eval_dataset=None,
-                optimizers=(self.optimizer, None),
             )
         else:
             raise NotImplementedError(f"Unsupported distribution mode: {self.dist_mode}")
