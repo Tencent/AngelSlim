@@ -12,6 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .compressor_factory import CompressorFactory  # noqa: F401
-from .qat.qat import QAT  # noqa: F401
-from .quant import PTQ  # noqa: F401
+
+class BasePlugin:
+    def __init__(self, config=None, quant_model=None):
+        self.config = config
+        self.quant_model = quant_model
+
+    def before_train(self, **kwargs):
+        """Execute before training starts"""
+        pass
+
+    def after_train(self, **kwargs):
+        """Execute after training ends"""
+        pass

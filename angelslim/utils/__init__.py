@@ -20,6 +20,7 @@ from .utils import decide_device_for_distributed  # noqa: F401
 from .utils import find_layers  # noqa: F401
 from .utils import find_parent_layer_and_sub_name  # noqa: F401
 from .utils import get_best_device  # noqa: F401
+from .utils import get_loaders  # noqa: F401
 from .utils import get_op_by_name  # noqa: F401
 from .utils import get_op_name  # noqa: F401
 from .utils import get_package_info  # noqa: F401

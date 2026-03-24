@@ -31,6 +31,7 @@ def get_args():
     parser.add_argument("--save-path", type=str, default=None)
     parser.add_argument("--multi-nodes", action="store_true")
     parser.add_argument("--lm-eval", action="store_true")
+    parser.add_argument("--ppl-eval", action="store_true")
     args = parser.parse_args()
     return args
 
@@ -276,10 +277,17 @@ def run(config):
     slim_engine.run()
 
     # Step 7: Eval
+    if args.ppl_eval:
+        slim_engine.ppl_eval(
+            tasks="wikitext2,c4",
+            seqlen=dataset_config.max_seq_length,
+            cache_dir=compress_config.QAT.hf_cache_dir,
+        )
+
     if args.lm_eval:
         slim_engine.lm_eval(
-            tasks="arc_easy,hellaswag",
-            batch_size=4,
+            tasks="piqa,arc_easy,arc_challenge,hellaswag,winogrande",
+            batch_size=32,
             num_fewshot=0,
         )
 

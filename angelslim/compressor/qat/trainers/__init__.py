@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .compressor_factory import CompressorFactory  # noqa: F401
-from .qat.qat import QAT  # noqa: F401
-from .quant import PTQ  # noqa: F401
+from .blockwise_trainer import BlockwiseTrainer  # noqa: F401
+from .end2end_trainer import End2EndTrainer  # noqa: F401
+from .trainer_factory import TrainerFactory  # noqa: F401
+
+__all__ = ["TrainerFactory", "End2EndTrainer", "BlockwiseTrainer"]

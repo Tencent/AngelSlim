@@ -12,3 +12,4 @@ datasets
 threadpoolctl
 shortuuid
 accelerate
+lm_eval
