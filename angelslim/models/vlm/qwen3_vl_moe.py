@@ -23,10 +23,16 @@ from transformers import (
     AutoTokenizer,
     Qwen3VLMoeForConditionalGeneration,
 )
-from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import Qwen3VLMoeTextExperts
+from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import (
+    Qwen3VLMoeTextExperts,
+    Qwen3VLMoeTextTopKRouter,
+)
 
 from angelslim.compressor.quant.core.quant_func import get_fp_maxval
-from angelslim.compressor.quant.observers import MoEAbsmaxPertensorObserver
+from angelslim.compressor.quant.observers import (
+    MoEAbsmaxPertensorObserver,
+    ParentObserver,
+)
 
 from ...compressor.quant.core import LossFilter, PTQVLMSaveVllmHF
 from ...compressor.quant.modules import MoEQDQModule
@@ -38,66 +44,36 @@ from ..model_factory import SlimModelFactory
 def moe_observer_forward(
     self,
     hidden_states: torch.Tensor,
-    routing_weights: torch.Tensor,
-    router_indices: torch.Tensor,
+    top_k_index: torch.Tensor,
+    top_k_weights: torch.Tensor,
 ) -> torch.Tensor:
-    """
-    When training it is more efficient to just loop over the experts and
-    compute the output for each expert
-    as otherwise the memory would explode.
+    final_hidden_states = torch.zeros_like(hidden_states)
+    with torch.no_grad():
+        expert_mask = torch.nn.functional.one_hot(top_k_index, num_classes=self.num_experts)
+        expert_mask = expert_mask.permute(2, 1, 0)
+        expert_hit = torch.greater(expert_mask.sum(dim=(-1, -2)), 0).nonzero()
 
-    For inference we can sacrifice some memory and compute the output for
-    all experts at once. By repeating the inputs.
+    for expert_idx in expert_hit:
+        expert_idx = expert_idx[0]
+        if expert_idx == self.num_experts:
+            continue
+        top_k_pos, token_idx = torch.where(expert_mask[expert_idx])
+        current_state = hidden_states[token_idx]
+        self.gateupobservers[expert_idx](current_state.reshape(1, -1))
+        gate, up = nn.functional.linear(current_state, self.gate_up_proj[expert_idx]).chunk(
+            2, dim=-1
+        )
+        current_hidden_states = self.act_fn(gate) * up
+        self.downobservers[expert_idx](current_hidden_states.reshape(1, -1))
+        current_hidden_states = nn.functional.linear(
+            current_hidden_states, self.down_proj[expert_idx]
+        )
+        current_hidden_states = current_hidden_states * top_k_weights[token_idx, top_k_pos, None]
+        final_hidden_states.index_add_(
+            0, token_idx, current_hidden_states.to(final_hidden_states.dtype)
+        )
 
-    Args:
-        hidden_states (torch.Tensor): (batch_size * token_num, hidden_size)
-        routing_weights (torch.Tensor): (batch_size * token_num, num_experts)
-        router_indices (torch.Tensor): (batch_size * token_num, top_k)
-    Returns:
-        torch.Tensor
-    """
-    # replace Qwen3VLMoeTextExperts forward function by moe_observer_forward"
-    batch_size = hidden_states.shape[0]
-    hidden_states = hidden_states.reshape(-1, self.hidden_size)  # (num_tokens, hidden_size)
-    if self.training:
-        next_states = torch.zeros_like(
-            hidden_states, dtype=hidden_states.dtype, device=hidden_states.device
-        )
-        with torch.no_grad():
-            expert_mask = torch.nn.functional.one_hot(router_indices, num_classes=self.num_experts)
-            expert_mask = expert_mask.permute(2, 1, 0)
-            # we sum on the top_k and on the sequence length to get which experts
-            # are hit this time around
-            expert_hit = torch.greater(expert_mask.sum(dim=(-1, -2)), 0).nonzero()
-        for expert_idx in expert_hit[:]:
-            with torch.no_grad():
-                _, token_idx = torch.where(expert_mask[expert_idx[0]])
-            current_state = hidden_states[token_idx]
-            gate_up = current_state @ self.gate_up_proj[expert_idx]
-            gate, up = gate_up.chunk(2, dim=-1)
-            gated_output = up * self.act_fn(gate)
-            out = gated_output @ self.down_proj[expert_idx]
-            weighted_output = out[0] * routing_weights[token_idx, expert_idx, None]
-            next_states.index_add_(0, token_idx, weighted_output.to(hidden_states.dtype))
-        next_states = next_states.view(batch_size, -1, self.hidden_size)
-    else:
-        hidden_states = hidden_states.repeat(self.num_experts, 1)
-        hidden_states = hidden_states.view(self.num_experts, -1, self.hidden_size)
-        if self.gateupobservers:
-            self.gateupobservers(hidden_states)
-        gate_up = torch.bmm(hidden_states, self.gate_up_proj)
-        gate, up = gate_up.chunk(2, dim=-1)  # not supported for DTensors
-        if self.downobservers:
-            down_input = up * self.act_fn(gate)
-            self.downobservers(down_input)
-        next_states = torch.bmm((up * self.act_fn(gate)), self.down_proj)
-        next_states = next_states.reshape(self.num_experts, batch_size, -1, self.hidden_size)
-        next_states = (
-            next_states
-            * routing_weights.transpose(0, 1).view(self.num_experts, batch_size, -1)[..., None]
-        )
-        next_states = next_states.sum(dim=0)
-    return next_states
+    return final_hidden_states
 
 
 @SlimModelFactory.register
@@ -120,7 +96,7 @@ class Qwen3VLMoE(BaseLLMModel):
             "language_model.norm",
             "language_model.rotary_emb",
         ]
-        self.observer_layer_classes = [nn.Linear, Qwen3VLMoeTextExperts]
+        self.observer_layer_classes = [nn.Linear, Qwen3VLMoeTextExperts, Qwen3VLMoeTextTopKRouter]
 
     def from_pretrained(
         self,
@@ -182,11 +158,25 @@ class Qwen3VLMoE(BaseLLMModel):
             result = ".".join(parts[-2:])
             if result == "mlp.experts":
                 if not hasattr(module, "gateupobservers"):
-                    layername = name + ".gate_up"
-                    module.gateupobservers = MoEAbsmaxPertensorObserver(layer_name=layername)
+                    parent = ParentObserver()
+                    module.gateupobservers = nn.ModuleList(
+                        [
+                            MoEAbsmaxPertensorObserver(
+                                layer_name=f"{name}.gate_up.expert_{i}", parent_observer=parent
+                            )
+                            for i in range(module.num_experts)
+                        ]
+                    )
                 if not hasattr(module, "downobservers"):
-                    layername = name + ".down"
-                    module.downobservers = MoEAbsmaxPertensorObserver(layer_name=layername)
+                    parent = ParentObserver()
+                    module.downobservers = nn.ModuleList(
+                        [
+                            MoEAbsmaxPertensorObserver(
+                                layer_name=f"{name}.down.expert_{i}", parent_observer=parent
+                            )
+                            for i in range(module.num_experts)
+                        ]
+                    )
             else:
                 if block_condition and result in names:
                     observer_layers_dict[name] = module
@@ -204,14 +194,25 @@ class Qwen3VLMoE(BaseLLMModel):
         if not isinstance(sub_layer, Qwen3VLMoeTextExperts):
             return sub_layer
         maxval = get_fp_maxval(bits=8)
-        gate_up_act_max = sub_layer.gateupobservers.scales()
-        down_act_max = sub_layer.downobservers.scales()
+
+        # Stack per-expert activation scales: [num_experts, 1]
+        gate_up_act_max = torch.stack(
+            [obs.scales() for obs in sub_layer.gateupobservers], dim=0
+        ).view(-1, 1)
+        down_act_max = torch.stack([obs.scales() for obs in sub_layer.downobservers], dim=0).view(
+            -1, 1
+        )
         gate_up_act_dtype = gate_up_act_max.dtype
         down_act_dtype = down_act_max.dtype
         gate_up_act_scale = gate_up_act_max / maxval.type(gate_up_act_dtype)
         down_act_scale = down_act_max / maxval.type(down_act_dtype)
 
-        gate_proj, up_proj = sub_layer.gate_up_proj.chunk(2, dim=-1)
+        # gate_up_proj shape from nn.functional.linear: [num_experts, out, in]
+        # transpose to [num_experts, in, out] to match old format (used with x @ w)
+        gate_up_proj_t = sub_layer.gate_up_proj.transpose(1, 2).contiguous()
+        down_proj_t = sub_layer.down_proj.transpose(1, 2).contiguous()
+
+        gate_proj, up_proj = gate_up_proj_t.chunk(2, dim=-1)
         abs_inputs = torch.abs(gate_proj)
         batch_size = abs_inputs.shape[0]
         abs_inputs_flat = abs_inputs.view(batch_size, -1)
@@ -222,14 +223,14 @@ class Qwen3VLMoE(BaseLLMModel):
         abs_inputs_flat = abs_inputs.view(batch_size, -1)
         up_weight_max, _ = torch.max(abs_inputs_flat, dim=1, keepdim=True)
 
-        abs_inputs = torch.abs(sub_layer.down_proj)
+        abs_inputs = torch.abs(down_proj_t)
         batch_size = abs_inputs.shape[0]
         abs_inputs_flat = abs_inputs.view(batch_size, -1)
         down_weight_max, _ = torch.max(abs_inputs_flat, dim=1, keepdim=True)
 
         gate_weight_dtype = gate_proj.dtype
         up_weight_dtype = up_proj.dtype
-        down_weight_dtype = sub_layer.down_proj.dtype
+        down_weight_dtype = down_proj_t.dtype
         gate_weight_scale = gate_weight_max / maxval.type(gate_weight_dtype)
         up_weight_scale = up_weight_max / maxval.type(up_weight_dtype)
         down_weight_scale = down_weight_max / maxval.type(down_weight_dtype)
@@ -237,7 +238,7 @@ class Qwen3VLMoE(BaseLLMModel):
         q_linear = MoEQDQModule(
             gate_proj=gate_proj.cpu(),
             up_proj=up_proj.cpu(),
-            down_proj=sub_layer.down_proj.cpu(),
+            down_proj=down_proj_t.cpu(),
             gate_proj_weight_scale=gate_weight_scale.cpu(),
             up_proj_weight_scale=up_weight_scale.cpu(),
             down_proj_weight_scale=down_weight_scale.cpu(),

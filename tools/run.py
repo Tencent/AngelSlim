@@ -207,6 +207,60 @@ def vllm_calibrate_run(config):
     )
 
 
+def weight_only_run(config):
+    """
+    Dispatch weight-only quantization based on compression.quantization.name.
+
+    Weight-only quantization operates directly on safetensors files without
+    loading the model into GPU memory.  New algorithms can be added here by
+    checking quantization.name and calling the appropriate implementation.
+
+    Currently supported quantization names:
+      - "fp8_blockwise": FP8 block-wise quantization (128x128 tiles)
+
+    The YAML config must contain:
+      - model.model_path: input model directory
+      - global.save_path: output directory
+      - compression.quantization.quant_method.block_size: [128, 128] (optional)
+      - compression.quantization.quant_method.num_workers: int (optional, default 8)
+    """
+    import sys
+
+    quant_name = ""
+    if config.compression_config and config.compression_config.quantization:
+        quant_name = config.compression_config.quantization.name
+
+    if quant_name == "fp8_blockwise":
+        # fp8_quant_blockwise.py lives alongside run.py in tools/
+        tools_dir = os.path.dirname(os.path.abspath(__file__))
+        if tools_dir not in sys.path:
+            sys.path.insert(0, tools_dir)
+        from fp8_quant_blockwise import main as fp8_main
+
+        input_path = config.model_config.model_path
+        output_path = config.global_config.save_path
+
+        quant_method = {}
+        qm = config.compression_config.quantization.quant_method
+        if isinstance(qm, dict):
+            quant_method = qm
+
+        block_size = tuple(quant_method.get("block_size", [128, 128]))
+        num_workers = int(quant_method.get("num_workers", 8))
+
+        print_info(f"FP8 block-wise quantization: {input_path} -> {output_path}")
+        print_info(f"  block_size={block_size}, num_workers={num_workers}")
+
+        fp8_main(input_path, output_path, block_size, num_workers)
+
+        print_info(f"FP8 block-wise quantized model saved to: {output_path}")
+    else:
+        raise ValueError(
+            f"Unsupported PTQWeightOnly quantization method: '{quant_name}'. "
+            "Supported methods: ['fp8_blockwise']"
+        )
+
+
 def run(config):
     """
     Run the LLM compression process based on the provided configuration.
@@ -228,6 +282,11 @@ def run(config):
         and config.compression_config.calibrate.backend == "vllm"
     ):
         vllm_calibrate_run(config)
+        return
+
+    # Dispatch to weight-only quantization (no model loading required)
+    if "PTQWeightOnly" in config.compression_config.name:
+        weight_only_run(config)
         return
 
     # Step 2: Execute complete pipeline

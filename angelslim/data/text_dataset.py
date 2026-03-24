@@ -150,7 +150,7 @@ class TextDataset(BaseDataset):
                             text = text + dic["content"] + self.processor.eos_token
 
                 model_inputs = self.processor(
-                    [text],
+                    text=[text],
                     return_tensors="pt",
                     max_length=self.max_length,
                     truncation=True,
