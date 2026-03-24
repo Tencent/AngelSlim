@@ -6,7 +6,7 @@ global:
 # Model configuration
 model:
   name: Qwen3_5
-  model_path: Qwen/Qwen3.5-35B-A3B 
+  model_path: Qwen/Qwen3.5-35B-A3B
   trust_remote_code: true
   low_cpu_mem_usage: true
   use_cache: false
@@ -15,9 +15,9 @@ model:
 
 # Compression configuration
 compression:
-  name: FP8BlockWise
+  name: PTQWeightOnly
   quantization:
-    name: fp8_dynamic
+    name: fp8_blockwise
     save_name: fp8_blockwise
     bits: 8
     quant_method:

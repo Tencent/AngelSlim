@@ -15,9 +15,9 @@ model:
 
 # Compression configuration
 compression:
-  name: FP8BlockWise
+  name: PTQWeightOnly
   quantization:
-    name: fp8_dynamic
+    name: fp8_blockwise
     save_name: fp8_blockwise
     bits: 8
     quant_method:
