@@ -51,9 +51,9 @@ class PTQ:
         self.quant_helpers = self.quant_model.quant_config.quant_helpers
 
         # create transform, for example, smoothquant
-        self.trasform_runner = TransformFactory.create(self.quant_model, slim_config)
+        self.transform_runner = TransformFactory.create(self.quant_model, slim_config)
         # trasform first, then run quantization
-        self.trasform_runner.run()
+        self.transform_runner.run()
 
         if "fp8" in self.quant_algo or "int8" in self.quant_algo or "nvfp4" in self.quant_algo:
             # Add ptq observer hook
@@ -178,6 +178,8 @@ class PTQ:
         """
         Save PTQ scales or ckpt.
         """
+        self.transform_runner.save()
+
         if (
             hasattr(self.quant_model.quant_config, "quant_analyse")
             and self.quant_model.quant_config.quant_analyse

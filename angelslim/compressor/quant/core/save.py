@@ -161,6 +161,14 @@ class PTQVLMSaveVllmHF(PTQSaveBase):
         else:
             quantization_config["activation_scheme"] = "dynamic" if is_dynamic else "static"
 
+        if (
+            hasattr(self.quant_model.quant_config, "transform_config")
+            and self.quant_model.quant_config.transform_config is not None
+        ):
+            quantization_config["transform_config"] = (
+                self.quant_model.quant_config.transform_config
+            )
+
         quant_dict = {"quantization_config": quantization_config}
         self.quant_model.get_model().config.update(quant_dict)
         print_info("Save quantization_config: {}".format(quant_dict))
@@ -259,6 +267,14 @@ class PTQSaveVllmHF(PTQSaveBase):
             )
         else:
             quantization_config["activation_scheme"] = "dynamic" if is_dynamic else "static"
+
+        if (
+            hasattr(self.quant_model.quant_config, "transform_config")
+            and self.quant_model.quant_config.transform_config is not None
+        ):
+            quantization_config["transform_config"] = (
+                self.quant_model.quant_config.transform_config
+            )
 
         quant_dict = {"quantization_config": quantization_config}
         self.quant_model.get_model().config.update(quant_dict)
@@ -836,6 +852,7 @@ class DeepSeekV3PTQSaveMulti(PTQSaveBase):
                 substring in param_name
                 for substring in self.quant_model.quant_config.quant_algo_info["ignore_layers"]
             ):
+
                 if param_name.endswith("weight_scale_inv"):
                     return
                 weight_scale = scales_dict.get(f"{param_name}_scale", None)

@@ -32,6 +32,7 @@ Supported transforms
 """
 
 import argparse
+import json
 import os
 
 import torch
@@ -61,12 +62,13 @@ def get_args():
     parser.add_argument(
         "--save-path", type=str, default=None, help="Override global.save_path from the YAML"
     )
+    parser.add_argument("--cpu", action="store_true", help="Run on CPU")
     parser.add_argument(
         "--test-output-diff",
         action="store_true",
         help="Verify logits are numerically unchanged after transform (atol=1e-2)",
     )
-    return parser.parse_args()
+    return args
 
 
 def merge_config(config, args):
@@ -85,7 +87,7 @@ def merge_config(config, args):
 # ---------------------------------------------------------------------------
 
 
-def build_slim_config(transform_config: TransformConfig, global_config):
+def build_slim_config(transform_config: TransformConfig, global_config, compress_config):
     """Build a slim_config dict for TransformFactory.create().
 
     SpinQuant.__init__ calls quant_config.get('transform_config'), so the top-level
@@ -95,6 +97,7 @@ def build_slim_config(transform_config: TransformConfig, global_config):
     return {
         "transform_config": transform_config,
         "global_config": global_config,
+        "compress_config": compress_config,
     }
 
 
@@ -113,6 +116,7 @@ def run_transform(config, test_diff=False):
     model_config = config.model_config
     transform_config = config.transform_config
     global_config = config.global_config
+    compress_config = config.compression_config
 
     if transform_config is None:
         raise ValueError(
@@ -148,7 +152,9 @@ def run_transform(config, test_diff=False):
     # 2. Apply transform (with optional output diff test)
     # ------------------------------------------------------------------
     print(f"[run_transform] Applying transform: {transform_config.name}")
-    slim_config = build_slim_config(transform_config, global_config)
+    slim_config = build_slim_config(transform_config, global_config, compress_config)
+    slim_model.init_ptq(slim_config)
+
     transform = TransformFactory.create(slim_model, slim_config)
 
     if test_diff:
@@ -204,31 +210,15 @@ def run_transform(config, test_diff=False):
         slim_model.tokenizer.save_pretrained(save_path)
     print(f"[run_transform] Done. Model saved to {save_path}")
 
-    try:
-        from lm_eval import evaluator as lm_evaluator
-        from lm_eval.models.huggingface import HFLM
-
-        lm_eval_model = HFLM(hf_model, tokenizer=slim_model.tokenizer, batch_size=4)
-
-        task_names = ["arc_easy", "hellaswag"]
-        results = lm_evaluator.simple_evaluate(
-            model=lm_eval_model,
-            tasks=task_names,
-            limit=None,
-            num_fewshot=0,
-            apply_chat_template=False,
-            fewshot_as_multiturn=False,
-        )
-        for key in results["results"]:
-            print(key)
-            print(results["results"][key])
-            print()
-
-    except ImportError as e:
-        raise ImportError(
-            "lm-evaluation-harness is required for test_lm_eval. "
-            "Install it with: pip install lm-eval"
-        ) from e
+    if (
+        hasattr(slim_model.quant_config, "transform_config")
+        and slim_model.quant_config.transform_config is not None
+    ):
+        quantization_config = {}
+        quantization_config["transform_config"] = slim_model.quant_config.transform_config
+        print(f"[run_transform] Saving transform config to {save_path}")
+        with open(os.path.join(save_path, "transform_config.json"), "w") as f:
+            json.dump(quantization_config, f, indent=2)
 
 
 if __name__ == "__main__":

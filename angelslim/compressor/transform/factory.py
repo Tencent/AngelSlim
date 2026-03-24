@@ -28,6 +28,9 @@ class _NoOpTransform(TransformBase):
     def run(self):
         pass
 
+    def save(self):
+        pass
+
 
 class TransformFactory:
     """Factory for creating TransformBase instances from config.

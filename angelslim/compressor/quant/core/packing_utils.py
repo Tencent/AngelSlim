@@ -122,7 +122,7 @@ def pack_weight_to_int8(weight):
         Packed INT8 tensor of shape (out_features, in_features // 2) on CPU.
     """
     weight = weight.t().contiguous().cpu()
-    weight = weight.to(torch.float32).numpy().astype(np.int8)
+    weight = weight.to(torch.float32).detach().numpy().astype(np.int8)
 
     i = 0
     row = 0

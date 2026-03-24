@@ -621,10 +621,6 @@ class QDQModule(torch.nn.Module):
 
     def state_dict(self, *args, **kwargs):
         state_dict = super().state_dict(*args, **kwargs)
-        keys_to_rename = [k for k in state_dict.keys() if "weight_scale_int4" in k]
-        for old_key in keys_to_rename:
-            new_key = old_key.replace("weight_scale_int4", "weight_scale.int4")
-            state_dict[new_key] = state_dict.pop(old_key)
         return state_dict
 
 
