@@ -343,7 +343,7 @@ class BaseLLMModel(metaclass=ABCMeta):
             for name, module in self.model.named_modules():
                 for target in targets:
                     if name.split(".")[-1] == target:
-                        if name not in ignore:
+                        if not any(name.endswith(ig) for ig in ignore):
                             linear_mapping_layers[name] = module
                         break
             return linear_mapping_layers
