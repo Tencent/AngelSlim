@@ -33,6 +33,7 @@ from angelslim.compressor.speculative import (
     infer_model_params,
 )
 from angelslim.compressor.speculative.train.data.data_utils import (
+    build_image_processor_kwargs,
     process_token_dict_to_mappings,
 )
 from angelslim.utils import decide_device_for_distributed
@@ -102,6 +103,10 @@ class HiddenStateGenerator:
         self.rank = rank
         self.draft_vocab_size = draft_vocab_size
         self.target_vocab_size = target_vocab_size
+        _max_pixels = os.environ.get("MAX_PIXELS")
+        _min_pixels = os.environ.get("MIN_PIXELS", "1024")
+        self.max_pixels = int(_max_pixels) if _max_pixels is not None else None
+        self.min_pixels = int(_min_pixels) if _min_pixels is not None else None
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.token_dict = Counter()
 
@@ -151,11 +156,17 @@ class HiddenStateGenerator:
                     images = [load_image(p) for p in image_paths]
                     processor = self.target_model.tokenizer
                     if hasattr(processor, "image_processor"):
+                        kwargs = build_image_processor_kwargs(
+                            processor.image_processor, self.max_pixels, self.min_pixels
+                        )
                         vision_encoding = processor.image_processor(
-                            images=images, return_tensors="pt"
+                            images=images, return_tensors="pt", **kwargs
                         )
                     else:
-                        vision_encoding = processor(images=images, return_tensors="pt")
+                        kwargs = build_image_processor_kwargs(
+                            processor, self.max_pixels, self.min_pixels
+                        )
+                        vision_encoding = processor(images=images, return_tensors="pt", **kwargs)
                     row["pixel_values"] = vision_encoding["pixel_values"].to(device)
                     if "video_pixel_values" in vision_encoding:
                         row["video_pixel_values"] = vision_encoding["video_pixel_values"].to(
@@ -406,7 +417,6 @@ def parse_arguments() -> argparse.Namespace:
         help="Path to draft model config file, used to read draft_vocab_size and vocab_size "
         "for computing vocab mapping",
     )
-
     return parser.parse_args()
 
 

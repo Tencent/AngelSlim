@@ -8,6 +8,7 @@ EVAL_HIDDEN_PATH=
 OUTPUT_DIR=
 RUN_NAME=qwen3-4b-eagle3-angelslim
 MODEL_MAX_LENGTH=8192
+export MAX_PIXELS=
 
 torchrun --nproc_per_node=8 tools/train_eagle3_offline.py \
     --modal_type VLM \

@@ -41,6 +41,7 @@ from ..data_utils import (
     DataCollatorWithPadding,
     VLMDataCollatorWithPadding,
     VLMHunyuanDataCollatorWithPadding,
+    build_image_processor_kwargs,
 )
 from .base_dataset_builder import OnlineDatasetBuilder
 from .dataset_builder_factory import DatasetBuilderFactory
@@ -87,6 +88,11 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
             chat_template_type,
             display,
         )
+        _max_pixels = os.environ.get("MAX_PIXELS")
+        _min_pixels = os.environ.get("MIN_PIXELS", "1024")
+        self.max_pixels = int(_max_pixels) if _max_pixels is not None else None
+        self.min_pixels = int(_min_pixels) if _min_pixels is not None else None
+        rank0_print(f"max_pixels: {self.max_pixels}, min_pixels: {self.min_pixels}")
 
     def build_dataset(
         self,
@@ -168,7 +174,15 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
 
     def get_data_collator(self) -> Any:
         # for online vlm training: dynamically compute pixel_values during collate stage
-        return VLMDataCollatorWithPadding(processor=self.tokenizer)
+        image_processor_kwargs = {}
+        if self.max_pixels is not None:
+            image_processor_kwargs["max_pixels"] = self.max_pixels
+        if self.min_pixels is not None:
+            image_processor_kwargs["min_pixels"] = self.min_pixels
+        return VLMDataCollatorWithPadding(
+            processor=self.tokenizer,
+            image_processor_kwargs=image_processor_kwargs or None,
+        )
 
     def _preprocess_function(self, examples: Dict[str, List]) -> Dict[str, List]:
         new_examples = {
@@ -258,6 +272,12 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
                 del message["content"]
                 message["content"] = new_content
 
+            image_kwargs = {}
+            if image_paths and hasattr(self.tokenizer, "image_processor"):
+                image_kwargs = build_image_processor_kwargs(
+                    self.tokenizer.image_processor, self.max_pixels, self.min_pixels
+                )
+
             encoding = self.tokenizer.apply_chat_template(
                 messages,
                 tokenize=True,
@@ -268,6 +288,7 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
                 max_length=self.max_length,
                 truncation=True,
                 padding=False,
+                **image_kwargs,
             )
 
             input_ids = encoding["input_ids"]
@@ -326,6 +347,11 @@ class OnlineVLMHunyuanVLDatasetBuilder(OnlineDatasetBuilder):
             chat_template_type,
             display,
         )
+        _max_pixels = os.environ.get("MAX_PIXELS")
+        _min_pixels = os.environ.get("MIN_PIXELS", "1024")
+        self.max_pixels = int(_max_pixels) if _max_pixels is not None else None
+        self.min_pixels = int(_min_pixels) if _min_pixels is not None else None
+        rank0_print(f"max_pixels: {self.max_pixels}, min_pixels: {self.min_pixels}")
 
     def build_dataset(
         self,
@@ -404,7 +430,15 @@ class OnlineVLMHunyuanVLDatasetBuilder(OnlineDatasetBuilder):
 
     def get_data_collator(self) -> Any:
         # for online training, we need to use VLMHunyuanDataCollatorWithPadding
-        return VLMHunyuanDataCollatorWithPadding(processor=self.tokenizer)
+        image_processor_kwargs = {}
+        if self.max_pixels is not None:
+            image_processor_kwargs["max_pixels"] = self.max_pixels
+        if self.min_pixels is not None:
+            image_processor_kwargs["min_pixels"] = self.min_pixels
+        return VLMHunyuanDataCollatorWithPadding(
+            processor=self.tokenizer,
+            image_processor_kwargs=image_processor_kwargs or None,
+        )
 
     def _preprocess_function(self, examples: Dict[str, List]) -> Dict[str, List]:
         new_examples = {
@@ -482,6 +516,11 @@ class OnlineVLMHunyuanVLDatasetBuilder(OnlineDatasetBuilder):
             )
             image_inputs, _ = self._extract_vision_info(messages)
 
+            image_kwargs = {}
+            if image_inputs and hasattr(self.tokenizer, "image_processor"):
+                image_kwargs = build_image_processor_kwargs(
+                    self.tokenizer.image_processor, self.max_pixels, self.min_pixels
+                )
             encoding = self.tokenizer(
                 text=[text],
                 images=image_inputs,
@@ -490,6 +529,7 @@ class OnlineVLMHunyuanVLDatasetBuilder(OnlineDatasetBuilder):
                 max_length=self.max_length,
                 truncation=True,
                 padding=False,
+                **image_kwargs,
             )
             input_ids = encoding["input_ids"]
             offsets = encoding["offset_mapping"]

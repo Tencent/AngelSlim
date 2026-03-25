@@ -9,6 +9,7 @@ OUTPUT_DIR=
 EMBED_WEIGHT_KEY="model.embed_tokens.weight"
 MODEL_MAX_LENGTH=8192
 CHAT_TEMPLATE_TYPE=hunyuan_vl
+export MAX_PIXELS=
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 
 torchrun --nproc_per_node=8 tools/train_eagle3_online.py \
