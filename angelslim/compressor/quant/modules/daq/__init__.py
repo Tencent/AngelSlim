@@ -12,8 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from angelslim.compressor.quant.core.kernels import (  # noqa: F401
+    FP8_E4M3_SCHEME,
+    QuantScheme,
+)
+
 from .daq import DAQ  # noqa: F401
-from .kernels import FP8_E4M3_SCHEME, QuantScheme  # noqa: F401
 
 __all__ = [
     "DAQ",

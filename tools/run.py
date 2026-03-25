@@ -254,6 +254,11 @@ def weight_only_run(config):
         fp8_main(input_path, output_path, block_size, num_workers)
 
         print_info(f"FP8 block-wise quantized model saved to: {output_path}")
+    elif quant_name == "daq":
+        from angelslim.compressor.quant.modules.daq import DAQ
+
+        daq = DAQ(config.compression_config.quantization, config.model_config.model_path)
+        daq.run(config.global_config.save_path)
     else:
         raise ValueError(
             f"Unsupported PTQWeightOnly quantization method: '{quant_name}'. "
@@ -305,7 +310,6 @@ def run(config):
         use_audio_in_video=model_config.use_audio_in_video,
         attn_implementation=model_config.attn_implementation,
         deploy_backend=global_config.deploy_backend,
-        build_model=compress_config.need_build_model,
     )
 
     # Step 4: Prepare data (optional custom dataloader)

@@ -14,7 +14,7 @@ model:
 
 # Compression configuration
 compression:
-  name: PTQ
+  name: PTQWeightOnly
   quantization:
     name: daq
     bits: 8

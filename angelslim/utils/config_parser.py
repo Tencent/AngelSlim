@@ -321,20 +321,6 @@ class CompressionConfig:
         return False
 
     @property
-    def need_build_model(self) -> bool:
-        """Check if any of the methods requires building the model."""
-        if not self.name:
-            return True
-
-        for method in self.name:
-            # PTQ/QAT usually need calibration dataset
-            if method in ["PTQ"]:
-                # DAQ is data-free, no calibration dataset needed
-                if self.quantization and self.quantization.name == "daq":
-                    return False
-        return True
-
-    @property
     def only_inference(self) -> Union[bool, List[bool]]:
         """
         Check if each method is inference-only. Returns a single boolean

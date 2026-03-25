@@ -78,7 +78,6 @@ class Engine:
         using_multi_nodes=False,
         use_audio_in_video=False,
         attn_implementation="default",
-        build_model=True,
     ) -> Any:
         """Load pretrained model and tokenizer
         Args:
@@ -114,28 +113,26 @@ class Engine:
                 assert tokenizer, " If model is set, tokenizer must be also set."
                 self.slim_model.tokenizer = tokenizer
             else:
-                if build_model:
-                    self.slim_model.from_pretrained(
-                        model_path,
-                        torch_dtype=torch_dtype,
-                        device_map=device_map,
-                        trust_remote_code=trust_remote_code,
-                        low_cpu_mem_usage=low_cpu_mem_usage,
-                        use_cache=use_cache,
-                        using_multi_nodes=using_multi_nodes,
-                    )
+                self.slim_model.from_pretrained(
+                    model_path,
+                    torch_dtype=torch_dtype,
+                    device_map=device_map,
+                    trust_remote_code=trust_remote_code,
+                    low_cpu_mem_usage=low_cpu_mem_usage,
+                    use_cache=use_cache,
+                    using_multi_nodes=using_multi_nodes,
+                )
                 self.model_path = model_path
         elif self.series in ["Omni"]:
             if not model:
-                if build_model:
-                    self.slim_model.from_pretrained(
-                        model_path,
-                        torch_dtype=torch_dtype,
-                        device_map=device_map,
-                        trust_remote_code=trust_remote_code,
-                        use_audio_in_video=use_audio_in_video,
-                        attn_implementation=attn_implementation,
-                    )
+                self.slim_model.from_pretrained(
+                    model_path,
+                    torch_dtype=torch_dtype,
+                    device_map=device_map,
+                    trust_remote_code=trust_remote_code,
+                    use_audio_in_video=use_audio_in_video,
+                    attn_implementation=attn_implementation,
+                )
                 self.model_path = model_path
         else:
             raise ValueError(f"Unsupported series: {self.series}")

@@ -18,7 +18,8 @@ from typing import Tuple
 
 import torch
 
-from .kernels import FP8E4M3Kernel, QuantKernel
+from angelslim.compressor.quant.core.kernels import FP8E4M3Kernel, QuantKernel
+
 from .utils import print_info
 
 

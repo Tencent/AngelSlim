@@ -22,12 +22,8 @@ from concurrent.futures import Future
 import torch
 from safetensors.torch import load_file
 
-from .kernels import weight_dequant
-
-
-def print_info(msg: str):
-    """Print info message with [DAQ] prefix."""
-    print(f"[DAQ] {msg}")
+from angelslim.compressor.quant.core.kernels import weight_dequant
+from angelslim.utils import print_info
 
 
 def get_available_gpus():

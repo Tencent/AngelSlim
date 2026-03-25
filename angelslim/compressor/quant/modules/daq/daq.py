@@ -28,7 +28,9 @@ from huggingface_hub import snapshot_download
 from safetensors.torch import load_file, save_file
 from tqdm import tqdm
 
-from .kernels import FP8_E4M3_SCHEME, create_quant_kernel
+from angelslim.compressor.quant.core.kernels import FP8_E4M3_SCHEME, create_quant_kernel
+from angelslim.utils import print_info
+
 from .scale_search import scale_search_weight_quant
 from .utils import (
     compute_dynamic_cache_size,
@@ -36,7 +38,6 @@ from .utils import (
     get_weight_map,
     load_base_weight,
     prefetch_base_shard,
-    print_info,
 )
 
 __all__ = ["DAQ"]
@@ -281,17 +282,6 @@ class DAQ:
         self._update_config_json(save_path)
 
         print_info("DAQ quantization complete!")
-
-    def save(self, save_path: str):
-        """Run DAQ quantization and save the quantized model."""
-        self.run(save_path)
-
-        index_file = os.path.join(save_path, "model.safetensors.index.json")
-        config_file = os.path.join(save_path, "config.json")
-        if os.path.exists(index_file) and os.path.exists(config_file):
-            print_info(f"Quantized model saved to {save_path}")
-        else:
-            print_info(f"Warning: Expected output files not found in {save_path}")
 
     def _prepare_output_dir(self, save_path: str):
         # TODO: Currently we only support quantizing BF16 DeepSeek V3/R1 models to FP8.
