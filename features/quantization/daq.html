@@ -1,0 +1,735 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>DAQ量化 &#8212; AngelSlim</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../_static/custom.css" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=a5fa425f"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../_static/togglebutton.js?v=4a39c7ea"></script>
+    <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'features/quantization/daq';</script>
+    <script src="../../_static/custom.js"></script>
+    <link rel="icon" href="../../_static/angelslim_icon.png"/>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="投机采样" href="../speculative_decoding/index.html" />
+    <link rel="prev" title="QAT 量化感知训练" href="qat.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../_static/angelslim_logo.png" class="logo__image only-light" alt="AngelSlim - Home"/>
+    <script>document.write(`<img src="../../_static/angelslim_logo.png" class="logo__image only-dark" alt="AngelSlim - Home"/>`);</script>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">入门指南</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/installation.html">安装教程</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/quickstrat.html">快速开始</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">算法特性</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">量化</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="fp8.html">FP8量化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="int8.html">INT8量化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="awq.html">AWQ量化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gptq.html">GPTQ量化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fp8_lepto.html">FP8_LEPTO量化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="qat.html">QAT 量化感知训练</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">DAQ量化</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../speculative_decoding/index.html">投机采样</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../diffusion/index.html">文生图/视频/3D压缩</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">模型支持</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../models/hunyuan/hunyuan_quant.html">混元模型量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/hunyuan_ocr/hunyuan_ocr_quant.html">HunyuanOCR量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/deepseek/deepseek_quant.html">DeepSeek量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwen/qwen_quant.html">Qwen量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwenvl/qwenvl_quant.html">Qwen2.5VL量化指南</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwen3_omni/qwen3_omni_quant.html">Qwen3-Omni量化指南</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">部署文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../deployment/deploy.html">压缩模型部署</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">性能表现</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../performance/quantization/benchmarks.html">量化benchmark</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../performance/speculative_decoding/benchmarks.html">投机采样Benchmark</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">设计文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../design/index.html">设计文档</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim/edit/main/docs/source/features/quantization/daq.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../../_sources/features/quantization/daq.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>DAQ量化</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#daq-dynamic">DAQ Dynamic量化简介</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">核心特性</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">技术报告</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">环境要求</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">使用方法</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">指标说明</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#sign-preservation-rate">1. Sign Preservation Rate（符号保持率）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cosine-similarity">2. Cosine Similarity（余弦相似度）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mean-squared-error-mse">3. Mean Squared Error（均方误差，MSE）</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">量化方式</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-wise">1. Block-wise 量化</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#per-channel">2. Per-channel 量化</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id8">使用场景</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id9">量化后模型权重分析</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id10">计算指标</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id11">用法</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id12">分析选项</a></li>
+</ul>
+</li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="daq">
+<span id="id1"></span><h1>DAQ量化<a class="headerlink" href="#daq" title="Link to this heading">#</a></h1>
+<section id="daq-dynamic">
+<h2>DAQ Dynamic量化简介<a class="headerlink" href="#daq-dynamic" title="Link to this heading">#</a></h2>
+<p><strong>DAQ (Delta-Aware Quantization)</strong> 是一个面向大语言模型（LLM）的免标定数据的后训练量化方法。标准量化方法以最小化重建误差为目标，但对基座模型无感知，导致量化噪声会不成比例地破坏编码后训练行为（如 SFT、RLHF、DPO）的小幅度参数增量（ΔW）。DAQ 通过将基于重建的优化目标替换为两个 delta-aware 指标——<strong>Sign Preservation Rate（符号保持率）</strong> 和 <strong>Cosine Similarity（余弦相似度）</strong>——来直接优化 ΔW 的方向保真度，仅需<strong>基座模型</strong>和<strong>后训练模型</strong>的权重矩阵，无需校准数据、激活统计量或 Hessian 估计。完整的方法论和实验细节请参阅<a class="reference external" href="https://arxiv.org/abs/2603.22324">技术报告</a>。</p>
+</section>
+<section id="id2">
+<h2>核心特性<a class="headerlink" href="#id2" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>Delta-Aware 指标</strong>：使用 Sign Preservation Rate 和 Cosine Similarity 优化 ΔW 的方向保真度，而非传统的重建误差</p></li>
+<li><p><strong>免数据</strong>：仅需基座模型和后训练模型的权重矩阵——无需校准数据、激活统计量和 Hessian 估计</p></li>
+<li><p><strong>粗-精两阶段搜索</strong>：先进行大范围粗搜索，再在最优候选附近精细搜索，实现高效的 scale 优化</p></li>
+<li><p><strong>多 GPU 支持</strong>：支持多 GPU 并行处理</p></li>
+<li><p><strong>灵活的量化方式</strong>：支持 block-wise 和 per-channel 两种量化方式</p></li>
+</ul>
+</section>
+<section id="id3">
+<h2>技术报告<a class="headerlink" href="#id3" title="Link to this heading">#</a></h2>
+<p>关于 DAQ 方法论的完整描述——包括问题定义、指标定义、粗-精两阶段 scale 搜索算法以及详细的实验结果——请参阅<a class="reference external" href="https://arxiv.org/abs/2603.22324">技术报告</a>。报告中还分析了为什么标准的基于重建的优化目标（如 MSE）会主动破坏后训练知识，并将 DAQ 与 AbsMax、SmoothQuant、AWQ 等基线方法进行了对比。</p>
+</section>
+<section id="id4">
+<h2>环境要求<a class="headerlink" href="#id4" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p>Python 3.8+</p></li>
+<li><p>PyTorch 2.0+</p></li>
+<li><p>Triton 2.0+</p></li>
+<li><p>safetensors</p></li>
+<li><p>huggingface_hub</p></li>
+<li><p>tqdm</p></li>
+</ul>
+</section>
+<section id="id5">
+<h2>使用方法<a class="headerlink" href="#id5" title="Link to this heading">#</a></h2>
+<p>运行示例如下</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/deepseek_r1/fp8_daq/deepseek_r1_daq_fp8_w8a8_block.yaml
+</pre></div>
+</div>
+<p>该配置文件中，量化相关参数如下：</p>
+<p>该配置文件中，量化相关参数如下：</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">name</span></code>：压缩策略，选填量化<code class="docutils literal notranslate"><span class="pre">quantization</span></code>。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.name</span></code>：压缩算法选填<code class="docutils literal notranslate"><span class="pre">daq</span></code>。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.bits</span></code>：目标量化比特数，如fp8量化对应填写8bit。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.base_model_path</span></code>：基座模型路径。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.base_model_repo</span></code>：基座模型在huggingface的路径。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.base_is_fp8</span></code>：基座模型是否是FP8格式。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.metric</span></code>：优化指标，选填<code class="docutils literal notranslate"><span class="pre">sign</span></code>、<code class="docutils literal notranslate"><span class="pre">cosine</span></code>、<code class="docutils literal notranslate"><span class="pre">mse</span></code>。详细说明可参见<a class="reference internal" href="#id6">指标说明</a>或<a class="reference external" href="https://arxiv.org/abs/2603.22324">技术报告</a></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.quantization_method</span></code>：量化方式，选填<code class="docutils literal notranslate"><span class="pre">blockwise</span></code>、<code class="docutils literal notranslate"><span class="pre">per_channel</span></code>。详细说明可参见<a class="reference internal" href="#id7">量化方式</a></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.scale_search.min_range</span></code>：scale 搜索最小倍率。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.scale_search.max_range</span></code>：scale 搜索最大倍率。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.scale_search.coarse_intervals</span></code>：粗搜索区间数。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.scale_search.fine_intervals</span></code>：精搜索区间数。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.scale_search.delta_threshold</span></code>：优化指标为<code class="docutils literal notranslate"><span class="pre">sign</span></code>时，判断Δweight是否有意义的阈值。小于该阈值的值不参与指标计算</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.num_workers</span></code>：多进程并行处理数。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.gpus</span></code>：GPU ID 列表。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.ignore_layers</span></code>：忽略量化层列表。</p></li>
+</ul>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">compression</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PTQ</span>
+<span class="w">  </span><span class="nt">quantization</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">daq</span>
+<span class="w">    </span><span class="nt">bits</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span>
+<span class="w">    </span><span class="nt">base_model_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">deepseek-ai/DeepSeek-R1-Base</span><span class="w"> </span><span class="c1"># DAQ-specific: path to the base model</span>
+<span class="w">    </span><span class="nt">base_model_repo</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">deepseek-ai/DeepSeek-R1</span>
+<span class="w">    </span><span class="nt">base_is_fp8</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"> </span><span class="c1"># Set to true if the base model is FP8 format</span>
+<span class="w">    </span><span class="nt">metric</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cosine</span><span class="w">    </span><span class="c1"># Optimization metric: &quot;sign&quot;，&quot;cosine&quot;，or &quot;mse&quot;</span>
+<span class="w">    </span><span class="nt">quantization_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">blockwise</span><span class="w"> </span><span class="c1"># Quantization method: &quot;blockwise&quot; or &quot;per_channel&quot;</span>
+<span class="w">    </span><span class="c1"># Scale search hyper-parameters (optional, shown with defaults)</span>
+<span class="w">    </span><span class="nt">scale_search</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">min_range</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.8</span>
+<span class="w">      </span><span class="nt">max_range</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.5</span>
+<span class="w">      </span><span class="nt">coarse_intervals</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
+<span class="w">      </span><span class="nt">fine_intervals</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
+<span class="w">      </span><span class="nt">delta_threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0e-5</span>
+<span class="w">    </span><span class="c1"># Multi-process parallelism</span>
+<span class="w">    </span><span class="nt">num_workers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span>
+<span class="w">    </span><span class="nt">gpus</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0,1,2,3&quot;</span>
+<span class="w">    </span><span class="c1"># Skip quantization for these layers</span>
+<span class="w">    </span><span class="nt">ignore_layers</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;lm_head&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="id6">
+<h2>指标说明<a class="headerlink" href="#id6" title="Link to this heading">#</a></h2>
+<section id="sign-preservation-rate">
+<h3>1. Sign Preservation Rate（符号保持率）<a class="headerlink" href="#sign-preservation-rate" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>衡量量化后 <code class="docutils literal notranslate"><span class="pre">sign(ΔW_quant)</span> <span class="pre">==</span> <span class="pre">sign(ΔW_post)</span></code> 的元素比例</p></li>
+<li><p>简单、可解释、对幅度差异鲁棒；值越高表示对微调方向的保持越好</p></li>
+</ul>
+</section>
+<section id="cosine-similarity">
+<h3>2. Cosine Similarity（余弦相似度）<a class="headerlink" href="#cosine-similarity" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>衡量原始 delta 向量与量化 delta 向量之间的方向对齐程度，归一化到 [-1, 1]</p></li>
+<li><p>同时捕捉方向和相对幅度信息；值越高表示对微调方向的保持越好</p></li>
+</ul>
+</section>
+<section id="mean-squared-error-mse">
+<h3>3. Mean Squared Error（均方误差，MSE）<a class="headerlink" href="#mean-squared-error-mse" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>标准重建损失，衡量量化权重与原始权重之间的平方距离</p></li>
+<li><p>注意：MSE <strong>不是</strong> delta-aware 的——它对基座模型无感知，并且可能主动破坏后训练知识（详见<a class="reference internal" href="#tech_report.pdf"><span class="xref myst">技术报告</span></a>）</p></li>
+</ul>
+</section>
+</section>
+<section id="id7">
+<h2>量化方式<a class="headerlink" href="#id7" title="Link to this heading">#</a></h2>
+<section id="block-wise">
+<h3>1. Block-wise 量化<a class="headerlink" href="#block-wise" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>将权重划分为 128×128 的块</p></li>
+<li><p>为每个块计算最优 scale</p></li>
+</ul>
+</section>
+<section id="per-channel">
+<h3>2. Per-channel 量化<a class="headerlink" href="#per-channel" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>为每个通道（行）计算最优 scale</p></li>
+<li><p>更加内存高效</p></li>
+</ul>
+</section>
+</section>
+<section id="id8">
+<h2>使用场景<a class="headerlink" href="#id8" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>模型压缩</strong>：缩减模型体积以便部署</p></li>
+<li><p><strong>边缘部署</strong>：在资源受限的设备上实现 LLM 推理</p></li>
+<li><p><strong>微调模型优化</strong>：在量化过程中保留微调带来的能力提升</p></li>
+</ul>
+</section>
+<section id="id9">
+<h2>量化后模型权重分析<a class="headerlink" href="#id9" title="Link to this heading">#</a></h2>
+<p>DAQ 内置了分析工具（<code class="docutils literal notranslate"><span class="pre">tools/</span></code>），用于评估量化模型对微调信号的保持程度。</p>
+<section id="id10">
+<h3>计算指标<a class="headerlink" href="#id10" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>Sign Preservation</strong> — 逐元素检查 <code class="docutils literal notranslate"><span class="pre">sign(ΔW_quant)</span> <span class="pre">==</span> <span class="pre">sign(ΔW_sft)</span></code> 是否成立</p></li>
+<li><p><strong>Delta Cosine</strong> — <code class="docutils literal notranslate"><span class="pre">ΔW_quant</span></code> 与 <code class="docutils literal notranslate"><span class="pre">ΔW_sft</span></code> 向量之间的余弦相似度</p></li>
+<li><p><strong>Distance Metrics</strong> — 模型对之间的 L2、MSE、MAE、余弦相似度</p></li>
+<li><p><strong>Magnitude Breakdown</strong> — 按 <code class="docutils literal notranslate"><span class="pre">|ΔW_sft|</span></code> 幅度分段统计符号保持率</p></li>
+</ul>
+</section>
+<section id="id11">
+<h3>用法<a class="headerlink" href="#id11" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/daq_analyze.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--quantized-model<span class="w"> </span>/path/to/quantized/model<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--sft-path<span class="w"> </span>/path/to/sft/model<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--base-model<span class="w"> </span>/path/to/base/model<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--quant-type<span class="w"> </span>block_fp8<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output-report<span class="w"> </span>/path/to/report.json<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--gpus<span class="w"> </span><span class="m">0</span>,1,2,3<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--num-workers<span class="w"> </span><span class="m">4</span>
+</pre></div>
+</div>
+</section>
+<section id="id12">
+<h3>分析选项<a class="headerlink" href="#id12" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--quant-type</span></code>：量化格式（<code class="docutils literal notranslate"><span class="pre">block_fp8</span></code>、<code class="docutils literal notranslate"><span class="pre">channel_fp8</span></code>、<code class="docutils literal notranslate"><span class="pre">channel_int8</span></code>、<code class="docutils literal notranslate"><span class="pre">bf16</span></code>）</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--output-report</span></code>：JSON 报告输出路径（可选）</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--num-workers</span></code>：并行工作进程数</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--gpus</span></code>：GPU ID 列表，逗号分隔（如 <code class="docutils literal notranslate"><span class="pre">0,1,2,3</span></code>）</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--verbose</span></code>：在报告中包含逐权重详细信息</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--block-size</span></code>：量化格式为 block_fp8时，block量化的块大小（默认：128）</p></li>
+</ul>
+</section>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="qat.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">QAT 量化感知训练</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../speculative_decoding/index.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">投机采样</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#daq-dynamic">DAQ Dynamic量化简介</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">核心特性</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">技术报告</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">环境要求</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">使用方法</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">指标说明</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#sign-preservation-rate">1. Sign Preservation Rate（符号保持率）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cosine-similarity">2. Cosine Similarity（余弦相似度）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mean-squared-error-mse">3. Mean Squared Error（均方误差，MSE）</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">量化方式</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-wise">1. Block-wise 量化</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#per-channel">2. Per-channel 量化</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id8">使用场景</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id9">量化后模型权重分析</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id10">计算指标</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id11">用法</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id12">分析选项</a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By the AngelSlim Team
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, AngelSlim Team.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

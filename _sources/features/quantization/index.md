@@ -13,4 +13,5 @@ awq
 gptq
 fp8_lepto
 qat
+daq
 :::
