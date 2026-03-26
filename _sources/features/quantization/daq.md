@@ -43,7 +43,6 @@ python3 tools/run.py -c configs/deepseek_r1/fp8_daq/deepseek_r1_daq_fp8_w8a8_blo
 - `quantization.name`：压缩算法选填`daq`。
 - `quantization.bits`：目标量化比特数，如fp8量化对应填写8bit。
 - `quantization.base_model_path`：基座模型路径。
-- `quantization.base_model_repo`：基座模型在huggingface的路径。
 - `quantization.base_is_fp8`：基座模型是否是FP8格式。
 - `quantization.metric`：优化指标，选填`sign`、`cosine`、`mse`。详细说明可参见[指标说明](#指标说明)或[技术报告](https://arxiv.org/abs/2603.22324)
 - `quantization.quantization_method`：量化方式，选填`blockwise`、`per_channel`。详细说明可参见[量化方式](#量化方式)
@@ -63,7 +62,6 @@ compression:
     name: daq
     bits: 8
     base_model_path: deepseek-ai/DeepSeek-R1-Base # DAQ-specific: path to the base model
-    base_model_repo: deepseek-ai/DeepSeek-R1
     base_is_fp8: true # Set to true if the base model is FP8 format
     metric: cosine    # Optimization metric: "sign"，"cosine"，or "mse"
     quantization_method: blockwise # Quantization method: "blockwise" or "per_channel"
