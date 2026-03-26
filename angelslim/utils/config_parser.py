@@ -229,7 +229,6 @@ class QuantizationConfig:
     scale_search: Optional[Dict[str, Any]] = field(default=None)
     num_workers: int = field(default=8)
     gpus: Optional[str] = field(default=None)
-    base_model_repo: Optional[str] = field(default=None)
 
 
 @dataclass

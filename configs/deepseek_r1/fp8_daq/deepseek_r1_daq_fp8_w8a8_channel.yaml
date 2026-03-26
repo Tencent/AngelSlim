@@ -20,7 +20,6 @@ compression:
     bits: 8
     # DAQ-specific: path to the base (pretrained) model
     base_model_path: deepseek-ai/DeepSeek-R1-Base
-    base_model_repo: deepseek-ai/DeepSeek-R1
     # Set to true if the base model is FP8 format
     base_is_fp8: true
     # Optimization metric: "sign" (sign preservation rate),

@@ -18,13 +18,13 @@ import copy
 import json
 import multiprocessing as mp
 import os
+import shutil
 from collections import OrderedDict, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from glob import glob
 
 import torch
-from huggingface_hub import snapshot_download
 from safetensors.torch import load_file, save_file
 from tqdm import tqdm
 
@@ -39,6 +39,27 @@ from .utils import (
     load_base_weight,
     prefetch_base_shard,
 )
+
+# Suffixes that identify weight tensors to be quantized.
+# Imported from fp8_quant_blockwise for consistency; any weight whose name
+# ends with one of these suffixes will be quantized by DAQ.
+SUFFIX_TO_QUANT = [
+    ".gate_and_up_proj.weight",
+    ".gate_proj.weight",
+    ".up_proj.weight",
+    ".down_proj.weight",
+    ".q_a_proj.weight",
+    ".q_b_proj.weight",
+    ".kv_a_proj_with_mqa.weight",
+    ".kv_b_proj.weight",
+    ".qkv_proj.weight",
+    ".q_proj.weight",
+    ".k_proj.weight",
+    ".v_proj.weight",
+    ".o_proj.weight",
+    ".experts.gate_up_proj",
+    ".experts.down_proj",
+]
 
 __all__ = ["DAQ"]
 
@@ -127,7 +148,6 @@ class DAQ:
         self.quantization_method = quant_config.quantization_method
         self.num_workers = quant_config.num_workers
         self.ignore_layers = getattr(quant_config, "ignore_layers", []) or []
-        self.base_model_repo = quant_config.base_model_repo
 
         gpus_str = quant_config.gpus
         if gpus_str:
@@ -228,7 +248,6 @@ class DAQ:
         model_index_file = os.path.join(save_path, "model.safetensors.index.json")
         with open(model_index_file, "r") as f:
             model_index = json.load(f)
-        weight_map = model_index["weight_map"]
 
         base_weight_map = get_weight_map(self.base_model_path)
         if not base_weight_map:
@@ -253,7 +272,6 @@ class DAQ:
                 safetensor_files,
                 self.base_model_path,
                 save_path,
-                weight_map,
                 base_weight_map,
                 dynamic_cache_size,
             )
@@ -262,7 +280,6 @@ class DAQ:
                 safetensor_files,
                 self.base_model_path,
                 save_path,
-                weight_map,
                 base_weight_map,
                 dynamic_cache_size,
             )
@@ -284,32 +301,12 @@ class DAQ:
         print_info("DAQ quantization complete!")
 
     def _prepare_output_dir(self, save_path: str):
-        # TODO: Currently we only support quantizing BF16 DeepSeek V3/R1 models to FP8.
-        # To support all model architectures, the logic for determining which weights
-        # to quantize should be changed from referencing the target model's
-        # model.safetensors.index.json to using regex-based include/exclude lists
-        # (e.g. regex patterns for weights to quantize and weights to ignore).
-        model_index_file = os.path.join(save_path, "model.safetensors.index.json")
-        config_file = os.path.join(save_path, "config.json")
-
-        # Check if files need to be downloaded
-        if not os.path.exists(model_index_file) or not os.path.exists(config_file):
-            print(f"Model index or config file not found in {save_path}")
-            print(f"Downloading config files from HuggingFace: {self.base_model_repo}")
-            try:
-                snapshot_download(
-                    repo_id=self.base_model_repo,
-                    ignore_patterns=["*.safetensors"],
-                    local_dir=save_path,
-                    local_dir_use_symlinks=False,
-                )
-            except Exception as e:
-                raise RuntimeError(
-                    f"Failed to download config files from HuggingFace repo "
-                    f"'{self.base_model_repo}'. Please check your network connection "
-                    f"and ensure the repo_id is correct. Original error: {e}"
-                ) from e
-            print(f"✓ Model index file and config file downloaded to {save_path}")
+        for item in os.listdir(self.sft_model_path):
+            src = os.path.join(self.sft_model_path, item)
+            dst = os.path.join(save_path, item)
+            if os.path.isfile(src) and not item.endswith(".safetensors"):
+                if not os.path.exists(dst):
+                    shutil.copy2(src, dst)
 
     def _update_config_json(self, save_path: str):
         config_file = os.path.join(save_path, "config.json")
@@ -346,7 +343,6 @@ class DAQ:
         safetensor_files,
         base_path,
         save_path,
-        weight_map,
         base_weight_map,
         dynamic_cache_size,
     ):
@@ -357,7 +353,6 @@ class DAQ:
                 safetensor_file,
                 base_path,
                 save_path,
-                weight_map,
                 base_weight_map,
                 self.scale_search_kwargs,
                 True,
@@ -377,7 +372,6 @@ class DAQ:
         safetensor_files,
         base_path,
         save_path,
-        weight_map,
         base_weight_map,
         dynamic_cache_size,
     ):
@@ -403,7 +397,6 @@ class DAQ:
                     worker_file_groups[wid],
                     base_path,
                     save_path,
-                    weight_map,
                     base_weight_map,
                     self.scale_search_kwargs,
                     worker_devices[wid],
@@ -487,7 +480,6 @@ def _worker_process_files(args):
         file_list,
         base_path,
         save_path,
-        weight_map,
         base_weight_map,
         scale_search_kwargs,
         device,
@@ -512,7 +504,6 @@ def _worker_process_files(args):
             safetensor_file,
             base_path,
             save_path,
-            weight_map,
             base_weight_map,
             scale_search_kwargs,
             False,
@@ -532,7 +523,6 @@ def _process_single_file(
     safetensor_file,
     base_path,
     fp8_path,
-    weight_map,
     base_weight_map,
     scale_search_kwargs,
     verbose,
@@ -622,8 +612,9 @@ def _process_single_file(
         scale_inv_name = f"{weight_name}_scale_inv"
 
         should_ignore = any(ignore_pattern in weight_name for ignore_pattern in ignore_layers)
+        should_quant = any(weight_name.endswith(suffix) for suffix in SUFFIX_TO_QUANT)
 
-        if scale_inv_name in weight_map and not should_ignore:
+        if should_quant and not should_ignore:
             assert weight.element_size() == 2, f"Expected BF16, got {weight.dtype}"
 
             base_weight = load_base_weight(
