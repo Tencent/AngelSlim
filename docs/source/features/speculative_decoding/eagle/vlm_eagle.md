@@ -81,7 +81,17 @@ bash scripts/speculative/generate_data_for_target_model.sh
 
 #### 2.2.2 为Eagle3模型生成hidden states
 
-目前仅支持以HF为后端生成hidden states，调用脚本如下：
+目前支持两种后端生成hidden states：**HF后端（torchrun）** 和 **vLLM后端（Ray）**。
+
+> 注意：qwen3_vl系列模型生成hidden states需要更新transformers>=5.0.0,
+ 或者cherry-pick: https://github.com/huggingface/transformers/pull/42609,
+ 否则抓取的hidden states不可用！！！
+
+##### 方式一：HF后端（torchrun）
+
+使用HuggingFace Transformers作为推理后端，通过torchrun进行多卡分布式生成。适合对HF生态兼容性要求高的场景。
+
+调用脚本如下：
 ```shell
 # For HunyuanOCR
 bash scripts/speculative/hunyuan_ocr/generate_vlm_hidden_for_draft_model.sh
@@ -89,21 +99,21 @@ bash scripts/speculative/hunyuan_ocr/generate_vlm_hidden_for_draft_model.sh
 bash scripts/speculative/qwen3_vl/generate_vlm_hidden_for_draft_model.sh
 ```
 
-> 注意：qwen3_vl系列模型生成hidden states需要更新transformers>=5.0.0,
- 或者cherry-pick: https://github.com/huggingface/transformers/pull/42609,
- 否则抓取的hidden states不可用！！！
 
-**脚本参数说明：**
+##### 方式二：vLLM后端（Ray）
 
-在使用前，需要在脚本中配置以下参数：
+使用vLLM作为推理后端对采样过程进行加速，通过Ray进行分布式调度。**推荐在多节点、大规模生成场景下使用**。
 
-- `DATASET_PATH`: 输入数据集的HF名称或本地路径
-- `TARGET_MODEL_NAME_OR_PATH`: 目标模型的HF名称或本地路径
-- `DRAFT_MODEL_CONFIG_PATH`: 草稿模型的config路径
-- `TARGET_BACKEND`: 目标模型后端，目前仅支持HF
-- `MODEL_MAX_LENGTH`: 生成数据的上下文长度
-- `CHAT_TEMPLATE_TYPE`: 目标模型的目标类型，目前支持qwen3_vl/hunyuan_vl
-- `OUTPUT_DIR`: 生成的数据集输出路径
+**核心优势：**
+- 支持多节点Ray集群，自动管理节点间通信
+- 支持vLLM的tensor parallel，充分利用多卡资源
+- 自动处理Ray集群的启动、任务分发和资源回收
+
+调用脚本如下：
+
+```shell
+bash scripts/speculative/qwen3_vl/generate_vlm_hidden_for_draft_model_ray.sh
+```
 
 
 ## 3. 训练Eagle3模型

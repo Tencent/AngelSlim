@@ -94,12 +94,17 @@ class TargetHead(nn.Module):
                 raise ValueError(f"Config {config} has no sub-config named {sub_config_name}")
 
         # Get model dimensions
-        if config.model_type in ["qwen3_vl", "qwen3_vl_moe"]:
+        if hasattr(config, "text_config") and hasattr(config.text_config, "hidden_size"):
             hidden_size = config.text_config.hidden_size
             vocab_size = config.text_config.vocab_size
-        else:
+        elif hasattr(config, "hidden_size"):
             hidden_size = config.hidden_size
             vocab_size = config.vocab_size
+        else:
+            raise ValueError(
+                f"Cannot determine hidden_size from config (model_type={config.model_type}). "
+                f"Please specify sub_config_name parameter to locate the text config."
+            )
 
         # Initialize lm_head
         lm_head = nn.Linear(hidden_size, vocab_size, bias=False)

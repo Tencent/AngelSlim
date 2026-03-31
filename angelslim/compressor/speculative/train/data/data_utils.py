@@ -248,8 +248,10 @@ class VLMDataCollatorWithPadding:
                        e.g. {"max_pixels": 1003520, "min_pixels": 200704}.
         """
         self.processor = processor
+        if image_processor_kwargs is None:
+            image_processor_kwargs = {}
         max_pixels = image_processor_kwargs.get("max_pixels", None)
-        min_pixels = image_processor_kwargs.get("min_pixels", None)
+        min_pixels = image_processor_kwargs.get("min_pixels", "1024")
         if (
             processor is not None
             and (max_pixels is not None or min_pixels is not None)
@@ -287,7 +289,7 @@ class VLMDataCollatorWithPadding:
         # Online training: decode image_paths -> pixel_values on-the-fly
         if self.processor is not None and "image_paths" in features[0]:
             all_pixel_values, all_image_grid_thw = [], []
-            all_video_pixel_values, all_video_grid_thw = [], []
+            all_pixel_values_videos, all_video_grid_thw = [], []
             for item in features:
                 image_paths = json.loads(item["image_paths"])
                 if image_paths:
@@ -307,16 +309,16 @@ class VLMDataCollatorWithPadding:
                     all_pixel_values.append(vision_enc["pixel_values"])
                     if "image_grid_thw" in vision_enc:
                         all_image_grid_thw.append(vision_enc["image_grid_thw"])
-                    if "video_pixel_values" in vision_enc:
-                        all_video_pixel_values.append(vision_enc["video_pixel_values"])
+                    if "pixel_values_videos" in vision_enc:
+                        all_pixel_values_videos.append(vision_enc["pixel_values_videos"])
                     if "video_grid_thw" in vision_enc:
                         all_video_grid_thw.append(vision_enc["video_grid_thw"])
             if all_pixel_values:
                 batch["pixel_values"] = paddingtensor3D_BHW(all_pixel_values)
             if all_image_grid_thw:
                 batch["image_grid_thw"] = torch.cat(all_image_grid_thw, dim=0)
-            if all_video_pixel_values:
-                batch["video_pixel_values"] = paddingtensor3D_BHW(all_video_pixel_values)
+            if all_pixel_values_videos:
+                batch["pixel_values_videos"] = paddingtensor3D_BHW(all_pixel_values_videos)
             if all_video_grid_thw:
                 batch["video_grid_thw"] = torch.cat(all_video_grid_thw, dim=0)
         else:
@@ -324,9 +326,9 @@ class VLMDataCollatorWithPadding:
                 batch["pixel_values"] = paddingtensor3D_BHW(
                     [item["pixel_values"] for item in features]
                 )
-            if "video_pixel_values" in features[0]:
-                batch["video_pixel_values"] = paddingtensor3D_BHW(
-                    [item["video_pixel_values"] for item in features]
+            if "pixel_values_videos" in features[0]:
+                batch["pixel_values_videos"] = paddingtensor3D_BHW(
+                    [item["pixel_values_videos"] for item in features]
                 )
             if all(
                 "image_grid_thw" in item and item["image_grid_thw"] is not None
@@ -375,8 +377,10 @@ class VLMHunyuanDataCollatorWithPadding:
                        e.g. {"max_pixels": 1003520, "min_pixels": 200704}.
         """
         self.processor = processor
+        if image_processor_kwargs is None:
+            image_processor_kwargs = {}
         max_pixels = image_processor_kwargs.get("max_pixels", None)
-        min_pixels = image_processor_kwargs.get("min_pixels", None)
+        min_pixels = image_processor_kwargs.get("min_pixels", "1024")
         if (
             processor is not None
             and (max_pixels is not None or min_pixels is not None)

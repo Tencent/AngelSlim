@@ -57,11 +57,8 @@ def setup_distributed():
         rank = int(os.environ["RANK"])
         world_size = int(os.environ["WORLD_SIZE"])
         local_rank = int(os.environ["LOCAL_RANK"])
-
-        # Initialize process group
         dist.init_process_group(backend="nccl", timeout=timedelta(minutes=60))
         torch.cuda.set_device(local_rank)
-
         return rank, world_size, local_rank
     else:
         # Single process mode
@@ -110,6 +107,149 @@ class HiddenStateGenerator:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.token_dict = Counter()
 
+        # Resolve image_pad token id for vLLM loss_mask rebuilding
+        self._image_pad_token_id = None
+
+    def _resolve_image_pad_token_id(self):
+        """Lazily resolve the image_pad token id from the target model's tokenizer."""
+        if self._image_pad_token_id is not None:
+            return self._image_pad_token_id
+        try:
+            tokenizer = self.target_model.tokenizer
+            _image_token = getattr(tokenizer, "image_token", "<|image_pad|>")
+            _tok = getattr(tokenizer, "tokenizer", tokenizer)
+            _vocab = _tok.get_vocab() if hasattr(_tok, "get_vocab") else {}
+            self._image_pad_token_id = _vocab.get(_image_token)
+        except Exception:
+            pass
+        return self._image_pad_token_id
+
+    def _rebuild_ids_and_loss_mask_for_vllm(
+        self,
+        orig_input_ids: torch.Tensor,
+        orig_loss_mask: torch.Tensor,
+        target_seq_len: int,
+    ) -> tuple:
+        """Rebuild input_ids and loss_mask to match vLLM's actual output length.
+
+        When vLLM processes images, it re-expands image_pad tokens internally.
+        The number of expanded tokens (M) may differ from the pre-expansion
+        count (N) in orig_input_ids.  This method adjusts the sequences:
+
+        Strategy:
+        - Identify contiguous runs of image_pad tokens in orig_input_ids.
+        - The total length difference (target_seq_len - orig_seq_len) is
+          distributed across image_pad runs proportionally.
+        - Non-image_pad tokens and their loss_mask values are preserved as-is.
+        - New image_pad tokens get loss_mask = 0 (image tokens are never
+          part of the training loss).
+
+        Args:
+            orig_input_ids: shape [B, N_orig]
+            orig_loss_mask: shape [B, N_orig]
+            target_seq_len: N_vllm, the actual sequence length from vLLM output
+
+        Returns:
+            Tuple of (new_input_ids, new_loss_mask), both shape [B, target_seq_len]
+        """
+        pad_id = self._resolve_image_pad_token_id()
+        batch_size = orig_input_ids.shape[0]
+
+        new_ids_list = []
+        new_mask_list = []
+
+        for b in range(batch_size):
+            ids = orig_input_ids[b].tolist()
+            mask = orig_loss_mask[b].tolist()
+            orig_len = len(ids)
+            delta = target_seq_len - orig_len
+
+            if pad_id is None or delta == 0:
+                # No image_pad token or lengths already match — just pad/truncate
+                if delta > 0:
+                    ids = ids + [0] * delta
+                    mask = mask + [0] * delta
+                else:
+                    ids = ids[:target_seq_len]
+                    mask = mask[:target_seq_len]
+                new_ids_list.append(ids)
+                new_mask_list.append(mask)
+                continue
+
+            # Find image_pad runs: list of (start, length) tuples
+            runs = []
+            i = 0
+            while i < orig_len:
+                if ids[i] == pad_id:
+                    run_start = i
+                    while i < orig_len and ids[i] == pad_id:
+                        i += 1
+                    runs.append((run_start, i - run_start))
+                else:
+                    i += 1
+
+            if not runs:
+                # No image_pad runs found; truncate/pad at end
+                if delta > 0:
+                    ids = ids + [0] * delta
+                    mask = mask + [0] * delta
+                else:
+                    ids = ids[:target_seq_len]
+                    mask = mask[:target_seq_len]
+                new_ids_list.append(ids)
+                new_mask_list.append(mask)
+                continue
+
+            # Distribute delta across runs proportionally
+            total_pad_tokens = sum(length for _, length in runs)
+            # New size for each run
+            new_run_sizes = []
+            remaining_delta = delta
+            for idx_r, (_, length) in enumerate(runs):
+                if idx_r == len(runs) - 1:
+                    # Last run absorbs remaining delta
+                    new_size = length + remaining_delta
+                else:
+                    share = round(delta * length / total_pad_tokens)
+                    new_size = length + share
+                    remaining_delta -= share
+                new_run_sizes.append(max(new_size, 1))  # At least 1 token per run
+
+            # Reconstruct ids and mask
+            result_ids = []
+            result_mask = []
+            run_idx = 0
+            i = 0
+            while i < orig_len:
+                if run_idx < len(runs) and i == runs[run_idx][0]:
+                    # This is an image_pad run
+                    run_start, run_len = runs[run_idx]
+                    new_size = new_run_sizes[run_idx]
+                    result_ids.extend([pad_id] * new_size)
+                    result_mask.extend([0] * new_size)  # image_pad tokens: loss_mask = 0
+                    i += run_len
+                    run_idx += 1
+                else:
+                    result_ids.append(ids[i])
+                    result_mask.append(mask[i])
+                    i += 1
+
+            # Final length adjustment (rounding safety)
+            if len(result_ids) < target_seq_len:
+                pad_count = target_seq_len - len(result_ids)
+                result_ids.extend([0] * pad_count)
+                result_mask.extend([0] * pad_count)
+            elif len(result_ids) > target_seq_len:
+                result_ids = result_ids[:target_seq_len]
+                result_mask = result_mask[:target_seq_len]
+
+            new_ids_list.append(result_ids)
+            new_mask_list.append(result_mask)
+
+        new_input_ids = torch.tensor(new_ids_list, dtype=orig_input_ids.dtype)
+        new_loss_mask = torch.tensor(new_mask_list, dtype=orig_loss_mask.dtype)
+        return new_input_ids, new_loss_mask
+
     def _get_output_path(self, idx: int) -> Path:
         """
         Get the output file path for a given sample index.
@@ -154,43 +294,81 @@ class HiddenStateGenerator:
                 image_paths = json.loads(row.pop("image_paths"))
                 if image_paths:
                     images = [load_image(p) for p in image_paths]
-                    processor = self.target_model.tokenizer
-                    if hasattr(processor, "image_processor"):
-                        kwargs = build_image_processor_kwargs(
-                            processor.image_processor, self.max_pixels, self.min_pixels
-                        )
-                        vision_encoding = processor.image_processor(
-                            images=images, return_tensors="pt", **kwargs
-                        )
+
+                    # Check if using vLLM backend.
+                    # vLLM expects raw PIL Images in multi_modal_data and runs
+                    # its own image processor internally (which also computes
+                    # image_grid_thw automatically).  Passing pre-processed
+                    # pixel_values tensors or image_grid_thw as separate
+                    # modality keys causes "Unsupported modality" errors.
+                    is_vllm_backend = getattr(self.target_model, "backend_name", None) == "vllm"
+
+                    if is_vllm_backend:
+                        # Pass raw PIL Images; vLLM handles preprocessing internally
+                        row["raw_images"] = [images]  # list of list (one list per batch sample)
                     else:
-                        kwargs = build_image_processor_kwargs(
-                            processor, self.max_pixels, self.min_pixels
-                        )
-                        vision_encoding = processor(images=images, return_tensors="pt", **kwargs)
-                    row["pixel_values"] = vision_encoding["pixel_values"].to(device)
-                    if "video_pixel_values" in vision_encoding:
-                        row["video_pixel_values"] = vision_encoding["video_pixel_values"].to(
-                            device
-                        )
-                    if "image_grid_thw" in vision_encoding:
-                        row["image_grid_thw"] = vision_encoding["image_grid_thw"].to(device)
-                    if "video_grid_thw" in vision_encoding:
-                        row["video_grid_thw"] = vision_encoding["video_grid_thw"].to(device)
+                        # HF Transformers backend: preprocess images manually
+                        processor = self.target_model.tokenizer
+                        if hasattr(processor, "image_processor"):
+                            kwargs = build_image_processor_kwargs(
+                                processor.image_processor, self.max_pixels, self.min_pixels
+                            )
+                            vision_encoding = processor.image_processor(
+                                images=images, return_tensors="pt", **kwargs
+                            )
+                        else:
+                            kwargs = build_image_processor_kwargs(
+                                processor, self.max_pixels, self.min_pixels
+                            )
+                            vision_encoding = processor(
+                                images=images, return_tensors="pt", **kwargs
+                            )
+                        row["pixel_values"] = vision_encoding["pixel_values"].to(device)
+                        if "pixel_values_videos" in vision_encoding:
+                            row["pixel_values_videos"] = vision_encoding["pixel_values_videos"].to(
+                                device
+                            )
+                        if "image_grid_thw" in vision_encoding:
+                            row["image_grid_thw"] = vision_encoding["image_grid_thw"].to(device)
+                        if "video_grid_thw" in vision_encoding:
+                            row["video_grid_thw"] = vision_encoding["video_grid_thw"].to(device)
                 else:
                     row.pop("image_paths", None)
+
+            # Save original input_ids and loss_mask before sending to model,
+            # because vLLM backend may change the effective sequence length.
+            orig_input_ids = row["input_ids"].clone()  # B, N_orig
+            orig_loss_mask = row["loss_mask"].clone()  # B, N_orig
 
             for k, v in row.items():
                 if isinstance(v, torch.Tensor) and v is not None:
                     row[k] = v.to(device)
             results = self.target_model.get_aux_and_target_hiddens(**row)
-            # hidden_states: B, N, 3*D
-            # target_hiddens: B, N, D
+            # hidden_states: B, N_vllm, 3*D
+            # target_hiddens: B, N_vllm, D
             for k, v in results.items():
                 results[k] = v.cpu() if isinstance(v, torch.Tensor) else v
 
-            # Prepare data point
-            input_ids_cpu = row["input_ids"].cpu()  # B, N
-            loss_mask_cpu = row["loss_mask"].cpu()  # B, N
+            # Prepare data point.
+            # When using vLLM backend, the returned hidden_states seq_len (N_vllm)
+            # may differ from the preprocessed input_ids length (N_orig), because
+            # _process_single_conversation expands image_pad to N tokens based on
+            # MAX_PIXELS, while vLLM internally re-expands a single image_pad to M
+            # tokens (M may differ from N even with same MAX_PIXELS due to rounding
+            # or processor differences).  We must rebuild input_ids and loss_mask to
+            # match N_vllm so that the saved .ckpt has consistent dimensions.
+            is_vllm_backend = getattr(self.target_model, "backend_name", None) == "vllm"
+            vllm_seq_len = results["hidden_states"].shape[1]
+            orig_seq_len = orig_input_ids.shape[1]
+
+            if is_vllm_backend and vllm_seq_len != orig_seq_len:
+                input_ids_cpu, loss_mask_cpu = self._rebuild_ids_and_loss_mask_for_vllm(
+                    orig_input_ids.cpu(), orig_loss_mask.cpu(), vllm_seq_len
+                )
+            else:
+                input_ids_cpu = orig_input_ids.cpu()
+                loss_mask_cpu = orig_loss_mask.cpu()
+
             data_point = {
                 "input_ids": input_ids_cpu,
                 "loss_mask": loss_mask_cpu,
@@ -347,7 +525,7 @@ def parse_arguments() -> argparse.Namespace:
         "--target_backend",
         type=str,
         default="hf",
-        choices=["hf"],
+        choices=["hf", "vllm"],
         help="Backend for target model",
     )
     parser.add_argument(
@@ -556,6 +734,9 @@ def main():
                 extra={"rank": rank},
             )
 
+        logger.info(
+            f"backend: {args.target_backend}, modal_type: {args.modal_type}", extra={"rank": rank}
+        )
         # Load target model
         torch_dtype = get_torch_dtype(args.torch_dtype)
         target_model = create_target_model(
@@ -634,10 +815,11 @@ def main():
         if rank == 0:
             logger.info("=" * 50, extra={"rank": rank})
             logger.info("Generation Complete!", extra={"rank": rank})
-            logger.info(
-                f"Total samples processed across all ranks: {len(dataset)}",
-                extra={"rank": rank},
-            )
+            if "dataset" in dir():
+                logger.info(
+                    f"Total samples processed across all ranks: {len(dataset)}",
+                    extra={"rank": rank},
+                )
             logger.info("=" * 50, extra={"rank": rank})
 
         # Cleanup distributed environment

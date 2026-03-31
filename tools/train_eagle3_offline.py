@@ -302,7 +302,7 @@ def train():
             )
 
     # Create draft model
-    rank0_print("Loading draft model...")
+    rank0_print(f"Loading draft model: {args.draft_model_config_path}")
     draft_model_config = DraftModelConfig.from_file(args.draft_model_config_path)
     draft_model = create_draft_model(draft_model_config)
     draft_model.load_embed_weights(args.target_model_name_or_path, args.embed_weight_key)
@@ -445,7 +445,7 @@ def train():
     rank0_print("Training completed!")
 
     # Save final model to output_dir
-    rank0_print(f"Saving final model to {training_args.output_dir}...")
+    rank0_print(f"Saving final model to {training_args.output_dir}")
     trainer.save_model()
     trainer.save_state()
     rank0_print("Final model saved successfully!")

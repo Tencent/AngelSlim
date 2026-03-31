@@ -145,16 +145,44 @@ class MRotaryEmbedding(nn.Module):
     def __init__(self, config, device=None):
         super().__init__()
         if hasattr(config, "rope_scaling") and config.rope_scaling is not None:
-            self.rope_type = config.rope_scaling.get("rope_type", "default")
+            self.rope_type = config.rope_scaling.get(
+                "rope_type", config.rope_scaling.get("type", "default")
+            )
+            # mrope is actually a special case of default RoPE that uses the same inv_freq
+            # calculation but with different layout in forward.
+            if self.rope_type == "mrope":
+                self.rope_type = "default"
         else:
             self.rope_type = "default"
         self.max_seq_len_cached = config.max_position_embeddings
         self.original_max_seq_len = config.max_position_embeddings
 
         self.config = config
-        self.rope_init_fn = ROPE_INIT_FUNCTIONS[self.rope_type]
 
-        inv_freq, self.attention_scaling = self.rope_init_fn(self.config, device)
+        if self.rope_type == "default":
+            # Standard RoPE: no scaling, equivalent to _compute_default_rope_parameters
+            # In transformers>=5.x, rope_theta is merged into rope_scaling/rope_parameters dict,
+            # so we need to check there first, then fallback to config attribute.
+            rope_scaling = getattr(config, "rope_scaling", None) or {}
+            base = rope_scaling.get("rope_theta", None) or getattr(config, "rope_theta", 10000.0)
+            partial_rotary_factor = getattr(config, "partial_rotary_factor", 1.0)
+            head_dim = (
+                getattr(config, "head_dim", None)
+                or config.hidden_size // config.num_attention_heads
+            )
+            dim = int(head_dim * partial_rotary_factor)
+            inv_freq = 1.0 / (
+                base
+                ** (
+                    torch.arange(0, dim, 2, dtype=torch.int64).to(device=device, dtype=torch.float)
+                    / dim
+                )
+            )
+            self.attention_scaling = 1.0
+        else:
+            self.rope_init_fn = ROPE_INIT_FUNCTIONS[self.rope_type]
+            inv_freq, self.attention_scaling = self.rope_init_fn(self.config, device)
+
         self.register_buffer("inv_freq", inv_freq, persistent=False)
         self.original_inv_freq = self.inv_freq
 
@@ -233,8 +261,10 @@ class LlamaAttention(nn.Module):
                 self.head_dim, max_position_embeddings=self.max_position_embeddings
             )
         else:
-            scaling_type = self.config.rope_scaling["type"]
-            if self.config.rope_scaling.get("mrope_interleaved", False):
+            scaling_type = self.config.rope_scaling.get(
+                "type", self.config.rope_scaling.get("rope_type", "default")
+            )
+            if scaling_type == "mrope" or self.config.rope_scaling.get("mrope_interleaved", False):
                 self.rotary_emb = MRotaryEmbedding(self.config)
                 self.rope_apply_func = apply_rotary_pos_emb_mrope
             elif scaling_type == "linear":
@@ -320,9 +350,20 @@ class LlamaAttention(nn.Module):
         lck = len(cache_k)
 
         if lck == 1:
-            attn_output = torch.nn.functional.scaled_dot_product_attention(
-                query_states, k0, v0, attn_mask=attention_mask
-            )
+            # cuDNN SDPA backend (PyTorch 2.7+) does not support arbitrary 4D
+            # float attention masks and will fail during backward with:
+            #   "Expected mha_graph->execute(...).is_good() to be true"
+            # Disable cuDNN backend so that Flash Attention / math backends
+            # handle the 4D causal mask correctly.
+            _sdpa_backends = [
+                torch.nn.attention.SDPBackend.FLASH_ATTENTION,
+                torch.nn.attention.SDPBackend.EFFICIENT_ATTENTION,
+                torch.nn.attention.SDPBackend.MATH,
+            ]
+            with torch.nn.attention.sdpa_kernel(_sdpa_backends):
+                attn_output = torch.nn.functional.scaled_dot_product_attention(
+                    query_states, k0, v0, attn_mask=attention_mask
+                )
             attn_output = attn_output.transpose(1, 2).contiguous()
             attn_output = attn_output.reshape(bsz, q_len, -1)
             attn_output = self.o_proj(attn_output)

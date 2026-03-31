@@ -229,8 +229,13 @@ class OfflineVLMEagle3Dataset(OfflineEagle3Dataset):
             "target_hiddens",  # B, N, D
             "hidden_states",  # B, N, 3*D
             "loss_mask",  # B, N
-            # "inputs_embeds",  # B, N, D
-            "position_ids",  # 3, B, N
+        ]
+        # position_ids and inputs_embeds are optional keys,
+        # - HF Transformers backend saves position_ids (torch.Tensor)
+        # - vLLM backend may save position_ids as None (hook not capturing)
+        optional_tensor_keys = [
+            "position_ids",  # 3, B, N (optional, vLLM backend may be None)
+            "inputs_embeds",  # B, N, D (optional)
         ]
         missing_keys = [key for key in required_keys if key not in data]
 
@@ -243,7 +248,7 @@ class OfflineVLMEagle3Dataset(OfflineEagle3Dataset):
             )
             return None
 
-        # Validate tensor types
+        # Validate tensor types for required keys
         for key in required_keys:
             if not isinstance(data[key], torch.Tensor):
                 warnings.warn(
@@ -253,6 +258,11 @@ class OfflineVLMEagle3Dataset(OfflineEagle3Dataset):
                     stacklevel=2,
                 )
                 return None
+
+        # Validate tensor types for optional keys
+        for key in optional_tensor_keys:
+            if key in data and not isinstance(data[key], torch.Tensor):
+                data[key] = None
 
         attention_mask = torch.ones_like(data["input_ids"])
         data["attention_mask"] = attention_mask  # B, N
@@ -279,6 +289,7 @@ class OfflineLLMDatasetBuilder(DatasetBuilder):
         return DataCollatorWithPadding()
 
 
+@DatasetBuilderFactory.register("offline", "VLM", "qwen2_5_vl")
 @DatasetBuilderFactory.register("offline", "VLM", "qwen3_vl")
 class OfflineVLMDatasetBuilder(DatasetBuilder):
     def __init__(self, file_pattern: str = "*.ckpt", cache_in_memory: bool = False, **kwargs: Any):
