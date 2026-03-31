@@ -411,7 +411,11 @@ document.write(`
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">2.1 数据组织形式</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">2.2 数据生成</a><ul class="visible nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">2.2.1 为目标模型生成采样数据</a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#eagle3hidden-states">2.2.2 为Eagle3模型生成hidden states</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#eagle3hidden-states">2.2.2 为Eagle3模型生成hidden states</a><ul class="nav section-nav flex-column">
+<li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#hf-torchrun">方式一：HF后端（torchrun）</a></li>
+<li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#vllm-ray">方式二：vLLM后端（Ray）</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -527,29 +531,37 @@ document.write(`
 </section>
 <section id="eagle3hidden-states">
 <h4>2.2.2 为Eagle3模型生成hidden states<a class="headerlink" href="#eagle3hidden-states" title="Link to this heading">#</a></h4>
-<p>目前仅支持以HF为后端生成hidden states，调用脚本如下：</p>
+<p>目前支持两种后端生成hidden states：<strong>HF后端（torchrun）</strong> 和 <strong>vLLM后端（Ray）</strong>。</p>
+<blockquote>
+<div><p>注意：qwen3_vl系列模型生成hidden states需要更新transformers&gt;=5.0.0,
+或者cherry-pick: https://github.com/huggingface/transformers/pull/42609,
+否则抓取的hidden states不可用！！！</p>
+</div></blockquote>
+<section id="hf-torchrun">
+<h5>方式一：HF后端（torchrun）<a class="headerlink" href="#hf-torchrun" title="Link to this heading">#</a></h5>
+<p>使用HuggingFace Transformers作为推理后端，通过torchrun进行多卡分布式生成。适合对HF生态兼容性要求高的场景。</p>
+<p>调用脚本如下：</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># For HunyuanOCR</span>
 bash<span class="w"> </span>scripts/speculative/hunyuan_ocr/generate_vlm_hidden_for_draft_model.sh
 <span class="c1"># For Qwen3-VL series</span>
 bash<span class="w"> </span>scripts/speculative/qwen3_vl/generate_vlm_hidden_for_draft_model.sh
 </pre></div>
 </div>
-<blockquote>
-<div><p>注意：qwen3_vl系列模型生成hidden states需要更新transformers&gt;=5.0.0,
-或者cherry-pick: https://github.com/huggingface/transformers/pull/42609,
-否则抓取的hidden states不可用！！！</p>
-</div></blockquote>
-<p><strong>脚本参数说明：</strong></p>
-<p>在使用前，需要在脚本中配置以下参数：</p>
+</section>
+<section id="vllm-ray">
+<h5>方式二：vLLM后端（Ray）<a class="headerlink" href="#vllm-ray" title="Link to this heading">#</a></h5>
+<p>使用vLLM作为推理后端对采样过程进行加速，通过Ray进行分布式调度。<strong>推荐在多节点、大规模生成场景下使用</strong>。</p>
+<p><strong>核心优势：</strong></p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">DATASET_PATH</span></code>: 输入数据集的HF名称或本地路径</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">TARGET_MODEL_NAME_OR_PATH</span></code>: 目标模型的HF名称或本地路径</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">DRAFT_MODEL_CONFIG_PATH</span></code>: 草稿模型的config路径</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">TARGET_BACKEND</span></code>: 目标模型后端，目前仅支持HF</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">MODEL_MAX_LENGTH</span></code>: 生成数据的上下文长度</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">CHAT_TEMPLATE_TYPE</span></code>: 目标模型的目标类型，目前支持qwen3_vl/hunyuan_vl</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">OUTPUT_DIR</span></code>: 生成的数据集输出路径</p></li>
+<li><p>支持多节点Ray集群，自动管理节点间通信</p></li>
+<li><p>支持vLLM的tensor parallel，充分利用多卡资源</p></li>
+<li><p>自动处理Ray集群的启动、任务分发和资源回收</p></li>
 </ul>
+<p>调用脚本如下：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>bash<span class="w"> </span>scripts/speculative/qwen3_vl/generate_vlm_hidden_for_draft_model_ray.sh
+</pre></div>
+</div>
+</section>
 </section>
 </section>
 </section>
@@ -747,7 +759,11 @@ HunyuanOCR &amp; Qwen3VLMoe &amp; Qwen2Audio 适配需要cherry-pick这个PR: <a
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">2.1 数据组织形式</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">2.2 数据生成</a><ul class="visible nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">2.2.1 为目标模型生成采样数据</a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#eagle3hidden-states">2.2.2 为Eagle3模型生成hidden states</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#eagle3hidden-states">2.2.2 为Eagle3模型生成hidden states</a><ul class="nav section-nav flex-column">
+<li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#hf-torchrun">方式一：HF后端（torchrun）</a></li>
+<li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#vllm-ray">方式二：vLLM后端（Ray）</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
