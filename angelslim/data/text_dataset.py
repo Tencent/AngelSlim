@@ -13,10 +13,12 @@
 # limitations under the License.
 
 import json
+import os
 from typing import Dict, List
 
 import pyarrow.parquet as pq
 import torch
+from datasets import load_dataset
 from transformers import ProcessorMixin
 
 from .base_dataset import BaseDataset
@@ -37,10 +39,46 @@ class TextDataset(BaseDataset):
         self._load_data(data_path, num_samples)
 
     def _load_data(self, data_path: str, num_samples: int):
+        if not os.path.isfile(data_path):
+            self._load_hf_dataset(data_path, num_samples)
+            return
+
         if ".parquet" in data_path.lower():
             self._load_parquet_data(data_path, num_samples)
         else:
             self._load_jsonl_data(data_path, num_samples)
+
+    def _load_hf_dataset(self, data_path: str, num_samples: int, block_size: int = 2048):
+        parts = data_path.split(",")
+        dataset = load_dataset(*parts)["train"]
+        total_samples = (
+            min(num_samples, len(dataset["text"])) if num_samples > 0 else len(dataset["text"])
+        )
+
+        concatenated = {}
+        for sample in dataset:
+            tokenized = self.processor(sample["text"])
+            for key in tokenized.keys():
+                if key not in concatenated:
+                    concatenated[key] = []
+                concatenated[key].extend(tokenized[key])
+
+        total = len(concatenated["input_ids"])
+        if total >= block_size:
+            total = (total // block_size) * block_size
+        result = {
+            k: [t[i : i + block_size] for i in range(0, total, block_size)]
+            for k, t in concatenated.items()
+        }
+        for i in range(total_samples):
+            inputs = {
+                "input_ids": torch.tensor(result["input_ids"][i]).unsqueeze(0).to(self.device)
+            }
+            labels = inputs["input_ids"].roll(shifts=-1, dims=-1)
+            labels[:, -1] = -100
+            inputs["labels"] = labels.to(self.device)
+            inputs["attention_mask"] = torch.tensor(result["attention_mask"][i]).to(self.device)
+            self.data.append(inputs)
 
     def _load_parquet_data(self, data_path: str, num_samples: int):
         table = pq.read_table(data_path)
@@ -102,23 +140,17 @@ class TextDataset(BaseDataset):
                             thinking_data = True
                             break
                 if thinking_data:
-                    text = (
-                        self.processor.bos_token
-                        if self.processor.bos_token is not None
-                        else ""
-                    )
+                    text = self.processor.bos_token if self.processor.bos_token is not None else ""
                     for dic in messages:
                         if dic["role"] == "system":
                             text += dic["content"]
                         elif dic["role"] == "user":
-                            text = (
-                                text + "<｜User｜>" + dic["content"] + "<｜Assistant｜>"
-                            )
+                            text = text + "<｜User｜>" + dic["content"] + "<｜Assistant｜>"
                         elif dic["role"] == "assistant":
                             text = text + dic["content"] + self.processor.eos_token
 
                 model_inputs = self.processor(
-                    [text],
+                    text=[text],
                     return_tensors="pt",
                     max_length=self.max_length,
                     truncation=True,
@@ -131,9 +163,7 @@ class TextDataset(BaseDataset):
                 self.data.append(
                     {
                         "input_ids": model_inputs["input_ids"].to(self.device),
-                        "attention_mask": model_inputs["attention_mask"].to(
-                            self.device
-                        ),
+                        "attention_mask": model_inputs["attention_mask"].to(self.device),
                         "labels": labels.to(self.device),
                     }
                 )
@@ -150,9 +180,7 @@ class TextDataset(BaseDataset):
                 and data["system_prompt"]
                 and messages[0]["role"] != "system"
             ):
-                messages = [
-                    {"role": "system", "content": data["system_prompt"]}
-                ] + messages
+                messages = [{"role": "system", "content": data["system_prompt"]}] + messages
         elif "conversations" in data:
             share_gpt_data = data["conversations"]
             messages = [
@@ -160,18 +188,14 @@ class TextDataset(BaseDataset):
                 {"role": "assistant", "content": share_gpt_data[1]["value"]},
             ]
             if "system" in data and data["system"]:
-                messages = [
-                    {"role": "system", "content": data["system_prompt"]}
-                ] + messages
+                messages = [{"role": "system", "content": data["system_prompt"]}] + messages
         else:
             messages = [
                 {"role": "user", "content": data["input"]},
                 {"role": "assistant", "content": data["output"]},
             ]
             if "system_prompt" in data and data["system_prompt"]:
-                messages = [
-                    {"role": "system", "content": data["system_prompt"]}
-                ] + messages
+                messages = [{"role": "system", "content": data["system_prompt"]}] + messages
 
         # Normalize role names
         for item in messages:

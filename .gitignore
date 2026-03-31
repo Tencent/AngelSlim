@@ -3,6 +3,7 @@
 build/
 ./dist/
 *.pyc
+*.pyc.*
 dist/
 *.data
 *.log
@@ -13,7 +14,9 @@ dist/
 eval/
 *_ckpt*/
 output/
+outputs/
 outs/
 wandb/
 tools/results/
+__pycache__/outputs/
 __pycache__/

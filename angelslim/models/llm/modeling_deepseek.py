@@ -96,27 +96,20 @@ def convert_ckpt(input_path, save_path, n_experts, mp):
                     new_param = param
                     if "experts" in name and "shared_experts" not in name:
                         idx = int(name.split(".")[-3])
-                        if (
-                            idx < i * n_local_experts
-                            or idx >= (i + 1) * n_local_experts
-                        ):
+                        if idx < i * n_local_experts or idx >= (i + 1) * n_local_experts:
                             continue
                     elif dim is not None:
                         assert (
                             param.size(dim) % mp == 0
                         ), f"Dimension {dim} must be divisible by {mp}"
                         shard_size = param.size(dim) // mp
-                        new_param = param.narrow(
-                            dim, i * shard_size, shard_size
-                        ).contiguous()
+                        new_param = param.narrow(dim, i * shard_size, shard_size).contiguous()
                     state_dicts[i][name] = new_param
 
     os.makedirs(save_path, exist_ok=True)
 
     for i in trange(mp):
-        save_file(
-            state_dicts[i], os.path.join(save_path, f"model{i}-mp{mp}.safetensors")
-        )
+        save_file(state_dicts[i], os.path.join(save_path, f"model{i}-mp{mp}.safetensors"))
 
 
 class ParallelEmbedding(nn.Module):
@@ -210,9 +203,7 @@ class Linear(nn.Module):
 
     dtype = torch.bfloat16
 
-    def __init__(
-        self, in_features: int, out_features: int, bias: bool = False, dtype=None
-    ):
+    def __init__(self, in_features: int, out_features: int, bias: bool = False, dtype=None):
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
@@ -256,9 +247,7 @@ class ColumnParallelLinear(Linear):
         dtype (optional): Data type for the layer. Defaults to `torch.bfloat16`.
     """
 
-    def __init__(
-        self, in_features: int, out_features: int, bias: bool = False, dtype=None
-    ):
+    def __init__(self, in_features: int, out_features: int, bias: bool = False, dtype=None):
         assert (
             out_features % world_size == 0
         ), f"Output features must be divisible by world size (world_size={world_size})"
@@ -290,9 +279,7 @@ class RowParallelLinear(Linear):
         dtype (optional): Data type for the layer. Defaults to `torch.bfloat16`.
     """
 
-    def __init__(
-        self, in_features: int, out_features: int, bias: bool = False, dtype=None
-    ):
+    def __init__(self, in_features: int, out_features: int, bias: bool = False, dtype=None):
         assert (
             in_features % world_size == 0
         ), f"Input features must be divisible by world size (world_size={world_size})"
@@ -376,11 +363,7 @@ def precompute_freqs_cis(config) -> torch.Tensor:
         Returns:
             float: The correction dimension based on the input parameters.
         """
-        return (
-            dim
-            * math.log(max_seq_len / (num_rotations * 2 * math.pi))
-            / (2 * math.log(base))
-        )
+        return dim * math.log(max_seq_len / (num_rotations * 2 * math.pi)) / (2 * math.log(base))
 
     def find_correction_range(low_rot, high_rot, dim, base, max_seq_len):
         """
@@ -421,9 +404,7 @@ def precompute_freqs_cis(config) -> torch.Tensor:
 
     freqs = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
     if max_seq_len > original_seq_len:
-        low, high = find_correction_range(
-            beta_fast, beta_slow, dim, base, original_seq_len
-        )
+        low, high = find_correction_range(beta_fast, beta_slow, dim, base, original_seq_len)
         smooth = 1 - linear_ramp_factor(low, high, dim // 2)
         freqs = freqs / factor * (1 - smooth) + freqs * smooth
 
@@ -482,18 +463,12 @@ class MLA(nn.Module):
         self.mscale = config.rope_scaling["mscale"]
 
         if self.q_lora_rank == 0:
-            self.q_proj = ColumnParallelLinear(
-                self.dim, self.n_heads * self.qk_head_dim
-            )
+            self.q_proj = ColumnParallelLinear(self.dim, self.n_heads * self.qk_head_dim)
         else:
             self.q_a_proj = Linear(self.dim, self.q_lora_rank)
             self.q_a_layernorm = RMSNorm(self.q_lora_rank)
-            self.q_b_proj = ColumnParallelLinear(
-                self.q_lora_rank, self.n_heads * self.qk_head_dim
-            )
-        self.kv_a_proj_with_mqa = Linear(
-            self.dim, self.kv_lora_rank + self.qk_rope_head_dim
-        )
+            self.q_b_proj = ColumnParallelLinear(self.q_lora_rank, self.n_heads * self.qk_head_dim)
+        self.kv_a_proj_with_mqa = Linear(self.dim, self.kv_lora_rank + self.qk_rope_head_dim)
         self.kv_a_layernorm = RMSNorm(self.kv_lora_rank)
         self.kv_b_proj = ColumnParallelLinear(
             self.kv_lora_rank, self.n_heads * (self.qk_nope_head_dim + self.v_head_dim)
@@ -503,9 +478,7 @@ class MLA(nn.Module):
         self.original_seq_len = config.rope_scaling["original_max_position_embeddings"]
         self.max_seq_len = config.max_position_embeddings
         if self.max_seq_len > self.original_seq_len:
-            self.mscale = (
-                0.1 * self.mscale * math.log(config.rope_scaling["factor"]) + 1.0
-            )
+            self.mscale = 0.1 * self.mscale * math.log(config.rope_scaling["factor"]) + 1.0
             self.softmax_scale = self.softmax_scale * self.mscale * self.mscale
 
         if config.use_cache:
@@ -538,9 +511,7 @@ class MLA(nn.Module):
                 )
                 self.register_buffer(
                     "pe_cache",
-                    torch.zeros(
-                        max_batch_size, self.max_seq_len, self.qk_rope_head_dim
-                    ),
+                    torch.zeros(max_batch_size, self.max_seq_len, self.qk_rope_head_dim),
                     persistent=False,
                 )
 
@@ -571,9 +542,7 @@ class MLA(nn.Module):
         else:
             q = self.q_b_proj(self.q_a_layernorm(self.q_a_proj(x)))
         q = q.view(bsz, seqlen, self.n_local_heads, self.qk_head_dim)
-        q_nope, q_pe = torch.split(
-            q, [self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1
-        )
+        q_nope, q_pe = torch.split(q, [self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1)
         freqs_cis = freqs_cis.to(q_pe.device)
         q_pe = apply_rotary_emb(q_pe, freqs_cis)
         kv = self.kv_a_proj_with_mqa(x)
@@ -583,12 +552,8 @@ class MLA(nn.Module):
         if attn_impl == "naive":
             q = torch.cat([q_nope, q_pe], dim=-1)
             kv = self.kv_b_proj(self.kv_a_layernorm(kv))
-            kv = kv.view(
-                bsz, seqlen, self.n_local_heads, self.qk_nope_head_dim + self.v_head_dim
-            )
-            k_nope, v = torch.split(
-                kv, [self.qk_nope_head_dim, self.v_head_dim], dim=-1
-            )
+            kv = kv.view(bsz, seqlen, self.n_local_heads, self.qk_nope_head_dim + self.v_head_dim)
+            k_nope, v = torch.split(kv, [self.qk_nope_head_dim, self.v_head_dim], dim=-1)
             k = torch.cat([k_nope, k_pe.expand(-1, -1, self.n_local_heads, -1)], dim=-1)
             if use_cache:
                 self.k_cache[:bsz, start_pos:end_pos] = k
@@ -608,9 +573,7 @@ class MLA(nn.Module):
                 )
             )
             wkv_b = wkv_b.view(self.n_local_heads, -1, self.kv_lora_rank)
-            q_nope = torch.einsum(
-                "bshd,hdc->bshc", q_nope, wkv_b[:, : self.qk_nope_head_dim]
-            )
+            q_nope = torch.einsum("bshd,hdc->bshc", q_nope, wkv_b[:, : self.qk_nope_head_dim])
             if use_cache:
                 self.kv_cache[:bsz, start_pos:end_pos] = self.kv_a_layernorm(kv)
                 self.pe_cache[:bsz, start_pos:end_pos] = k_pe.squeeze(2)
@@ -700,12 +663,8 @@ class Gate(nn.Module):
         self.topk_groups = config.topk_group
         self.score_func = config.scoring_func
         self.route_scale = config.routed_scaling_factor
-        self.weight = nn.Parameter(
-            torch.empty(config.n_routed_experts, config.hidden_size)
-        )
-        self.register_buffer(
-            "e_score_correction_bias", torch.zeros(config.n_routed_experts)
-        )
+        self.weight = nn.Parameter(torch.empty(config.n_routed_experts, config.hidden_size))
+        self.register_buffer("e_score_correction_bias", torch.zeros(config.n_routed_experts))
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -841,9 +800,7 @@ class MoE(nn.Module):
         x = x.view(-1, self.dim)
         weights, indices = self.gate(x)
         y = torch.zeros_like(x)
-        counts = torch.bincount(
-            indices.flatten(), minlength=self.n_routed_experts
-        ).tolist()
+        counts = torch.bincount(indices.flatten(), minlength=self.n_routed_experts).tolist()
         for i in range(self.experts_start_idx, self.experts_end_idx):
             if counts[i] == 0:
                 continue
@@ -908,9 +865,7 @@ class Block(nn.Module):
         hidden_states = hidden_states + self.self_attn(
             self.input_layernorm(hidden_states), start_pos, freqs_cis, mask, use_cache
         )
-        hidden_states = hidden_states + self.mlp(
-            self.post_attention_layernorm(hidden_states)
-        )
+        hidden_states = hidden_states + self.mlp(self.post_attention_layernorm(hidden_states))
         return hidden_states
 
 
@@ -932,9 +887,7 @@ class DeepseekV3Model(DeepseekV3PreTrainedModel):
         for layer_id in range(config.num_hidden_layers):
             self.layers.append(Block(layer_id, config))
         self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.register_buffer(
-            "freqs_cis", precompute_freqs_cis(config), persistent=False
-        )
+        self.register_buffer("freqs_cis", precompute_freqs_cis(config), persistent=False)
 
     def get_input_embeddings(self):
         return self.embed_tokens
@@ -949,9 +902,7 @@ class DeepseekV3Model(DeepseekV3PreTrainedModel):
         freqs_cis = self.freqs_cis[start_pos : start_pos + seqlen]
         mask = None
         if seqlen > 1:
-            mask = torch.full(
-                (seqlen, seqlen), float("-inf"), device=tokens.device
-            ).triu_(1)
+            mask = torch.full((seqlen, seqlen), float("-inf"), device=tokens.device).triu_(1)
         for layer in self.layers:
             h = layer(
                 h,
@@ -1040,9 +991,7 @@ class DeepseekV3ForCausalLM(DeepseekV3PreTrainedModel, GenerationMixin):
             try:
                 load_model(
                     model,
-                    os.path.join(
-                        tp_model_path, f"model{rank}-mp{cls.world_size}.safetensors"
-                    ),
+                    os.path.join(tp_model_path, f"model{rank}-mp{cls.world_size}.safetensors"),
                 )
             except RuntimeError:
                 file_path = os.path.join(
@@ -1055,9 +1004,7 @@ class DeepseekV3ForCausalLM(DeepseekV3PreTrainedModel, GenerationMixin):
                         key in file_state_dict
                         and file_state_dict[key].dtype != model_state_dict[key].dtype
                     ):
-                        file_state_dict[key] = file_state_dict[key].to(
-                            model_state_dict[key].dtype
-                        )
+                        file_state_dict[key] = file_state_dict[key].to(model_state_dict[key].dtype)
                 model.load_state_dict(file_state_dict, strict=False)
             return model
         return super().from_pretrained(

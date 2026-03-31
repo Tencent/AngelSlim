@@ -110,9 +110,9 @@ class AWQSearch:
 
                 for j in range(act.shape[0]):
                     new_act = act[j, :, :].unsqueeze(0).to(dev) / scales
-                    new_out[j, :, :] = self._get_out(
-                        layer_name, new_act, block, cache
-                    ).to(act.device)
+                    new_out[j, :, :] = self._get_out(layer_name, new_act, block, cache).to(
+                        act.device
+                    )
 
                 try:
                     loss = self.loss_function(origin_out, new_out).to(torch.float32)
@@ -147,7 +147,5 @@ class AWQSearch:
             best_scales = torch.ones(scales.shape, dtype=act.dtype)
             print_func("Cannot find better ratio.")
         else:
-            print_func(
-                "Best ratio :{}, minimal loss : {}.".format(best_ratio, best_error)
-            )
+            print_func("Best ratio :{}, minimal loss : {}.".format(best_ratio, best_error))
         return best_scales.detach().cpu()

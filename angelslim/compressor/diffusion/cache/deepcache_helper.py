@@ -34,9 +34,7 @@ class DeepCacheHelper(CacheHelper):
             single_blocks=single_blocks,
             no_cache_steps=no_cache_steps,
         )
-        self.no_cache_block_id = (
-            no_cache_block_id if no_cache_block_id is not None else {}
-        )
+        self.no_cache_block_id = no_cache_block_id if no_cache_block_id is not None else {}
 
     def is_skip(self, block_id: int, blocktype: str) -> bool:
         # For some pipelines, the first timestep may not be 0

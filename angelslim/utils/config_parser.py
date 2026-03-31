@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import yaml
 
+from ..compressor.transform.rotation.spin import SpinConfig
 from .utils import get_hf_config, get_hf_model_path
 
 
@@ -29,6 +30,7 @@ class CompressionMethod(str, Enum):
     PTQ = "PTQ"
     QAT = "QAT"
     SPECULATIVE_DECODING = "speculative_decoding"
+    PTQ_WEIGHT_ONLY = "PTQWeightOnly"
 
 
 class QuantizationMethod(str, Enum):
@@ -37,6 +39,8 @@ class QuantizationMethod(str, Enum):
     FP8_STATIC = "fp8_static"
     FP8_DYNAMIC = "fp8_dynamic"
     FP8_LEPTO = "fp8_lepto"
+    FP8_BLOCKWISE = "fp8_blockwise"
+    DAQ = "daq"
     INT4_AWQ = "int4_awq"
     INT4_GPTQ = "int4_gptq"
     INT8_DYNAMIC = "int8_dynamic"
@@ -44,6 +48,22 @@ class QuantizationMethod(str, Enum):
     INT4_GPTAQ = "int4_gptaq"
     NVFP4 = "nvfp4"
     W4A8_INT8 = "w4a8i8"
+
+
+@dataclass
+class TransformConfig:
+    """
+    Configuration for transform in LLM compression.
+
+    Attributes:
+        name: Transform method name, e.g. "SpinQuant"
+        spin_config: SpinQuant-specific options
+        output_log: Whether to write a transform log file alongside the saved model
+    """
+
+    name: str
+    spin_config: Optional[Dict[str, Any]] = field(default_factory=dict)
+    output_log: bool = field(default=False)
 
 
 @dataclass
@@ -100,9 +120,7 @@ class GlobalConfig:
                 if isinstance(json_data["architectures"], list)
                 else json_data["architectures"]
             ) == "Qwen3OmniMoeForConditionalGeneration":
-                self.hidden_size = json_data["thinker_config"]["text_config"][
-                    "hidden_size"
-                ]
+                self.hidden_size = json_data["thinker_config"]["text_config"]["hidden_size"]
             else:
                 self.hidden_size = json_data["hidden_size"]
         except KeyError:
@@ -203,6 +221,14 @@ class QuantizationConfig:
     ignore_layers: List[str] = field(default_factory=list)
     quant_analyse: bool = field(default=False)
     quant_vit: bool = field(default=False)
+    # DAQ-specific fields
+    base_model_path: Optional[str] = field(default=None)
+    base_is_fp8: bool = field(default=False)
+    metric: str = field(default="sign")
+    quantization_method: str = field(default="blockwise")
+    scale_search: Optional[Dict[str, Any]] = field(default=None)
+    num_workers: int = field(default=8)
+    gpus: Optional[str] = field(default=None)
 
 
 @dataclass
@@ -232,6 +258,24 @@ class CacheConfig:
 
 
 @dataclass
+class QATTrainingConfig:
+    """
+    QAT (Quantization-Aware Training) configuration.
+    """
+
+    training_mode: str = field(default="end2end")
+    dist_mode: str = field(default="hf")
+    block_wise_config: Dict[str, Any] = field(default_factory=dict)
+    save_format: Optional[str] = None
+    plugin_config: Dict[str, Any] = field(default_factory=dict)
+    hf_cache_dir: Optional[str] = None
+    hf_dataset: Optional[str] = None
+    do_train: bool = field(default=True)
+    resume_ckpt_dir: Optional[str] = None
+    hf_args: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class CompressionConfig:
     """
     Compression configurations container for LLM.
@@ -245,6 +289,8 @@ class CompressionConfig:
     name: Union[str, List[str]]
     quantization: Optional[QuantizationConfig] = None
     cache: Optional[CacheConfig] = None
+    calibrate: Optional["CalibrateConfig"] = None
+    QAT: Optional[QATTrainingConfig] = None
     # speculative_decoding: Optional[SpeculativeDecodingConfig] = None
 
     @property
@@ -256,6 +302,9 @@ class CompressionConfig:
         for method in self.name:
             # PTQ/QAT usually need calibration dataset
             if method in ["PTQ", "QAT"]:
+                # DAQ is data-free, no calibration dataset needed
+                if self.quantization and self.quantization.name == "daq":
+                    continue
                 # Check if specific quantization helpers need dataset
                 if (
                     self.quantization
@@ -297,16 +346,12 @@ class CompressionConfig:
 
         # Ensure name is now a list
         if not isinstance(self.name, list):
-            raise TypeError(
-                f"`name` must be a string or a list of strings, got {type(self.name)}"
-            )
+            raise TypeError(f"`name` must be a string or a list of strings, got {type(self.name)}")
 
         # Validate all elements in the list are strings
         for n in self.name:
             if not isinstance(n, str):
-                raise TypeError(
-                    f"All elements in `name` must be strings, found {type(n)}"
-                )
+                raise TypeError(f"All elements in `name` must be strings, found {type(n)}")
 
         # Further validate against predefined enumeration
         try:
@@ -314,6 +359,27 @@ class CompressionConfig:
                 _ = CompressionMethod(n)  # Attempt to convert string to enum
         except ValueError as e:
             raise ValueError(f"Unsupported compression method in 'name': {e}")
+
+
+@dataclass
+class CalibrateConfig:
+    """Configuration for vLLM-based calibration.
+
+    Attributes:
+        backend: Calibration backend ('hf' or 'vllm')
+        tp_size: Tensor parallel size for vLLM
+        max_num_seqs: Maximum number of sequences per batch for vLLM
+        distributed_executor_backend: Distributed executor backend ('ray' or 'mp')
+        skip_weight_loading: Use dummy weights for fast debug mode
+        verbose: Enable verbose output for debugging
+    """
+
+    backend: str = field(default="hf")
+    tp_size: int = field(default=1)
+    max_num_seqs: int = field(default=128)
+    distributed_executor_backend: str = field(default="ray")
+    skip_weight_loading: bool = field(default=False)
+    verbose: bool = field(default=False)
 
 
 @dataclass
@@ -342,16 +408,20 @@ class FullConfig:
     Top-level configuration container for LLM compression.
 
     Attributes:
-        model_config: Model configuration parameters
-        compression_config: Compression configuration parameters
-        dataset_config: Dataset configuration parameters
+    model_config: Model configuration parameters
+    compression_config: Compression configuration parameters
+    dataset_config: Dataset configuration parameters
+    global_config: Global configuration parameters
+    infer_config: Inference configuration parameters
+    transform_config: Transform configuration parameters (e.g. SpinQuant)
     """
 
     model_config: ModelConfig
-    compression_config: CompressionConfig
-    dataset_config: DatasetConfig
-    global_config: GlobalConfig
-    infer_config: InferenceConfig
+    compression_config: Optional[CompressionConfig] = field(default=None)
+    dataset_config: Optional[DatasetConfig] = field(default=None)
+    global_config: Optional[GlobalConfig] = field(default=None)
+    infer_config: Optional[InferenceConfig] = field(default=None)
+    transform_config: Optional[TransformConfig] = field(default=None)
 
 
 class SlimConfigParser:
@@ -407,65 +477,79 @@ class SlimConfigParser:
 
         # Get compression section
         compression_dict = config_dict.get("compression", {})
-        if not compression_dict:
-            raise ValueError("Missing 'compression' section in configuration")
+        if compression_dict:
 
-        # Validate compression method
-        compress_name = compression_dict.get("name")
-        # Convert single method to list for consistent processing
-        if isinstance(compress_name, str):
-            compress_names = [compress_name]
-        elif isinstance(compress_name, list):
-            compress_names = compress_name
-        else:
-            raise TypeError(
-                f"Compress method must be a str or list[str], got {type(compress_name)}"
-            )
-        for name in compress_names:
-            if name not in self.supported_methods:
-                raise ValueError(
-                    f"Unsupported compression method: {name}. "
-                    f"Supported methods: {self.supported_methods}"
+            # Validate compression method
+            compress_name = compression_dict.get("name")
+            # Convert single method to list for consistent processing
+            if isinstance(compress_name, str):
+                compress_names = [compress_name]
+            elif isinstance(compress_name, list):
+                compress_names = compress_name
+            else:
+                raise TypeError(
+                    f"Compress method must be a str or list[str], got {type(compress_name)}"
                 )
-
-        # Initialize compression config
-        compression_conf = CompressionConfig(name=compress_names)
-
-        # Parse method-specific configurations for each specified method
-        for method_name in compress_names:
-            if method_name in ["PTQ", "QAT"]:
-                # Validate quantization type
-                quant_dict = compression_dict.get("quantization", {})
-                quant_method = quant_dict.get("name")
-
-                # Get supported quantization methods (assuming similar enum exists)
-                if (
-                    quant_method not in self.supported_quant_methods
-                ):  # Keep existing or update similarly
+            for name in compress_names:
+                if name not in self.supported_methods:
                     raise ValueError(
-                        f"Unsupported quantization method: {quant_method}. "
-                        f"Supported: {self.supported_quant_methods}"
+                        f"Unsupported compression method: {name}. "
+                        f"Supported methods: {self.supported_methods}"
                     )
 
-                # Parse quantization config (only set if not already set)
-                if compression_conf.quantization is None:
-                    compression_conf.quantization = QuantizationConfig(**quant_dict)
+            # Initialize compression config
+            compression_conf = CompressionConfig(name=compress_names)
 
-            elif method_name == CompressionMethod.CACHE.value:
-                # Parse cache configuration (only set if not already set)
-                cache_dict = compression_dict.get("cache", {})
-                if compression_conf.cache is None:
-                    compression_conf.cache = CacheConfig(**cache_dict)
-            else:
+            # Parse method-specific configurations for each specified method
+            for method_name in compress_names:
+                if method_name in ["PTQ", "QAT"]:
+                    # Validate quantization type
+                    quant_dict = compression_dict.get("quantization", {})
+                    quant_method = quant_dict.get("name")
+
+                    # Get supported quantization methods (assuming similar enum exists)
+                    if (
+                        quant_method not in self.supported_quant_methods
+                    ):  # Keep existing or update similarly
+                        raise ValueError(
+                            f"Unsupported quantization method: {quant_method}. "
+                            f"Supported: {self.supported_quant_methods}"
+                        )
+
+                    # Parse quantization config (only set if not already set)
+                    if compression_conf.quantization is None:
+                        compression_conf.quantization = QuantizationConfig(**quant_dict)
+                    # DAQ-specific validation: base_model_path is required
+                    if quant_method == "daq":
+                        if not compression_conf.quantization.base_model_path:
+                            raise ValueError(
+                                "DAQ quantization (daq) requires 'base_model_path' "
+                                "to be specified in the quantization config. "
+                                "This should point to the base model directory "
+                                "used to compute delta weights."
+                            )
+
+                elif method_name == CompressionMethod.CACHE.value:
+                    # Parse cache configuration (only set if not already set)
+                    cache_dict = compression_dict.get("cache", {})
+                    if compression_conf.cache is None:
+                        compression_conf.cache = CacheConfig(**cache_dict)
+                elif method_name == CompressionMethod.PTQ_WEIGHT_ONLY.value:
+                    # PTQWeightOnly: weight-only quantization without model loading.
+                    # Parse quantization config to know which algorithm to use.
+                    quant_dict = compression_dict.get("quantization", {})
+                    if quant_dict and compression_conf.quantization is None:
+                        compression_conf.quantization = QuantizationConfig(**quant_dict)
+                else:
+                    raise ValueError(
+                        f"Unsupported compression method: {method_name}. "
+                        f"Supported methods: {self.supported_methods}"
+                    )
+
+            if compression_conf.need_dataset and not dataset_conf:
                 raise ValueError(
-                    f"Unsupported compression method: {method_name}. "
-                    f"Supported methods: {self.supported_methods}"
+                    "Compressor requires dataset, but 'dataset' section is missing in yaml."
                 )
-
-        if compression_conf.need_dataset and not dataset_conf:
-            raise ValueError(
-                "Compressor requires dataset, but 'dataset' section is missing in yaml."
-            )
 
         # Global properties
         global_config = self._get_global_config(config_dict, model_conf, dataset_conf)
@@ -476,17 +560,35 @@ class SlimConfigParser:
             inference_dict = config_dict["inference"]
             inference_conf = InferenceConfig(**inference_dict)
 
+        # Calibration configuration (nested under compression)
+        calibrate_dict = compression_dict.get("calibrate", None)
+        if calibrate_dict:
+            compression_conf.calibrate = CalibrateConfig(**calibrate_dict)
+
+        # QAT configuration (nested under compression)
+        qat_dict = compression_dict.get("QAT", None)
+        if qat_dict:
+            compression_conf.QAT = QATTrainingConfig(**qat_dict)
+
+        # Transform configuration (e.g. SpinQuant)
+        transform_conf = None
+        if "transform" in config_dict:
+            transform_dict = config_dict["transform"]
+            spin_dict = transform_dict.pop("spin_config", None)
+            transform_conf = TransformConfig(**transform_dict)
+            if spin_dict is not None:
+                transform_conf.spin_config = SpinConfig(**spin_dict)
+
         return FullConfig(
             model_config=model_conf,
             compression_config=compression_conf,
             dataset_config=dataset_conf,
             global_config=global_config,
             infer_config=inference_conf,
+            transform_config=transform_conf,
         )
 
-    def _get_global_config(
-        self, config_dict, model_conf, dataset_conf=None
-    ) -> GlobalConfig:
+    def _get_global_config(self, config_dict, model_conf, dataset_conf=None) -> GlobalConfig:
         """
         Extract global configuration settings from the provided dictionary.
 
@@ -580,12 +682,14 @@ def parse_json_full_config(json_file_path: str) -> FullConfig:
     model_config = ModelConfig(**config_data["model_config"])
 
     # Parse compression configuration section
-    comp_config = parse_json_compression_config_section(
-        config_data["compression_config"]
-    )
+    comp_config = parse_json_compression_config_section(config_data["compression_config"])
 
     # Parse other configuration sections with default fallbacks
-    dataset_config, global_config, infer_config = None, None, None
+    dataset_config, global_config, infer_config = (
+        None,
+        None,
+        None,
+    )
     if config_data.get("dataset_config", {}):
         dataset_config = DatasetConfig(**config_data["dataset_config"])
     if config_data.get("global_config", {}):
@@ -593,12 +697,48 @@ def parse_json_full_config(json_file_path: str) -> FullConfig:
     if config_data.get("infer_config", {}):
         infer_config = InferenceConfig(**config_data["infer_config"])
 
+    # Parse calibration configuration section (nested under compression)
+    comp_data = config_data.get("compression_config", {})
+    calibrate_data = comp_data.get("calibrate", None)
+    if not calibrate_data and config_data.get("calibrate_config"):
+        # Backward compatibility: support top-level calibrate_config
+        calibrate_data = config_data["calibrate_config"]
+    if calibrate_data:
+        comp_config.calibrate = CalibrateConfig(**calibrate_data)
+
+    # Parse transform configuration section
+    transform_config = None
+    transform_data = config_data.get("transform_config", {})
+    if transform_data:
+        spin_data = transform_data.pop("spin_config", None)
+        transform_config = TransformConfig(**transform_data)
+        if spin_data is not None:
+            transform_config.spin_config = SpinConfig(**spin_data)
+
+    # Parse calibration configuration section (nested under compression)
+    comp_data = config_data.get("compression_config", {})
+    calibrate_data = comp_data.get("calibrate", None)
+    if not calibrate_data and config_data.get("calibrate_config"):
+        # Backward compatibility: support top-level calibrate_config
+        calibrate_data = config_data["calibrate_config"]
+    if calibrate_data:
+        comp_config.calibrate = CalibrateConfig(**calibrate_data)
+
+    # Parse transform configuration section
+    transform_config = None
+    transform_data = config_data.get("transform_config", {})
+    if transform_data:
+        spin_data = transform_data.pop("spin_config", None)
+        transform_config = TransformConfig(**transform_data)
+        if spin_data is not None:
+            transform_config.spin_config = SpinConfig(**spin_data)
+
     return FullConfig(
         model_config=model_config,
-        compression_config=comp_config,
         dataset_config=dataset_config,
         global_config=global_config,
         infer_config=infer_config,
+        transform_config=transform_config,
     )
 
 
@@ -644,7 +784,12 @@ def print_config(config, indent=0):
             print_config(config.infer_config, next_indent)
         else:
             print(f"{prefix}None")
-        return
+
+        print(f"{prefix}Transform:")
+        if hasattr(config, "transform_config"):
+            print_config(config.transform_config, next_indent)
+        else:
+            print(f"{prefix}None")
 
     # Handle dataclass instances
     if hasattr(config, "__dataclass_fields__"):

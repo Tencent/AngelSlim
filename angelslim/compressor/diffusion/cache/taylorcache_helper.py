@@ -1,10 +1,26 @@
 import math
-from typing import Any, List, Optional, Set, Tuple
+from typing import Any, Callable, List, Optional, Set, Tuple
 
 import torch
 import torch.nn as nn
 
 from .cache_helper import CacheHelper
+
+# Conditional torch.compile decorator
+# Disabled on Windows and when ANGELSLIM_TORCH_COMPILE=0
+try:
+    from angelslim.compressor._platform import is_torch_compile_supported
+
+    _USE_TORCH_COMPILE = is_torch_compile_supported()
+except ImportError:
+    _USE_TORCH_COMPILE = False
+
+
+def _conditional_compile(func: Callable) -> Callable:
+    """Apply torch.compile only if supported on this platform."""
+    if _USE_TORCH_COMPILE:
+        return torch.compile(func)
+    return func
 
 
 class TaylorCacheHelper(CacheHelper):
@@ -137,7 +153,7 @@ class TaylorCacheHelper(CacheHelper):
         self.taylor_cache.clear_derivatives()
 
 
-@torch.compile
+@_conditional_compile
 def decomposition_FFT(
     x: torch.Tensor, cutoff_ratio: float = 0.1
 ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -188,7 +204,7 @@ def decomposition_FFT(
     return low, high
 
 
-@torch.compile
+@_conditional_compile
 def reconstruction(low_freq: torch.Tensor, high_freq: torch.Tensor) -> torch.Tensor:
     return low_freq + high_freq
 
@@ -202,12 +218,8 @@ class CacheWithFreqsContainer(nn.Module):
         for i in range(max_order + 1):
             self.register_buffer(f"derivative_{i}_low_freqs", None, persistent=False)
             self.register_buffer(f"derivative_{i}_high_freqs", None, persistent=False)
-            self.register_buffer(
-                f"temp_derivative_{i}_low_freqs", None, persistent=False
-            )
-            self.register_buffer(
-                f"temp_derivative_{i}_high_freqs", None, persistent=False
-            )
+            self.register_buffer(f"temp_derivative_{i}_low_freqs", None, persistent=False)
+            self.register_buffer(f"temp_derivative_{i}_high_freqs", None, persistent=False)
 
     def get_derivative(self, order: int, freqs: str) -> Optional[torch.Tensor]:
         return getattr(self, f"derivative_{order}_{freqs}")
@@ -249,14 +261,10 @@ class CacheWithFreqsContainer(nn.Module):
         high_freqs_output = 0
         for i in range(len(self.get_all_filled_derivatives("low_freqs"))):
             coefficient = 1 / math.factorial(i)
-            low_freqs_output += (
-                coefficient * self.get_derivative(i, "low_freqs") * (distance**i)
-            )
+            low_freqs_output += coefficient * self.get_derivative(i, "low_freqs") * (distance**i)
         for i in range(len(self.get_all_filled_derivatives("high_freqs"))):
             coefficient = 1 / math.factorial(i)
-            high_freqs_output += (
-                coefficient * self.get_derivative(i, "high_freqs") * (distance**i)
-            )
+            high_freqs_output += coefficient * self.get_derivative(i, "high_freqs") * (distance**i)
 
         return reconstruction(low_freqs_output, high_freqs_output)
 
@@ -272,18 +280,16 @@ class CacheWithFreqsContainer(nn.Module):
         self.set_temp_derivative(0, "high_freqs", x_high)
         for i in range(low_freqs_order):
             if self.get_derivative(i, "low_freqs") is not None:
-                derivative_diff = self.get_temp_derivative(
+                derivative_diff = self.get_temp_derivative(i, "low_freqs") - self.get_derivative(
                     i, "low_freqs"
-                ) - self.get_derivative(i, "low_freqs")
+                )
                 self.set_temp_derivative(i + 1, "low_freqs", derivative_diff / distance)
         for i in range(high_freqs_order):
             if self.get_derivative(i, "high_freqs") is not None:
-                derivative_diff = self.get_temp_derivative(
+                derivative_diff = self.get_temp_derivative(i, "high_freqs") - self.get_derivative(
                     i, "high_freqs"
-                ) - self.get_derivative(i, "high_freqs")
-                self.set_temp_derivative(
-                    i + 1, "high_freqs", derivative_diff / distance
                 )
+                self.set_temp_derivative(i + 1, "high_freqs", derivative_diff / distance)
         self.move_temp_to_derivative()
 
     def clear_temp_derivative(self) -> None:

@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
+from transformers import AutoConfig
 
 __all__ = [
     "make_causal_mask",
@@ -22,6 +23,7 @@ __all__ = [
     "repeat_kv",
     "rotate_half",
     "apply_rotary_pos_emb",
+    "infer_model_params",
 ]
 
 
@@ -44,16 +46,12 @@ def make_causal_mask(
     if past_key_values_length > 0:
         mask = torch.cat(
             [
-                torch.zeros(
-                    tgt_len, past_key_values_length, dtype=dtype, device=device
-                ),
+                torch.zeros(tgt_len, past_key_values_length, dtype=dtype, device=device),
                 mask,
             ],
             dim=-1,
         )
-    return mask[None, None, :, :].expand(
-        bsz, 1, tgt_len, tgt_len + past_key_values_length
-    )
+    return mask[None, None, :, :].expand(bsz, 1, tgt_len, tgt_len + past_key_values_length)
 
 
 # Copied from transformers.models.bart.modeling_bart._expand_mask
@@ -69,9 +67,7 @@ def expand_mask(mask: torch.Tensor, dtype: torch.dtype, tgt_len: Optional[int] =
 
     inverted_mask = 1.0 - expanded_mask
 
-    return inverted_mask.masked_fill(
-        inverted_mask.to(torch.bool), torch.finfo(dtype).min
-    )
+    return inverted_mask.masked_fill(inverted_mask.to(torch.bool), torch.finfo(dtype).min)
 
 
 def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
@@ -113,3 +109,94 @@ def apply_rotary_pos_emb_mrope(q, k, cos, sin, position_ids=None, unsqueeze_dim=
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
     return q_embed, k_embed
+
+
+# model_type -> (lm_head_key, embed_weight_key, chat_template_type)
+# key: model_type (from AutoConfig)
+MODEL_TYPE_PARAM_MAP: dict = {
+    "qwen2.5": (
+        "lm_head.weight",
+        "model.embed_tokens.weight",
+        "qwen2.5",
+    ),
+    "qwen2_5_vl": (
+        "lm_head.weight",
+        "model.embed_tokens.weight",
+        "qwen2_5_vl",
+    ),
+    "qwen2_audio": (
+        "lm_head.weight",
+        "language_model.model.embed_tokens.weight",
+        "qwen2_audio",
+    ),
+    "qwen3": (
+        "lm_head.weight",
+        "model.embed_tokens.weight",
+        "qwen3",
+    ),
+    "qwen3_vl": (
+        "lm_head.weight",
+        "model.language_model.embed_tokens.weight",
+        "qwen3_vl",
+    ),
+    "qwen3_vl_moe": (
+        "lm_head.weight",
+        "model.language_model.embed_tokens.weight",
+        "qwen3_vl",
+    ),
+    "hunyuan_vl": (
+        "model.embed_tokens.weight",
+        "model.embed_tokens.weight",
+        "hunyuan_vl",
+    ),
+    "llama": (
+        "lm_head.weight",
+        "model.embed_tokens.weight",
+        "qwen3",
+    ),
+}
+
+
+def infer_model_params(
+    model_name_or_path: str,
+) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """
+    auto-detect lm_head_key、embed_weight_key、chat_template_type from target model path
+    Args:
+        model_name_or_path: target model path
+
+    Returns:
+        (lm_head_key, embed_weight_key, chat_template_type)
+        (None, None, None) if failed to auto-detect
+    """
+    try:
+        config = AutoConfig.from_pretrained(model_name_or_path, trust_remote_code=True)
+        model_type = getattr(config, "model_type", None)
+        print(f"[Auto-detect] Detected model_type: {model_type}")
+        if model_type in MODEL_TYPE_PARAM_MAP:
+            lm_head_key, embed_weight_key, chat_template_type = MODEL_TYPE_PARAM_MAP[model_type]
+            # compatible with tie_word_embeddings=False/True
+            tie_word_embeddings = getattr(config, "tie_word_embeddings", False)
+            if tie_word_embeddings and lm_head_key != embed_weight_key:
+                print(
+                    f"[Auto-detect] tie_word_embeddings=True, "
+                    f"overriding lm_head_key from '{lm_head_key}' to '{embed_weight_key}'"
+                )
+                lm_head_key = embed_weight_key
+
+            print(
+                f"[Auto-detect] lm_head_key={lm_head_key}, "
+                f"embed_weight_key={embed_weight_key}, "
+                f"chat_template_type={chat_template_type}, "
+                f"tie_word_embeddings={tie_word_embeddings}"
+            )
+            return lm_head_key, embed_weight_key, chat_template_type
+        else:
+            print(
+                f"[Auto-detect] No preset mapping found for model_type={model_type!r}, "
+                "will use command-line specified values"
+            )
+            return None, None, None
+    except Exception as e:
+        print(f"[Auto-detect] Failed to read model config: {e}")
+        return None, None, None

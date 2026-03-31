@@ -24,6 +24,7 @@ from .train import (
     create_target_model,
     data_generation_work_flow,
     get_supported_chat_template_type_strings,
+    infer_model_params,
 )
 
 __all__ = [
@@ -40,4 +41,5 @@ __all__ = [
     "DatasetManager",
     "get_supported_chat_template_type_strings",
     "TargetHead",
+    "infer_model_params",
 ]

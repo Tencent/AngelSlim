@@ -78,9 +78,7 @@ def ras_sampling(
 def nucleus_sampling(weighted_scores, top_p=0.8, top_k=25):
     prob, indices = [], []
     cum_prob = 0.0
-    sorted_value, sorted_idx = weighted_scores.softmax(dim=0).sort(
-        descending=True, stable=True
-    )
+    sorted_value, sorted_idx = weighted_scores.softmax(dim=0).sort(descending=True, stable=True)
     for i in range(len(sorted_idx)):
         # sampling both top-p and numbers.
         if cum_prob < top_p and len(prob) < top_k:
@@ -126,13 +124,9 @@ def make_pad_mask(lengths: torch.Tensor, max_len: int = 0) -> torch.Tensor:
     return mask
 
 
-def get_qwen_tokenizer(
-    token_path: str, skip_special_tokens: bool, version: str = "cosyvoice3"
-):
+def get_qwen_tokenizer(token_path: str, skip_special_tokens: bool, version: str = "cosyvoice3"):
     if version == "cosyvoice3":
-        return CosyVoice3Tokenizer(
-            token_path=token_path, skip_special_tokens=skip_special_tokens
-        )
+        return CosyVoice3Tokenizer(token_path=token_path, skip_special_tokens=skip_special_tokens)
     else:
         raise ValueError
 
@@ -163,9 +157,7 @@ def mel_spectrogram(
         mel = librosa.filters.mel(
             sr=sampling_rate, n_fft=n_fft, n_mels=num_mels, fmin=fmin, fmax=fmax
         )
-        mel_basis[str(fmax) + "_" + str(y.device)] = (
-            torch.from_numpy(mel).float().to(y.device)
-        )
+        mel_basis[str(fmax) + "_" + str(y.device)] = torch.from_numpy(mel).float().to(y.device)
         hann_window[str(y.device)] = torch.hann_window(win_size).to(y.device)
 
     y = torch.nn.functional.pad(
@@ -292,10 +284,7 @@ def split_paragraph(
     final_utts = []
     cur_utt = ""
     for utt in utts:
-        if (
-            calc_utt_length(cur_utt + utt) > token_max_n
-            and calc_utt_length(cur_utt) > token_min_n
-        ):
+        if calc_utt_length(cur_utt + utt) > token_max_n and calc_utt_length(cur_utt) > token_min_n:
             final_utts.append(cur_utt)
             cur_utt = ""
         cur_utt = cur_utt + utt
@@ -332,21 +321,17 @@ def load_wav(wav, target_sr, min_sr=16000):
     speech, sample_rate = torchaudio.load(wav, backend="soundfile")
     speech = speech.mean(dim=0, keepdim=True)
     if sample_rate != target_sr:
-        assert (
-            sample_rate >= min_sr
-        ), "wav sample rate {} must be greater than {}".format(sample_rate, target_sr)
-        speech = torchaudio.transforms.Resample(
-            orig_freq=sample_rate, new_freq=target_sr
-        )(speech)
+        assert sample_rate >= min_sr, "wav sample rate {} must be greater than {}".format(
+            sample_rate, target_sr
+        )
+        speech = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=target_sr)(speech)
     return speech
 
 
 class Qwen2Encoder(torch.nn.Module):
     def __init__(self, pretrain_path):
         super().__init__()
-        self.model = Qwen2ForCausalLM.from_pretrained(
-            pretrain_path, attn_implementation="eager"
-        )
+        self.model = Qwen2ForCausalLM.from_pretrained(pretrain_path, attn_implementation="eager")
 
     def forward_one_step(
         self,
@@ -426,9 +411,9 @@ class CosyVoice3Tokenizer:
 
     def decode(self, tokens):
         tokens = torch.tensor(tokens, dtype=torch.int64)
-        text = self.tokenizer.batch_decode(
-            [tokens], skip_special_tokens=self.skip_special_tokens
-        )[0]
+        text = self.tokenizer.batch_decode([tokens], skip_special_tokens=self.skip_special_tokens)[
+            0
+        ]
         return text
 
 
@@ -447,9 +432,7 @@ class CosyVoiceFrontEnd:
         self.feat_extractor = feat_extractor
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         option = onnxruntime.SessionOptions()
-        option.graph_optimization_level = (
-            onnxruntime.GraphOptimizationLevel.ORT_ENABLE_ALL
-        )
+        option.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_ENABLE_ALL
         option.intra_op_num_threads = 1
         self.campplus_session = onnxruntime.InferenceSession(
             campplus_model, sess_options=option, providers=["CPUExecutionProvider"]
@@ -458,11 +441,7 @@ class CosyVoiceFrontEnd:
             speech_tokenizer_model,
             sess_options=option,
             providers=[
-                (
-                    "CUDAExecutionProvider"
-                    if torch.cuda.is_available()
-                    else "CPUExecutionProvider"
-                )
+                ("CUDAExecutionProvider" if torch.cuda.is_available() else "CPUExecutionProvider")
             ],
         )
         if os.path.exists(spk2info):
@@ -496,9 +475,7 @@ class CosyVoiceFrontEnd:
             texts = list(
                 split_paragraph(
                     text,
-                    partial(
-                        self.tokenizer.encode, allowed_special=self.allowed_special
-                    ),
+                    partial(self.tokenizer.encode, allowed_special=self.allowed_special),
                     "zh",
                     token_max_n=80,
                     token_min_n=60,
@@ -512,9 +489,7 @@ class CosyVoiceFrontEnd:
             texts = list(
                 split_paragraph(
                     text,
-                    partial(
-                        self.tokenizer.encode, allowed_special=self.allowed_special
-                    ),
+                    partial(self.tokenizer.encode, allowed_special=self.allowed_special),
                     "en",
                     token_max_n=80,
                     token_min_n=60,
@@ -533,13 +508,9 @@ class CosyVoiceFrontEnd:
                 [0], dtype=torch.int32
             ).to(self.device)
         else:
-            text_token = self.tokenizer.encode(
-                text, allowed_special=self.allowed_special
-            )
+            text_token = self.tokenizer.encode(text, allowed_special=self.allowed_special)
             text_token = torch.tensor([text_token], dtype=torch.int32).to(self.device)
-            text_token_len = torch.tensor([text_token.shape[1]], dtype=torch.int32).to(
-                self.device
-            )
+            text_token_len = torch.tensor([text_token.shape[1]], dtype=torch.int32).to(self.device)
             return text_token, text_token_len
 
     def _extract_text_token_generator(self, text_generator):
@@ -571,9 +542,7 @@ class CosyVoiceFrontEnd:
             .tolist()
         )
         speech_token = torch.tensor([speech_token], dtype=torch.int32).to(self.device)
-        speech_token_len = torch.tensor([speech_token.shape[1]], dtype=torch.int32).to(
-            self.device
-        )
+        speech_token_len = torch.tensor([speech_token.shape[1]], dtype=torch.int32).to(self.device)
         return speech_token, speech_token_len
 
     def _extract_spk_embedding(self, prompt_wav):
@@ -585,12 +554,7 @@ class CosyVoiceFrontEnd:
         embedding = (
             self.campplus_session.run(
                 None,
-                {
-                    self.campplus_session.get_inputs()[0]
-                    .name: feat.unsqueeze(dim=0)
-                    .cpu()
-                    .numpy()
-                },
+                {self.campplus_session.get_inputs()[0].name: feat.unsqueeze(dim=0).cpu().numpy()},
             )[0]
             .flatten()
             .tolist()
@@ -600,13 +564,9 @@ class CosyVoiceFrontEnd:
 
     def _extract_speech_feat(self, prompt_wav):
         speech = load_wav(prompt_wav, sample_rate)
-        speech_feat = (
-            self.feat_extractor(speech).squeeze(dim=0).transpose(0, 1).to(self.device)
-        )
+        speech_feat = self.feat_extractor(speech).squeeze(dim=0).transpose(0, 1).to(self.device)
         speech_feat = speech_feat.unsqueeze(dim=0)
-        speech_feat_len = torch.tensor([speech_feat.shape[1]], dtype=torch.int32).to(
-            self.device
-        )
+        speech_feat_len = torch.tensor([speech_feat.shape[1]], dtype=torch.int32).to(self.device)
         return speech_feat, speech_feat_len
 
     def frontend_zero_shot(
@@ -614,9 +574,7 @@ class CosyVoiceFrontEnd:
     ):
         tts_text_token, tts_text_token_len = self._extract_text_token(tts_text)
         if zero_shot_spk_id == "":
-            prompt_text_token, prompt_text_token_len = self._extract_text_token(
-                prompt_text
-            )
+            prompt_text_token, prompt_text_token_len = self._extract_text_token(prompt_text)
             speech_feat, speech_feat_len = self._extract_speech_feat(prompt_wav)
             speech_token, speech_token_len = self._extract_speech_token(prompt_wav)
             if resample_rate == 24000:
@@ -671,14 +629,10 @@ class CosyVoice3LM(torch.nn.Module):
         self.fill_token = speech_token_size + 3
 
         self.llm = Qwen2Encoder(os.path.join(model_path, "CosyVoice-BlankEN"))
-        self.llm_decoder = nn.Linear(
-            llm_output_size, speech_token_size + 200, bias=False
-        )
+        self.llm_decoder = nn.Linear(llm_output_size, speech_token_size + 200, bias=False)
 
         # 3. [Optional] build speech token related modules
-        self.speech_embedding = torch.nn.Embedding(
-            speech_token_size + 200, llm_input_size
-        )
+        self.speech_embedding = torch.nn.Embedding(speech_token_size + 200, llm_input_size)
 
         # 4. sampling method
         self.sampling = functools.partial(
@@ -718,9 +672,9 @@ class CosyVoice3LM(torch.nn.Module):
         past_key_values=None,
     ) -> List[int]:
         if inputs_embeds is None:
-            inputs_embeds = self.speech_embedding.weight[
-                input_ids.squeeze(0).tolist()
-            ].unsqueeze(0)
+            inputs_embeds = self.speech_embedding.weight[input_ids.squeeze(0).tolist()].unsqueeze(
+                0
+            )
         # prefill
         y_pred, hidden_states = self.llm.forward_one_step(
             inputs_embeds,
@@ -750,9 +704,7 @@ class CosyVoice3Model:
         self.hift = hift
 
     def load(self, llm_model, flow_model, hift_model):
-        self.llm.load_state_dict(
-            torch.load(llm_model, map_location=self.device), strict=True
-        )
+        self.llm.load_state_dict(torch.load(llm_model, map_location=self.device), strict=True)
         self.llm.to(self.device).eval()
         if self.flow is not None:
             self.flow.load_state_dict(
@@ -784,9 +736,9 @@ class CosyVoice3Model:
             token=token.to(self.device, dtype=torch.int32),
             token_len=torch.tensor([token.shape[1]], dtype=torch.int32).to(self.device),
             prompt_token=prompt_token.to(self.device),
-            prompt_token_len=torch.tensor(
-                [prompt_token.shape[1]], dtype=torch.int32
-            ).to(self.device),
+            prompt_token_len=torch.tensor([prompt_token.shape[1]], dtype=torch.int32).to(
+                self.device
+            ),
             prompt_feat=prompt_feat.to(self.device),
             prompt_feat_len=torch.tensor([prompt_feat.shape[1]], dtype=torch.int32).to(
                 self.device
@@ -800,9 +752,7 @@ class CosyVoice3Model:
             assert (
                 token_offset == 0 and finalize is True
             ), "speed change only support non-stream inference mode"
-            tts_mel = F.interpolate(
-                tts_mel, size=int(tts_mel.shape[2] / speed), mode="linear"
-            )
+            tts_mel = F.interpolate(tts_mel, size=int(tts_mel.shape[2] / speed), mode="linear")
         tts_speech, _ = self.hift.inference(speech_feat=tts_mel, finalize=finalize)
         return tts_speech
 
@@ -905,9 +855,7 @@ class CosyVoice3:
                 pre_lookahead_layer=pre_lookahead_layer,
                 decoder=decoder,
             )
-            f0_predictor = CausalConvRNNF0Predictor(
-                num_class=1, in_channels=80, cond_channels=512
-            )
+            f0_predictor = CausalConvRNNF0Predictor(num_class=1, in_channels=80, cond_channels=512)
             hift = CausalHiFTGenerator(
                 in_channels=80,
                 base_channels=512,

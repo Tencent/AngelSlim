@@ -16,6 +16,7 @@ import datetime
 import importlib.metadata
 import json
 import os
+import random
 import subprocess
 from itertools import takewhile
 from pathlib import Path
@@ -23,6 +24,7 @@ from typing import Optional
 
 import torch
 import torch.distributed as dist
+from datasets import load_dataset
 from transformers.utils.hub import cached_file
 
 
@@ -158,9 +160,9 @@ def get_hf_model_path(model_path) -> str:
 
 
 def common_prefix(str1, str2):
-    return "".join(
-        x[0] for x in takewhile(lambda x: x[0] == x[1], zip(str1, str2))
-    ).rpartition(".")[0]
+    return "".join(x[0] for x in takewhile(lambda x: x[0] == x[1], zip(str1, str2))).rpartition(
+        "."
+    )[0]
 
 
 def get_package_info(package_name: str) -> dict:
@@ -283,3 +285,28 @@ def decide_device_for_distributed():
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
     return device
+
+
+def get_loaders(tokenizer, name, seed=0, seqlen=2048, cache_dir=None):
+    if "wikitext2" in name:
+        testdata = load_dataset("wikitext", "wikitext-2-raw-v1", split="test", cache_dir=cache_dir)
+        return tokenizer("\n\n".join(testdata["text"]), return_tensors="pt")
+    elif "c4" in name:
+        valdata = load_dataset(
+            "allenai/c4",
+            data_files={"validation": "en/c4-validation.00000-of-00008.json.gz"},
+            split="validation",
+            cache_dir=cache_dir,
+        )
+        random.seed(seed)
+        valenc = []
+        for _ in range(256):
+            while True:
+                i = random.randint(0, len(valdata) - 1)
+                tmp = tokenizer(valdata[i]["text"], return_tensors="pt")
+                if tmp.input_ids.shape[1] >= seqlen:
+                    break
+            i = random.randint(0, tmp.input_ids.shape[1] - seqlen - 1)
+            valenc.append(tmp.input_ids[:, i : i + seqlen])
+        return torch.hstack(valenc)
+    raise NotImplementedError(f"Unsupported PPL dataset: {name}")

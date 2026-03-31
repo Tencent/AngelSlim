@@ -12,7 +12,35 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .fp8_per_block import fp8_per_block_quant_triton
-from .fp8_per_token_group import fp8_per_token_group_quant_triton
+"""
+FP8 quantization kernels with automatic backend selection.
 
-__all__ = ["fp8_per_token_group_quant_triton", "fp8_per_block_quant_triton"]
+This module automatically selects between Triton (for Linux/CUDA) and
+PyTorch (for Windows/CPU) implementations based on the runtime environment.
+"""
+
+from angelslim.compressor._platform import use_triton
+
+# Conditional imports based on platform/backend availability
+if use_triton():
+    from .fp8_per_block import fp8_per_block_quant_triton
+    from .fp8_per_token_group import fp8_per_token_group_quant_triton
+else:
+    # PyTorch fallback implementations
+    from .fp8_per_block_torch import (
+        fp8_per_block_quant_torch as fp8_per_block_quant_triton,
+    )
+    from .fp8_per_token_group_torch import (
+        fp8_per_token_group_quant_torch as fp8_per_token_group_quant_triton,
+    )
+
+# Also export PyTorch versions directly for explicit use
+from .fp8_per_block_torch import fp8_per_block_quant_torch
+from .fp8_per_token_group_torch import fp8_per_token_group_quant_torch
+
+__all__ = [
+    "fp8_per_token_group_quant_triton",
+    "fp8_per_block_quant_triton",
+    "fp8_per_block_quant_torch",
+    "fp8_per_token_group_quant_torch",
+]

@@ -29,7 +29,12 @@ from ..chat_templates import ChatTemplateType, template_manager
 class DatasetBuilder(metaclass=ABCMeta):
     @abstractmethod
     def build_dataset(
-        self, datapath: str, num_proc: int = 8, shuffle: bool = True, **kwargs
+        self,
+        datapath: str,
+        num_proc: int = 8,
+        shuffle: bool = True,
+        min_loss_tokens: Optional[int] = None,
+        **kwargs,
     ) -> Dataset:
         pass
 
@@ -127,6 +132,7 @@ class OnlineDatasetBuilder(DatasetBuilder):
         num_proc: int = 8,
         shuffle: bool = True,
         sample_num: Optional[int] = None,
+        min_loss_tokens: Optional[int] = None,
     ) -> Dataset:
         try:
             # Load dataset
@@ -161,6 +167,18 @@ class OnlineDatasetBuilder(DatasetBuilder):
                 num_proc=num_proc,
                 desc="Filtering empty input_ids",
             )
+
+            if min_loss_tokens is not None:
+                processed_ds = processed_ds.filter(
+                    lambda batch: [
+                        sum(sum(x) if isinstance(x, list) else x for x in m) >= min_loss_tokens
+                        for m in batch["loss_mask"]
+                    ],
+                    batched=True,
+                    num_proc=num_proc,
+                    desc=f"Filtering sequences with loss tokens < {min_loss_tokens}",
+                )
+
             processed_ds.set_format(type="torch")
 
             return processed_ds
@@ -173,9 +191,7 @@ class OnlineDatasetBuilder(DatasetBuilder):
 
         for i in range(len(examples["id"])):
             try:
-                processed_example = self._process_single_conversation(
-                    examples["conversations"][i]
-                )
+                processed_example = self._process_single_conversation(examples["conversations"][i])
 
                 if processed_example is not None:
                     for key, value in processed_example.items():
@@ -190,9 +206,7 @@ class OnlineDatasetBuilder(DatasetBuilder):
 
         return new_examples
 
-    def _process_single_conversation(
-        self, conversation_data: List[Dict]
-    ) -> Optional[Dict]:
+    def _process_single_conversation(self, conversation_data: List[Dict]) -> Optional[Dict]:
         if not conversation_data or not isinstance(conversation_data, list):
             return None
 
@@ -210,9 +224,7 @@ class OnlineDatasetBuilder(DatasetBuilder):
             )
 
             # Check if tokenizer supports offset_mapping
-            is_fast_tokenizer = (
-                hasattr(self.tokenizer, "is_fast") and self.tokenizer.is_fast
-            )
+            is_fast_tokenizer = hasattr(self.tokenizer, "is_fast") and self.tokenizer.is_fast
 
             # Tokenize conversation
             if is_fast_tokenizer:
@@ -237,9 +249,7 @@ class OnlineDatasetBuilder(DatasetBuilder):
                 )
                 input_ids = torch.tensor(encoding.input_ids)
                 # Create loss mask without offsets (alternative implementation needed)
-                loss_mask = self._create_loss_mask_without_offsets(
-                    conversation, input_ids
-                )
+                loss_mask = self._create_loss_mask_without_offsets(conversation, input_ids)
 
             input_ids = torch.tensor(input_ids)
             attention_mask = torch.ones_like(input_ids)
@@ -298,10 +308,7 @@ class OnlineDatasetBuilder(DatasetBuilder):
 
         # Find all assistant response spans
         assistant_pattern = (
-            re.escape(self.assistant_header)
-            + r"(.*?)(?="
-            + re.escape(self.user_header)
-            + "|$)"
+            re.escape(self.assistant_header) + r"(.*?)(?=" + re.escape(self.user_header) + "|$)"
         )
 
         for match in re.finditer(assistant_pattern, conversation, re.DOTALL):
@@ -336,11 +343,7 @@ class OnlineDatasetBuilder(DatasetBuilder):
         # Filter and validate conversation turns
         valid_turns = []
         for turn in source:
-            if (
-                not isinstance(turn, dict)
-                or "role" not in turn
-                or "content" not in turn
-            ):
+            if not isinstance(turn, dict) or "role" not in turn or "content" not in turn:
                 continue
 
             role = turn["role"]

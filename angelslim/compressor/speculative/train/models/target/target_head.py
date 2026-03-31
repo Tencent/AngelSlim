@@ -91,17 +91,20 @@ class TargetHead(nn.Module):
             if hasattr(config, sub_config_name):
                 config = getattr(config, sub_config_name)
             else:
-                raise ValueError(
-                    f"Config {config} has no sub-config named {sub_config_name}"
-                )
+                raise ValueError(f"Config {config} has no sub-config named {sub_config_name}")
 
         # Get model dimensions
-        if config.model_type in ["qwen3_vl", "qwen3_vl_moe"]:
+        if hasattr(config, "text_config") and hasattr(config.text_config, "hidden_size"):
             hidden_size = config.text_config.hidden_size
             vocab_size = config.text_config.vocab_size
-        else:
+        elif hasattr(config, "hidden_size"):
             hidden_size = config.hidden_size
             vocab_size = config.vocab_size
+        else:
+            raise ValueError(
+                f"Cannot determine hidden_size from config (model_type={config.model_type}). "
+                f"Please specify sub_config_name parameter to locate the text config."
+            )
 
         # Initialize lm_head
         lm_head = nn.Linear(hidden_size, vocab_size, bias=False)
@@ -110,9 +113,7 @@ class TargetHead(nn.Module):
         try:
             # Read safetensors index to locate lm_head weights
             try:
-                index_path = os.path.join(
-                    model_name_or_path, "model.safetensors.index.json"
-                )
+                index_path = os.path.join(model_name_or_path, "model.safetensors.index.json")
 
                 if not os.path.exists(index_path):
                     raise FileNotFoundError(
@@ -140,8 +141,7 @@ class TargetHead(nn.Module):
 
         except Exception as e:
             raise RuntimeError(
-                f"Failed to load lm_head weights from {model_name_or_path}. "
-                f"Error: {str(e)}"
+                f"Failed to load lm_head weights from {model_name_or_path}. " f"Error: {str(e)}"
             )
 
         # Create TargetHead instance

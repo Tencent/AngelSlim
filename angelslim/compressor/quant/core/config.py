@@ -74,9 +74,7 @@ class QuantConfig:
                 is_dynamic or act_quant_method is not None
             ), "[Error] fp8_static need act_quant_method"
             self.act_observer = (
-                ACT_OBSERVERS_CLASS[act_quant_method]
-                if "static" in is_dynamic
-                else None
+                ACT_OBSERVERS_CLASS[act_quant_method] if "static" in is_dynamic else None
             )
             self.weight_observer = WEIGHT_OBSERVERS_CLASS[weight_quant_method]
             self.kv_cache_observer = None
@@ -116,9 +114,7 @@ class QuantConfig:
                 is_dynamic or act_quant_method is not None
             ), "[Error] int8_static need act_quant_method"
             self.act_observer = (
-                ACT_OBSERVERS_CLASS[act_quant_method]
-                if "static" in is_dynamic
-                else None
+                ACT_OBSERVERS_CLASS[act_quant_method] if "static" in is_dynamic else None
             )
             self.weight_observer = WEIGHT_OBSERVERS_CLASS[weight_quant_method]
             self.kv_cache_observer = None
@@ -163,9 +159,7 @@ class QuantConfig:
             assert (
                 is_dynamic or act_quant_method is not None
             ), "[Error] nvfp4 need act_quant_method"
-            self.act_observer = (
-                AbsmaxPertensorObserver if "static" in is_dynamic else None
-            )
+            self.act_observer = AbsmaxPertensorObserver if "static" in is_dynamic else None
             self.weight_observer = AbsmaxPertensorObserver
             self.kv_cache_observer = None
             block_size = (
@@ -182,6 +176,12 @@ class QuantConfig:
 
             if act_quant_method is not None:
                 self.quant_algo_info["a"] = f"nvfp4_{act_quant_method}-{is_dynamic}"
+        elif "daq" in self.quant_algo:
+            self.quant_algo_info = {
+                "ignore_layers": quantization_args.ignore_layers,
+            }
+            self.low_memory = False
+            self._quantization_config = quantization_args
 
         if "smooth" in self.quant_helpers:
             self.smooth_alpha = quantization_args.smooth_alpha
@@ -203,9 +203,7 @@ class QuantConfig:
             act_observer if act_observer in ACT_OBSERVERS_CLASS else self.act_observer
         )
         self.weight_observer = (
-            weight_observer
-            if weight_observer in WEIGHT_OBSERVERS_CLASS
-            else self.weight_observer
+            weight_observer if weight_observer in WEIGHT_OBSERVERS_CLASS else self.weight_observer
         )
         self.kv_cache_observer = (
             kv_cache_observer

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import time
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Tuple
 
@@ -44,6 +45,67 @@ class Eagle3Trainer(Trainer, ABC):
         """
         super().__init__(model=draft_model, **kwargs)
         self.length = length
+        self._train_start_time = None
+        self._pending_log: dict = (
+            {}
+        )  # cache acc/ploss log for merging with base Trainer's loss log
+        self._pending_log_count: int = 0  # accumulated batch count for averaging the cached log
+
+    def train(self, *args, **kwargs):
+        """Override train method to record training start time for estimating remaining time."""
+        self._train_start_time = time.time()
+        return super().train(*args, **kwargs)
+
+    def log(self, logs: dict, start_time: Optional[float] = None) -> None:
+        """
+        rewrite log method to merge acc/ploss log with base Trainer's loss log.
+        """
+        if "loss" in logs and self._pending_log:
+            # merge cached acc/ploss data (average)
+            count = max(self._pending_log_count, 1)
+            acc_ploss = {k: v / count for k, v in self._pending_log.items()}
+            merged = {}
+
+            # step
+            max_steps = 0
+            if self.state is not None:
+                global_step = self.state.global_step
+                max_steps = self.state.max_steps
+                merged["step"] = global_step
+
+            # epoch
+            if "epoch" in logs:
+                merged["epoch"] = logs["epoch"]
+            if "loss" in logs:
+                merged["loss"] = logs["loss"]
+            if "grad_norm" in logs:
+                merged["grad_norm"] = logs["grad_norm"]
+
+            if "learning_rate" in logs:
+                merged["lr"] = logs["learning_rate"]
+
+            # acc/ploss
+            merged.update(acc_ploss)
+
+            # remaining_time
+            if (
+                self.state is not None
+                and self._train_start_time is not None
+                and global_step > 0
+                and max_steps > 0
+            ):
+                elapsed = time.time() - self._train_start_time
+                time_per_step = elapsed / global_step
+                remaining_seconds = int(time_per_step * (max_steps - global_step))
+                hours, remainder = divmod(remaining_seconds, 3600)
+                minutes, seconds = divmod(remainder, 60)
+                merged["remaining_time"] = f"{hours:02d}h:{minutes:02d}m:{seconds:02d}s"
+
+            self._pending_log.clear()
+            self._pending_log_count = 0
+            super().log(merged, start_time)
+        else:
+            super().log(logs, start_time)
 
     @property
     def draft_model(self) -> nn.Module:
@@ -131,12 +193,14 @@ class Eagle3Trainer(Trainer, ABC):
             position_ids = torch.arange(0, seq_length, dtype=torch.long, device=device)
             position_ids = position_ids.unsqueeze(0).view(-1, seq_length)
         else:
-            position_ids = position_ids.view(-1, seq_length).long()
+            if position_ids.ndim == 3:
+                # MRoPE format: (3, batch, seq_len), keep as-is
+                position_ids = position_ids.long()
+            else:
+                position_ids = position_ids.view(-1, seq_length).long()
 
         if attention_mask is None:
-            attention_mask = torch.ones(
-                (batch_size, seq_length), dtype=torch.bool, device=device
-            )
+            attention_mask = torch.ones((batch_size, seq_length), dtype=torch.bool, device=device)
 
         attention_mask = self.draft_model.prepare_decoder_attention_mask(
             attention_mask, (batch_size, seq_length), hidden_states, 0
@@ -195,9 +259,7 @@ class Eagle3Trainer(Trainer, ABC):
 
             # Step 7.6: Compute accuracy
             with torch.no_grad():
-                correct = (
-                    logits.argmax(-1) == target_p.argmax(-1)
-                ) * position_mask.squeeze(-1)
+                correct = (logits.argmax(-1) == target_p.argmax(-1)) * position_mask.squeeze(-1)
                 accuracy = correct.sum().item() / (loss_mask.sum().item() + 1e-6)
 
             # Step 7.7: Store loss and accuracy
@@ -214,24 +276,16 @@ class Eagle3Trainer(Trainer, ABC):
         ploss_weight = [0.8**i for i in range(len(plosses))]
         ploss = sum([ploss_weight[i] * plosses[i] for i in range(len(plosses))])
 
-        log = {
-            f"{log_prefix}/acc_{i}": round(float(acces[i]), 3)
-            for i in range(len(acces))
-        }
-        log.update(
-            {
-                f"{log_prefix}/ploss_{i}": round(float(plosses[i].item()), 3)
-                for i in range(len(plosses))
-            }
-        )
-        self.log(log)
-
+        log = {f"{log_prefix}/acc_{i}": acces[i] for i in range(len(acces))}
+        log.update({f"{log_prefix}/ploss_{i}": plosses[i].item() for i in range(len(plosses))})
+        # Cache log for merging with base Trainer's loss log
+        for k, v in log.items():
+            self._pending_log[k] = self._pending_log.get(k, 0.0) + v
+        self._pending_log_count += 1
         # Step 9: Return loss
         return ploss
 
-    def save_model(
-        self, output_dir: Optional[str] = None, _internal_call: bool = False
-    ):
+    def save_model(self, output_dir: Optional[str] = None, _internal_call: bool = False):
         """
         Override save_model to handle DeepSpeed ZeRO-3 model saving.
 
@@ -271,9 +325,7 @@ class Eagle3Trainer(Trainer, ABC):
         with deepspeed.zero.GatheredParameters(self.model.parameters()):
             state_dict = self.model.state_dict()
 
-        draft_model_state_dict = {
-            k: v for k, v in state_dict.items() if "embed" not in k
-        }
+        draft_model_state_dict = {k: v for k, v in state_dict.items() if "embed" not in k}
 
         # Only main process saves the model
         if self.args.should_save and self.accelerator.is_main_process:
@@ -302,7 +354,7 @@ class Eagle3Trainer(Trainer, ABC):
         """
         Perform an evaluation step on `model` using `inputs`.
         """
-        data_for_draft_model = self.prepare_data_for_draft_model(**inputs)
+        data_for_draft_model = self.prepare_data_for_draft_model(inputs)
 
         attention_mask = data_for_draft_model["attention_mask"]
         # inputs_embeds = data_for_draft_model["inputs_embeds"]

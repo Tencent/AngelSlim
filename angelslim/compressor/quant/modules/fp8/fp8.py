@@ -84,9 +84,7 @@ class FP8:
         )
         cache = {"i": 0}
         layers[0] = layers[0].to(dev)
-        self.model.model.model.embed_tokens = self.model.model.model.embed_tokens.to(
-            dev
-        )
+        self.model.model.model.embed_tokens = self.model.model.model.embed_tokens.to(dev)
         layers[0] = Catcher(layers[0], self.inps, cache)
         self.model.model_forward(dataloader)
         layer_kwargs = layers[0].layer_kwargs
@@ -95,11 +93,7 @@ class FP8:
             # position embeddings
             if isinstance(v, tuple):
                 layer_kwargs[k] = tuple(
-                    (
-                        item.to(dev)
-                        if isinstance(item, (torch.Tensor, nn.Module))
-                        else item
-                    )
+                    (item.to(dev) if isinstance(item, (torch.Tensor, nn.Module)) else item)
                     for item in v
                 )
             if isinstance(v, torch.Tensor):
@@ -126,9 +120,7 @@ class FP8:
                         outs = outs[0].squeeze(1)
 
                 if torch.cuda.is_available():
-                    print_info(
-                        f"GPU Memory: {torch.cuda.memory_reserved() / 1024 ** 2:.2f} MB"
-                    )
+                    print_info(f"GPU Memory: {torch.cuda.memory_reserved() / 1024 ** 2:.2f} MB")
                 # Clear GPU memory
                 torch.cuda.empty_cache()
 

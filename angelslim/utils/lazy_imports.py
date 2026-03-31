@@ -125,9 +125,7 @@ class LazyModule:
                 return lazy_submodule
             except ImportError:
                 # If submodule import fails, re-raise the original AttributeError
-                raise AttributeError(
-                    f"module '{self._module_name}' has no attribute '{name}'"
-                )
+                raise AttributeError(f"module '{self._module_name}' has no attribute '{name}'")
 
 
 class LazyAttribute:

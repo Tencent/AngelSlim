@@ -58,17 +58,11 @@ class OmniDataset(BaseDataset):
                 image_path = None
 
                 if "video_path" in data:
-                    video_path = os.path.normpath(
-                        os.path.join(data_dir, data["video_path"])
-                    )
+                    video_path = os.path.normpath(os.path.join(data_dir, data["video_path"]))
                 if "audio_path" in data:
-                    audio_path = os.path.normpath(
-                        os.path.join(data_dir, data["audio_path"])
-                    )
+                    audio_path = os.path.normpath(os.path.join(data_dir, data["audio_path"]))
                 if "image_path" in data:
-                    image_path = os.path.normpath(
-                        os.path.join(data_dir, data["image_path"])
-                    )
+                    image_path = os.path.normpath(os.path.join(data_dir, data["image_path"]))
 
                 ms = data.get("messages")
 

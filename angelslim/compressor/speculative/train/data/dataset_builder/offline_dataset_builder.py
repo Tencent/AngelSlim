@@ -39,9 +39,7 @@ class OfflineEagle3Dataset(Dataset):
     hidden_states, and loss_mask.
     """
 
-    def __init__(
-        self, data_dir: str, file_pattern: str = "*.ckpt", cache_in_memory: bool = False
-    ):
+    def __init__(self, data_dir: str, file_pattern: str = "*.ckpt", cache_in_memory: bool = False):
         """
         Initialize the OfflineEagle3Dataset.
 
@@ -192,16 +190,13 @@ class OfflineEagle3Dataset(Dataset):
                     self.valid_indices.remove(actual_idx)
                     if len(self.valid_indices) == 0:
                         raise RuntimeError(
-                            "All checkpoint files failed to load. "
-                            "Cannot continue training."
+                            "All checkpoint files failed to load. " "Cannot continue training."
                         )
                     # Try next index
                     idx += 1
 
             # If all retries failed, raise error
-            raise RuntimeError(
-                f"Failed to load any valid checkpoint after {max_retries} attempts"
-            )
+            raise RuntimeError(f"Failed to load any valid checkpoint after {max_retries} attempts")
 
 
 class OfflineVLMEagle3Dataset(OfflineEagle3Dataset):
@@ -234,8 +229,13 @@ class OfflineVLMEagle3Dataset(OfflineEagle3Dataset):
             "target_hiddens",  # B, N, D
             "hidden_states",  # B, N, 3*D
             "loss_mask",  # B, N
-            # "inputs_embeds",  # B, N, D
-            "position_ids",  # 3, B, N
+        ]
+        # position_ids and inputs_embeds are optional keys,
+        # - HF Transformers backend saves position_ids (torch.Tensor)
+        # - vLLM backend may save position_ids as None (hook not capturing)
+        optional_tensor_keys = [
+            "position_ids",  # 3, B, N (optional, vLLM backend may be None)
+            "inputs_embeds",  # B, N, D (optional)
         ]
         missing_keys = [key for key in required_keys if key not in data]
 
@@ -248,7 +248,7 @@ class OfflineVLMEagle3Dataset(OfflineEagle3Dataset):
             )
             return None
 
-        # Validate tensor types
+        # Validate tensor types for required keys
         for key in required_keys:
             if not isinstance(data[key], torch.Tensor):
                 warnings.warn(
@@ -259,6 +259,11 @@ class OfflineVLMEagle3Dataset(OfflineEagle3Dataset):
                 )
                 return None
 
+        # Validate tensor types for optional keys
+        for key in optional_tensor_keys:
+            if key in data and not isinstance(data[key], torch.Tensor):
+                data[key] = None
+
         attention_mask = torch.ones_like(data["input_ids"])
         data["attention_mask"] = attention_mask  # B, N
         return data
@@ -266,9 +271,7 @@ class OfflineVLMEagle3Dataset(OfflineEagle3Dataset):
 
 @DatasetBuilderFactory.register("offline", "LLM")
 class OfflineLLMDatasetBuilder(DatasetBuilder):
-    def __init__(
-        self, file_pattern: str = "*.ckpt", cache_in_memory: bool = False, **kwargs: Any
-    ):
+    def __init__(self, file_pattern: str = "*.ckpt", cache_in_memory: bool = False, **kwargs: Any):
         self.file_pattern = file_pattern
         self.cache_in_memory = cache_in_memory
 
@@ -286,11 +289,10 @@ class OfflineLLMDatasetBuilder(DatasetBuilder):
         return DataCollatorWithPadding()
 
 
+@DatasetBuilderFactory.register("offline", "VLM", "qwen2_5_vl")
 @DatasetBuilderFactory.register("offline", "VLM", "qwen3_vl")
 class OfflineVLMDatasetBuilder(DatasetBuilder):
-    def __init__(
-        self, file_pattern: str = "*.ckpt", cache_in_memory: bool = False, **kwargs: Any
-    ):
+    def __init__(self, file_pattern: str = "*.ckpt", cache_in_memory: bool = False, **kwargs: Any):
         self.file_pattern = file_pattern
         self.cache_in_memory = cache_in_memory
 
@@ -310,9 +312,7 @@ class OfflineVLMDatasetBuilder(DatasetBuilder):
 
 @DatasetBuilderFactory.register("offline", "VLM", "hunyuan_vl")
 class OfflineVLMHunyuanVLDatasetBuilder(DatasetBuilder):
-    def __init__(
-        self, file_pattern: str = "*.ckpt", cache_in_memory: bool = False, **kwargs: Any
-    ):
+    def __init__(self, file_pattern: str = "*.ckpt", cache_in_memory: bool = False, **kwargs: Any):
         self.file_pattern = file_pattern
         self.cache_in_memory = cache_in_memory
 

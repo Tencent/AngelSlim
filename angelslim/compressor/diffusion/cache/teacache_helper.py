@@ -81,9 +81,7 @@ class TeaCacheHelper(CacheHelper):
                 else:
                     is_last_single_block = block_id == len(self.single_blocks) - 1
                     if blocktype == "single_blocks" and is_last_single_block:
-                        img_seq_len = self.cached_output[("double_blocks", 0)][0].shape[
-                            1
-                        ]
+                        img_seq_len = self.cached_output[("double_blocks", 0)][0].shape[1]
                         cached_output = result[:, :img_seq_len, ...]
                         self.previous_residual = cached_output - self.cached_input
 

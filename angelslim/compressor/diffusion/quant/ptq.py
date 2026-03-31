@@ -84,8 +84,7 @@ class DynamicDiTQuantizer:
             self.native_fp8_support = native_fp8_support
         else:
             self.native_fp8_support = (
-                torch.cuda.is_available()
-                and torch.cuda.get_device_capability() >= (8, 9)
+                torch.cuda.is_available() and torch.cuda.get_device_capability() >= (8, 9)
             )
 
         self.quantize_linear_module = self._set_quantize_linear_module()
@@ -128,14 +127,12 @@ class DynamicDiTQuantizer:
         model.to(torch.bfloat16)
         assert scale is not None, "scale is required"
         self.fp8_scales_map = load_fp8_scales(scale)
-        for name, module in tqdm.tqdm(
-            list(model.named_modules()), desc="converting linear"
-        ):
+        for name, module in tqdm.tqdm(list(model.named_modules()), desc="converting linear"):
             if isinstance(module, torch.nn.Linear) and self.layer_filter(name):
                 # Prefer $name.weight_scale, fallback to "$name" key if needed
-                s = self.fp8_scales_map.get(
-                    f"{name}.weight_scale"
-                ) or self.fp8_scales_map.get(name)
+                s = self.fp8_scales_map.get(f"{name}.weight_scale") or self.fp8_scales_map.get(
+                    name
+                )
                 if s is None:
                     continue
                 # import pdb; pdb.set_trace()

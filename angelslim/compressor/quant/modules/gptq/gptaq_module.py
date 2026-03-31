@@ -167,18 +167,16 @@ class GPTAQModule:
                         weight_zero = zero[idx // group_size]
 
                 maxq = torch.tensor(2**self.quant_bits - 1)
-                q = torch.clamp(
-                    torch.round(w.unsqueeze(1) / weight_scale) + weight_zero, 0, maxq
-                )
+                q = torch.clamp(torch.round(w.unsqueeze(1) / weight_scale) + weight_zero, 0, maxq)
                 q = weight_scale * (q - weight_zero)
                 q = q.flatten()
                 q1[:, i] = q
                 losses1[:, i] = (w - q) ** 2 / d**2
 
                 err = (w - q) / d
-                w1[:, i:] -= err.unsqueeze(1).matmul(
-                    hinv1[i, i:].unsqueeze(0)
-                ) - w.unsqueeze(1).matmul(P1[i, i:].unsqueeze(0))
+                w1[:, i:] -= err.unsqueeze(1).matmul(hinv1[i, i:].unsqueeze(0)) - w.unsqueeze(
+                    1
+                ).matmul(P1[i, i:].unsqueeze(0))
                 err1[:, i] = err
 
             q_weight[:, i1:i2] = q1

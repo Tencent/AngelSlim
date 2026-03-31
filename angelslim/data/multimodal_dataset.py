@@ -83,9 +83,7 @@ class MultiModalDataset(BaseDataset):
                     [
                         {
                             "role": "system",
-                            "content": [
-                                {"type": "text", "text": data["system_prompt"]}
-                            ],
+                            "content": [{"type": "text", "text": data["system_prompt"]}],
                         }
                     ]
                 )
@@ -153,9 +151,7 @@ class MultiModalDataset(BaseDataset):
         """Load dataset from Hugging Face format"""
         dataset = load_dataset(dataset, split="test")
         total_samples = (
-            min(num_samples, len(dataset["query"]))
-            if num_samples > 0
-            else len(dataset["query"])
+            min(num_samples, len(dataset["query"])) if num_samples > 0 else len(dataset["query"])
         )
 
         for i in tqdm(range(total_samples), desc="Processing HF Dataset"):
@@ -183,7 +179,7 @@ class MultiModalDataset(BaseDataset):
         else:
             padding = True
 
-        if self.model_name in ["Qwen3VL", "Qwen3VLMoE"]:
+        if self.model_name in ["Qwen3VL", "Qwen3VLMoE", "Qwen3_5"]:
             inputs = self.processor.apply_chat_template(
                 messages,
                 tools=tools,
@@ -253,9 +249,7 @@ class MultiModalDataset(BaseDataset):
                             img = Image.open(item["image"])
                             image_paths.append(img)
                         except ValueError as e:
-                            raise ValueError(
-                                f"Could not open image file: {item['image']}, {e}"
-                            )
+                            raise ValueError(f"Could not open image file: {item['image']}, {e}")
                     elif isinstance(item["image"], Image.Image):
                         image_paths.append(item["image"])
                 elif item.get("type") == "video":

@@ -84,9 +84,7 @@ class BaseLLMModel(metaclass=ABCMeta):
                 - compress_config: the configuration for compression.
                 - global_config: the global configuration for the model.
         """
-        quant_config = QuantConfig(
-            slim_config["compress_config"], slim_config["global_config"]
-        )
+        quant_config = QuantConfig(slim_config["compress_config"], slim_config["global_config"])
         self.quant_config = quant_config
         self.act_scales_dict = {}
         self.weight_scales_dict = {}
@@ -141,9 +139,7 @@ class BaseLLMModel(metaclass=ABCMeta):
                 input_scale=act_scale,
             )
         else:
-            print_info(
-                "current {} deploy_backend not support".format(self.deploy_backend)
-            )
+            print_info("current {} deploy_backend not support".format(self.deploy_backend))
             raise NotImplementedError
         return q_linear
 
@@ -169,9 +165,7 @@ class BaseLLMModel(metaclass=ABCMeta):
                 input_scale=act_scale,
             )
         else:
-            print_info(
-                "current {} deploy_backend not support".format(self.deploy_backend)
-            )
+            print_info("current {} deploy_backend not support".format(self.deploy_backend))
             raise NotImplementedError
         return q_linear
 
@@ -184,8 +178,7 @@ class BaseLLMModel(metaclass=ABCMeta):
         return [
             k
             for k in observe_names
-            if k.startswith(self.block_name)
-            and k.split(".")[-2] + "." + k.split(".")[-1] in names
+            if k.startswith(self.block_name) and k.split(".")[-2] + "." + k.split(".")[-1] in names
         ]
 
     def get_quant_config(self):
@@ -210,19 +203,13 @@ class BaseLLMModel(metaclass=ABCMeta):
         w_quant_algo = w.split("_")[0] if w is not None else None
         c_quant_algo = c.split("_")[0] if c is not None else None
         a_quant_bits = (
-            int(re.search(r"\d+", a_quant_algo).group())
-            if a_quant_algo is not None
-            else None
+            int(re.search(r"\d+", a_quant_algo).group()) if a_quant_algo is not None else None
         )
         w_quant_bits = (
-            int(re.search(r"\d+", w_quant_algo).group())
-            if w_quant_algo is not None
-            else None
+            int(re.search(r"\d+", w_quant_algo).group()) if w_quant_algo is not None else None
         )
         c_quant_bits = (
-            int(re.search(r"\d+", c_quant_algo).group())
-            if c_quant_algo is not None
-            else None
+            int(re.search(r"\d+", c_quant_algo).group()) if c_quant_algo is not None else None
         )
         a_quant_method = a.split("_")[1] if a is not None else None
         w_quant_method = w.split("_")[1] if w is not None else None
@@ -282,9 +269,7 @@ class BaseLLMModel(metaclass=ABCMeta):
 
         if dataloader is not None:
             with torch.no_grad():
-                for batch in tqdm(
-                    dataloader, desc="calibrating...", total=len(dataloader)
-                ):
+                for batch in tqdm(dataloader, desc="calibrating...", total=len(dataloader)):
                     inputs = batch["input_ids"].to(device)
                     labels = batch["labels"].to(device)
                     attention_mask = batch["attention_mask"].to(device)
@@ -298,9 +283,7 @@ class BaseLLMModel(metaclass=ABCMeta):
                             reduction="none",
                         )
 
-                        attention_mask = (
-                            attention_mask.view(-1).to(logits.device).float()
-                        )
+                        attention_mask = attention_mask.view(-1).to(logits.device).float()
                         loss = loss * attention_mask
                         avg_loss = loss.mean()
                         ppl = torch.exp(avg_loss)
@@ -350,6 +333,58 @@ class BaseLLMModel(metaclass=ABCMeta):
 
         return smooth_mapping_layers
 
+    def get_rotation_mapping_layers(
+        self, transform_config, linear_mapping=None, norm_mapping=None
+    ):
+
+        if linear_mapping:
+            targets, ignore = linear_mapping
+            linear_mapping_layers = {}
+            for name, module in self.model.named_modules():
+                for target in targets:
+                    if name.split(".")[-1] == target:
+                        if not any(name.endswith(ig) for ig in ignore):
+                            linear_mapping_layers[name] = module
+                        break
+            return linear_mapping_layers
+
+        if norm_mapping:
+            norm_mapping_layers = {}
+
+            for to_linear_list, to_norm in norm_mapping:
+                for norm_name, norm_layer in self.model.named_modules():
+                    if norm_name.split(".")[-1] != to_norm:
+                        continue
+                    linear_layers_list = []
+
+                    for to_linear in to_linear_list:
+                        longest_prefix = 0
+                        linear_layers = []
+
+                        # use common_prefix to support moe experts
+                        for name, layer in self.model.named_modules():
+                            if name.split(".")[-1] != to_linear:
+                                continue
+                            prefix = common_prefix(name, norm_name)
+                            if prefix.count(".") < longest_prefix:
+                                continue
+                            elif prefix.count(".") == longest_prefix:
+                                linear_layers.append((name, layer))
+                            else:
+                                longest_prefix = prefix.count(".")
+                                linear_layers = [(name, layer)]
+
+                        if linear_layers:
+                            linear_layers_list.extend(linear_layers)
+
+                    if linear_layers_list:
+                        norm_mapping_layers[norm_name] = (
+                            norm_layer,
+                            linear_layers_list,
+                        )
+
+            return norm_mapping_layers
+
     def get_parent_dict(self, observer_layers_dict):
         return {}
 
@@ -359,4 +394,4 @@ class BaseLLMModel(metaclass=ABCMeta):
         return weight_observer.scales()
 
     def __getattr__(self, item):
-        return super().__getattr__(item)
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{item}'")

@@ -50,9 +50,7 @@ class AbsMaxGroupWiseWeightObserver(BaseObserver):
         input_processed = new_inp.view(
             [new_inp.shape[0], new_inp.shape[1] // self._group_size, self._group_size]
         )
-        abs_max_values, _ = input_processed.abs().max(
-            dim=self.quant_axis(), keepdim=True
-        )
+        abs_max_values, _ = input_processed.abs().max(dim=self.quant_axis(), keepdim=True)
         abs_max_values = abs_max_values.squeeze(-1)
         return 0, abs_max_values
 
@@ -69,9 +67,7 @@ class AbsMaxGroupWiseWeightObserver(BaseObserver):
     def scales(self):
         """Return output scales."""
         if self.step == 0:
-            raise ValueError(
-                "AbsMaxGroupWiseWeightObserver scales must calibrate data first!"
-            )
+            raise ValueError("AbsMaxGroupWiseWeightObserver scales must calibrate data first!")
         if self._scale is None:
             self.cal_thresholds()
         if self.dtype:

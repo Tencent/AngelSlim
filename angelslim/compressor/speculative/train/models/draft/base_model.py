@@ -86,18 +86,12 @@ class Eagle3BaseDraftModel(PreTrainedModel, ABC):
         # Handle HuggingFace model identifier
         if not os.path.exists(target_model_name_or_path):
             # print(f"Downloading model from HuggingFace: {target_model_name_or_path}")
-            target_model_name_or_path = snapshot_download(
-                repo_id=target_model_name_or_path
-            )
+            target_model_name_or_path = snapshot_download(repo_id=target_model_name_or_path)
 
         # Try loading embedding weights
-        tensor = self._load_from_safetensors(
-            target_model_name_or_path, embed_weight_key
-        )
+        tensor = self._load_from_safetensors(target_model_name_or_path, embed_weight_key)
         if tensor is None:
-            tensor = self._load_from_pytorch_bin(
-                target_model_name_or_path, embed_weight_key
-            )
+            tensor = self._load_from_pytorch_bin(target_model_name_or_path, embed_weight_key)
 
         if tensor is None:
             raise FileNotFoundError(
@@ -108,9 +102,7 @@ class Eagle3BaseDraftModel(PreTrainedModel, ABC):
         with torch.no_grad():
             self.embed_tokens.weight.copy_(tensor)
 
-    def _load_from_safetensors(
-        self, model_path, embed_weight_key="model.embed_tokens.weight"
-    ):
+    def _load_from_safetensors(self, model_path, embed_weight_key="model.embed_tokens.weight"):
         """Load embedding weights from safetensors format."""
         try:
             try:
@@ -137,9 +129,7 @@ class Eagle3BaseDraftModel(PreTrainedModel, ABC):
             print(f"Failed to load from safetensors: {e}")
             return None
 
-    def _load_from_pytorch_bin(
-        self, model_path, embed_weight_key="model.embed_tokens.weight"
-    ):
+    def _load_from_pytorch_bin(self, model_path, embed_weight_key="model.embed_tokens.weight"):
         """Load embedding weights from pytorch_model.bin format."""
         try:
             try:
@@ -213,5 +203,18 @@ class Eagle3BaseDraftModel(PreTrainedModel, ABC):
             d2t = cache["d2t"]
             t2d = cache["t2d"]
 
+        self.t2d.copy_(t2d)
+        self.d2t.copy_(d2t)
+
+    def load_vocab_mapping(self, vocab_mapping_path):
+        """
+        Load pre-computed vocab mapping directly from disk.
+
+        Args:
+            vocab_mapping_path: Path to the vocab_mapping.pt file saved by generate_hidden
+        """
+        cache = torch.load(vocab_mapping_path)
+        d2t = cache["d2t"]
+        t2d = cache["t2d"]
         self.t2d.copy_(t2d)
         self.d2t.copy_(d2t)
