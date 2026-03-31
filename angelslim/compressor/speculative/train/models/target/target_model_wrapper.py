@@ -703,7 +703,9 @@ class VLMTransformersBackend(BaseBackend):
             return args, kwargs
 
         if self.target_model_type in ("qwen3_vl", "qwen2_5_vl"):
-            handle = self.model.language_model.register_forward_pre_hook(hook, with_kwargs=True)
+            handle = self.model.model.language_model.register_forward_pre_hook(
+                hook, with_kwargs=True
+            )
         elif self.target_model_type == "hunyuan_vl":
             handle = self.model.model.register_forward_pre_hook(hook, with_kwargs=True)
         else:
@@ -773,7 +775,9 @@ class VLMTransformersBackend(BaseBackend):
             return args, kwargs
 
         if self.target_model_type in ("qwen3_vl", "qwen2_5_vl"):
-            handle = self.model.language_model.register_forward_pre_hook(hook, with_kwargs=True)
+            handle = self.model.model.language_model.register_forward_pre_hook(
+                hook, with_kwargs=True
+            )
         elif self.target_model_type == "hunyuan_vl":
             handle = self.model.model.register_forward_pre_hook(hook, with_kwargs=True)
         else:
