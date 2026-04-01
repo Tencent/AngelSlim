@@ -18,6 +18,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Tuple
 
 import torch
+import torch.utils.checkpoint
 from torch import nn
 from transformers import Trainer
 
@@ -227,19 +228,34 @@ class Eagle3Trainer(Trainer, ABC):
         # Step 7: Iterative speculative decoding training loop
         for idx in range(self.length):
             # Step 7.1: Get input embeddings with gradient tracking
-            inputs_embeds = self.draft_model.get_input_embeddings(input_ids)
+            inputs_embeds = self.draft_model.embed_input_ids(input_ids)
             if not inputs_embeds.requires_grad:
                 inputs_embeds.requires_grad = True
 
             # Step 7.2: Encode through draft model layers
-            hidden_states, cache_hidden = self.draft_model.encode_layers(
-                inputs_embeds=inputs_embeds,
-                hidden_states=hidden_states,
-                cache_hidden=cache_hidden,
-                attention_mask=attention_mask,
-                position_ids=position_ids,
-                use_cache=True,
-            )
+            if (
+                getattr(self.draft_model, "gradient_checkpointing", False)
+                and self.draft_model.training
+            ):
+                hidden_states, cache_hidden = torch.utils.checkpoint.checkpoint(
+                    self.draft_model.encode_layers,
+                    inputs_embeds,
+                    hidden_states,
+                    cache_hidden,
+                    attention_mask,
+                    position_ids,
+                    True,
+                    use_reentrant=False,
+                )
+            else:
+                hidden_states, cache_hidden = self.draft_model.encode_layers(
+                    inputs_embeds=inputs_embeds,
+                    hidden_states=hidden_states,
+                    cache_hidden=cache_hidden,
+                    attention_mask=attention_mask,
+                    position_ids=position_ids,
+                    use_cache=True,
+                )
 
             # Step 7.3: Compute logits from hidden states
             logits = self.draft_model.compute_logits(hidden_states)

@@ -258,6 +258,12 @@ def parse_args():
             "'polynomial', 'constant', 'constant_with_warmup'"
         ),
     )
+    training_group.add_argument(
+        "--gradient_checkpointing",
+        action="store_true",
+        default=False,
+        help="Whether to use gradient checkpointing",
+    )
     training_group.add_argument("--run_name", type=str, default=None, help="Run name for tracking")
     training_group.add_argument(
         "--report_to",
@@ -411,6 +417,7 @@ def train():
 
     distributed_args = {
         "deepspeed": args.deepspeed,
+        "gradient_checkpointing": args.gradient_checkpointing,
     }
 
     training_args = transformers.TrainingArguments(

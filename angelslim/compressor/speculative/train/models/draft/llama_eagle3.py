@@ -563,6 +563,9 @@ class Eagle3LlamaForCausalLM(Eagle3BaseDraftModel):
 
         self.lm_head = nn.Linear(config.hidden_size, config.draft_vocab_size, bias=False)
 
+        # Required by new transformers gradient checkpointing format
+        self.gradient_checkpointing = False
+
     def combine_hidden_states(self, hidden_states: torch.Tensor) -> torch.Tensor:
         return self.fc(hidden_states)
 
@@ -593,7 +596,7 @@ class Eagle3LlamaForCausalLM(Eagle3BaseDraftModel):
         logits = self.lm_head(norm_hidden_states)
         return logits.float()
 
-    def get_input_embeddings(self, input_ids):
+    def embed_input_ids(self, input_ids):
         inputs_embeds = self.embed_tokens(input_ids)
         return inputs_embeds
 
