@@ -267,6 +267,10 @@ class LlamaAttention(nn.Module):
             if scaling_type == "mrope" or self.config.rope_scaling.get("mrope_interleaved", False):
                 self.rotary_emb = MRotaryEmbedding(self.config)
                 self.rope_apply_func = apply_rotary_pos_emb_mrope
+            elif scaling_type == "default":
+                self.rotary_emb = LlamaRotaryEmbedding(
+                    self.head_dim, max_position_embeddings=self.max_position_embeddings
+                )
             elif scaling_type == "linear":
                 self.rotary_emb = LlamaLinearScalingRotaryEmbedding(
                     self.head_dim,

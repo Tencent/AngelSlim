@@ -158,12 +158,21 @@ MODEL_TYPE_PARAM_MAP: dict = {
 
 
 def infer_model_params(
-    model_name_or_path: str,
+    model_name_or_path: Optional[str],
+    model_type: Optional[str],
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """
     auto-detect lm_head_key、embed_weight_key、chat_template_type from target model path
+    or model_type.
+
+    If model_type is provided, it will be used directly to look up the parameter map
+    without loading AutoConfig. Otherwise, model_name_or_path is used to auto-detect
+    model_type via AutoConfig.
+
     Args:
-        model_name_or_path: target model path
+        model_name_or_path: target model path (optional if model_type is provided)
+        model_type: model type string, e.g. 'qwen2_5_vl', 'qwen3_vl'
+                    (typically from draft_model_config.target_model_type)
 
     Returns:
         (lm_head_key, embed_weight_key, chat_template_type)
@@ -171,8 +180,7 @@ def infer_model_params(
     """
     try:
         config = AutoConfig.from_pretrained(model_name_or_path, trust_remote_code=True)
-        model_type = getattr(config, "model_type", None)
-        print(f"[Auto-detect] Detected model_type: {model_type}")
+        print(f"model_type: {model_type}")
         if model_type in MODEL_TYPE_PARAM_MAP:
             lm_head_key, embed_weight_key, chat_template_type = MODEL_TYPE_PARAM_MAP[model_type]
             # compatible with tie_word_embeddings=False/True

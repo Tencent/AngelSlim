@@ -235,33 +235,34 @@ def split_dataset_indices(total_len, num_workers, start=0, end=None):
 def main():
     args = parse_arguments()
 
+    draft_vocab_size = None
+    target_vocab_size = None
+    logger.info(f"args.draft_model_config_path: {args.draft_model_config_path}")
+    if args.draft_model_config_path is not None:
+        draft_config = DraftModelConfig.from_file(args.draft_model_config_path)
+        draft_vocab_size = getattr(draft_config, "draft_vocab_size", None)
+        target_vocab_size = getattr(draft_config, "vocab_size", None)
+        args.target_model_type = getattr(draft_config, "target_model_type", None)
+        logger.info(
+            f"Read from draft model config: draft_vocab_size={draft_vocab_size}, "
+            f"target_vocab_size={target_vocab_size}, "
+            f"target_model_type={args.target_model_type}"
+        )
+    else:
+        raise ValueError("--draft_model_config_path must be specified")
+
     # Auto-infer chat_template_type
     if args.chat_template_type is None:
-        _, _, inferred_chat_template_type = infer_model_params(args.target_model_name_or_path)
+        _, _, inferred_chat_template_type = infer_model_params(
+            model_name_or_path=args.target_model_name_or_path,
+            model_type=args.target_model_type,
+        )
         args.chat_template_type = (
             inferred_chat_template_type if inferred_chat_template_type is not None else "default"
         )
         logger.info(f"chat_template_type auto-inferred as: {args.chat_template_type}")
     else:
         logger.info(f"Using specified chat_template_type: {args.chat_template_type}")
-
-    # Read draft model config
-    draft_vocab_size = None
-    target_vocab_size = None
-    target_model_type = None
-    logger.info(f"args.draft_model_config_path: {args.draft_model_config_path}")
-    if args.draft_model_config_path is not None:
-        draft_config = DraftModelConfig.from_file(args.draft_model_config_path)
-        draft_vocab_size = getattr(draft_config, "draft_vocab_size", None)
-        target_vocab_size = getattr(draft_config, "vocab_size", None)
-        target_model_type = getattr(draft_config, "target_model_type", None)
-        logger.info(
-            f"Read from draft model config: draft_vocab_size={draft_vocab_size}, "
-            f"target_vocab_size={target_vocab_size}, "
-            f"target_model_type={target_model_type}"
-        )
-    else:
-        raise ValueError("--draft_model_config_path must be specified")
 
     # Parse limit_mm_per_prompt
     limit_mm_per_prompt = None
@@ -332,7 +333,7 @@ def main():
     dataset_manager = DatasetManager(
         data_args=args,
         tokenizer=tokenizer,
-        target_model_type=target_model_type,
+        target_model_type=None if args.modal_type in ("LLM", "TTS") else args.target_model_type,
         model_max_length=args.model_max_length,
         chat_template_type=args.chat_template_type,
         display=args.display,

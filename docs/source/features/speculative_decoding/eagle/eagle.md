@@ -10,7 +10,18 @@
 
 数据生成包括：1）为目标模型生成采样数据，2）为Eagle3模型离线生成目标模型的hidden states。
 
-### 1.1 为目标模型生成采样数据
+### 1.1 数据组织形式
+所有数据需保存在jsonl文件中，训练数据格式可参考:
+
+- 数据示例:
+    ```json
+    {"id": "0", "conversations": [{"role": "user", "content": "xxx"}, {"role": "assistant", "content": "xxx"}]}
+    ```
+
+- 典型字段意义如下：
+    - id: 对话唯一标识
+
+### 1.2 为目标模型生成采样数据
 
 生成采样数据为可选项，当有足够数量以及足够质量的目标模型SFT数据时，此步可略过。当训练数据和目标模型不配套时，则需要为目标模型重新采样生成数据。
 
@@ -55,7 +66,7 @@ bash scripts/speculative/generate_data_for_target_model.sh
 - 数据生成过程可能需要较长时间，取决于样本数量和模型规模
 
 
-### 1.2 为Eagle3模型生成hidden states
+### 1.3 为Eagle3模型生成hidden states
 
 目前仅支持以HF为后端生成hidden states，调用脚本如下：
 ```shell
