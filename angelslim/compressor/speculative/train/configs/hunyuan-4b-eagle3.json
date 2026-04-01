@@ -3,6 +3,8 @@
   "architectures": [
     "Eagle3LlamaForCausalLM"
   ],
+  "model_type": "llama",
+  "target_model_type": "hunyuan_v1_dense",
   "attention_bias": false,
   "attention_dropout": 0.0,
   "attention_head_dim": 128,
@@ -26,7 +28,6 @@
   "mask_init_id": 12,
   "max_position_embeddings": 262144,
   "mlp_bias": false,
-  "model_type": "llama",
   "norm_type": "rms",
   "num_attention_heads": 32,
   "num_hidden_layers": 1,

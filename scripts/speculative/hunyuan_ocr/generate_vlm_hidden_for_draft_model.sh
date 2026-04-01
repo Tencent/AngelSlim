@@ -19,5 +19,4 @@ torchrun --nproc_per_node=8 tools/generate_hidden_for_draft_model.py \
     --torch_dtype bfloat16 \
     --model_max_length $MODEL_MAX_LENGTH \
     --chat_template_type $CHAT_TEMPLATE_TYPE \
-    --outdir $OUTPUT_DIR \
-    --target_model_type hunyuan_vl
+    --outdir $OUTPUT_DIR

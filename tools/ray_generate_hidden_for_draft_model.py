@@ -95,12 +95,6 @@ def parse_arguments() -> argparse.Namespace:
         help="Target model path",
     )
     parser.add_argument(
-        "--target_model_type",
-        type=str,
-        default=None,
-        help="Target model type, e.g. qwen3_vl, qwen2.5_vl, hunyuan_vl",
-    )
-    parser.add_argument(
         "--target_backend",
         type=str,
         default="vllm",
@@ -254,14 +248,17 @@ def main():
     # Read draft model config
     draft_vocab_size = None
     target_vocab_size = None
+    target_model_type = None
     logger.info(f"args.draft_model_config_path: {args.draft_model_config_path}")
     if args.draft_model_config_path is not None:
         draft_config = DraftModelConfig.from_file(args.draft_model_config_path)
         draft_vocab_size = getattr(draft_config, "draft_vocab_size", None)
         target_vocab_size = getattr(draft_config, "vocab_size", None)
+        target_model_type = getattr(draft_config, "target_model_type", None)
         logger.info(
-            f"Read vocab sizes from config: draft_vocab_size={draft_vocab_size}, "
-            f"target_vocab_size={target_vocab_size}"
+            f"Read from draft model config: draft_vocab_size={draft_vocab_size}, "
+            f"target_vocab_size={target_vocab_size}, "
+            f"target_model_type={target_model_type}"
         )
     else:
         raise ValueError("--draft_model_config_path must be specified")
@@ -335,7 +332,7 @@ def main():
     dataset_manager = DatasetManager(
         data_args=args,
         tokenizer=tokenizer,
-        target_model_type=args.target_model_type,
+        target_model_type=target_model_type,
         model_max_length=args.model_max_length,
         chat_template_type=args.chat_template_type,
         display=args.display,

@@ -166,7 +166,6 @@ if [ "$NODE_RANK" -eq "0" ]; then
         --outdir $TRAIN_HIDDEN_PATH \
         --num_proc 16 \
         --sample_num $SAMPLE_NUM \
-        --target_model_type qwen3_vl \
         --tensor_parallel_size $TP_SIZE \
         --max_model_len $MAX_MODEL_LEN \
         $OPTIONAL_ARGS

@@ -516,12 +516,6 @@ def parse_arguments() -> argparse.Namespace:
         help="Target model name or path (if different from model_name)",
     )
     parser.add_argument(
-        "--target_model_type",
-        type=str,
-        default=None,
-        help="Target model name or path (if different from model_name)",
-    )
-    parser.add_argument(
         "--target_backend",
         type=str,
         default="hf",
@@ -737,6 +731,26 @@ def main():
         logger.info(
             f"backend: {args.target_backend}, modal_type: {args.modal_type}", extra={"rank": rank}
         )
+
+        # Read draft_vocab_size, target_vocab_size and target_model_type from draft model config
+        # Must be done before create_target_model and load_dataset which use args.target_model_type
+        draft_vocab_size = None
+        target_vocab_size = None
+        target_model_type = None
+        if args.draft_model_config_path is not None:
+            draft_config = DraftModelConfig.from_file(args.draft_model_config_path)
+            draft_vocab_size = getattr(draft_config, "draft_vocab_size", None)
+            target_vocab_size = getattr(draft_config, "vocab_size", None)
+            target_model_type = getattr(draft_config, "target_model_type", None)
+            logger.info(
+                f"Loaded from draft model config: draft_vocab_size={draft_vocab_size}, "
+                f"target_vocab_size={target_vocab_size}, "
+                f"target_model_type={target_model_type}",
+                extra={"rank": rank},
+            )
+        else:
+            raise ValueError("draft_model_config_path not specified")
+
         # Load target model
         torch_dtype = get_torch_dtype(args.torch_dtype)
         target_model = create_target_model(
@@ -745,7 +759,7 @@ def main():
             model_path=args.target_model_name_or_path,
             torch_dtype=torch_dtype,
             trust_remote_code=args.trust_remote_code,
-            target_model_type=args.target_model_type,
+            target_model_type=target_model_type,
         )
         logger.info(
             f"Target model loaded: {args.target_model_name_or_path}",
@@ -766,21 +780,6 @@ def main():
         # Generate hidden states
         output_dir = f"{args.outdir}/rank_{rank}"
         logger.info(f"writing hidden states to {output_dir}", extra={"rank": rank})
-
-        # Read draft_vocab_size and target_vocab_size from draft model config
-        draft_vocab_size = None
-        target_vocab_size = None
-        if args.draft_model_config_path is not None:
-            draft_config = DraftModelConfig.from_file(args.draft_model_config_path)
-            draft_vocab_size = getattr(draft_config, "draft_vocab_size", None)
-            target_vocab_size = getattr(draft_config, "vocab_size", None)
-            logger.info(
-                f"Loaded vocab sizes from config: draft_vocab_size={draft_vocab_size}, "
-                f"target_vocab_size={target_vocab_size}",
-                extra={"rank": rank},
-            )
-        else:
-            raise ValueError("draft_model_config_path not specified")
 
         generator = HiddenStateGenerator(
             target_model,
