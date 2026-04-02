@@ -50,9 +50,7 @@ def hiprune_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
         last_vit_layer = kwargs["last_vit_layer"]
         alpha = kwargs["alpha"]
     except KeyError as e:
-        raise ValueError(
-            f"[TokenCompressor Error] HiPrune missing required parameter: {e}"
-        )
+        raise ValueError(f"[TokenCompressor Error] HiPrune missing required parameter: {e}")
 
     input_ids = context.input_ids
     if input_ids is None:
@@ -62,9 +60,7 @@ def hiprune_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
 
     # Extract grid info from context attributes
     grid_thw = (
-        context.image_grid_thw
-        if context.image_grid_thw is not None
-        else context.video_grid_thw
+        context.image_grid_thw if context.image_grid_thw is not None else context.video_grid_thw
     )
 
     spatial_merge_size = context.spatial_merge_size
@@ -97,9 +93,7 @@ def hiprune_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
     shallow_scores_list, _ = _recompute_attention_maps_for_all_images(
         q_shallow, k_shallow, context
     )
-    deep_scores_list, _ = _recompute_attention_maps_for_all_images(
-        q_deep, k_deep, context
-    )
+    deep_scores_list, _ = _recompute_attention_maps_for_all_images(q_deep, k_deep, context)
 
     # Align scores with logical image segments
     from .utils.utils import _regroup_tensors_by_count
@@ -107,9 +101,7 @@ def hiprune_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
     shallow_scores_list, _ = _regroup_tensors_by_count(
         shallow_scores_list, num_tokens_per_image, None
     )
-    deep_scores_list, _ = _regroup_tensors_by_count(
-        deep_scores_list, num_tokens_per_image, None
-    )
+    deep_scores_list, _ = _regroup_tensors_by_count(deep_scores_list, num_tokens_per_image, None)
 
     vision_indices_split = torch.split(vision_indices_global, num_tokens_per_image)
     all_kept_indices_global = []
@@ -192,9 +184,7 @@ def hiprune_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
         return torch.ones_like(input_ids, dtype=torch.bool)
 
     kept_indices_tensor = torch.cat(all_kept_indices_global)
-    final_indices = torch.cat(
-        [non_vision_indices_global.to(device), kept_indices_tensor]
-    )
+    final_indices = torch.cat([non_vision_indices_global.to(device), kept_indices_tensor])
 
     keep_mask = torch.zeros_like(input_ids.squeeze(0), dtype=torch.bool)
     keep_mask[final_indices] = True

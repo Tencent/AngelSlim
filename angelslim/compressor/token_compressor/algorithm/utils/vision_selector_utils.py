@@ -128,8 +128,7 @@ def _init_selector_entry(selector_path: str, device: torch.device):
 
     if not weights_files or not py_files:
         raise FileNotFoundError(
-            f"[TokenCompressor Error]"
-            f"Incomplete selector components in: {resolved_path}"
+            f"[TokenCompressor Error]" f"Incomplete selector components in: {resolved_path}"
         )
 
     with open(config_path, "r", encoding="utf-8") as f:

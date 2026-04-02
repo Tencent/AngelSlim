@@ -29,8 +29,7 @@ from angelslim.compressor.token_compressor.base.config import TokenCompressorCon
 
 # Constants for test data
 DEFAULT_IMAGE_PATH = (
-    "https://github.com/Tencent/AngelSlim/"
-    "raw/main/docs/source/assets/logos/angelslim_logo.png"
+    "https://inews.gtimg.com/news_bt/" "OQSQBp_mW8TxXv7UsR55mi2DMfWW4D2aJJ-jsFphE5YD8AA/1000"
 )
 MAX_NEW_TOKENS = 30
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -71,8 +70,7 @@ def main():
         "--config",
         type=str,
         required=True,
-        help="Path to the strategy YAML "
-        "(e.g., configs/qwen2_5_vl/pruning/dart_r0.75.yaml)",
+        help="Path to the strategy YAML " "(e.g., configs/qwen2_5_vl/pruning/dart_r0.75.yaml)",
     )
     parser.add_argument(
         "--model_path",
@@ -109,13 +107,11 @@ def main():
             args.model_path,
             torch_dtype=torch.bfloat16 if DEVICE != "cpu" else torch.float32,
             attn_implementation="sdpa",
-            device_map="auto",
+            device_map=DEVICE,
             trust_remote_code=True,
         ).eval()
 
-        processor = AutoProcessor.from_pretrained(
-            args.model_path, trust_remote_code=True
-        )
+        processor = AutoProcessor.from_pretrained(args.model_path, trust_remote_code=True)
         print("✅ Base architecture loaded successfully.")
     except Exception as e:
         print(f"❌ Model loading failed: {e}")
@@ -132,8 +128,7 @@ def main():
                     {"type": "image"},
                     {
                         "type": "text",
-                        "text": "Describe the content of this image "
-                        "in one short sentence.",
+                        "text": "Describe the content of this image " "in one short sentence.",
                     },
                 ],
             }

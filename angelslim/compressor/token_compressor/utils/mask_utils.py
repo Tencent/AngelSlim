@@ -186,9 +186,7 @@ def compensate_decoding_state(
     if not hasattr(past_key_values, "get_pruning_mask_for_layer"):
         return position_ids, cache_position, causal_mask
 
-    is_pruned, keep_mask, pruned_count = past_key_values.get_pruning_mask_for_layer(
-        stage_key
-    )
+    is_pruned, keep_mask, pruned_count = past_key_values.get_pruning_mask_for_layer(stage_key)
 
     if not is_pruned or pruned_count <= 0:
         return position_ids, cache_position, causal_mask

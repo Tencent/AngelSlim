@@ -19,5 +19,5 @@ compressor:
         ratio: 0.75
       model_related_params:
         selector_path:
-          "7b": "<path_to_selector_module>"
-          "3b": "<path_to_selector_module>"
+          "7b": "AngelSlim/Qwen2.5-VL-7B-Instruct-Selector"
+          "3b": "AngelSlim/Qwen2.5-VL-3B-Instruct-Selector"

@@ -16,10 +16,10 @@
 ## 运行示例
 
 ### 1. 功能验证 (Smoke Test)
-使用 `tools/test_universal_pruning.py` 快速验证指定策略在模型上的适配性与单次推理逻辑：
+使用 `tools/test_token_pruning.py` 快速验证指定策略在模型上的适配性与单次推理逻辑：
 
 ```bash
-python tools/test_universal_pruning.py \
+python tools/test_token_pruning.py \
     --config configs/qwen2_5_vl/pruning/scope_r0.75.yaml \
     --model_path "Qwen/Qwen2.5-VL-3B-Instruct"
 ```
@@ -30,10 +30,10 @@ python tools/test_universal_pruning.py \
 
 
 ### 2. 精度评测 (Evaluation)
-使用 `tools/run_pruning_eval.py` 在标准数据集上评估剪枝后的模型性能。以下示例演示如何使用 **SCOPE** 策略在 **TextVQA** 任务上运行评测：
+使用 `tools/run_token_pruning_evaluation.py` 在标准数据集上评估剪枝后的模型性能。以下示例演示如何使用 **SCOPE** 策略在 **TextVQA** 任务上运行评测：
 
 ```bash
-python tools/run_pruning_eval.py \
+python tools/run_token_pruning_evaluation.py \
     --model_path "Qwen/Qwen2.5-VL-3B-Instruct" \
     --configs configs/qwen2_5_vl/pruning/scope_r0.75.yaml \
     --tasks textvqa \

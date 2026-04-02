@@ -133,9 +133,7 @@ def vision_selector_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
         # Probabilistic sampling based on importance distribution
         probs = torch.softmax(scores, dim=-1)
         try:
-            top_k_local_indices = torch.multinomial(
-                probs, num_samples=k, replacement=False
-            )
+            top_k_local_indices = torch.multinomial(probs, num_samples=k, replacement=False)
         except RuntimeError as e:
             raise RuntimeError(
                 "[TokenCompressor Error] "
@@ -147,9 +145,7 @@ def vision_selector_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
 
     # 7. Construct and return the global keep_mask
     kept_vision_global_indices = vision_indices[top_k_local_indices]
-    final_kept_indices = torch.cat(
-        [non_vision_indices.to(device), kept_vision_global_indices]
-    )
+    final_kept_indices = torch.cat([non_vision_indices.to(device), kept_vision_global_indices])
 
     keep_mask = torch.zeros_like(input_ids, dtype=torch.bool)
     keep_mask[0, final_kept_indices] = True

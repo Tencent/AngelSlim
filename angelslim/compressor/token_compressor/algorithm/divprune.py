@@ -39,9 +39,7 @@ def divprune(context: PruningContext, **kwargs) -> torch.Tensor:
     try:
         ratio = kwargs["ratio"]
     except KeyError:
-        raise ValueError(
-            "[TokenCompressor Error] 'divprune' requires 'ratio' in params."
-        )
+        raise ValueError("[TokenCompressor Error] 'divprune' requires 'ratio' in params.")
 
     input_ids = context.input_ids
     inputs_embeds = context.inputs_embeds
@@ -49,16 +47,12 @@ def divprune(context: PruningContext, **kwargs) -> torch.Tensor:
     if input_ids is None:
         raise ValueError("[TokenCompressor Error] 'input_ids' not found in context.")
     if inputs_embeds is None:
-        raise ValueError(
-            "[TokenCompressor Error] DivPrune requires 'inputs_embeds' in context."
-        )
+        raise ValueError("[TokenCompressor Error] DivPrune requires 'inputs_embeds' in context.")
 
     bsz, seq_len, _ = inputs_embeds.shape
     device = input_ids.device
     if bsz != 1:
-        raise NotImplementedError(
-            "[TokenCompressor Error] DivPrune only supports batch_size=1."
-        )
+        raise NotImplementedError("[TokenCompressor Error] DivPrune only supports batch_size=1.")
 
     batch_keep_masks = []
     for i in range(bsz):
@@ -66,9 +60,7 @@ def divprune(context: PruningContext, **kwargs) -> torch.Tensor:
         features_single = inputs_embeds[i]
 
         # 1. Extract vision token indices
-        vision_indices, non_vision_indices, _, _ = (
-            _extract_and_validate_vision_token_info(context)
-        )
+        vision_indices, non_vision_indices, _, _ = _extract_and_validate_vision_token_info(context)
 
         num_vision_tokens = len(vision_indices)
         if num_vision_tokens == 0:

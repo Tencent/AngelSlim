@@ -4,18 +4,10 @@
 
 ## 1. 安装多模态依赖库
 
-请使用以下命令安装 Transformers、数据处理及多模态相关的辅助依赖：
+请使用以下命令安装多模态相关的辅助依赖：
 
 ```bash
-pip install uv
-uv pip install \
-    transformers==5.0.0 \
-    accelerate \
-    matplotlib \
-    seaborn \
-    datasets \
-    torchcodec \
-    qwen_vl_utils
+uv pip install qwen_vl_utils
 ```
 
 ## 2. 配置集成评测环境 (lmms-eval)

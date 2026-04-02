@@ -20,9 +20,7 @@ from ..base.context import PruningContext
 from .utils.utils import _extract_and_validate_vision_token_info
 
 
-def special_token_based_attention_pruning(
-    context: PruningContext, **kwargs
-) -> torch.Tensor:
+def special_token_based_attention_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
     """
     Pruning strategy base on attention scores between specific tokens and vision tokens.
     Supports 'last_text' and 'global_average' strategies.
@@ -55,9 +53,7 @@ def special_token_based_attention_pruning(
     k = context.llm_k[layer_idx]
 
     if input_ids is None or q is None or k is None:
-        raise ValueError(
-            "[AngelSlim Error] Missing 'input_ids' or Q/K tensors in context."
-        )
+        raise ValueError("[AngelSlim Error] Missing 'input_ids' or Q/K tensors in context.")
 
     bsz, seq_len = input_ids.shape
     device = input_ids.device
@@ -73,9 +69,7 @@ def special_token_based_attention_pruning(
         k_single = k[i]
 
         # 2. Identify vision and non-vision tokens via dynamic check
-        vision_indices, non_vision_indices, _, _ = (
-            _extract_and_validate_vision_token_info(context)
-        )
+        vision_indices, non_vision_indices, _, _ = _extract_and_validate_vision_token_info(context)
 
         num_vision_tokens = len(vision_indices)
         if num_vision_tokens == 0:

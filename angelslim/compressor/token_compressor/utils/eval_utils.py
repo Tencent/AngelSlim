@@ -32,8 +32,7 @@ try:
     from qwen_vl_utils import process_vision_info
 except ImportError:
     eval_logger.warning(
-        "Failed to import qwen_vl_utils; "
-        "Please install it via `pip install qwen-vl-utils`"
+        "Failed to import qwen_vl_utils; " "Please install it via `pip install qwen-vl-utils`"
     )
 
 E2E_TIMING_ENABLED = False
@@ -151,9 +150,7 @@ class PruningModel(lmms):
         return new_list
 
     def loglikelihood(self, requests: List[Instance]) -> List[Tuple[float, bool]]:
-        raise NotImplementedError(
-            "Loglikelihood is not implemented for Qwen2.5_VLPruned"
-        )
+        raise NotImplementedError("Loglikelihood is not implemented for Qwen2.5_VLPruned")
 
     def generate_until(self, requests: List[Instance]) -> List[str]:
         res = []
@@ -300,8 +297,7 @@ class PruningModel(lmms):
                 E2E_TIME_LIST.append((_e2e_end - _e2e_start) * 1000)
 
             generated_ids_trimmed = [
-                out_ids[len(in_ids) :]
-                for in_ids, out_ids in zip(inputs.input_ids, cont)
+                out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, cont)
             ]
             answers = self.processor.batch_decode(
                 generated_ids_trimmed,
@@ -316,9 +312,7 @@ class PruningModel(lmms):
             for ans, context in zip(answers, texts):
                 clean_ans = parse_reasoning_model_answer(ans)
                 res.append(clean_ans)
-                self.cache_hook.add_partial(
-                    "generate_until", (context, gen_kwargs), clean_ans
-                )
+                self.cache_hook.add_partial("generate_until", (context, gen_kwargs), clean_ans)
 
                 eval_logger.debug(f"Question: {context}")
                 eval_logger.debug(f"Model Raw Response: {ans}")

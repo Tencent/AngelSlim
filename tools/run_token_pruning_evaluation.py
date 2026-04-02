@@ -179,28 +179,18 @@ def run_single_config_eval(
 
 def main():
     """Main entry point for the evaluator."""
-    parser = argparse.ArgumentParser(
-        description="AngelSlim Universal Pruning Evaluator"
-    )
+    parser = argparse.ArgumentParser(description="AngelSlim Universal Pruning Evaluator")
 
     # Model parameters
-    parser.add_argument(
-        "--model_path", type=str, required=True, help="HF model ID or local path"
-    )
-    parser.add_argument(
-        "--configs", nargs="+", required=True, help="List of strategy YAML paths"
-    )
+    parser.add_argument("--model_path", type=str, required=True, help="HF model ID or local path")
+    parser.add_argument("--configs", nargs="+", required=True, help="List of strategy YAML paths")
 
     # Evaluation parameters
-    parser.add_argument(
-        "--tasks", nargs="+", default=["textvqa"], help="List of lmms-eval tasks"
-    )
+    parser.add_argument("--tasks", nargs="+", default=["textvqa"], help="List of lmms-eval tasks")
     parser.add_argument(
         "--batch_size", type=int, default=1, help="Batch size (only 1 is recommended)"
     )
-    parser.add_argument(
-        "--num_fewshot", type=int, default=0, help="Number of few-shot examples"
-    )
+    parser.add_argument("--num_fewshot", type=int, default=0, help="Number of few-shot examples")
     parser.add_argument(
         "--output_dir", type=str, default="./eval_results", help="Directory for results"
     )
@@ -220,18 +210,14 @@ def main():
         model = AutoModelForImageTextToText.from_pretrained(
             args.model_path,
             torch_dtype=torch.bfloat16,
-            device_map="auto",
+            device_map="cuda",
             trust_remote_code=True,
             # Pruning hooks require eager implementation to capture attention maps
             attn_implementation="sdpa",
         ).eval()
 
-        processor = AutoProcessor.from_pretrained(
-            args.model_path, trust_remote_code=True
-        )
-        tokenizer = AutoTokenizer.from_pretrained(
-            args.model_path, trust_remote_code=True
-        )
+        processor = AutoProcessor.from_pretrained(args.model_path, trust_remote_code=True)
+        tokenizer = AutoTokenizer.from_pretrained(args.model_path, trust_remote_code=True)
         eval_logger.success("Base architecture loaded successfully.")
     except Exception as e:
         eval_logger.error(f"Critical failure during model loading: {e}")
@@ -271,9 +257,7 @@ def main():
             continue
 
     # 3. Save final summary report
-    summary_path = os.path.join(
-        args.output_dir, f"final_summary_{int(time.time())}.json"
-    )
+    summary_path = os.path.join(args.output_dir, f"final_summary_{int(time.time())}.json")
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(final_report, f, indent=4, ensure_ascii=False)
 

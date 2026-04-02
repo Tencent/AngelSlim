@@ -83,22 +83,16 @@ class Prunable_CLIPAttention(CLIPAttention):
         keys = self.k_proj(hidden_states)
         values = self.v_proj(hidden_states)
 
-        queries = queries.view(batch_size, seq_length, -1, self.head_dim).transpose(
-            1, 2
-        )
+        queries = queries.view(batch_size, seq_length, -1, self.head_dim).transpose(1, 2)
         keys = keys.view(batch_size, seq_length, -1, self.head_dim).transpose(1, 2)
         values = values.view(batch_size, seq_length, -1, self.head_dim).transpose(1, 2)
 
         attention_interface: Callable = clip_eager_attention_forward
         if self.config._attn_implementation != "eager":
-            attention_interface = CLIP_ALL_ATTENTION_FUNCTIONS[
-                self.config._attn_implementation
-            ]
+            attention_interface = CLIP_ALL_ATTENTION_FUNCTIONS[self.config._attn_implementation]
 
         # PRUNING START: Capture Vision Q/K States #
-        assert (
-            context is not None
-        ), "PruningContext must be provided for prunable attention."
+        assert context is not None, "PruningContext must be provided for prunable attention."
         if context is not None and hasattr(self, "layer_idx"):
             if self.pruning_config.requirements.needs_vit_q(self.layer_idx):
                 context.vit_q[self.layer_idx] = queries
@@ -151,23 +145,16 @@ class Prunable_LlamaAttention(LlamaAttention):
         value_states = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
 
         cos, sin = position_embeddings
-        query_states, key_states = apply_rotary_pos_emb(
-            query_states, key_states, cos, sin
-        )
+        query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
 
         # PRUNING START: Capture LLM States #
-        assert (
-            context is not None
-        ), "PruningContext must be provided for prunable attention."
+        assert context is not None, "PruningContext must be provided for prunable attention."
         if context is not None and hasattr(self, "layer_idx"):
             if self.pruning_config.requirements.needs_llm_q(self.layer_idx):
                 context.llm_q[self.layer_idx] = query_states
             if self.pruning_config.requirements.needs_llm_k(self.layer_idx):
                 context.llm_k[self.layer_idx] = key_states
-            if (
-                self.pruning_config.requirements.feature_map
-                and context.feature_map is None
-            ):
+            if self.pruning_config.requirements.feature_map and context.feature_map is None:
                 context.feature_map = hidden_states
         # PRUNING END #
 
@@ -185,9 +172,7 @@ class Prunable_LlamaAttention(LlamaAttention):
 
         attention_interface: Callable = llama_eager_attention_forward
         if self.config._attn_implementation != "eager":
-            attention_interface = LLAMA_ALL_ATTENTION_FUNCTIONS[
-                self.config._attn_implementation
-            ]
+            attention_interface = LLAMA_ALL_ATTENTION_FUNCTIONS[self.config._attn_implementation]
 
         attn_output, attn_weights = attention_interface(
             self,
@@ -231,9 +216,7 @@ class Prunable_LlamaModel(LlamaModel):
         **kwargs: Unpack[TransformersKwargs],
     ) -> BaseModelOutputWithPast:
         if (input_ids is None) ^ (inputs_embeds is not None):
-            raise ValueError(
-                "You must specify exactly one of input_ids or inputs_embeds"
-            )
+            raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
 
         if inputs_embeds is None:
             inputs_embeds: torch.Tensor = self.embed_tokens(input_ids)
@@ -256,14 +239,10 @@ class Prunable_LlamaModel(LlamaModel):
         if position_ids is None:
             position_ids = cache_position.unsqueeze(0)
 
-        is_prefill = (
-            getattr(past_key_values, "is_prefill", True) if past_key_values else True
-        )
+        is_prefill = getattr(past_key_values, "is_prefill", True) if past_key_values else True
 
         # PRUNING START: Global Compression #
-        assert (
-            context is not None
-        ), "PruningContext must be provided for prunable model."
+        assert context is not None, "PruningContext must be provided for prunable model."
         assert inputs_embeds.shape[0] == 1, "Batch size must be 1 for global pruning."
         if is_prefill:
             if "global" in self.pruning_fns:
@@ -316,9 +295,7 @@ class Prunable_LlamaModel(LlamaModel):
         hidden_states = inputs_embeds
         position_embeddings = self.rotary_emb(hidden_states, position_ids=position_ids)
 
-        for layer_idx, decoder_layer in enumerate(
-            self.layers[: self.config.num_hidden_layers]
-        ):
+        for layer_idx, decoder_layer in enumerate(self.layers[: self.config.num_hidden_layers]):
             hidden_states = decoder_layer(
                 hidden_states,
                 attention_mask=causal_mask,
@@ -417,9 +394,7 @@ class Prunable_LlavaModel(LlavaModel):
         # PRUNING END #
 
         if (input_ids is None) ^ (inputs_embeds is not None):
-            raise ValueError(
-                "You must specify exactly one of input_ids or inputs_embeds"
-            )
+            raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
 
         if inputs_embeds is None:
             inputs_embeds = self.get_input_embeddings()(input_ids)
@@ -441,9 +416,7 @@ class Prunable_LlavaModel(LlavaModel):
                 inputs_embeds=inputs_embeds,
                 image_features=image_features,
             )
-            inputs_embeds = inputs_embeds.masked_scatter(
-                special_image_mask, image_features
-            )
+            inputs_embeds = inputs_embeds.masked_scatter(special_image_mask, image_features)
 
         # PRUNING START: Capturing Image Info #
         context.inputs_embeds = inputs_embeds

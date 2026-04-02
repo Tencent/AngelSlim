@@ -51,7 +51,7 @@ IDPruner 的决策逻辑由三个要素驱动：
 通过以下命令启动 IDPruner 的基准评测：
 
 ```bash
-python tools/run_pruning_eval.py \
+python tools/run_token_pruning_evaluation.py \
     --model_path "Qwen/Qwen2.5-VL-7B-Instruct" \
     --configs "configs/qwen2_5_vl/pruning/idpruner_r0.75.yaml" \
     --tasks "textvqa" \
@@ -63,10 +63,11 @@ python tools/run_pruning_eval.py \
 
 ```yaml
 params:
-  ratio: 0.75
-  mmr_lambda: 0.5
-  # selector_path 支持以下两种方式：
-  # 1. 远程 ID：填入 HuggingFace 仓库名（如 AngelSlim/IDPruner-Scorer-7B），工具会自动下载。
-  # 2. 本地路径：填入包含权重文件及 config.json 的本地文件夹绝对路径。
-  selector_path: "your_path_to_selector"
+    ratio: 0.9
+    mmr_lambda: 0.5
+    parallel_k: 1
+model_related_params:
+    selector_path:
+        "7b": "AngelSlim/Qwen2.5-VL-7B-Instruct-Selector"
+        "3b": "AngelSlim/Qwen2.5-VL-3B-Instruct-Selector"
 ```

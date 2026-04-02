@@ -41,9 +41,7 @@ def SCOPE(
         cls_attn: [B, N] saliency/attention weights.
         alpha: Scaling factor for saliency.
     """
-    norm_vectors = visual_feature_vectors / visual_feature_vectors.norm(
-        dim=-1, keepdim=True
-    )
+    norm_vectors = visual_feature_vectors / visual_feature_vectors.norm(dim=-1, keepdim=True)
     cosine_simi = torch.bmm(norm_vectors, norm_vectors.transpose(1, 2))
 
     B, N = visual_feature_vectors.shape[:2]
@@ -64,8 +62,7 @@ def SCOPE(
         # Calculate marginal coverage gain
         gains = torch.maximum(
             torch.zeros(1, dtype=dtype, device=device),
-            cosine_simi.masked_fill(~unselected_mask.unsqueeze(1), 0)
-            - cur_max.unsqueeze(2),
+            cosine_simi.masked_fill(~unselected_mask.unsqueeze(1), 0) - cur_max.unsqueeze(2),
         ).sum(dim=1)
 
         # Combine with saliency
@@ -110,25 +107,19 @@ def scope_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
         layer_idx = kwargs["layer_idx"]
         alpha = kwargs.get("alpha", 1.0)
     except KeyError as e:
-        raise ValueError(
-            f"[TokenCompressor Error] scope_pruning missing required parameter: {e}"
-        )
+        raise ValueError(f"[TokenCompressor Error] scope_pruning missing required parameter: {e}")
 
     # 2. Fetch base data via attributes
     input_ids = context.input_ids
     inputs_embeds = context.inputs_embeds
 
     if input_ids is None or inputs_embeds is None:
-        raise ValueError(
-            "[TokenCompressor Error] SCOPE requires 'input_ids' and 'inputs_embeds'."
-        )
+        raise ValueError("[TokenCompressor Error] SCOPE requires 'input_ids' and 'inputs_embeds'.")
 
     device = input_ids.device
 
     # 3. Extract vision token info
-    vision_indices, non_vision_indices, _, _ = _extract_and_validate_vision_token_info(
-        context
-    )
+    vision_indices, non_vision_indices, _, _ = _extract_and_validate_vision_token_info(context)
     N_vision = len(vision_indices)
 
     if N_vision == 0:
@@ -143,12 +134,8 @@ def scope_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
             f"[TokenCompressor Error] SCOPE requires ViT layer {layer_idx} Q/K states."
         )
 
-    scores_list, _ = _recompute_attention_maps_for_all_images(
-        q_tensor, k_tensor, context
-    )
-    cls_attn = torch.cat(scores_list, dim=1).to(
-        device=device, dtype=inputs_embeds.dtype
-    )
+    scores_list, _ = _recompute_attention_maps_for_all_images(q_tensor, k_tensor, context)
+    cls_attn = torch.cat(scores_list, dim=1).to(device=device, dtype=inputs_embeds.dtype)
 
     # 5. Execute SCOPE core
     num_to_keep = int(round(N_vision * (1.0 - ratio)))
@@ -159,17 +146,13 @@ def scope_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
         return torch.ones_like(input_ids, dtype=torch.bool)
 
     visual_features = inputs_embeds[:, vision_indices, :]
-    selected_idx_local, _ = SCOPE(
-        visual_features, num_to_keep, cls_attn=cls_attn, alpha=alpha
-    )
+    selected_idx_local, _ = SCOPE(visual_features, num_to_keep, cls_attn=cls_attn, alpha=alpha)
 
     # 6. Map indices and build mask
     selected_idx_local = selected_idx_local.squeeze(0)
     kept_vision_global = vision_indices[selected_idx_local]
 
-    final_indices = torch.cat(
-        [non_vision_indices.to(device), kept_vision_global.to(device)]
-    )
+    final_indices = torch.cat([non_vision_indices.to(device), kept_vision_global.to(device)])
     keep_mask = torch.zeros_like(input_ids[0], dtype=torch.bool)
     if final_indices.numel() > 0:
         keep_mask[final_indices] = True

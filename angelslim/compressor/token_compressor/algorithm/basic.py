@@ -50,9 +50,7 @@ def override_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
     """
     partial_mask = kwargs.get("mask")
     if partial_mask is None:
-        raise ValueError(
-            "[TokenCompressor Error] 'override_pruning' requires 'mask' in params."
-        )
+        raise ValueError("[TokenCompressor Error] 'override_pruning' requires 'mask' in params.")
 
     input_ids = context.input_ids
     if input_ids is None:
@@ -68,9 +66,7 @@ def override_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
 
     # Identify vision token indices and the vision_token_mask from context
     # attribute
-    vision_indices, _, vision_token_mask, _ = _extract_and_validate_vision_token_info(
-        context
-    )
+    vision_indices, _, vision_token_mask, _ = _extract_and_validate_vision_token_info(context)
 
     # Validate mask length against identified vision tokens
     if len(partial_mask) != len(vision_indices):
@@ -107,9 +103,7 @@ def random_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
     try:
         ratio = kwargs["ratio"]
     except KeyError:
-        raise ValueError(
-            "[TokenCompressor Error] 'random_pruning' requires 'ratio' in params."
-        )
+        raise ValueError("[TokenCompressor Error] 'random_pruning' requires 'ratio' in params.")
 
     input_ids = context.input_ids
     if input_ids is None:
@@ -127,9 +121,7 @@ def random_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
         input_ids_single = input_ids[i]
 
         # Extract vision/non-vision indices using context
-        vision_indices, non_vision_indices, _, _ = (
-            _extract_and_validate_vision_token_info(context)
-        )
+        vision_indices, non_vision_indices, _, _ = _extract_and_validate_vision_token_info(context)
 
         num_vision_tokens = len(vision_indices)
         if num_vision_tokens == 0:
@@ -143,15 +135,11 @@ def random_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
 
         kept_vision_indices = torch.tensor([], dtype=torch.long, device=device)
         if num_to_keep > 0:
-            shuffled_indices = vision_indices[
-                torch.randperm(num_vision_tokens, device=device)
-            ]
+            shuffled_indices = vision_indices[torch.randperm(num_vision_tokens, device=device)]
             kept_vision_indices = shuffled_indices[:num_to_keep]
 
         # Combine non-vision tokens with kept vision tokens
-        final_kept_indices = torch.cat(
-            [non_vision_indices.to(device), kept_vision_indices]
-        )
+        final_kept_indices = torch.cat([non_vision_indices.to(device), kept_vision_indices])
 
         keep_mask = torch.zeros_like(input_ids_single, dtype=torch.bool)
         if len(final_kept_indices) > 0:

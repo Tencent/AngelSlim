@@ -53,9 +53,7 @@ def visionzip(
         layer_idx = kwargs["layer_idx"]
         zip_ratio = kwargs.get("zip_ratio", 10.0 / 64.0)
     except KeyError as e:
-        raise ValueError(
-            f"[TokenCompressor Error] 'visionzip' missing required parameter: {e}"
-        )
+        raise ValueError(f"[TokenCompressor Error] 'visionzip' missing required parameter: {e}")
 
     keep_ratio = 1.0 - ratio
 
@@ -75,8 +73,7 @@ def visionzip(
 
     if q_tensor_fine is None or k_tensor_fine is None:
         raise ValueError(
-            "[TokenCompressor Error] "
-            f"VisionZip requires ViT Q/K from layer {layer_idx}."
+            "[TokenCompressor Error] " f"VisionZip requires ViT Q/K from layer {layer_idx}."
         )
 
     device = inputs_embeds.device
@@ -130,9 +127,7 @@ def visionzip(
             num_to_keep_total = 1
 
         if num_to_keep_total >= num_vision_tokens:
-            merge_weight_list.append(
-                torch.eye(num_vision_tokens, dtype=dtype, device=device)
-            )
+            merge_weight_list.append(torch.eye(num_vision_tokens, dtype=dtype, device=device))
             fake_mask_segments.append(
                 torch.ones(num_vision_tokens, dtype=torch.bool, device=device)
             )
@@ -155,9 +150,7 @@ def visionzip(
         if num_target > 0 and len(candidate_indices) > 0:
             step = max(1, len(candidate_indices) // num_target)
             target_indices = candidate_indices[
-                torch.arange(0, len(candidate_indices), step, device=device)[
-                    :num_target
-                ]
+                torch.arange(0, len(candidate_indices), step, device=device)[:num_target]
             ]
         else:
             target_indices = torch.tensor([], dtype=torch.long, device=device)
@@ -176,9 +169,7 @@ def visionzip(
         fake_mask_segments.append(segment_mask)
 
         # Build merging matrix
-        index_map = torch.full(
-            (num_vision_tokens,), -1, dtype=torch.long, device=device
-        )
+        index_map = torch.full((num_vision_tokens,), -1, dtype=torch.long, device=device)
         index_map[kept_indices] = torch.arange(len(kept_indices), device=device)
         merge_mat = torch.zeros(
             len(kept_indices),

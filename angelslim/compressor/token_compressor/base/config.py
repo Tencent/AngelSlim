@@ -60,12 +60,6 @@ class DataRequirements:
     llm_k_layers: List[int] = field(default_factory=list)
     """Indices of Language Model layers to capture Key states from."""
 
-    reverse_indices: bool = False
-    """Whether to capture spatial reordering indices."""
-
-    window_index: bool = False
-    """Whether to capture window partitioning indices."""
-
     def needs_vit_q(self, layer_idx: int) -> bool:
         """Checks if a specific Vision Tower layer should capture its Query states."""
         return layer_idx in self.vit_q_layers

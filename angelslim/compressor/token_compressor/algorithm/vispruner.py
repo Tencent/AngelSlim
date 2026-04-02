@@ -53,8 +53,7 @@ def vispruner_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
         keep_ratio = 1.0 - pruning_ratio
     except KeyError as e:
         raise ValueError(
-            "[TokenCompressor Error] "
-            f"'vispruner_pruning' missing required parameter: {e}"
+            "[TokenCompressor Error] " f"'vispruner_pruning' missing required parameter: {e}"
         )
 
     # 2. Access context attributes
@@ -89,30 +88,21 @@ def vispruner_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
 
     if q_tensor is None or k_tensor is None:
         raise ValueError(
-            "[TokenCompressor Error] "
-            f"VisPruner requires ViT layer {layer_idx} Q/K states."
+            "[TokenCompressor Error] " f"VisPruner requires ViT layer {layer_idx} Q/K states."
         )
 
     # Recompute importance scores
-    final_scores_list, _ = _recompute_attention_maps_for_all_images(
-        q_tensor, k_tensor, context
-    )
+    final_scores_list, _ = _recompute_attention_maps_for_all_images(q_tensor, k_tensor, context)
 
     # Align physical scores with logical image segments
-    final_scores_list, _ = _regroup_tensors_by_count(
-        final_scores_list, num_tokens_per_image, None
-    )
+    final_scores_list, _ = _regroup_tensors_by_count(final_scores_list, num_tokens_per_image, None)
 
     # 3. Prepare features and split indices
     all_kept_indices_global = []
     vision_features_total = inputs_embeds[0, vision_indices_global, :]
 
-    vision_features_list = torch.split(
-        vision_features_total, num_tokens_per_image, dim=0
-    )
-    vision_indices_split = torch.split(
-        vision_indices_global, num_tokens_per_image, dim=0
-    )
+    vision_features_list = torch.split(vision_features_total, num_tokens_per_image, dim=0)
+    vision_indices_split = torch.split(vision_indices_global, num_tokens_per_image, dim=0)
 
     # 4. Process each image independently
     for scores, features, global_idx_map in zip(
@@ -188,9 +178,7 @@ def vispruner_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
         return torch.ones_like(input_ids, dtype=torch.bool)
 
     kept_indices_tensor = torch.cat(all_kept_indices_global)
-    final_indices = torch.cat(
-        [non_vision_indices_global.to(device), kept_indices_tensor]
-    )
+    final_indices = torch.cat([non_vision_indices_global.to(device), kept_indices_tensor])
 
     keep_mask = torch.zeros_like(input_ids[0], dtype=torch.bool)
     if final_indices.numel() > 0:

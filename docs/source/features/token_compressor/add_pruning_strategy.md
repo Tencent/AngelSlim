@@ -138,7 +138,7 @@ compressor:
 
 **运行单次推理验证：**
 ```bash
-python tools/test_universal_pruning.py \
+python tools/test_token_pruning.py \
     --config configs/qwen2_5_vl/pruning/bottom_k_test.yaml \
     --model_path "Qwen/Qwen2.5-VL-3B-Instruct"
 ```

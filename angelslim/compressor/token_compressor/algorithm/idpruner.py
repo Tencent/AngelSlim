@@ -39,9 +39,7 @@ def _default_importance_compute(scores: torch.Tensor) -> torch.Tensor:
     return (scores - s_min) / (s_max - s_min + 1e-6)
 
 
-def _resolve_callable(
-    func_or_str: Union[Callable, str, None], default_func: Callable
-) -> Callable:
+def _resolve_callable(func_or_str: Union[Callable, str, None], default_func: Callable) -> Callable:
     """Resolves function parameters as callable objects."""
     if func_or_str is None:
         return default_func
@@ -80,25 +78,17 @@ def idpruner(context: PruningContext, **kwargs) -> torch.Tensor:
         selector_path = kwargs["selector_path"]
         mmr_lambda = kwargs.get("mmr_lambda", 0.5)
         parallel_k = kwargs.get("parallel_k", 1)
-        sim_func = _resolve_callable(
-            kwargs.get("similarity_func"), _default_similarity_compute
-        )
-        imp_func = _resolve_callable(
-            kwargs.get("importance_func"), _default_importance_compute
-        )
+        sim_func = _resolve_callable(kwargs.get("similarity_func"), _default_similarity_compute)
+        imp_func = _resolve_callable(kwargs.get("importance_func"), _default_importance_compute)
     except KeyError as e:
-        raise ValueError(
-            f"[TokenCompressor Error] idpruner missing required parameter: {e}"
-        )
+        raise ValueError(f"[TokenCompressor Error] idpruner missing required parameter: {e}")
 
     # 2. Fetch context data via attributes
     input_ids = context.input_ids
     inputs_embeds = context.inputs_embeds
 
     if input_ids is None or inputs_embeds is None:
-        raise ValueError(
-            "[TokenCompressor Error] Context missing 'input_ids' or 'inputs_embeds'."
-        )
+        raise ValueError("[TokenCompressor Error] Context missing 'input_ids' or 'inputs_embeds'.")
 
     bsz = inputs_embeds.shape[0]
     device = inputs_embeds.device
@@ -109,9 +99,7 @@ def idpruner(context: PruningContext, **kwargs) -> torch.Tensor:
         ids_single = input_ids[i]
         embeds_single = inputs_embeds[i]
 
-        vision_indices, non_vision_indices, _, _ = (
-            _extract_and_validate_vision_token_info(context)
-        )
+        vision_indices, non_vision_indices, _, _ = _extract_and_validate_vision_token_info(context)
         N = len(vision_indices)
 
         keep_mask_single = torch.ones_like(ids_single, dtype=torch.bool)
@@ -151,9 +139,7 @@ def idpruner(context: PruningContext, **kwargs) -> torch.Tensor:
                     if len(selected_indices) == 0:
                         mmr_score = importance.clone()
                     else:
-                        mmr_score = (mmr_lambda * importance) - (
-                            (1 - mmr_lambda) * max_sim_values
-                        )
+                        mmr_score = (mmr_lambda * importance) - ((1 - mmr_lambda) * max_sim_values)
 
                     mmr_score[~candidates_mask] = -float("inf")
                     _, best_indices = torch.topk(mmr_score, k=k_step)
@@ -167,9 +153,7 @@ def idpruner(context: PruningContext, **kwargs) -> torch.Tensor:
                     max_sim_values = torch.maximum(max_sim_values, batch_max_sim)
 
                 # 6. Construct local keep_mask
-                kept_indices = vision_indices[
-                    torch.tensor(selected_indices, device=device)
-                ]
+                kept_indices = vision_indices[torch.tensor(selected_indices, device=device)]
                 keep_mask_single[kept_indices] = True
 
         batch_keep_masks.append(keep_mask_single)

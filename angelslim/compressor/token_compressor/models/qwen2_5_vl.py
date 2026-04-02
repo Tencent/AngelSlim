@@ -37,6 +37,7 @@ from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     apply_multimodal_rotary_pos_emb,
     apply_rotary_pos_emb_vision,
     eager_attention_forward,
+    is_flash_attention_requested,
 )
 
 from ..base.cache import PruningCache
@@ -62,13 +63,13 @@ class Prunable_Qwen2_5_VLVisionAttention(Qwen2_5_VLVisionAttention):
 
     def forward(
         self,
-        hidden_states,
-        cu_seqlens,
-        rotary_pos_emb=None,
-        position_embeddings=None,
+        hidden_states: torch.Tensor,
+        cu_seqlens: torch.Tensor,
+        rotary_pos_emb: torch.Tensor | None = None,
+        position_embeddings: tuple[torch.Tensor, torch.Tensor] | None = None,
         context: Optional[PruningContext] = None,
         **kwargs,
-    ):
+    ) -> torch.Tensor:
         seq_length = hidden_states.shape[0]
         query_states, key_states, value_states = (
             self.qkv(hidden_states)
@@ -77,9 +78,7 @@ class Prunable_Qwen2_5_VLVisionAttention(Qwen2_5_VLVisionAttention):
             .unbind(0)
         )
         cos, sin = position_embeddings
-        query_states, key_states = apply_rotary_pos_emb_vision(
-            query_states, key_states, cos, sin
-        )
+        query_states, key_states = apply_rotary_pos_emb_vision(query_states, key_states, cos, sin)
 
         query_states = query_states.transpose(0, 1).unsqueeze(0)
         key_states = key_states.transpose(0, 1).unsqueeze(0)
@@ -93,13 +92,12 @@ class Prunable_Qwen2_5_VLVisionAttention(Qwen2_5_VLVisionAttention):
                 context.vit_k[self.layer_idx] = key_states
         # PRUNING END #
 
-        attention_interface: Callable = eager_attention_forward
-        if self.config._attn_implementation != "eager":
-            attention_interface = ALL_ATTENTION_FUNCTIONS[
-                self.config._attn_implementation
-            ]
+        attention_interface: Callable = ALL_ATTENTION_FUNCTIONS.get_interface(
+            self.config._attn_implementation, eager_attention_forward
+        )
 
-        if self.config._attn_implementation == "flash_attention_2":
+        if is_flash_attention_requested(self.config):
+            # Flash Attention: Use cu_seqlens for variable length attention
             max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max()
             attn_output, _ = attention_interface(
                 self,
@@ -108,7 +106,7 @@ class Prunable_Qwen2_5_VLVisionAttention(Qwen2_5_VLVisionAttention):
                 value_states,
                 attention_mask=None,
                 scaling=self.scaling,
-                dropout=(0.0 if not self.training else self.attention_dropout),
+                dropout=0.0 if not self.training else self.attention_dropout,
                 cu_seq_lens_q=cu_seqlens,
                 cu_seq_lens_k=cu_seqlens,
                 max_length_q=max_seqlen,
@@ -117,11 +115,13 @@ class Prunable_Qwen2_5_VLVisionAttention(Qwen2_5_VLVisionAttention):
                 **kwargs,
             )
         else:
+            # Other implementations: Process each chunk separately
             lengths = cu_seqlens[1:] - cu_seqlens[:-1]
             splits = [
                 torch.split(tensor, lengths.tolist(), dim=2)
                 for tensor in (query_states, key_states, value_states)
             ]
+
             attn_outputs = [
                 attention_interface(
                     self,
@@ -130,7 +130,7 @@ class Prunable_Qwen2_5_VLVisionAttention(Qwen2_5_VLVisionAttention):
                     v,
                     attention_mask=None,
                     scaling=self.scaling,
-                    dropout=(0.0 if not self.training else self.attention_dropout),
+                    dropout=0.0 if not self.training else self.attention_dropout,
                     is_causal=False,
                     **kwargs,
                 )[0]
@@ -160,8 +160,6 @@ class Prunable_Qwen2_5_VLAttention(Qwen2_5_VLAttention):
         position_ids: torch.LongTensor | None = None,
         past_key_values: Cache | None = None,
         output_attentions: bool = False,
-        use_cache: bool = False,
-        cache_position: torch.LongTensor | None = None,
         position_embeddings: tuple[torch.Tensor, torch.Tensor] | None = None,
         context: Optional[PruningContext] = None,
         **kwargs: Unpack[FlashAttentionKwargs],
@@ -191,28 +189,18 @@ class Prunable_Qwen2_5_VLAttention(Qwen2_5_VLAttention):
                 context.llm_q[self.layer_idx] = query_states
             if self.pruning_config.requirements.needs_llm_k(self.layer_idx):
                 context.llm_k[self.layer_idx] = key_states
-            if (
-                self.pruning_config.requirements.feature_map
-                and context.feature_map is None
-            ):
+            if self.pruning_config.requirements.feature_map and context.feature_map is None:
                 context.feature_map = hidden_states
         # PRUNING END #
 
         if past_key_values is not None:
-            cache_kwargs = {
-                "sin": sin,
-                "cos": cos,
-                "cache_position": cache_position,
-            }  # Specific to RoPE models
             key_states, value_states = past_key_values.update(
-                key_states, value_states, self.layer_idx, cache_kwargs
+                key_states, value_states, self.layer_idx
             )
 
         attention_interface: Callable = eager_attention_forward
         if self.config._attn_implementation != "eager":
-            attention_interface = ALL_ATTENTION_FUNCTIONS[
-                self.config._attn_implementation
-            ]
+            attention_interface = ALL_ATTENTION_FUNCTIONS[self.config._attn_implementation]
 
         attn_output, attn_weights = attention_interface(
             self,
@@ -307,10 +295,8 @@ class Prunable_Qwen2_5_VisionTransformer(Qwen2_5_VisionTransformerPretrainedMode
         if context is not None:
             context.spatial_merge_size = self.spatial_merge_size
             context.cu_seqlens_full = cu_seqlens
-            if self.pruning_config.requirements.reverse_indices:
-                context.reverse_indices = reverse_indices
-            if self.pruning_config.requirements.window_index:
-                context.window_index = window_index
+            context.reverse_indices = reverse_indices
+            context.window_index = window_index
         # PRUNING END #
 
         return BaseModelOutputWithPooling(
@@ -340,10 +326,6 @@ class Prunable_Qwen2_5_VLTextModel(Qwen2_5_VLTextModel):
         past_key_values: Cache | None = None,
         inputs_embeds: torch.FloatTensor | None = None,
         use_cache: bool | None = None,
-        output_attentions: bool | None = None,
-        output_hidden_states: bool | None = None,
-        return_dict: bool | None = None,
-        cache_position: torch.LongTensor | None = None,
         context: Optional[Any] = None,
         **kwargs,
     ) -> tuple | BaseModelOutputWithPast:
@@ -352,25 +334,10 @@ class Prunable_Qwen2_5_VLTextModel(Qwen2_5_VLTextModel):
         Maintains HF source compatibility
         while integrating post-layer pruning and compensation.
         """
-        output_attentions = (
-            output_attentions
-            if output_attentions is not None
-            else self.config.output_attentions
-        )
-        output_hidden_states = (
-            output_hidden_states
-            if output_hidden_states is not None
-            else self.config.output_hidden_states
-        )
         use_cache = use_cache if use_cache is not None else self.config.use_cache
-        return_dict = (
-            return_dict if return_dict is not None else self.config.use_return_dict
-        )
 
         if (input_ids is None) ^ (inputs_embeds is not None):
-            raise ValueError(
-                "You must specify exactly one of input_ids or inputs_embeds"
-            )
+            raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
 
         if self.gradient_checkpointing and self.training:
             if use_cache:
@@ -385,22 +352,16 @@ class Prunable_Qwen2_5_VLTextModel(Qwen2_5_VLTextModel):
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids)
 
-        # Initialize cache_position (HF Standard)
-        if cache_position is None:
+        # Initialize 3D position_ids (HF Standard)
+        if position_ids is None:
             past_seen_tokens = (
                 past_key_values.get_seq_length() if past_key_values is not None else 0
             )
-            cache_position = torch.arange(
-                past_seen_tokens,
-                past_seen_tokens + inputs_embeds.shape[1],
-                device=inputs_embeds.device,
+            position_ids = (
+                torch.arange(inputs_embeds.shape[1], device=inputs_embeds.device)
+                + past_seen_tokens
             )
-
-        # Initialize 3D position_ids (HF Standard)
-        if position_ids is None:
-            position_ids = cache_position.view(1, 1, -1).expand(
-                3, inputs_embeds.shape[0], -1
-            )
+            position_ids = position_ids.view(1, 1, -1).expand(3, inputs_embeds.shape[0], -1)
         elif position_ids.ndim == 2:
             position_ids = position_ids[None, ...].expand(3, position_ids.shape[0], -1)
 
@@ -411,9 +372,7 @@ class Prunable_Qwen2_5_VLTextModel(Qwen2_5_VLTextModel):
         else:
             text_position_ids = None
 
-        is_prefill = (
-            getattr(past_key_values, "is_prefill", True) if past_key_values else True
-        )
+        is_prefill = getattr(past_key_values, "is_prefill", True) if past_key_values else True
 
         # PRUNING START: GLOBAL STAGE #
         assert inputs_embeds.shape[0] == 1, "Batch size must be 1 for global pruning."
@@ -445,7 +404,7 @@ class Prunable_Qwen2_5_VLTextModel(Qwen2_5_VLTextModel):
                         position_ids,
                         text_position_ids,
                         attention_mask,
-                        cache_position,
+                        None,
                         stage_key="global",
                         past_key_values=past_key_values,
                     )
@@ -454,7 +413,7 @@ class Prunable_Qwen2_5_VLTextModel(Qwen2_5_VLTextModel):
             # updated here
             text_position_ids, cache_position, _ = compensate_decoding_state(
                 text_position_ids,
-                cache_position,
+                None,
                 None,
                 "global",
                 past_key_values,
@@ -465,9 +424,8 @@ class Prunable_Qwen2_5_VLTextModel(Qwen2_5_VLTextModel):
         if not isinstance(causal_mask_mapping := attention_mask, dict):
             mask_kwargs = {
                 "config": self.config,
-                "input_embeds": inputs_embeds,
+                "inputs_embeds": inputs_embeds,
                 "attention_mask": attention_mask,
-                "cache_position": cache_position,
                 "past_key_values": past_key_values,
                 "position_ids": text_position_ids,
             }
@@ -475,8 +433,8 @@ class Prunable_Qwen2_5_VLTextModel(Qwen2_5_VLTextModel):
                 "full_attention": create_causal_mask(**mask_kwargs),
             }
             if self.has_sliding_layers:
-                causal_mask_mapping["sliding_attention"] = (
-                    create_sliding_window_causal_mask(**mask_kwargs)
+                causal_mask_mapping["sliding_attention"] = create_sliding_window_causal_mask(
+                    **mask_kwargs
                 )
 
         hidden_states = inputs_embeds
@@ -485,34 +443,20 @@ class Prunable_Qwen2_5_VLTextModel(Qwen2_5_VLTextModel):
         # pruning happened.
         position_embeddings = self.rotary_emb(hidden_states, position_ids)
 
-        all_hidden_states = () if output_hidden_states else None
-        all_self_attns = () if output_attentions else None
-
         # Decoder layers loop
         for layer_idx, decoder_layer in enumerate(self.layers):
-            if output_hidden_states:
-                all_hidden_states += (hidden_states,)
 
-            curr_mask = causal_mask_mapping[decoder_layer.attention_type]
-
-            # 1. Forward pass using states from previous stages
-            layer_outputs = decoder_layer(
+            curr_mask = causal_mask_mapping[self.config.layer_types[layer_idx]]
+            hidden_states = decoder_layer(
                 hidden_states,
                 attention_mask=curr_mask,
                 position_embeddings=position_embeddings,
                 position_ids=text_position_ids,
                 past_key_values=past_key_values,
-                output_attentions=output_attentions,
                 use_cache=use_cache,
-                cache_position=cache_position,
                 context=context,
                 **kwargs,
             )
-
-            hidden_states = layer_outputs[0]
-
-            if output_attentions:
-                all_self_attns += (layer_outputs[1],)
 
             # PRUNING START: POST-LAYER LOGIC #
             if is_prefill:
@@ -540,7 +484,7 @@ class Prunable_Qwen2_5_VLTextModel(Qwen2_5_VLTextModel):
                             position_ids,
                             text_position_ids,
                             curr_mask,
-                            cache_position,
+                            None,
                             stage_key=layer_idx,
                             past_key_values=past_key_values,
                         )
@@ -553,42 +497,23 @@ class Prunable_Qwen2_5_VLTextModel(Qwen2_5_VLTextModel):
                             cos[:, :, m, :],
                             sin[:, :, m, :],
                         )
-                        causal_mask_mapping[decoder_layer.attention_type] = curr_mask
+                        causal_mask_mapping[self.config.layer_types[layer_idx]] = curr_mask
             else:
-                text_position_ids, cache_position, curr_mask = (
-                    compensate_decoding_state(
-                        text_position_ids,
-                        cache_position,
-                        curr_mask,
-                        layer_idx,
-                        past_key_values,
-                    )
+                text_position_ids, cache_position, curr_mask = compensate_decoding_state(
+                    text_position_ids,
+                    None,
+                    curr_mask,
+                    layer_idx,
+                    past_key_values,
                 )
-                causal_mask_mapping[decoder_layer.attention_type] = curr_mask
+                causal_mask_mapping[self.config.layer_types[layer_idx]] = curr_mask
             # PRUNING END #
 
         hidden_states = self.norm(hidden_states)
 
-        if output_hidden_states:
-            all_hidden_states += (hidden_states,)
-
-        if not return_dict:
-            return tuple(
-                v
-                for v in [
-                    hidden_states,
-                    past_key_values,
-                    all_hidden_states,
-                    all_self_attns,
-                ]
-                if v is not None
-            )
-
         return BaseModelOutputWithPast(
             last_hidden_state=hidden_states,
             past_key_values=past_key_values,
-            hidden_states=all_hidden_states,
-            attentions=all_self_attns,
         )
 
 
@@ -616,12 +541,8 @@ class Prunable_Qwen2_5_VLModel(Qwen2_5_VLModel):
             The temporal, height and width of feature shape of each video in LLM.
         """
         pixel_values_videos = pixel_values_videos.type(self.visual.dtype)
-        vision_outputs = self.visual(
-            pixel_values_videos, grid_thw=video_grid_thw, **kwargs
-        )
-        split_sizes = (
-            video_grid_thw.prod(-1) // self.visual.spatial_merge_size**2
-        ).tolist()
+        vision_outputs = self.visual(pixel_values_videos, grid_thw=video_grid_thw, **kwargs)
+        split_sizes = (video_grid_thw.prod(-1) // self.visual.spatial_merge_size**2).tolist()
         video_embeds = torch.split(vision_outputs.pooler_output, split_sizes)
         vision_outputs.pooler_output = video_embeds
 
@@ -642,9 +563,7 @@ class Prunable_Qwen2_5_VLModel(Qwen2_5_VLModel):
         """
         pixel_values = pixel_values.type(self.visual.dtype)
         vision_outputs = self.visual(pixel_values, grid_thw=image_grid_thw, **kwargs)
-        split_sizes = (
-            image_grid_thw.prod(-1) // self.visual.spatial_merge_size**2
-        ).tolist()
+        split_sizes = (image_grid_thw.prod(-1) // self.visual.spatial_merge_size**2).tolist()
         image_embeds = torch.split(vision_outputs.pooler_output, split_sizes)
         vision_outputs.pooler_output = image_embeds
 
@@ -658,15 +577,12 @@ class Prunable_Qwen2_5_VLModel(Qwen2_5_VLModel):
         past_key_values: Cache | None = None,
         inputs_embeds: torch.FloatTensor | None = None,
         use_cache: bool | None = None,
-        output_attentions: bool | None = None,
-        output_hidden_states: bool | None = None,
-        return_dict: bool | None = None,
         pixel_values: torch.Tensor | None = None,
         pixel_values_videos: torch.FloatTensor | None = None,
         image_grid_thw: torch.LongTensor | None = None,
         video_grid_thw: torch.LongTensor | None = None,
         rope_deltas: torch.LongTensor | None = None,
-        cache_position: torch.LongTensor | None = None,
+        mm_token_type_ids: torch.IntTensor | None = None,
         second_per_grid_ts: torch.Tensor | None = None,
         **kwargs: Unpack[TransformersKwargs],
     ) -> tuple | Qwen2_5_VLModelOutputWithPast:
@@ -684,20 +600,6 @@ class Prunable_Qwen2_5_VLModel(Qwen2_5_VLModel):
         context.vit_layer_num = self.config.vision_config.depth
         # PRUNING END #
 
-        output_attentions = (
-            output_attentions
-            if output_attentions is not None
-            else self.config.output_attentions
-        )
-        output_hidden_states = (
-            output_hidden_states
-            if output_hidden_states is not None
-            else self.config.output_hidden_states
-        )
-        return_dict = (
-            return_dict if return_dict is not None else self.config.use_return_dict
-        )
-
         if inputs_embeds is None:
             inputs_embeds = self.get_input_embeddings()(input_ids)
 
@@ -705,7 +607,6 @@ class Prunable_Qwen2_5_VLModel(Qwen2_5_VLModel):
             image_embeds = self.get_image_features(
                 pixel_values,
                 image_grid_thw,
-                return_dict=True,
                 context=context,
             ).pooler_output
             image_embeds = torch.cat(image_embeds, dim=0).to(
@@ -722,7 +623,6 @@ class Prunable_Qwen2_5_VLModel(Qwen2_5_VLModel):
             video_embeds = self.get_video_features(
                 pixel_values_videos,
                 video_grid_thw,
-                return_dict=True,
                 context=context,
             ).pooler_output
             video_embeds = torch.cat(video_embeds, dim=0).to(
@@ -752,9 +652,7 @@ class Prunable_Qwen2_5_VLModel(Qwen2_5_VLModel):
                 batch_size, seq_length, _ = inputs_embeds.shape
                 position_ids = torch.arange(seq_length, device=inputs_embeds.device)
                 position_ids = position_ids.view(1, 1, -1).expand(3, batch_size, -1)
-                delta = (past_key_values_length + self.rope_deltas).to(
-                    inputs_embeds.device
-                )
+                delta = (past_key_values_length + self.rope_deltas).to(inputs_embeds.device)
                 delta = delta.repeat_interleave(batch_size // delta.shape[0], dim=1)
                 position_ids = position_ids + delta.to(position_ids.device)
 
@@ -769,19 +667,14 @@ class Prunable_Qwen2_5_VLModel(Qwen2_5_VLModel):
             past_key_values=past_key_values,
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=True,
-            cache_position=cache_position,
             context=context,  # Forward the context
             **kwargs,
         )
 
-        output = Qwen2_5_VLModelOutputWithPast(
+        return Qwen2_5_VLModelOutputWithPast(
             last_hidden_state=outputs.last_hidden_state,
             past_key_values=outputs.past_key_values,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
             rope_deltas=self.rope_deltas,
         )
-        return output if return_dict else output.to_tuple()

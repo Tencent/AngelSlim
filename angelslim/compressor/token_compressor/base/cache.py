@@ -62,9 +62,7 @@ class PruningCache(DynamicCache):
         self.update_counts[layer_idx] = self.update_counts.get(layer_idx, 0) + 1
         return updated_key, updated_value
 
-    def set_pruning_mask_for_layer(
-        self, stage_key: Union[int, str], mask: torch.Tensor
-    ):
+    def set_pruning_mask_for_layer(self, stage_key: Union[int, str], mask: torch.Tensor):
         if mask.dim() != 1:
             mask = mask.view(-1)
 

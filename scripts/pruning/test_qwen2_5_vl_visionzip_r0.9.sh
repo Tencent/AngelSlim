@@ -7,7 +7,7 @@ echo "[AngelSlim] Starting Universal Pruning Smoke Test..."
 echo "[AngelSlim] Model: $MODEL_PATH"
 echo "[AngelSlim] Config: $CONFIG_PATH"
 
-python tools/test_universal_pruning.py \
+python tools/test_token_pruning.py \
     --model_path "$MODEL_PATH" \
     --config "$CONFIG_PATH"
 

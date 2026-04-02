@@ -11,7 +11,7 @@ echo "[AngelSlim] Config: $CONFIG_PATH"
 echo "[AngelSlim] Tasks: $TASKS"
 echo "[AngelSlim] Output Directory: $OUTPUT_DIR"
 
-python tools/run_pruning_eval.py \
+python tools/run_token_pruning_evaluation.py \
     --model_path "$MODEL_PATH" \
     --configs "$CONFIG_PATH" \
     --tasks "$TASKS" \

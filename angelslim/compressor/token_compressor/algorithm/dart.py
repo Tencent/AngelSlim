@@ -49,9 +49,7 @@ def dart_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
         pivot_text_token = kwargs["pivot_text_token"]
         layer_idx = kwargs["layer_idx"]
     except KeyError as e:
-        raise ValueError(
-            f"[TokenCompressor Error] DART pruning missing required parameter: {e}"
-        )
+        raise ValueError(f"[TokenCompressor Error] DART pruning missing required parameter: {e}")
 
     input_ids = context.input_ids
     feature_map = context.feature_map
@@ -61,13 +59,9 @@ def dart_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
     if input_ids is None:
         raise ValueError("[TokenCompressor Error] 'input_ids' not found in context.")
     if feature_map is None:
-        raise ValueError(
-            "[TokenCompressor Error] DART requires 'feature_map' in context."
-        )
+        raise ValueError("[TokenCompressor Error] DART requires 'feature_map' in context.")
     if k_tensor is None:
-        raise ValueError(
-            "[TokenCompressor Error] DART requires Key tensors in context."
-        )
+        raise ValueError("[TokenCompressor Error] DART requires Key tensors in context.")
 
     bsz, seq_len = input_ids.shape
     device = input_ids.device
@@ -84,9 +78,7 @@ def dart_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
         k_single = k_tensor[i].permute(1, 0, 2).reshape(seq_len, -1)
 
         # 2. Identify vision and non-vision tokens
-        vision_indices, non_vision_indices, _, _ = (
-            _extract_and_validate_vision_token_info(context)
-        )
+        vision_indices, non_vision_indices, _, _ = _extract_and_validate_vision_token_info(context)
 
         num_vision_tokens = len(vision_indices)
         if num_vision_tokens == 0:
@@ -118,9 +110,7 @@ def dart_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
         img_pivot_indices = torch.tensor([], dtype=torch.long, device=device)
         top_img_pivot_local_indices = torch.tensor([], dtype=torch.long, device=device)
         if num_img_pivots > 0:
-            _, top_img_pivot_local_indices = torch.topk(
-                k_visual_l1_norm, k=num_img_pivots
-            )
+            _, top_img_pivot_local_indices = torch.topk(k_visual_l1_norm, k=num_img_pivots)
             img_pivot_indices = vision_indices[top_img_pivot_local_indices]
 
         txt_pivot_indices = torch.tensor([], dtype=torch.long, device=device)
@@ -129,9 +119,7 @@ def dart_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
             k_text_l1_norm = torch.norm(k_text, p=1, dim=-1)
             num_txt_pivots = min(num_txt_pivots_req, len(text_indices_for_pivot))
             if num_txt_pivots > 0:
-                _, top_txt_pivot_local_indices = torch.topk(
-                    k_text_l1_norm, k=num_txt_pivots
-                )
+                _, top_txt_pivot_local_indices = torch.topk(k_text_l1_norm, k=num_txt_pivots)
                 txt_pivot_indices = text_indices_for_pivot[top_txt_pivot_local_indices]
 
         pivot_indices = torch.cat([img_pivot_indices, txt_pivot_indices])
@@ -177,9 +165,7 @@ def dart_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
                 if num_to_gather > 0:
                     # Select tokens with lowest redundancy (smallest
                     # similarity)
-                    _, least_similar_indices = torch.topk(
-                        cos_sim, k=num_to_gather, largest=False
-                    )
+                    _, least_similar_indices = torch.topk(cos_sim, k=num_to_gather, largest=False)
                     kept_local_indices.update(least_similar_indices.cpu().tolist())
 
         # 6. Build global keep_mask
@@ -194,9 +180,7 @@ def dart_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
             if len(valid_indices) > 0:
                 final_kept_vision_indices = vision_indices[valid_indices]
 
-        final_indices = torch.cat(
-            [non_vision_indices.to(device), final_kept_vision_indices]
-        )
+        final_indices = torch.cat([non_vision_indices.to(device), final_kept_vision_indices])
         keep_mask = torch.zeros_like(input_ids_single, dtype=torch.bool)
         if final_indices.numel() > 0:
             keep_mask[final_indices] = True

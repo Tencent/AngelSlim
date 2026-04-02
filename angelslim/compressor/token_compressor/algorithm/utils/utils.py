@@ -44,9 +44,7 @@ def identify_model_architecture(context: PruningContext) -> str:
 
     vision_config = _get_config_attr(config, "vision_config")
     if vision_config:
-        vision_model_type = str(
-            _get_config_attr(vision_config, "model_type", "")
-        ).lower()
+        vision_model_type = str(_get_config_attr(vision_config, "model_type", "")).lower()
         if "rice" in vision_model_type:
             return "llava_ov"
 
@@ -85,8 +83,7 @@ def get_model_specific_vision_token_ids(
 
     if not token_ids:
         raise ValueError(
-            "[TokenCompressor Error] "
-            f"Failed to extract vision token IDs for {model_type}."
+            "[TokenCompressor Error] " f"Failed to extract vision token IDs for {model_type}."
         )
     return token_ids
 
@@ -119,9 +116,7 @@ def _extract_and_validate_vision_token_info(
     if len(vision_indices) > 0:
         diffs = vision_indices[1:] - vision_indices[:-1]
         splits = torch.where(diffs > 1)[0] + 1
-        actual_counts = [
-            len(b) for b in torch.tensor_split(vision_indices, splits.cpu())
-        ]
+        actual_counts = [len(b) for b in torch.tensor_split(vision_indices, splits.cpu())]
 
     # 4. Strict validation for Qwen/LLaVA-OV
     if "qwen" in model_type or model_type == "llava_ov":
@@ -154,7 +149,6 @@ def _recompute_attention_maps_for_all_images(
     model_type = identify_model_architecture(context)
     head_dim = q_tensor.shape[-1]
 
-    # Branch A: Standard LLaVA
     if model_type == "llava":
         for i in range(q_tensor.shape[0]):
             q_cls = q_tensor[i, :, 0:1, :]
@@ -166,45 +160,36 @@ def _recompute_attention_maps_for_all_images(
             final_scores_list.append(weights.mean(dim=0))
             final_keys_list.append(k_patches.mean(dim=0).unsqueeze(0))
 
-    # Branch B: Packed Sequence (Qwen / LLaVA-OV)
     elif "qwen" in model_type or model_type == "llava_ov":
         cu_seqlens = context.cu_seqlens_full
         if cu_seqlens is None:
             raise ValueError("[TokenCompressor Error] Missing 'cu_seqlens_full'.")
 
         lengths = torch.diff(cu_seqlens).cpu().tolist()
-        q_splits = torch.split(
-            q_tensor.squeeze(0) if q_tensor.dim() == 4 else q_tensor,
-            lengths,
-            dim=1,
-        )
-        k_splits = torch.split(
-            k_tensor.squeeze(0) if k_tensor.dim() == 4 else k_tensor,
-            lengths,
-            dim=1,
-        )
+        q_physical = q_tensor.squeeze(0) if q_tensor.dim() == 4 else q_tensor
+        k_physical = k_tensor.squeeze(0) if k_tensor.dim() == 4 else k_tensor
 
+        q_splits = torch.split(q_physical, lengths, dim=1)
+        k_splits = torch.split(k_physical, lengths, dim=1)
+
+        temp_scores, temp_keys = [], []
         for q_slice, k_slice in zip(q_splits, k_splits):
             if model_type == "llava_ov":
                 q_use, k_use = q_slice[:, 0:1, :], k_slice[:, 1:, :]
+                weights = torch.softmax(
+                    torch.matmul(q_use, k_use.transpose(-1, -2)) / math.sqrt(head_dim),
+                    dim=-1,
+                )
+                score_fine = weights.mean(dim=0).squeeze(0)
             else:
-                q_use, k_use = (
-                    q_slice.mean(dim=1, keepdim=True)
-                    if q_slice.shape[1] >= 6144
-                    else q_slice
-                ), k_slice
+                q_use = q_slice.mean(dim=1, keepdim=True) if q_slice.shape[1] >= 6144 else q_slice
+                weights = torch.softmax(
+                    torch.matmul(q_use, k_slice.transpose(-1, -2)) / math.sqrt(head_dim),
+                    dim=-1,
+                )
+                score_fine = weights.mean(dim=0).sum(dim=0)
+                k_use = k_slice
 
-            weights = torch.softmax(
-                torch.matmul(q_use, k_use.transpose(-1, -2)) / math.sqrt(head_dim),
-                dim=-1,
-            )
-            score_fine = (
-                weights.mean(dim=0).sum(dim=0)
-                if model_type != "llava_ov"
-                else weights.mean(dim=0).squeeze(0)
-            )
-
-            # Spatial Merging
             merge_unit = context.spatial_merge_size**2
             if merge_unit > 1:
                 pad = (merge_unit - (score_fine.shape[0] % merge_unit)) % merge_unit
@@ -217,8 +202,30 @@ def _recompute_attention_maps_for_all_images(
             else:
                 s_pad, k_pad = score_fine, k_use
 
-            final_scores_list.append(s_pad.unsqueeze(0))
-            final_keys_list.append(k_pad.mean(0).unsqueeze(0))
+            temp_scores.append(s_pad)
+            temp_keys.append(k_pad)
+
+        if not temp_scores:
+            return [], []
+
+        all_scores = torch.cat(temp_scores, dim=0)
+        all_keys = torch.cat(temp_keys, dim=1)
+
+        reverse_indices = getattr(context, "reverse_indices", None)
+        if reverse_indices is not None:
+            if all_scores.shape[0] == reverse_indices.shape[0]:
+                all_scores = all_scores[reverse_indices]
+                all_keys = all_keys[:, reverse_indices, :]
+
+        all_keys = all_keys.mean(dim=0)
+
+        split_sizes = [t.shape[0] for t in temp_scores]
+        s_splits = torch.split(all_scores, split_sizes)
+        k_splits = torch.split(all_keys, split_sizes)
+
+        for s, k in zip(s_splits, k_splits):
+            final_scores_list.append(s.unsqueeze(0))
+            final_keys_list.append(k.unsqueeze(0))
 
     return final_scores_list, final_keys_list
 
