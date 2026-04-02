@@ -407,24 +407,31 @@ document.write(`
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">1. 数据生成</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">1.1 为目标模型生成采样数据</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#eagle3hidden-states">1.2 为Eagle3模型生成hidden states</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">1.1 数据组织形式</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">1.2 为目标模型生成采样数据</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#eagle3hidden-states">1.3 为Eagle3模型生成hidden states</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">2. 训练Eagle3模型</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">2.1 在线训练</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">2.2 离线训练</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">2. 训练Eagle3模型</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">2.1 在线训练</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">2.2 离线训练</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">3. 基准测试</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">3. 基准测试</a><ul class="visible nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#hf">3.1 HF基准测试</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">3.1.1 基本用法</a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id8">3.1.2 参数说明</a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id9">3.1.3 使用示例</a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id10">3.1.4 性能报告</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id8">3.1.1 基本用法</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id9">3.1.2 参数说明</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id10">3.1.3 使用示例</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id11">3.1.4 性能报告</a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#vllm">3.2 vLLM基准测试</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#vllm">3.2 vLLM基准测试</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id12">3.2.1 基本用法</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id13">3.2.2 参数说明</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id14">3.2.3 使用示例</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id15">3.2.4 性能报告</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -448,7 +455,23 @@ document.write(`
 <h2>1. 数据生成<a class="headerlink" href="#id1" title="Link to this heading">#</a></h2>
 <p>数据生成包括：1）为目标模型生成采样数据，2）为Eagle3模型离线生成目标模型的hidden states。</p>
 <section id="id2">
-<h3>1.1 为目标模型生成采样数据<a class="headerlink" href="#id2" title="Link to this heading">#</a></h3>
+<h3>1.1 数据组织形式<a class="headerlink" href="#id2" title="Link to this heading">#</a></h3>
+<p>所有数据需保存在jsonl文件中，训练数据格式可参考:</p>
+<ul>
+<li><p>数据示例:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;0&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;conversations&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;user&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;xxx&quot;</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;assistant&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;xxx&quot;</span><span class="p">}]}</span>
+</pre></div>
+</div>
+</li>
+<li><p>典型字段意义如下：</p>
+<ul class="simple">
+<li><p>id: 对话唯一标识</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="id3">
+<h3>1.2 为目标模型生成采样数据<a class="headerlink" href="#id3" title="Link to this heading">#</a></h3>
 <p>生成采样数据为可选项，当有足够数量以及足够质量的目标模型SFT数据时，此步可略过。当训练数据和目标模型不配套时，则需要为目标模型重新采样生成数据。</p>
 <p><strong>步骤1：启动vLLM server</strong></p>
 <p>首先需要启动vLLM server来提供模型推理服务：</p>
@@ -488,7 +511,7 @@ document.write(`
 </ul>
 </section>
 <section id="eagle3hidden-states">
-<h3>1.2 为Eagle3模型生成hidden states<a class="headerlink" href="#eagle3hidden-states" title="Link to this heading">#</a></h3>
+<h3>1.3 为Eagle3模型生成hidden states<a class="headerlink" href="#eagle3hidden-states" title="Link to this heading">#</a></h3>
 <p>目前仅支持以HF为后端生成hidden states，调用脚本如下：</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># For LLMs</span>
 bash<span class="w"> </span>scripts/speculative/generate_hidden_for_draft_model.sh
@@ -508,12 +531,12 @@ bash<span class="w"> </span>scripts/speculative/generate_vlm_hidden_for_draft_mo
 </ul>
 </section>
 </section>
-<section id="id3">
-<h2>2. 训练Eagle3模型<a class="headerlink" href="#id3" title="Link to this heading">#</a></h2>
+<section id="id4">
+<h2>2. 训练Eagle3模型<a class="headerlink" href="#id4" title="Link to this heading">#</a></h2>
 <p>目前支持在线训练和离线训练两种模式：在线训练适合显存足够、目标模型不大、训练上下文长度不要求极长的场景，
 离线训练适合大尺寸目标模型、磁盘空间足够、长上下文训练场景。</p>
-<section id="id4">
-<h3>2.1 在线训练<a class="headerlink" href="#id4" title="Link to this heading">#</a></h3>
+<section id="id5">
+<h3>2.1 在线训练<a class="headerlink" href="#id5" title="Link to this heading">#</a></h3>
 <p>使用下面的脚本进行Eagle3模型的在线训练：</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># For LLMs</span>
 bash<span class="w"> </span>scripts/speculative/train_eagle3_online.sh
@@ -533,8 +556,8 @@ bash<span class="w"> </span>scripts/speculative/train_eagle3_vlm_online.sh
 <li><p><code class="docutils literal notranslate"><span class="pre">CHAT_TEMPLATE_TYPE</span></code>: 目标模型的数据模板类型</p></li>
 </ul>
 </section>
-<section id="id5">
-<h3>2.2 离线训练<a class="headerlink" href="#id5" title="Link to this heading">#</a></h3>
+<section id="id6">
+<h3>2.2 离线训练<a class="headerlink" href="#id6" title="Link to this heading">#</a></h3>
 <p>在离线训练前，必须要完成<code class="docutils literal notranslate"><span class="pre">1.2</span></code> 为Eagle3模型生成hidden states。
 使用下面的脚本进行Eagle3模型的离线训练：</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># For LLMs</span>
@@ -559,13 +582,13 @@ bash<span class="w"> </span>scripts/speculative/train_eagle3_vlm_offline.sh
 </ul>
 </section>
 </section>
-<section id="id6">
-<h2>3. 基准测试<a class="headerlink" href="#id6" title="Link to this heading">#</a></h2>
+<section id="id7">
+<h2>3. 基准测试<a class="headerlink" href="#id7" title="Link to this heading">#</a></h2>
 <p>AngelSlim提供了HF和vLLM两种backend的Eagle3基准测试脚本，用于评估投机采样的性能提升。</p>
 <section id="hf">
 <h3>3.1 HF基准测试<a class="headerlink" href="#hf" title="Link to this heading">#</a></h3>
-<section id="id7">
-<h4>3.1.1 基本用法<a class="headerlink" href="#id7" title="Link to this heading">#</a></h4>
+<section id="id8">
+<h4>3.1.1 基本用法<a class="headerlink" href="#id8" title="Link to this heading">#</a></h4>
 <p>使用 <code class="docutils literal notranslate"><span class="pre">tools/spec_benchmark.py</span></code> 脚本进行投机采样基准测试：</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/spec_benchmark.py<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--base-model-path<span class="w"> </span><span class="si">${</span><span class="nv">BASE_MODEL_PATH</span><span class="si">}</span><span class="w"> </span><span class="se">\</span>
@@ -575,8 +598,8 @@ bash<span class="w"> </span>scripts/speculative/train_eagle3_vlm_offline.sh
 </pre></div>
 </div>
 </section>
-<section id="id8">
-<h4>3.1.2 参数说明<a class="headerlink" href="#id8" title="Link to this heading">#</a></h4>
+<section id="id9">
+<h4>3.1.2 参数说明<a class="headerlink" href="#id9" title="Link to this heading">#</a></h4>
 <p><strong>模型配置参数：</strong></p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">--base-model-path</span></code>: 基础模型路径（必需）</p></li>
@@ -611,8 +634,8 @@ bash<span class="w"> </span>scripts/speculative/train_eagle3_vlm_offline.sh
 <li><p><code class="docutils literal notranslate"><span class="pre">--no-metrics</span></code>: 跳过自动指标计算</p></li>
 </ul>
 </section>
-<section id="id9">
-<h4>3.1.3 使用示例<a class="headerlink" href="#id9" title="Link to this heading">#</a></h4>
+<section id="id10">
+<h4>3.1.3 使用示例<a class="headerlink" href="#id10" title="Link to this heading">#</a></h4>
 <p><strong>完整基准测试（推荐）：</strong></p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/spec_benchmark.py<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--base-model-path<span class="w"> </span>/path/to/base/model<span class="w"> </span><span class="se">\</span>
@@ -642,8 +665,8 @@ bash<span class="w"> </span>scripts/speculative/train_eagle3_vlm_offline.sh
 </pre></div>
 </div>
 </section>
-<section id="id10">
-<h4>3.1.4 性能报告<a class="headerlink" href="#id10" title="Link to this heading">#</a></h4>
+<section id="id11">
+<h4>3.1.4 性能报告<a class="headerlink" href="#id11" title="Link to this heading">#</a></h4>
 <p>运行完成后，工具会自动生成性能报告，包括：</p>
 <ul class="simple">
 <li><p>投机采样与基线模型的性能对比</p></li>
@@ -655,18 +678,119 @@ bash<span class="w"> </span>scripts/speculative/train_eagle3_vlm_offline.sh
 </section>
 <section id="vllm">
 <h3>3.2 vLLM基准测试<a class="headerlink" href="#vllm" title="Link to this heading">#</a></h3>
+<section id="id12">
+<h4>3.2.1 基本用法<a class="headerlink" href="#id12" title="Link to this heading">#</a></h4>
 <p>使用 <code class="docutils literal notranslate"><span class="pre">tools/vllm_spec_benchmark.py</span></code> 脚本进行投机采样基准测试：</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>vllm_spec_benchmark.py<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--model-dir<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$MODEL_DIR</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--eagle-dir<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$EAGLE_DIR</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--benchmark-name<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$BENCHMARK_NAME</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--stats-output-file<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$OUTPUT_FILE</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/vllm_spec_benchmark.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--target_model<span class="w"> </span><span class="si">${</span><span class="nv">TARGET_MODEL_PATH</span><span class="si">}</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--draft_model<span class="w"> </span><span class="si">${</span><span class="nv">EAGLE_MODEL_PATH</span><span class="si">}</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--dataset<span class="w"> </span><span class="s2">&quot;gsm8k&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output_file<span class="w"> </span><span class="si">${</span><span class="nv">OUTPUT_FILE</span><span class="si">}</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--method<span class="w"> </span>eagle3<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--output-len<span class="w"> </span><span class="m">1024</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--max-num-seqs<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$BATCH_SIZE</span><span class="s2">&quot;</span>
+<span class="w">    </span>--output_len<span class="w"> </span><span class="m">1024</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--max_num_seqs<span class="w"> </span><span class="si">${</span><span class="nv">BATCH_SIZE</span><span class="si">}</span>
 </pre></div>
 </div>
+</section>
+<section id="id13">
+<h4>3.2.2 参数说明<a class="headerlink" href="#id13" title="Link to this heading">#</a></h4>
+<p><strong>模型配置参数：</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--target_model</span></code>: 目标模型的HF名称或本地路径</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--draft_model</span></code>: 草稿模型（Eagle模型）的HF名称或本地路径</p></li>
+</ul>
+<p><strong>数据集配置：</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--dataset</span></code>: 基准数据集名称或本地JSONL文件路径，默认为 <code class="docutils literal notranslate"><span class="pre">gsm8k</span></code>。支持逗号分隔指定多个数据集（如 <code class="docutils literal notranslate"><span class="pre">mt_bench,gsm8k,/path/to/local/question.jsonl</span></code>）。如果路径为已存在的文件则直接加载，否则视为 <code class="docutils literal notranslate"><span class="pre">dataset/</span></code> 目录下的benchmark名称</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--num_prompts</span></code>: 从数据集中加载的prompt数量，默认为 80</p></li>
+</ul>
+<p><strong>投机采样配置：</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--method</span></code>: 投机采样方法，可选 <code class="docutils literal notranslate"><span class="pre">eagle</span></code>、<code class="docutils literal notranslate"><span class="pre">eagle3</span></code>、<code class="docutils literal notranslate"><span class="pre">ngram</span></code>、<code class="docutils literal notranslate"><span class="pre">mtp</span></code>、<code class="docutils literal notranslate"><span class="pre">ar</span></code>（无投机采样的基线），默认为 <code class="docutils literal notranslate"><span class="pre">eagle3</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--num_spec_tokens</span></code>: 投机采样token数量，默认为 2</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--prompt_lookup_max</span></code>: ngram方法的最大查找长度，默认为 5</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--prompt_lookup_min</span></code>: ngram方法的最小查找长度，默认为 2</p></li>
+</ul>
+<p><strong>生成参数：</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--temp</span></code>: 采样温度，默认为 0</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--top_p</span></code>: Top-p采样，默认为 1.0</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--top_k</span></code>: Top-k采样，默认为 -1（不启用）</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--output_len</span></code>: 最大生成token数，默认为 1024</p></li>
+</ul>
+<p><strong>硬件与引擎配置：</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--tp</span></code>: tensor parallel大小，默认为 1</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--max_model_len</span></code>: 模型最大上下文长度，默认为 16384</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--max_num_seqs</span></code>: 最大并发序列数（batch size），默认为 1</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--enforce_eager</span></code>: 启用eager模式（禁用CUDA graph）</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable_chunked_prefill</span></code>: 启用chunked prefill</p></li>
+</ul>
+<p><strong>其他设置：</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--seed</span></code>: 随机种子，默认为 42</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--output_file</span></code>: 结果输出文件路径（jsonl格式）</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--print_output</span></code>: 打印生成的文本内容</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--test</span></code>: 测试模式</p></li>
+</ul>
+</section>
+<section id="id14">
+<h4>3.2.3 使用示例<a class="headerlink" href="#id14" title="Link to this heading">#</a></h4>
+<p><strong>单数据集测试：</strong></p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/vllm_spec_benchmark.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--target_model<span class="w"> </span>/path/to/base/model<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--draft_model<span class="w"> </span>/path/to/eagle/model<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--dataset<span class="w"> </span><span class="s2">&quot;gsm8k&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output_file<span class="w"> </span>./results/benchmark_stats.jsonl<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--method<span class="w"> </span>eagle3<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output_len<span class="w"> </span><span class="m">1024</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--max_num_seqs<span class="w"> </span><span class="m">1</span>
+</pre></div>
+</div>
+<p><strong>多数据集测试（逗号分隔，支持混合使用benchmark名称和本地文件路径）：</strong></p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/vllm_spec_benchmark.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--target_model<span class="w"> </span>/path/to/base/model<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--draft_model<span class="w"> </span>/path/to/eagle/model<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--dataset<span class="w"> </span><span class="s2">&quot;mt_bench,gsm8k,/path/to/local/question.jsonl&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output_file<span class="w"> </span>./results/benchmark_stats.jsonl<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--method<span class="w"> </span>eagle3<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output_len<span class="w"> </span><span class="m">1024</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--max_num_seqs<span class="w"> </span><span class="m">1</span>
+</pre></div>
+</div>
+<p><strong>使用基线模式（无投机采样）进行对比：</strong></p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/vllm_spec_benchmark.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--target_model<span class="w"> </span>/path/to/base/model<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--dataset<span class="w"> </span><span class="s2">&quot;gsm8k&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--method<span class="w"> </span>ar<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output_len<span class="w"> </span><span class="m">1024</span>
+</pre></div>
+</div>
+<p><strong>多GPU配置：</strong></p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/vllm_spec_benchmark.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--target_model<span class="w"> </span>/path/to/base/model<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--draft_model<span class="w"> </span>/path/to/eagle/model<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--dataset<span class="w"> </span><span class="s2">&quot;gsm8k&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--method<span class="w"> </span>eagle3<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--tp<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output_len<span class="w"> </span><span class="m">1024</span>
+</pre></div>
+</div>
+</section>
+<section id="id15">
+<h4>3.2.4 性能报告<a class="headerlink" href="#id15" title="Link to this heading">#</a></h4>
+<p>运行完成后，工具会自动生成性能报告，包括：</p>
+<ul class="simple">
+<li><p>输出吞吐量（tokens/s）</p></li>
+<li><p>请求吞吐量（requests/s）</p></li>
+<li><p>平均每个样本的耗时</p></li>
+<li><p>投机采样的平均接受长度（mean acceptance length）</p></li>
+<li><p>各token位置的接受率</p></li>
+</ul>
+<p>当指定多个数据集时，还会额外输出所有数据集的平均统计结果。
+所有结果将以jsonl格式保存在指定的输出文件中，便于后续分析和比较。</p>
 <p>完整的vLLM benchmark结果可见<a class="reference internal" href="../../../performance/speculative_decoding/benchmarks.html"><span class="std std-doc">Benchmark</span></a>。</p>
+</section>
 </section>
 </section>
 </section>
@@ -717,24 +841,31 @@ bash<span class="w"> </span>scripts/speculative/train_eagle3_vlm_offline.sh
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">1. 数据生成</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">1.1 为目标模型生成采样数据</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#eagle3hidden-states">1.2 为Eagle3模型生成hidden states</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">1.1 数据组织形式</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">1.2 为目标模型生成采样数据</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#eagle3hidden-states">1.3 为Eagle3模型生成hidden states</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">2. 训练Eagle3模型</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">2.1 在线训练</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">2.2 离线训练</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">2. 训练Eagle3模型</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">2.1 在线训练</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">2.2 离线训练</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">3. 基准测试</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">3. 基准测试</a><ul class="visible nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#hf">3.1 HF基准测试</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">3.1.1 基本用法</a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id8">3.1.2 参数说明</a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id9">3.1.3 使用示例</a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id10">3.1.4 性能报告</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id8">3.1.1 基本用法</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id9">3.1.2 参数说明</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id10">3.1.3 使用示例</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id11">3.1.4 性能报告</a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#vllm">3.2 vLLM基准测试</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#vllm">3.2 vLLM基准测试</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id12">3.2.1 基本用法</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id13">3.2.2 参数说明</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id14">3.2.3 使用示例</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id15">3.2.4 性能报告</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
