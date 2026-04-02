@@ -1,0 +1,24 @@
+model_mapping:
+  - name: "vl_model"
+    path: "model"
+    wrapper_module: ".models.qwen2_5_vl"
+    wrapper_class: "Prunable_Qwen2_5_VLModel"
+  - name: "text_model"
+    path: "model.language_model"
+    wrapper_module: ".models.qwen2_5_vl"
+    wrapper_class: "Prunable_Qwen2_5_VLTextModel"
+
+compressor:
+  requirements:
+    inputs_embeds: true
+  strategies:
+    global:
+      strategy: "idpruner"
+      params:
+        ratio: 0.9
+        mmr_lambda: 0.5
+        parallel_k: 1
+      model_related_params:
+        selector_path:
+          "7b": "AngelSlim/Qwen2.5-VL-7B-Instruct-Selector"
+          "3b": "AngelSlim/Qwen2.5-VL-3B-Instruct-Selector"

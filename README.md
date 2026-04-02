@@ -290,6 +290,18 @@ For more details, please refer to the [Quick Start Documentation](https://angels
   ```
   For more quantization inference methods, please refer to [the Diffusion Model Quantization Documentation](https://angelslim.readthedocs.io/zh-cn/latest/features/diffusion/quantization.html).
 
+#### 2.4 Token Compression (VLM)
+
+AngelSlim provides a universal metadata-driven framework for vision token pruning and merging. You can quickly verify a compression strategy (e.g., **VisionZip**) with a smoke test:
+
+```shell
+python tools/test_universal_pruning.py \
+    --model_path "Qwen/Qwen2.5-VL-3B-Instruct" \
+    --config "configs/qwen2_5_vl/pruning/visionzip_r0.9.yaml"
+```
+
+For more details on implementing new strategies, please refer to the [Token Compressor Documentation](https://angelslim.readthedocs.io/zh-cn/latest/features/token_compressor/index.html).
+
 ### 3. Deployment and Testing
 
 #### 3.1 Offline Inference
@@ -1020,6 +1032,84 @@ Other models such as GLM-4.6, Qwen2.5, and Seed-OSS have been evaluated on bench
     <tr><td>FP8-Dynamic</td><td>83.73</td><td>81.10</td><td>86.43</td></tr>
     <tr><td>INT4-GPTQ</td><td>84.10</td><td>79.80</td><td>86.73</td></tr>
     <tr><td>INT4-AWQ</td><td>82.84</td><td>80.15</td><td>87.19</td></tr>
+  </tbody>
+</table>
+
+</details>
+
+### 3. Token Compression (VLM)
+
+We evaluated various vision token compression strategies on the **Qwen2.5-VL-3B-Instruct** model across multiple multimodal benchmarks. You can replicate these results using the following command:
+
+```shell
+python tools/run_pruning_eval.py \
+    --model_path "Qwen/Qwen2.5-VL-3B-Instruct" \
+    --configs "configs/qwen2_5_vl/pruning/visionzip_r0.9.yaml" \
+    --tasks "textvqa" \
+    --output_dir "./results/visionzip_test"
+```
+
+<details>
+<summary><b>Detailed Benchmark Results (Qwen2.5-VL-3B-Instruct)</b></summary>
+
+<table style="text-align:center; vertical-align:middle;">
+  <thead>
+    <tr>
+      <th>Method</th>
+      <th>AI2D</th>
+      <th>ChartQA</th>
+      <th>DocVQA</th>
+      <th>MMB<sup>CN</sup></th>
+      <th>MMB</th>
+      <th>MME</th>
+      <th>MMStar</th>
+      <th>OCRBench</th>
+      <th>POPE</th>
+      <th>SQA</th>
+      <th>VQA<sup>Text</sup></th>
+      <th>Avg</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><b>Baseline</b></td>
+      <td>79.11</td>
+      <td>83.56</td>
+      <td>92.48</td>
+      <td>73.28</td>
+      <td>77.32</td>
+      <td>1517</td>
+      <td>56.05</td>
+      <td>80.10</td>
+      <td>87.41</td>
+      <td>80.81</td>
+      <td>78.79</td>
+      <td>100.0%</td>
+    </tr>
+    <tr style="background-color: #808080;">
+      <th colspan="13">Retain 25% Tokens (75% Compression Ratio)</th>
+    </tr>
+    <tr><td>FastV</td><td>72.70</td><td>70.04</td><td>75.98</td><td>63.40</td><td>66.92</td><td>1437</td><td>47.39</td><td>36.60</td><td>86.42</td><td>79.33</td><td>73.51</td><td>86.02%</td></tr>
+    <tr><td>VisionZip</td><td>74.19</td><td>71.32</td><td>70.11</td><td>67.35</td><td>71.22</td><td>1452</td><td>49.37</td><td>42.50</td><td>85.51</td><td><u>81.36</u></td><td>68.12</td><td>87.34%</td></tr>
+    <tr><td>HiPrune</td><td>73.83</td><td>72.76</td><td>72.10</td><td>67.27</td><td>72.34</td><td>1449</td><td>48.93</td><td>41.30</td><td>85.86</td><td>80.91</td><td>69.27</td><td>87.67%</td></tr>
+    <tr><td>VisionSelector</td><td>75.19</td><td>73.72</td><td><b>90.24</b></td><td><u>68.81</u></td><td>72.59</td><td><b>1521</b></td><td><u>49.97</u></td><td><u>61.80</u></td><td>85.36</td><td>80.37</td><td><u>76.86</u></td><td><u>93.62%</u></td></tr>
+    <tr><td>DivPrune</td><td>73.06</td><td>62.96</td><td>78.46</td><td>67.10</td><td>71.82</td><td>1459</td><td>48.38</td><td>51.40</td><td><b>86.81</b></td><td>80.22</td><td>68.91</td><td>88.15%</td></tr>
+    <tr><td>DART</td><td>71.08</td><td>65.20</td><td>79.72</td><td>65.38</td><td>71.05</td><td>1428</td><td>48.78</td><td>41.80</td><td>80.97</td><td>80.91</td><td>68.25</td><td>86.17%</td></tr>
+    <tr><td>VisPruner</td><td>74.29</td><td>68.20</td><td>72.52</td><td>67.35</td><td>70.88</td><td>1458</td><td>49.74</td><td>44.80</td><td>86.59</td><td><b>81.46</b></td><td>69.62</td><td>87.87%</td></tr>
+    <tr><td>SCOPE</td><td><u>75.84</u></td><td><u>74.00</u></td><td>82.40</td><td><u>68.81</u></td><td><u>72.94</u></td><td>1471</td><td><b>50.35</b></td><td>56.00</td><td><u>86.62</u></td><td>80.96</td><td>74.04</td><td>91.98%</td></tr>
+    <tr><td><b>IDPruner</b></td><td><b>75.94</b></td><td><b>75.84</b></td><td><u>90.00</u></td><td><b>69.42</b></td><td><b>73.80</b></td><td><u>1505</u></td><td>49.49</td><td><b>64.90</b></td><td>86.26</td><td>80.42</td><td><b>76.90</b></td><td><b>94.42%</b></td></tr>
+    <tr style="background-color: #808080;">
+      <th colspan="13">Retain 10% Tokens (90% Compression Ratio)</th>
+    </tr>
+    <tr><td>FastV</td><td>65.87</td><td>29.72</td><td>36.89</td><td>48.37</td><td>51.98</td><td>1257</td><td>37.28</td><td>13.90</td><td>79.50</td><td>77.05</td><td>57.75</td><td>65.30%</td></tr>
+    <tr><td>VisionZip</td><td>67.65</td><td>51.60</td><td>37.88</td><td>59.62</td><td>63.06</td><td>1338</td><td>42.82</td><td>21.40</td><td>81.14</td><td>80.47</td><td>51.56</td><td>72.75%</td></tr>
+    <tr><td>HiPrune</td><td>67.75</td><td>53.20</td><td>41.15</td><td>59.45</td><td>63.14</td><td>1326</td><td>41.08</td><td>20.30</td><td>80.90</td><td><b>80.96</b></td><td>53.31</td><td>73.00%</td></tr>
+    <tr><td>VisionSelector</td><td><u>70.50</u></td><td><b>65.92</b></td><td><b>79.94</b></td><td>59.97</td><td>64.69</td><td>1374</td><td>42.86</td><td><u>45.20</u></td><td>82.66</td><td><u>80.61</u></td><td><b>71.57</b></td><td><u>84.42%</u></td></tr>
+    <tr><td>DivPrune</td><td>67.71</td><td>43.12</td><td>58.03</td><td>61.25</td><td>65.12</td><td>1389</td><td>40.43</td><td>27.90</td><td>82.24</td><td>79.18</td><td>56.87</td><td>75.50%</td></tr>
+    <tr><td>DART</td><td>67.49</td><td>47.56</td><td>60.23</td><td>57.99</td><td>63.83</td><td>1299</td><td>42.18</td><td>23.40</td><td>74.20</td><td>78.63</td><td>58.02</td><td>74.09%</td></tr>
+    <tr><td>VisPruner</td><td>67.75</td><td>47.92</td><td>48.65</td><td>59.28</td><td>63.32</td><td>1305</td><td>41.51</td><td>22.50</td><td>78.74</td><td>79.77</td><td>54.95</td><td>73.19%</td></tr>
+    <tr><td>SCOPE</td><td>69.75</td><td>56.24</td><td>55.01</td><td><b>64.26</b></td><td><u>67.18</u></td><td><u>1390</u></td><td><b>44.35</b></td><td>30.80</td><td><u>83.34</u></td><td>80.47</td><td>62.58</td><td>79.37%</td></tr>
+    <tr><td><b>IDPruner</b></td><td><b>71.79</b></td><td><u>63.32</u></td><td><u>79.38</u></td><td><u>63.57</u></td><td><b>68.21</b></td><td><b>1438</b></td><td><u>44.05</u></td><td><b>45.50</b></td><td><b>84.51</b></td><td>80.57</td><td><u>70.02</u></td><td><b>85.71%</b></td></tr>
   </tbody>
 </table>
 
