@@ -94,39 +94,64 @@ def _extract_prompts(ds, num_prompts):
 
     支持的格式：
     1. turns 格式: {"turns": ["xxx"], "reference": ["xxx"]}
-       - 取第一个 turn 作为 prompt
+       - 取第一个 turn 作为 prompt，返回纯文本列表
     2. conversations 格式:
-       {"conversations": [{"role": "user", "content": "xxx"}, {"role": "assistant", ...}]}
+       {"conversations": [
+          {"role": "system", "content": "xxx"},
+          {"role": "user", "content": "xxx"},
+          {"role": "assistant", ...}]
+       }
        {"conversations": [{"role": "user", "content": [{"type": "text", "text": "xxx"}]}, ...]}
-       - 取第一个 role=user 的 content 作为 prompt
+       - 提取 system + 第一个 user 消息，构建完整的 messages 列表
 
     Args:
         ds: HuggingFace Dataset 对象
         num_prompts: 最多提取的 prompt 数量
 
     Returns:
-        prompts: 纯文本 prompt 列表
+        prompts: 纯文本 prompt 列表（turns 格式）或 messages 列表的列表（conversations 格式）
+        format_type: 数据格式类型，"turns" 或 "conversations"
     """
     columns = ds.column_names
 
     if "turns" in columns:
         # turns 格式：取每条数据的第一个 turn
-        return [q[0] for q in ds["turns"][:num_prompts]]
+        return [q[0] for q in ds["turns"][:num_prompts]], "turns"
     elif "conversations" in columns:
-        # conversations 格式：取第一个 role=user 的 content
+        # conversations 格式：提取 system prompt + 第一个 user 消息，构建完整 messages
         prompts = []
         for item in ds[:num_prompts]["conversations"]:
-            user_content = None
+            messages = []
             for msg in item:
-                if msg.get("role") == "user":
-                    user_content = _extract_text_content(msg.get("content", ""))
+                role = msg.get("role")
+                content = msg.get("content", "")
+                if role == "system":
+                    messages.append({"role": "system", "content": _extract_text_content(content)})
+                elif role == "user":
+                    messages.append({"role": "user", "content": _extract_text_content(content)})
+                    break  # 只取到第一个 user 消息
+            if messages and messages[-1]["role"] == "user":
+                prompts.append(messages)
+        return prompts, "conversations"
+    elif "messages" in columns:
+        # messages 格式（sharegpt_gpt4_qwen 等）：与 conversations 格式类似
+        prompts = []
+        for item in ds[:num_prompts]["messages"]:
+            messages = []
+            for msg in item:
+                role = msg.get("role")
+                content = msg.get("content", "")
+                if role == "system":
+                    messages.append({"role": "system", "content": _extract_text_content(content)})
+                elif role == "user":
+                    messages.append({"role": "user", "content": _extract_text_content(content)})
                     break
-            if user_content is not None:
-                prompts.append(user_content)
-        return prompts
+            if messages and messages[-1]["role"] == "user":
+                prompts.append(messages)
+        return prompts, "conversations"
     else:
         raise ValueError(
-            f"Unsupported dataset format. Expected 'turns' or 'conversations' column, "
+            f"Unsupported dataset format. Expected 'turns', 'conversations' or 'messages' column, "
             f"but found: {columns}"
         )
 
@@ -160,18 +185,40 @@ def load_benchmark_dataset(dataset, num_prompts, tokenizer, dataset_base_dir):
 
     # Load dataset
     ds = load_dataset("json", data_files=dataset_file)["train"]
-    prompts = _extract_prompts(ds, num_prompts)
+    prompts, format_type = _extract_prompts(ds, num_prompts)
 
     # Tokenize prompts
-    # add_special_tokens is False to avoid adding bos twice when using chat templates
-    prompt_ids = [tokenizer.encode(prompt, add_special_tokens=False) for prompt in prompts]
+    if format_type == "conversations":
+        # conversations/messages 格式：使用 apply_chat_template 构建包含 system prompt 的完整 prompt
+        prompt_ids = []
+        for messages in prompts:
+            token_ids = tokenizer.apply_chat_template(
+                messages,
+                tokenize=True,
+                add_generation_prompt=True,
+                return_dict=False,
+            )
+            prompt_ids.append(token_ids)
+        # 将 messages 列表转为可读文本用于日志
+        prompts_text = [
+            next(
+                (msg["content"] for msg in msgs if msg["role"] == "user"),
+                "",
+            )
+            for msgs in prompts
+        ]
+    else:
+        # turns 格式：直接编码纯文本
+        # add_special_tokens is False to avoid adding bos twice when using chat templates
+        prompt_ids = [tokenizer.encode(prompt, add_special_tokens=False) for prompt in prompts]
+        prompts_text = prompts
 
     print(f"Loaded {len(prompt_ids)} prompts from: {dataset_file} (dataset={dataset})")
     print(
         "Average prompt length: " f"{sum(len(p) for p in prompt_ids) / len(prompt_ids):.2f} tokens"
     )
 
-    return prompt_ids, prompts
+    return prompt_ids, prompts_text
 
 
 def save_stats_to_jsonl(stats, output_file):

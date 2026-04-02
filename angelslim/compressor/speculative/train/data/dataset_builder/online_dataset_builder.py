@@ -75,7 +75,7 @@ class OnlineLLMDatasetBuilder(OnlineDatasetBuilder):
         compatible with two format:
         {"id": "0", "conversations": [
             {"role": "user", "content": "xxx"},
-            {"role": "assistant", "content": [{"type": "text", "text": "xxx"}]}
+            {"role": "assistant", "content": "xxx"}
         ]}
         {"id": "0", "conversations": [
             {"role": "user", "content": [{"type": "text", "text": "xxx"}]},
