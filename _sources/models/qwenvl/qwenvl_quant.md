@@ -33,12 +33,12 @@ FP8量化的配置文件可参考路径：`config/qwen2_5_vl/fp8_dynamic` 和 `c
 
 ```shell
 # 动态FP8量化
-python3 tools/run.py -c configs/qwen2_5_vl/fp8_dynamic/qwen2_5_vl-7b_fp8_dynamic.yaml
+python3 tools/run.py -c configs/qwen2_5_vl/quantization/fp8_dynamic/qwen2_5_vl-7b_fp8_dynamic.yaml
 ```
 
 ```shell
 # 静态FP8量化
-python3 tools/run.py -c configs/qwen2_5_vl/fp8_static/qwen2_5_vl-7b_fp8_static.yaml
+python3 tools/run.py -c configs/qwen2_5_vl/quantization/fp8_static/qwen2_5_vl-7b_fp8_static.yaml
 ```
 
 
@@ -69,12 +69,12 @@ INT4量化的配置文件可参考路径：`config/qwen2_5_vl/int4_awq` 和 `con
 
 ```shell
 # AWQ算法INT4量化
-python3 tools/run.py -c configs/qwen2_5_vl/int4_awq/qwen2_5_vl-32b_int4_awq.yaml
+python3 tools/run.py -c configs/qwen2_5_vl/quantization/int4_awq/qwen2_5_vl-32b_int4_awq.yaml
 ```
 
 ```shell
 # GPTQ算法INT4量化
-python3 tools/run.py -c configs/qwen2_5_vl/int4_gptq/qwen2_5_vl-7b_int4_gptq.yaml
+python3 tools/run.py -c configs/qwen2_5_vl/quantization/int4_gptq/qwen2_5_vl-7b_int4_gptq.yaml
 ```
 
 

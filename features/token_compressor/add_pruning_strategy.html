@@ -1,0 +1,670 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>新增剪枝策略指南 &#8212; AngelSlim</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../_static/custom.css" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=a5fa425f"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../_static/togglebutton.js?v=4a39c7ea"></script>
+    <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'features/token_compressor/add_pruning_strategy';</script>
+    <script src="../../_static/custom.js"></script>
+    <link rel="icon" href="../../_static/angelslim_icon.png"/>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../_static/angelslim_logo.png" class="logo__image only-light" alt="AngelSlim - Home"/>
+    <script>document.write(`<img src="../../_static/angelslim_logo.png" class="logo__image only-dark" alt="AngelSlim - Home"/>`);</script>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">入门指南</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/installation.html">安装教程</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/quickstrat.html">快速开始</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">算法特性</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../quantization/index.html">量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../speculative_decoding/index.html">投机采样</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../diffusion/index.html">文生图/视频/3D压缩</a></li>
+<li class="toctree-l1"><a class="reference internal" href="index.html">Token 压缩</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">模型支持</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../models/hunyuan/hunyuan_quant.html">混元模型量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/hunyuan_ocr/hunyuan_ocr_quant.html">HunyuanOCR量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/deepseek/deepseek_quant.html">DeepSeek量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwen/qwen_quant.html">Qwen量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwenvl/qwenvl_quant.html">Qwen2.5VL量化指南</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwen3_omni/qwen3_omni_quant.html">Qwen3-Omni量化指南</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">部署文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../deployment/deploy.html">压缩模型部署</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">性能表现</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../performance/quantization/benchmarks.html">量化benchmark</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../performance/speculative_decoding/benchmarks.html">投机采样Benchmark</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">设计文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../design/index.html">设计文档</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim/edit/main/docs/source/features/token_compressor/add_pruning_strategy.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../../_sources/features/token_compressor/add_pruning_strategy.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>新增剪枝策略指南</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">策略目标</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">1. 核心开发流程</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">第一步：实现算法逻辑</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">第二步：在工厂类中注册</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">2. 核心通用工具函数详解</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#extract-and-validate-vision-token-info"><code class="docutils literal notranslate"><span class="pre">_extract_and_validate_vision_token_info</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#recompute-attention-maps-for-all-images"><code class="docutils literal notranslate"><span class="pre">_recompute_attention_maps_for_all_images</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">3. 运行与验证</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="id1">
+<h1>新增剪枝策略指南<a class="headerlink" href="#id1" title="Link to this heading">#</a></h1>
+<p>AngelSlim 的核心优势在于将<strong>模型架构包装</strong>与<strong>剪枝算法逻辑</strong>完全解耦。研究人员只需调用底层封装好的工具函数，即可访问模型内部的激活值（如 Attention Map）并实现复杂的剪枝或合并逻辑。</p>
+<p>接下来，我们以实现一个 <strong>“Bottom-K Attention 策略”</strong> 为例进行说明。</p>
+<section id="id2">
+<h2>策略目标<a class="headerlink" href="#id2" title="Link to this heading">#</a></h2>
+<p>从 Vision Encoder 的第 5 层提取注意力图，并保留其中注意力分数<strong>最低</strong>（即最不显著）的 K 个视觉 Token。</p>
+</section>
+<hr class="docutils" />
+<section id="id3">
+<h2>1. 核心开发流程<a class="headerlink" href="#id3" title="Link to this heading">#</a></h2>
+<section id="id4">
+<h3>第一步：实现算法逻辑<a class="headerlink" href="#id4" title="Link to this heading">#</a></h3>
+<p>在 <code class="docutils literal notranslate"><span class="pre">angelslim/compressor/token_compressor/algorithm</span></code> 目录下新建 Python 文件。我们需要利用 <code class="docutils literal notranslate"><span class="pre">PruningContext</span></code> 中捕获的 Q/K 张量来重构注意力分布。</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..base.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">PruningContext</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.utils.utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">_extract_and_validate_vision_token_info</span><span class="p">,</span>
+    <span class="n">_recompute_attention_maps_for_all_images</span><span class="p">,</span>
+    <span class="n">_regroup_tensors_by_count</span>
+<span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">bottom_k_attention_pruning</span><span class="p">(</span><span class="n">context</span><span class="p">:</span> <span class="n">PruningContext</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    自定义策略实现：选取 Vision Encoder 指定层注意力最低的 Token。</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># 1. 提取超参数与元数据</span>
+    <span class="n">ratio</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ratio&quot;</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">)</span>  <span class="c1"># 剪枝比例</span>
+    <span class="n">target_layer</span> <span class="o">=</span> <span class="mi">5</span>                  <span class="c1"># 目标层索引</span>
+    <span class="n">input_ids</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">input_ids</span>
+    <span class="n">device</span> <span class="o">=</span> <span class="n">input_ids</span><span class="o">.</span><span class="n">device</span>
+
+    <span class="c1"># 2. 定位全序列中的视觉 Token 分布</span>
+    <span class="c1"># vision_indices_global: 所有视觉 Token 的绝对位置索引</span>
+    <span class="c1"># num_tokens_per_image: 记录序列中每张图像占用的 Token 数量，用于处理 Packed Sequence</span>
+    <span class="n">vision_indices_global</span><span class="p">,</span> <span class="n">non_vision_indices_global</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">num_tokens_per_image</span> <span class="o">=</span> \
+        <span class="n">_extract_and_validate_vision_token_info</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">vision_indices_global</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bool</span><span class="p">)</span>
+
+    <span class="c1"># 3. 从上下文提取 Vision Encoder 第 5 层的 Q 和 K</span>
+    <span class="c1"># 注意：必须在 YAML 的 requirements 中预先指定捕获该层，否则此处会报错</span>
+    <span class="n">q_tensor</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">vit_q</span><span class="p">[</span><span class="n">target_layer</span><span class="p">]</span>
+    <span class="n">k_tensor</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">vit_k</span><span class="p">[</span><span class="n">target_layer</span><span class="p">]</span>
+    
+    <span class="k">if</span> <span class="n">q_tensor</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">k_tensor</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Layer </span><span class="si">{</span><span class="n">target_layer</span><span class="si">}</span><span class="s2"> tensors not captured. Check requirements in YAML.&quot;</span><span class="p">)</span>
+
+    <span class="c1"># 4. 重构注意力图</span>
+    <span class="c1"># _recompute_attention_maps_for_all_images 会根据 Q/K 计算每张图的内部注意力分布</span>
+    <span class="c1"># final_scores_list: 包含每张图像注意力权重的列表，元素形状为 [1, N_i]</span>
+    <span class="n">final_scores_list</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">_recompute_attention_maps_for_all_images</span><span class="p">(</span><span class="n">q_tensor</span><span class="p">,</span> <span class="n">k_tensor</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+    
+    <span class="c1"># 将物理层面的输出对齐到逻辑层面的图像 Token（处理多图/视频帧拼接场景）</span>
+    <span class="n">final_scores_list</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">_regroup_tensors_by_count</span><span class="p">(</span><span class="n">final_scores_list</span><span class="p">,</span> <span class="n">num_tokens_per_image</span><span class="p">)</span>
+
+    <span class="c1"># 5. 执行 Bottom-K 选择逻辑</span>
+    <span class="n">all_kept_indices_global</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">vision_indices_split</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">vision_indices_global</span><span class="p">,</span> <span class="n">num_tokens_per_image</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">scores</span><span class="p">,</span> <span class="n">global_idx_map</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">final_scores_list</span><span class="p">,</span> <span class="n">vision_indices_split</span><span class="p">):</span>
+        <span class="n">n_tokens</span> <span class="o">=</span> <span class="n">scores</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">num_to_keep</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">n_tokens</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">ratio</span><span class="p">)))</span>
+        <span class="n">num_to_keep</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">num_to_keep</span><span class="p">)</span>
+
+        <span class="c1"># 核心：使用 torch.topk 选取权重最小的词（largest=False）</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">bottom_k_local_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">topk</span><span class="p">(</span><span class="n">scores</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">k</span><span class="o">=</span><span class="n">num_to_keep</span><span class="p">,</span> <span class="n">largest</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        
+        <span class="c1"># 将局部索引映射回全序列的绝对索引</span>
+        <span class="n">all_kept_indices_global</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">global_idx_map</span><span class="p">[</span><span class="n">bottom_k_local_indices</span><span class="p">])</span>
+
+    <span class="c1"># 6. 汇总索引并构造 [1, Seq_Len] 的布尔掩码</span>
+    <span class="n">kept_indices_tensor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">(</span><span class="n">all_kept_indices_global</span><span class="p">)</span>
+    <span class="n">final_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="n">non_vision_indices_global</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">),</span> <span class="n">kept_indices_tensor</span><span class="p">])</span>
+
+    <span class="n">keep_mask</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">input_ids</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bool</span><span class="p">)</span>
+    <span class="n">keep_mask</span><span class="p">[</span><span class="n">final_indices</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+    
+    <span class="k">return</span> <span class="n">keep_mask</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="id5">
+<h3>第二步：在工厂类中注册<a class="headerlink" href="#id5" title="Link to this heading">#</a></h3>
+<p>修改 <code class="docutils literal notranslate"><span class="pre">angelslim/compressor/token_compressor/factory.py</span></code>，将新算法加入注册表：</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">.algorithm.my_custom_file</span><span class="w"> </span><span class="kn">import</span> <span class="n">bottom_k_attention_pruning</span>
+
+<span class="n">PRUNING_STRATEGIES</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Callable</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;idpruner&quot;</span><span class="p">:</span> <span class="n">idpruner</span><span class="p">,</span>
+    <span class="s2">&quot;bottom_k_attn&quot;</span><span class="p">:</span> <span class="n">bottom_k_attention_pruning</span><span class="p">,</span> <span class="c1"># 注册名，用于 YAML 配置</span>
+    <span class="o">...</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="id6">
+<h2>2. 核心通用工具函数详解<a class="headerlink" href="#id6" title="Link to this heading">#</a></h2>
+<p>在开发过程中，推荐使用以下内置函数以确保算法的跨模型兼容性：</p>
+<section id="extract-and-validate-vision-token-info">
+<h3><code class="docutils literal notranslate"><span class="pre">_extract_and_validate_vision_token_info</span></code><a class="headerlink" href="#extract-and-validate-vision-token-info" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>输入</strong>：<code class="docutils literal notranslate"><span class="pre">context</span></code> (PruningContext)。</p></li>
+<li><p><strong>输出及形状</strong>：</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">vision_indices</span></code>: <code class="docutils literal notranslate"><span class="pre">[num_vision_tokens]</span></code>，视觉 Token 的绝对索引。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">non_vision_indices</span></code>: <code class="docutils literal notranslate"><span class="pre">[num_non_vision_tokens]</span></code>，非视觉 Token 的索引。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">vision_mask</span></code>: <code class="docutils literal notranslate"><span class="pre">[seq_len]</span></code>，全序列布尔掩码。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">num_tokens_per_image</span></code>: <code class="docutils literal notranslate"><span class="pre">List[int]</span></code>，Packed Sequence 中每张图像对应的 Token 数。</p></li>
+</ol>
+</li>
+</ul>
+</section>
+<section id="recompute-attention-maps-for-all-images">
+<h3><code class="docutils literal notranslate"><span class="pre">_recompute_attention_maps_for_all_images</span></code><a class="headerlink" href="#recompute-attention-maps-for-all-images" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>功能</strong>：屏蔽掉 Packed Sequence 中不相关的 Token（如其他图像或文本），重新计算单张图像内部的自注意力。</p></li>
+<li><p><strong>输入</strong>：<code class="docutils literal notranslate"><span class="pre">q_tensor</span></code>, <code class="docutils literal notranslate"><span class="pre">k_tensor</span></code> (形状 <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">H,</span> <span class="pre">N,</span> <span class="pre">D]</span></code>) 及 <code class="docutils literal notranslate"><span class="pre">context</span></code>。</p></li>
+<li><p><strong>输出</strong>：</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">final_scores_list</span></code>: <code class="docutils literal notranslate"><span class="pre">List[Tensor]</span></code>，每个元素为 <code class="docutils literal notranslate"><span class="pre">[1,</span> <span class="pre">N_i]</span></code>，即该图像的重要性得分。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">final_keys_list</span></code>: <code class="docutils literal notranslate"><span class="pre">List[Tensor]</span></code>，每个元素为 <code class="docutils literal notranslate"><span class="pre">[1,</span> <span class="pre">N_i,</span> <span class="pre">head_dim]</span></code>，即该图像的 Key 特征向量。</p></li>
+</ol>
+</li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="id7">
+<h2>3. 运行与验证<a class="headerlink" href="#id7" title="Link to this heading">#</a></h2>
+<p>在准备 YAML 配置文件时，<strong>必须</strong>在 <code class="docutils literal notranslate"><span class="pre">requirements</span></code> 中声明捕获 Vision Encoder 的第 5 层，否则 Context 中将无法获取对应的张量：</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># configs/qwen2_5_vl/pruning/bottom_k_test.yaml</span>
+<span class="nt">compressor</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">requirements</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">vit_q_layers</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">5</span><span class="p p-Indicator">]</span><span class="w">  </span><span class="c1"># 捕获第 5 层 Query</span>
+<span class="w">    </span><span class="nt">vit_k_layers</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">5</span><span class="p p-Indicator">]</span><span class="w">  </span><span class="c1"># 捕获第 5 层 Key</span>
+<span class="w">  </span><span class="nt">strategies</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">global</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;bottom_k_attn&quot;</span><span class="w"> </span><span class="c1"># 使用注册的算法名</span>
+<span class="w">      </span><span class="nt">params</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">ratio</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.75</span>
+</pre></div>
+</div>
+<p><strong>运行单次推理验证：</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/test_token_pruning.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--config<span class="w"> </span>configs/qwen2_5_vl/pruning/bottom_k_test.yaml<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--model_path<span class="w"> </span><span class="s2">&quot;Qwen/Qwen2.5-VL-3B-Instruct&quot;</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">策略目标</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">1. 核心开发流程</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">第一步：实现算法逻辑</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">第二步：在工厂类中注册</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">2. 核心通用工具函数详解</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#extract-and-validate-vision-token-info"><code class="docutils literal notranslate"><span class="pre">_extract_and_validate_vision_token_info</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#recompute-attention-maps-for-all-images"><code class="docutils literal notranslate"><span class="pre">_recompute_attention_maps_for_all_images</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">3. 运行与验证</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By the AngelSlim Team
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, AngelSlim Team.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

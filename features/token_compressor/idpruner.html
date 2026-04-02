@@ -1,0 +1,898 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>IDPruner (核心自研算法) &#8212; AngelSlim</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../_static/custom.css" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=a5fa425f"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../_static/togglebutton.js?v=4a39c7ea"></script>
+    <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'features/token_compressor/idpruner';</script>
+    <script src="../../_static/custom.js"></script>
+    <link rel="icon" href="../../_static/angelslim_icon.png"/>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="其他视觉 Token 压缩方法" href="other_methods.html" />
+    <link rel="prev" title="Token 压缩" href="index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../_static/angelslim_logo.png" class="logo__image only-light" alt="AngelSlim - Home"/>
+    <script>document.write(`<img src="../../_static/angelslim_logo.png" class="logo__image only-dark" alt="AngelSlim - Home"/>`);</script>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">入门指南</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/installation.html">安装教程</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/quickstrat.html">快速开始</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">算法特性</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../quantization/index.html">量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../speculative_decoding/index.html">投机采样</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../diffusion/index.html">文生图/视频/3D压缩</a></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">Token 压缩</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">IDPruner (核心自研算法)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="other_methods.html">其他视觉 Token 压缩方法</a></li>
+</ul>
+</details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">模型支持</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../models/hunyuan/hunyuan_quant.html">混元模型量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/hunyuan_ocr/hunyuan_ocr_quant.html">HunyuanOCR量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/deepseek/deepseek_quant.html">DeepSeek量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwen/qwen_quant.html">Qwen量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwenvl/qwenvl_quant.html">Qwen2.5VL量化指南</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwen3_omni/qwen3_omni_quant.html">Qwen3-Omni量化指南</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">部署文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../deployment/deploy.html">压缩模型部署</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">性能表现</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../performance/quantization/benchmarks.html">量化benchmark</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../performance/speculative_decoding/benchmarks.html">投机采样Benchmark</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">设计文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../design/index.html">设计文档</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim/edit/main/docs/source/features/token_compressor/idpruner.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../../_sources/features/token_compressor/idpruner.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>IDPruner (核心自研算法)</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">1. 算法动机</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">2. 技术核心</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qwen-2-5-7b-instruct">3. 实验结果 (Qwen-2.5-7B-Instruct)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">4. 快速开始</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#selector-path">关键配置说明：selector_path</a></li>
+</ul>
+</li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="idpruner">
+<h1>IDPruner (核心自研算法)<a class="headerlink" href="#idpruner" title="Link to this heading">#</a></h1>
+<p><strong>IDPruner (Importance and Diversity Pruner)</strong> 是 AngelSlim 的核心视觉 Token 剪枝算法。它通过引入信息检索领域的重排序机制，解决了 MLLM 在极高压缩比下精度大幅退化的问题。</p>
+<section id="id1">
+<h2>1. 算法动机<a class="headerlink" href="#id1" title="Link to this heading">#</a></h2>
+<p>MLLM 推理中的视觉 Token 存在显著冗余。现有的剪枝方案往往陷入局部最优：</p>
+<ul class="simple">
+<li><p><strong>仅关注重要性 (Importance)</strong>：导致 Token 极度向前景目标（如人脸、主体）聚集，丢失对全局推理至关重要的背景上下文。</p></li>
+<li><p><strong>仅关注多样性 (Diversity)</strong>：倾向于均匀采样，虽保证了覆盖度，但容易保留任务无关的噪声且丢失关键细节。</p></li>
+</ul>
+<p>我们的方法兼顾了多样性维度和重要性维度，并且超过了其他的两者兼顾的方法，将两个维度的结合推向帕累托最优。</p>
+</section>
+<section id="id2">
+<h2>2. 技术核心<a class="headerlink" href="#id2" title="Link to this heading">#</a></h2>
+<p>IDPruner 的决策逻辑由三个要素驱动：</p>
+<ol class="arabic simple">
+<li><p><strong>重要性度量 (Importance Source)</strong>：采用经过端到端训练的轻量化 <strong>Scorer（评分器）</strong>，预测每个 Token 对最终语义生成的贡献度。</p></li>
+<li><p><strong>相似性度量 (Similarity Source)</strong>：利用模型自身的<strong>视觉隐藏层特征向量</strong>，在特征空间计算 Token 间的<strong>余弦相似度</strong>以识别冗余。</p></li>
+<li><p><strong>MMR 选择机制 (Maximal Marginal Relevance)</strong>：采用贪心策略迭代选择 Token，目标是最大化以下函数：
+$$v^* = \arg \max_{v_i \in V \setminus S} [\lambda \cdot \text{Imp}(v_i) - (1 - \lambda) \cdot \max_{v_j \in S} \text{Sim}(v_i, v_j)]$$
+通过动态惩罚与已选集合高度相似的候选 Token，确保最终集合在保留高价值信息的同时，具备最优的语义覆盖面。</p></li>
+</ol>
+</section>
+<section id="qwen-2-5-7b-instruct">
+<h2>3. 实验结果 (Qwen-2.5-7B-Instruct)<a class="headerlink" href="#qwen-2-5-7b-instruct" title="Link to this heading">#</a></h2>
+<p>在 Qwen-2.5-7B 上的大规模评测表明，IDPruner 在 75% 甚至 90% 的极端压缩率下，性能均显著优于现有主流方法。</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head text-left"><p>Method</p></th>
+<th class="head text-center"><p>AI2D</p></th>
+<th class="head text-center"><p>ChartQA</p></th>
+<th class="head text-center"><p>DocVQA</p></th>
+<th class="head text-center"><p>MMB<sup>CN</sup></p></th>
+<th class="head text-center"><p>MMB</p></th>
+<th class="head text-center"><p>MME</p></th>
+<th class="head text-center"><p>MMStar</p></th>
+<th class="head text-center"><p>OCR</p></th>
+<th class="head text-center"><p>POPE</p></th>
+<th class="head text-center"><p>SQA</p></th>
+<th class="head text-center"><p>VQA<sup>T</sup></p></th>
+<th class="head text-center"><p>Avg</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td class="text-left"><p><strong>Baseline</strong></p></td>
+<td class="text-center"><p>82.48</p></td>
+<td class="text-center"><p>83.68</p></td>
+<td class="text-center"><p>94.90</p></td>
+<td class="text-center"><p>80.41</p></td>
+<td class="text-center"><p>83.08</p></td>
+<td class="text-center"><p>1702</p></td>
+<td class="text-center"><p>61.88</p></td>
+<td class="text-center"><p>85.30</p></td>
+<td class="text-center"><p>87.80</p></td>
+<td class="text-center"><p>88.45</p></td>
+<td class="text-center"><p>82.74</p></td>
+<td class="text-center"><p>100.0%</p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><strong>保留 25% Tokens</strong></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>FastV</p></td>
+<td class="text-center"><p>75.68</p></td>
+<td class="text-center"><p>68.20</p></td>
+<td class="text-center"><p>81.20</p></td>
+<td class="text-center"><p>73.20</p></td>
+<td class="text-center"><p>76.12</p></td>
+<td class="text-center"><p>1636</p></td>
+<td class="text-center"><p>51.08</p></td>
+<td class="text-center"><p>43.00</p></td>
+<td class="text-center"><p>85.20</p></td>
+<td class="text-center"><p>83.49</p></td>
+<td class="text-center"><p>80.06</p></td>
+<td class="text-center"><p>87.16%</p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>VisionZip</p></td>
+<td class="text-center"><p>77.40</p></td>
+<td class="text-center"><p>67.20</p></td>
+<td class="text-center"><p>71.48</p></td>
+<td class="text-center"><p>76.12</p></td>
+<td class="text-center"><p>78.78</p></td>
+<td class="text-center"><p>1637</p></td>
+<td class="text-center"><p>54.86</p></td>
+<td class="text-center"><p>46.50</p></td>
+<td class="text-center"><p>85.76</p></td>
+<td class="text-center"><p>83.99</p></td>
+<td class="text-center"><p>76.21</p></td>
+<td class="text-center"><p>87.55%</p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>HiPrune</p></td>
+<td class="text-center"><p>77.49</p></td>
+<td class="text-center"><p>68.60</p></td>
+<td class="text-center"><p>73.52</p></td>
+<td class="text-center"><p>76.03</p></td>
+<td class="text-center"><p>78.09</p></td>
+<td class="text-center"><p>1619</p></td>
+<td class="text-center"><p>54.43</p></td>
+<td class="text-center"><p>47.10</p></td>
+<td class="text-center"><p>86.02</p></td>
+<td class="text-center"><p>84.18</p></td>
+<td class="text-center"><p>76.43</p></td>
+<td class="text-center"><p>87.80%</p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>VisionSelector</p></td>
+<td class="text-center"><p><u>79.60</u></p></td>
+<td class="text-center"><p><u>72.00</u></p></td>
+<td class="text-center"><p><strong>93.24</strong></p></td>
+<td class="text-center"><p>75.86</p></td>
+<td class="text-center"><p>78.78</p></td>
+<td class="text-center"><p><u>1688</u></p></td>
+<td class="text-center"><p>55.78</p></td>
+<td class="text-center"><p><u>72.50</u></p></td>
+<td class="text-center"><p>86.74</p></td>
+<td class="text-center"><p>85.08</p></td>
+<td class="text-center"><p><u>80.39</u></p></td>
+<td class="text-center"><p><u>94.22%</u></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>DivPrune</p></td>
+<td class="text-center"><p>77.98</p></td>
+<td class="text-center"><p>62.00</p></td>
+<td class="text-center"><p>85.32</p></td>
+<td class="text-center"><p>75.77</p></td>
+<td class="text-center"><p>77.84</p></td>
+<td class="text-center"><p>1650</p></td>
+<td class="text-center"><p>52.97</p></td>
+<td class="text-center"><p>58.40</p></td>
+<td class="text-center"><p>85.88</p></td>
+<td class="text-center"><p>83.94</p></td>
+<td class="text-center"><p>75.88</p></td>
+<td class="text-center"><p>89.26%</p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>DART</p></td>
+<td class="text-center"><p>74.35</p></td>
+<td class="text-center"><p>60.80</p></td>
+<td class="text-center"><p>78.90</p></td>
+<td class="text-center"><p>73.88</p></td>
+<td class="text-center"><p>76.72</p></td>
+<td class="text-center"><p>1625</p></td>
+<td class="text-center"><p>52.90</p></td>
+<td class="text-center"><p>46.00</p></td>
+<td class="text-center"><p>84.34</p></td>
+<td class="text-center"><p>84.33</p></td>
+<td class="text-center"><p>71.68</p></td>
+<td class="text-center"><p>85.74%</p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>VisPruner</p></td>
+<td class="text-center"><p>77.62</p></td>
+<td class="text-center"><p>68.04</p></td>
+<td class="text-center"><p>77.39</p></td>
+<td class="text-center"><p>75.69</p></td>
+<td class="text-center"><p>78.87</p></td>
+<td class="text-center"><p>1657</p></td>
+<td class="text-center"><p>54.01</p></td>
+<td class="text-center"><p>48.70</p></td>
+<td class="text-center"><p>85.68</p></td>
+<td class="text-center"><p>84.18</p></td>
+<td class="text-center"><p>75.17</p></td>
+<td class="text-center"><p>88.31%</p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>SCOPE</p></td>
+<td class="text-center"><p>78.92</p></td>
+<td class="text-center"><p>71.20</p></td>
+<td class="text-center"><p>85.40</p></td>
+<td class="text-center"><p><strong>77.75</strong></p></td>
+<td class="text-center"><p><u>79.38</u></p></td>
+<td class="text-center"><p>1684</p></td>
+<td class="text-center"><p><strong>56.86</strong></p></td>
+<td class="text-center"><p>61.70</p></td>
+<td class="text-center"><p><u>86.78</u></p></td>
+<td class="text-center"><p><u>85.23</u></p></td>
+<td class="text-center"><p>79.66</p></td>
+<td class="text-center"><p>92.51%</p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><strong>IDPruner</strong></p></td>
+<td class="text-center"><p><strong>80.51</strong></p></td>
+<td class="text-center"><p><strong>74.32</strong></p></td>
+<td class="text-center"><p><u>93.16</u></p></td>
+<td class="text-center"><p><u>76.63</u></p></td>
+<td class="text-center"><p><strong>79.73</strong></p></td>
+<td class="text-center"><p><strong>1695</strong></p></td>
+<td class="text-center"><p><u>56.49</u></p></td>
+<td class="text-center"><p><strong>74.00</strong></p></td>
+<td class="text-center"><p><strong>87.06</strong></p></td>
+<td class="text-center"><p><strong>85.52</strong></p></td>
+<td class="text-center"><p><strong>80.83</strong></p></td>
+<td class="text-center"><p><strong>95.18%</strong></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><strong>保留 10% Tokens</strong></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>FastV</p></td>
+<td class="text-center"><p>67.23</p></td>
+<td class="text-center"><p>39.48</p></td>
+<td class="text-center"><p>51.90</p></td>
+<td class="text-center"><p>53.26</p></td>
+<td class="text-center"><p>55.58</p></td>
+<td class="text-center"><p>1332</p></td>
+<td class="text-center"><p>38.02</p></td>
+<td class="text-center"><p>24.10</p></td>
+<td class="text-center"><p>76.31</p></td>
+<td class="text-center"><p>79.28</p></td>
+<td class="text-center"><p>72.59</p></td>
+<td class="text-center"><p>68.07%</p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>VisionZip</p></td>
+<td class="text-center"><p>70.60</p></td>
+<td class="text-center"><p>41.56</p></td>
+<td class="text-center"><p>37.94</p></td>
+<td class="text-center"><p>66.67</p></td>
+<td class="text-center"><p>71.05</p></td>
+<td class="text-center"><p>1462</p></td>
+<td class="text-center"><p>45.19</p></td>
+<td class="text-center"><p>23.40</p></td>
+<td class="text-center"><p>81.06</p></td>
+<td class="text-center"><p><strong>83.24</strong></p></td>
+<td class="text-center"><p>61.06</p></td>
+<td class="text-center"><p>71.84%</p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>HiPrune</p></td>
+<td class="text-center"><p>69.82</p></td>
+<td class="text-center"><p>43.96</p></td>
+<td class="text-center"><p>39.89</p></td>
+<td class="text-center"><p>67.44</p></td>
+<td class="text-center"><p>70.88</p></td>
+<td class="text-center"><p>1438</p></td>
+<td class="text-center"><p>45.04</p></td>
+<td class="text-center"><p>23.70</p></td>
+<td class="text-center"><p>80.70</p></td>
+<td class="text-center"><p>82.65</p></td>
+<td class="text-center"><p>62.51</p></td>
+<td class="text-center"><p>72.22%</p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>VisionSelector</p></td>
+<td class="text-center"><p><u>74.81</u></p></td>
+<td class="text-center"><p><strong>62.68</strong></p></td>
+<td class="text-center"><p><strong>87.00</strong></p></td>
+<td class="text-center"><p>68.99</p></td>
+<td class="text-center"><p>71.65</p></td>
+<td class="text-center"><p>1569</p></td>
+<td class="text-center"><p>46.93</p></td>
+<td class="text-center"><p><strong>55.50</strong></p></td>
+<td class="text-center"><p>82.69</p></td>
+<td class="text-center"><p>81.95</p></td>
+<td class="text-center"><p><strong>74.52</strong></p></td>
+<td class="text-center"><p><u>85.39%</u></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>DivPrune</p></td>
+<td class="text-center"><p>70.11</p></td>
+<td class="text-center"><p>41.36</p></td>
+<td class="text-center"><p>66.20</p></td>
+<td class="text-center"><p>69.42</p></td>
+<td class="text-center"><p>72.16</p></td>
+<td class="text-center"><p>1529</p></td>
+<td class="text-center"><p>44.46</p></td>
+<td class="text-center"><p>31.80</p></td>
+<td class="text-center"><p>81.91</p></td>
+<td class="text-center"><p>80.96</p></td>
+<td class="text-center"><p>62.72</p></td>
+<td class="text-center"><p>76.09%</p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>DART</p></td>
+<td class="text-center"><p>67.88</p></td>
+<td class="text-center"><p>34.84</p></td>
+<td class="text-center"><p>49.86</p></td>
+<td class="text-center"><p>63.92</p></td>
+<td class="text-center"><p>67.35</p></td>
+<td class="text-center"><p>1451</p></td>
+<td class="text-center"><p>42.93</p></td>
+<td class="text-center"><p>24.30</p></td>
+<td class="text-center"><p>79.70</p></td>
+<td class="text-center"><p>80.96</p></td>
+<td class="text-center"><p>54.06</p></td>
+<td class="text-center"><p>69.80%</p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>VisPruner</p></td>
+<td class="text-center"><p>69.88</p></td>
+<td class="text-center"><p>42.68</p></td>
+<td class="text-center"><p>50.85</p></td>
+<td class="text-center"><p>66.84</p></td>
+<td class="text-center"><p>70.96</p></td>
+<td class="text-center"><p>1442</p></td>
+<td class="text-center"><p>44.14</p></td>
+<td class="text-center"><p>24.40</p></td>
+<td class="text-center"><p>81.03</p></td>
+<td class="text-center"><p>81.11</p></td>
+<td class="text-center"><p>59.66</p></td>
+<td class="text-center"><p>72.60%</p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>SCOPE</p></td>
+<td class="text-center"><p>71.63</p></td>
+<td class="text-center"><p>50.04</p></td>
+<td class="text-center"><p>56.45</p></td>
+<td class="text-center"><p><u>71.22</u></p></td>
+<td class="text-center"><p><strong>75.43</strong></p></td>
+<td class="text-center"><p><u>1608</u></p></td>
+<td class="text-center"><p><strong>48.74</strong></p></td>
+<td class="text-center"><p>34.10</p></td>
+<td class="text-center"><p><u>84.10</u></p></td>
+<td class="text-center"><p>82.25</p></td>
+<td class="text-center"><p>70.61</p></td>
+<td class="text-center"><p>79.35%</p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><strong>IDPruner</strong></p></td>
+<td class="text-center"><p><strong>75.16</strong></p></td>
+<td class="text-center"><p><u>62.48</u></p></td>
+<td class="text-center"><p><u>85.98</u></p></td>
+<td class="text-center"><p><strong>71.65</strong></p></td>
+<td class="text-center"><p><u>74.66</u></p></td>
+<td class="text-center"><p><strong>1618</strong></p></td>
+<td class="text-center"><p><u>47.48</u></p></td>
+<td class="text-center"><p><u>53.90</u></p></td>
+<td class="text-center"><p><strong>85.43</strong></p></td>
+<td class="text-center"><p><strong>82.80</strong></p></td>
+<td class="text-center"><p><u>74.43</u></p></td>
+<td class="text-center"><p><strong>86.47%</strong></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><em>(注：<strong>粗体</strong>为最优值，<u>下划线</u>为次优值。)</em></p>
+</section>
+<section id="id3">
+<h2>4. 快速开始<a class="headerlink" href="#id3" title="Link to this heading">#</a></h2>
+<p>通过以下命令启动 IDPruner 的基准评测：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/run_token_pruning_evaluation.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--model_path<span class="w"> </span><span class="s2">&quot;Qwen/Qwen2.5-VL-7B-Instruct&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--configs<span class="w"> </span><span class="s2">&quot;configs/qwen2_5_vl/pruning/idpruner_r0.75.yaml&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--tasks<span class="w"> </span><span class="s2">&quot;textvqa&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output_dir<span class="w"> </span><span class="s2">&quot;./results/idpruner_test&quot;</span>
+</pre></div>
+</div>
+<section id="selector-path">
+<h3>关键配置说明：selector_path<a class="headerlink" href="#selector-path" title="Link to this heading">#</a></h3>
+<p>在 <code class="docutils literal notranslate"><span class="pre">idpruner_r0.75.yaml</span></code> 中，<code class="docutils literal notranslate"><span class="pre">selector_path</span></code> 是算法运行的核心参数，它指定了用于预测 Token 重要性的 Scorer 权重路径：</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">params</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">ratio</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.9</span>
+<span class="w">    </span><span class="nt">mmr_lambda</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.5</span>
+<span class="w">    </span><span class="nt">parallel_k</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<span class="nt">model_related_params</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">selector_path</span><span class="p">:</span>
+<span class="w">        </span><span class="s">&quot;7b&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;AngelSlim/Qwen2.5-VL-7B-Instruct-Selector&quot;</span>
+<span class="w">        </span><span class="s">&quot;3b&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;AngelSlim/Qwen2.5-VL-3B-Instruct-Selector&quot;</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Token 压缩</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="other_methods.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">其他视觉 Token 压缩方法</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">1. 算法动机</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">2. 技术核心</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qwen-2-5-7b-instruct">3. 实验结果 (Qwen-2.5-7B-Instruct)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">4. 快速开始</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#selector-path">关键配置说明：selector_path</a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By the AngelSlim Team
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, AngelSlim Team.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

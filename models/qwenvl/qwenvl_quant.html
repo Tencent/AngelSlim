@@ -179,6 +179,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../features/quantization/index.html">量化</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../features/speculative_decoding/index.html">投机采样</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../features/diffusion/index.html">文生图/视频/3D压缩</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../features/token_compressor/index.html">Token 压缩</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">模型支持</span></p>
 <ul class="current nav bd-sidenav">
@@ -466,11 +467,11 @@ document.write(`
 <h3>启动量化流程<a class="headerlink" href="#id2" title="Link to this heading">#</a></h3>
 <p>通过以下命令启动FP8量化校准：</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># 动态FP8量化</span>
-python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/qwen2_5_vl/fp8_dynamic/qwen2_5_vl-7b_fp8_dynamic.yaml
+python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/qwen2_5_vl/quantization/fp8_dynamic/qwen2_5_vl-7b_fp8_dynamic.yaml
 </pre></div>
 </div>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># 静态FP8量化</span>
-python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/qwen2_5_vl/fp8_static/qwen2_5_vl-7b_fp8_static.yaml
+python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/qwen2_5_vl/quantization/fp8_static/qwen2_5_vl-7b_fp8_static.yaml
 </pre></div>
 </div>
 </section>
@@ -505,11 +506,11 @@ python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class
 <h3>启动量化流程<a class="headerlink" href="#id6" title="Link to this heading">#</a></h3>
 <p>通过以下命令启动INT4量化校准：</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># AWQ算法INT4量化</span>
-python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/qwen2_5_vl/int4_awq/qwen2_5_vl-32b_int4_awq.yaml
+python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/qwen2_5_vl/quantization/int4_awq/qwen2_5_vl-32b_int4_awq.yaml
 </pre></div>
 </div>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># GPTQ算法INT4量化</span>
-python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/qwen2_5_vl/int4_gptq/qwen2_5_vl-7b_int4_gptq.yaml
+python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/qwen2_5_vl/quantization/int4_gptq/qwen2_5_vl-7b_int4_gptq.yaml
 </pre></div>
 </div>
 </section>
