@@ -43,18 +43,21 @@ class _VLMSetupHooksFn:
         self.lm_module_name = lm_module_name
 
     def __call__(self, model):
-        import torch
-
         cache_attr = self.cache_attr
         lm_module_name = self.lm_module_name
         handles = []
+        # Use lists to accumulate chunks from vLLM's chunked prefill.
+        # When a long sequence is split into multiple chunks, each chunk
+        # triggers the hooks separately. We collect all chunks and
+        # concatenate them in _VLMCollectAndCleanupFn.
         setattr(
             model,
             cache_attr,
             {
                 "all_hidden_states": [],
-                "inputs_embeds": None,
-                "position_ids": None,
+                "inputs_embeds_chunks": [],
+                "position_ids_chunks": [],
+                "normed_hidden_states_chunks": [],
             },
         )
         cache = getattr(model, cache_attr)
@@ -81,7 +84,8 @@ class _VLMSetupHooksFn:
             if "inputs_embeds" in hook_kwargs and hook_kwargs["inputs_embeds"] is not None:
                 embeds = hook_kwargs["inputs_embeds"].clone().detach()
                 if tp_rank == 0:
-                    cache["inputs_embeds"] = embeds.cpu()
+                    cache["inputs_embeds_chunks"].append(embeds.cpu())
+
             pos_key = None
             if "position_ids" in hook_kwargs and hook_kwargs["position_ids"] is not None:
                 pos_key = "position_ids"
@@ -96,11 +100,7 @@ class _VLMSetupHooksFn:
                     pos_tensor = args[1]
 
             if pos_tensor is not None and tp_rank == 0:
-                new_len = pos_tensor.shape[-1]
-                old_pos = cache["position_ids"]
-                old_len = old_pos.shape[-1] if old_pos is not None else 0
-                if new_len > old_len:
-                    cache["position_ids"] = pos_tensor.clone().detach().cpu()
+                cache["position_ids_chunks"].append(pos_tensor.clone().detach().cpu())
             return args, hook_kwargs
 
         pre_hook_target = getattr(lm, "model", lm)
@@ -119,7 +119,10 @@ class _VLMSetupHooksFn:
                     break
 
         if layers is not None:
-            cache["all_hidden_states"] = [None] * len(layers)
+            # Each element is a list of chunk tensors for that layer.
+            # After all chunks are processed, they will be concatenated
+            # in _VLMCollectAndCleanupFn.
+            cache["all_hidden_states"] = [[] for _ in range(len(layers))]
 
             for layer_idx, layer in enumerate(layers):
 
@@ -138,16 +141,7 @@ class _VLMSetupHooksFn:
                                 else output[0].clone().detach()
                             )
                         if tp_rank == 0:
-                            cache["all_hidden_states"][idx] = hidden.cpu()
-
-                        if idx == 0 and tp_rank == 0 and len(args) >= 1:
-                            pos_candidate = args[0]
-                            if isinstance(pos_candidate, torch.Tensor):
-                                new_len = pos_candidate.shape[-1]
-                                old_pos = cache["position_ids"]
-                                old_len = old_pos.shape[-1] if old_pos is not None else 0
-                                if new_len > old_len:
-                                    cache["position_ids"] = pos_candidate.clone().detach().cpu()
+                            cache["all_hidden_states"][idx].append(hidden.cpu())
 
                         return output
 
@@ -159,27 +153,82 @@ class _VLMSetupHooksFn:
             first_layer = layers[0]
 
             def _first_layer_pre_hook(module, args, hook_kwargs):
-                if len(args) >= 1 and args[0] is not None:
-                    if isinstance(args[0], torch.Tensor) and tp_rank == 0:
-                        new_len = args[0].shape[-1]
-                        old_pos = cache["position_ids"]
-                        old_len = old_pos.shape[-1] if old_pos is not None else 0
-                        if new_len > old_len:
-                            cache["position_ids"] = args[0].clone().detach().cpu()
                 return args, hook_kwargs
 
             h = first_layer.register_forward_pre_hook(_first_layer_pre_hook, with_kwargs=True)
             handles.append(h)
+
+        # Register hook on final norm to capture hidden states after RMSNorm
+        # Try to find norm in lm.model or lm directly
+        norm_module = None
+        if hasattr(lm, "model") and hasattr(lm.model, "norm"):
+            norm_module = lm.model.norm
+        elif hasattr(lm, "norm"):
+            norm_module = lm.norm
+
+        if norm_module is not None:
+            print_with_rank(
+                f"[VLM] Registering norm hook on {type(norm_module).__name__} "
+                f"(tp_rank={tp_rank})"
+            )
+
+            def vlm_norm_hook(module, args, output):
+                if isinstance(output, tuple):
+                    normed_hs = output[0]
+                else:
+                    normed_hs = output
+                if tp_rank == 0:
+                    cache["normed_hidden_states_chunks"].append(normed_hs.clone().detach().cpu())
+                return output
+
+            h = norm_module.register_forward_hook(vlm_norm_hook)
+            handles.append(h)
+        else:
+            print_with_rank(
+                f"[VLM] WARNING: norm module is None, norm hook NOT registered! "
+                f"lm type: {type(lm).__name__}"
+            )
 
         cache["_handles"] = handles
         return True
 
 
 class _VLMCollectAndCleanupFn:
-    """Picklable callable that reads hook data and cleans up."""
+    """Picklable callable that reads hook data and cleans up.
+
+    Handles vLLM's chunked prefill by concatenating chunk tensors collected
+    during multiple forward passes into single contiguous tensors.
+    """
 
     def __init__(self, cache_attr: str):
         self.cache_attr = cache_attr
+
+    @staticmethod
+    def _concat_chunks(chunks):
+        """Concatenate a list of chunk tensors along the sequence dimension.
+
+        Args:
+            chunks: list of tensors, each with shape (seq_chunk, ...) or
+                    (batch, seq_chunk, ...)
+
+        Returns:
+            Concatenated tensor or None if chunks is empty.
+        """
+        if not chunks:
+            return None
+        # Deduplicate chunks that may have been captured by multiple hooks
+        # for the same forward pass. Use a simple heuristic: if consecutive
+        # chunks have the same shape and identical content, skip duplicates.
+        deduped = [chunks[0]]
+        for c in chunks[1:]:
+            if c.shape == deduped[-1].shape and torch.equal(c, deduped[-1]):
+                continue
+            deduped.append(c)
+        if len(deduped) == 1:
+            return deduped[0]
+        # Concatenate along the sequence dimension (dim=0 for 1D/2D, dim=1 for 3D+)
+        cat_dim = 0 if deduped[0].dim() <= 2 else 1
+        return torch.cat(deduped, dim=cat_dim)
 
     def __call__(self, model):
         cache = getattr(model, self.cache_attr, None)
@@ -187,10 +236,35 @@ class _VLMCollectAndCleanupFn:
             return None
         for h in cache.get("_handles", []):
             h.remove()
+
+        all_hidden_states_raw = cache["all_hidden_states"]
+
+        # Concatenate chunked hidden states for each layer
+        all_hidden_states = []
+        for layer_chunks in all_hidden_states_raw:
+            if isinstance(layer_chunks, list):
+                if not layer_chunks:
+                    all_hidden_states.append(None)
+                elif len(layer_chunks) == 1:
+                    all_hidden_states.append(layer_chunks[0])
+                else:
+                    # Concatenate chunks along sequence dimension
+                    cat_dim = 0 if layer_chunks[0].dim() <= 2 else 1
+                    all_hidden_states.append(torch.cat(layer_chunks, dim=cat_dim))
+            else:
+                # Backward compatibility: already a single tensor
+                all_hidden_states.append(layer_chunks)
+
+        # Concatenate chunked position_ids, inputs_embeds, normed_hidden_states
+        position_ids = self._concat_chunks(cache.get("position_ids_chunks", []))
+        inputs_embeds = self._concat_chunks(cache.get("inputs_embeds_chunks", []))
+        normed_hidden_states = self._concat_chunks(cache.get("normed_hidden_states_chunks", []))
+
         result = {
-            "all_hidden_states": cache["all_hidden_states"],
-            "inputs_embeds": cache["inputs_embeds"],
-            "position_ids": cache["position_ids"],
+            "all_hidden_states": all_hidden_states,
+            "inputs_embeds": inputs_embeds,
+            "position_ids": position_ids,
+            "normed_hidden_states": normed_hidden_states,
         }
         delattr(model, self.cache_attr)
         return result
@@ -204,17 +278,20 @@ class _LLMSetupHooksFn:
         self.tp_size = tp_size
 
     def __call__(self, model):
-        import torch
-
         cache_attr = self.cache_attr
         handles = []
+        # Use lists to accumulate chunks from vLLM's chunked prefill.
+        # When a long sequence is split into multiple chunks, each chunk
+        # triggers the hooks separately. We collect all chunks and
+        # concatenate them in _LLMCollectAndCleanupFn.
         setattr(
             model,
             cache_attr,
             {
                 "all_hidden_states": [],
-                "inputs_embeds": None,
-                "position_ids": None,
+                "inputs_embeds_chunks": [],
+                "position_ids_chunks": [],
+                "normed_hidden_states_chunks": [],
             },
         )
         cache = getattr(model, cache_attr)
@@ -241,7 +318,7 @@ class _LLMSetupHooksFn:
             if "inputs_embeds" in hook_kwargs and hook_kwargs["inputs_embeds"] is not None:
                 embeds = hook_kwargs["inputs_embeds"].clone().detach()
                 if tp_rank == 0:
-                    cache["inputs_embeds"] = embeds.cpu()
+                    cache["inputs_embeds_chunks"].append(embeds.cpu())
 
             pos_key = None
             if "position_ids" in hook_kwargs and hook_kwargs["position_ids"] is not None:
@@ -257,11 +334,7 @@ class _LLMSetupHooksFn:
                     pos_tensor = args[1]
 
             if pos_tensor is not None and tp_rank == 0:
-                new_len = pos_tensor.shape[-1]
-                old_pos = cache["position_ids"]
-                old_len = old_pos.shape[-1] if old_pos is not None else 0
-                if new_len > old_len:
-                    cache["position_ids"] = pos_tensor.clone().detach().cpu()
+                cache["position_ids_chunks"].append(pos_tensor.clone().detach().cpu())
             return args, hook_kwargs
 
         h = inner_model.register_forward_pre_hook(pre_hook, with_kwargs=True)
@@ -274,7 +347,11 @@ class _LLMSetupHooksFn:
                 break
 
         if layers is not None:
-            cache["all_hidden_states"] = [None] * len(layers)
+            # Each element is a list of chunk tensors for that layer.
+            # After all chunks are processed, they will be concatenated
+            # in _LLMCollectAndCleanupFn.
+            num_layers = len(layers)
+            cache["all_hidden_states"] = [[] for _ in range(num_layers)]
 
             for layer_idx, layer in enumerate(layers):
 
@@ -293,16 +370,7 @@ class _LLMSetupHooksFn:
                                 else output[0].clone().detach()
                             )
                         if tp_rank == 0:
-                            cache["all_hidden_states"][idx] = hidden.cpu()
-
-                        if idx == 0 and tp_rank == 0 and len(args) >= 1:
-                            pos_candidate = args[0]
-                            if isinstance(pos_candidate, torch.Tensor):
-                                new_len = pos_candidate.shape[-1]
-                                old_pos = cache["position_ids"]
-                                old_len = old_pos.shape[-1] if old_pos is not None else 0
-                                if new_len > old_len:
-                                    cache["position_ids"] = pos_candidate.clone().detach().cpu()
+                            cache["all_hidden_states"][idx].append(hidden.cpu())
 
                         return output
 
@@ -314,27 +382,81 @@ class _LLMSetupHooksFn:
             first_layer = layers[0]
 
             def _first_layer_pre_hook(module, args, hook_kwargs):
-                if len(args) >= 1 and args[0] is not None:
-                    if isinstance(args[0], torch.Tensor) and tp_rank == 0:
-                        new_len = args[0].shape[-1]
-                        old_pos = cache["position_ids"]
-                        old_len = old_pos.shape[-1] if old_pos is not None else 0
-                        if new_len > old_len:
-                            cache["position_ids"] = args[0].clone().detach().cpu()
                 return args, hook_kwargs
 
             h = first_layer.register_forward_pre_hook(_first_layer_pre_hook, with_kwargs=True)
             handles.append(h)
+
+        # Register hook on final norm (inner_model.norm) to capture
+        # hidden states after RMSNorm, which is needed for correct
+        # target_hiddens when using TargetHead (lm_head projection).
+        norm_module = getattr(inner_model, "norm", None)
+        if norm_module is not None:
+            print_with_rank(
+                f"[LLM] Registering norm hook on {type(norm_module).__name__} "
+                f"(tp_rank={tp_rank})"
+            )
+
+            def norm_hook(module, args, output):
+                # vLLM RMSNorm returns (normed_hidden_states, residual)
+                # or just normed_hidden_states depending on implementation
+                if isinstance(output, tuple):
+                    normed_hs = output[0]
+                else:
+                    normed_hs = output
+                if tp_rank == 0:
+                    cache["normed_hidden_states_chunks"].append(normed_hs.clone().detach().cpu())
+                return output
+
+            h = norm_module.register_forward_hook(norm_hook)
+            handles.append(h)
+        else:
+            print_with_rank(
+                "[LLM] WARNING: inner_model.norm is None, norm hook NOT registered! "
+                f"inner_model type: {type(inner_model).__name__}"
+            )
 
         cache["_handles"] = handles
         return True
 
 
 class _LLMCollectAndCleanupFn:
-    """Picklable callable that reads hook data and cleans up (for LLM backend)."""
+    """Picklable callable that reads hook data and cleans up (for LLM backend).
+
+    Handles vLLM's chunked prefill by concatenating chunk tensors collected
+    during multiple forward passes into single contiguous tensors.
+    """
 
     def __init__(self, cache_attr: str):
         self.cache_attr = cache_attr
+
+    @staticmethod
+    def _concat_chunks(chunks):
+        """Concatenate a list of chunk tensors along the sequence dimension.
+
+        Args:
+            chunks: list of tensors, each with shape (seq_chunk, ...) or
+                    (batch, seq_chunk, ...)
+
+        Returns:
+            Concatenated tensor or None if chunks is empty.
+        """
+        if not chunks:
+            return None
+        # Deduplicate chunks that may have been captured by multiple hooks
+        # for the same forward pass (e.g., position_ids captured by both
+        # pre_hook and layer_hook). Use a simple heuristic: if consecutive
+        # chunks have the same shape and identical content, skip duplicates.
+        deduped = [chunks[0]]
+        for c in chunks[1:]:
+            if c.shape == deduped[-1].shape and torch.equal(c, deduped[-1]):
+                continue
+            deduped.append(c)
+        if len(deduped) == 1:
+            return deduped[0]
+        # Concatenate along the sequence dimension (dim=0 for 1D/2D, dim=1 for 3D+)
+        cat_dim = 0 if deduped[0].dim() <= 2 else 1
+        return torch.cat(deduped, dim=cat_dim)
 
     def __call__(self, model):
         cache = getattr(model, self.cache_attr, None)
@@ -342,10 +464,35 @@ class _LLMCollectAndCleanupFn:
             return None
         for h in cache.get("_handles", []):
             h.remove()
+
+        all_hidden_states_raw = cache["all_hidden_states"]
+
+        # Concatenate chunked hidden states for each layer
+        all_hidden_states = []
+        for layer_chunks in all_hidden_states_raw:
+            if isinstance(layer_chunks, list):
+                if not layer_chunks:
+                    all_hidden_states.append(None)
+                elif len(layer_chunks) == 1:
+                    all_hidden_states.append(layer_chunks[0])
+                else:
+                    # Concatenate chunks along sequence dimension
+                    cat_dim = 0 if layer_chunks[0].dim() <= 2 else 1
+                    all_hidden_states.append(torch.cat(layer_chunks, dim=cat_dim))
+            else:
+                # Backward compatibility: already a single tensor
+                all_hidden_states.append(layer_chunks)
+
+        # Concatenate chunked position_ids, inputs_embeds, normed_hidden_states
+        position_ids = self._concat_chunks(cache.get("position_ids_chunks", []))
+        inputs_embeds = self._concat_chunks(cache.get("inputs_embeds_chunks", []))
+        normed_hidden_states = self._concat_chunks(cache.get("normed_hidden_states_chunks", []))
+
         result = {
-            "all_hidden_states": cache["all_hidden_states"],
-            "inputs_embeds": cache["inputs_embeds"],
-            "position_ids": cache["position_ids"],
+            "all_hidden_states": all_hidden_states,
+            "inputs_embeds": inputs_embeds,
+            "position_ids": position_ids,
+            "normed_hidden_states": normed_hidden_states,
         }
         delattr(model, self.cache_attr)
         return result
@@ -926,6 +1073,9 @@ class VLMVLLMBackend(BaseBackend):
             trust_remote_code=True,
             limit_mm_per_prompt=limit_mm_per_prompt,
             mm_processor_kwargs=mm_processor_kwargs or None,
+            # Disable prefix caching to ensure forward hooks capture hidden
+            # states for the FULL sequence (see VLLMBackend for details).
+            enable_prefix_caching=False,
         )
 
     def _get_language_model_module_name(self) -> str:
@@ -1176,6 +1326,7 @@ class VLMVLLMBackend(BaseBackend):
         all_hs = collected["all_hidden_states"]
         inputs_embeds = collected["inputs_embeds"]
         position_ids = collected["position_ids"]
+        normed_hidden_states = collected.get("normed_hidden_states")
 
         if not all_hs or all(h is None for h in all_hs):
             raise RuntimeError(
@@ -1193,8 +1344,24 @@ class VLMVLLMBackend(BaseBackend):
         selected_hiddens = [all_hs[layer_id] for layer_id in aux_layer_ids]
         aux_hidden_states = torch.cat(selected_hiddens, dim=-1)
 
-        # Final-layer hidden states
-        target_hidden_states = all_hs[-1]
+        # Use normed hidden states (after final RMSNorm) as target_hiddens
+        # for correct logit computation via TargetHead.
+        if normed_hidden_states is not None:
+            target_hidden_states = normed_hidden_states
+            print_with_rank(
+                f"[VLM] Using normed_hidden_states as target_hiddens, "
+                f"shape={normed_hidden_states.shape}, "
+                f"mean={normed_hidden_states.float().mean().item():.6f}, "
+                f"std={normed_hidden_states.float().std().item():.6f}"
+            )
+        else:
+            print_with_rank(
+                "[VLM] WARNING: normed_hidden_states not available from vLLM hook. "
+                "Falling back to pre-norm last-layer hidden states. "
+                "This may cause incorrect target_logits computation. "
+                f"collected keys: {list(collected.keys())}"
+            )
+            target_hidden_states = all_hs[-1]
 
         # vLLM internally uses packed/flattened format, so hook-captured hidden
         # states are 2D (seq_len, hidden_size) without a batch dimension.
@@ -1221,6 +1388,28 @@ class VLMVLLMBackend(BaseBackend):
                 # MRoPE: (3, num_tokens) -> (3, 1, num_tokens)
                 position_ids = position_ids.unsqueeze(1)
             # else: regular 2D (B, N), keep as-is
+
+        # Truncate to input_ids length to exclude decode-step hidden states.
+        # vLLM's generate() runs prefill (all input tokens) then decode
+        # (max_tokens=1 new token). Our hooks capture both stages, so the
+        # concatenated hidden states may be longer than the input sequence.
+        # We only need the prefill hidden states (matching input_ids length).
+        if attention_mask is not None:
+            expected_len = int(attention_mask.sum(dim=-1).max().item())
+        else:
+            expected_len = input_ids.shape[-1]
+
+        if aux_hidden_states.shape[1] > expected_len:
+            aux_hidden_states = aux_hidden_states[:, :expected_len, :]
+        if target_hidden_states.shape[1] > expected_len:
+            target_hidden_states = target_hidden_states[:, :expected_len, :]
+        if inputs_embeds is not None and inputs_embeds.shape[1] > expected_len:
+            inputs_embeds = inputs_embeds[:, :expected_len, :]
+        if position_ids is not None:
+            if position_ids.dim() == 1 and position_ids.shape[0] > expected_len:
+                position_ids = position_ids[:expected_len]
+            elif position_ids.dim() >= 2 and position_ids.shape[-1] > expected_len:
+                position_ids = position_ids[..., :expected_len]
 
         # Move results to the same device as input_ids
         device = input_ids.device
@@ -1315,6 +1504,12 @@ class VLLMBackend(BaseBackend):
             max_num_seqs=max_num_seqs,
             distributed_executor_backend=distributed_executor_backend,
             trust_remote_code=True,
+            # Disable prefix caching to ensure forward hooks capture hidden
+            # states for the FULL sequence. With prefix caching enabled,
+            # vLLM reuses cached KV for shared prefixes and only runs the
+            # model forward on the uncached suffix, causing hooks to miss
+            # the prefix portion of hidden states.
+            enable_prefix_caching=False,
         )
 
     def _build_vllm_inputs(
@@ -1449,6 +1644,7 @@ class VLLMBackend(BaseBackend):
         all_hs = collected["all_hidden_states"]
         inputs_embeds = collected["inputs_embeds"]
         position_ids = collected["position_ids"]
+        normed_hidden_states = collected.get("normed_hidden_states")
 
         if not all_hs or all(h is None for h in all_hs):
             raise RuntimeError(
@@ -1466,8 +1662,30 @@ class VLLMBackend(BaseBackend):
         selected_hiddens = [all_hs[layer_id] for layer_id in aux_layer_ids]
         aux_hidden_states = torch.cat(selected_hiddens, dim=-1)
 
-        # Final-layer hidden states
-        target_hidden_states = all_hs[-1]
+        # Use normed hidden states (after final RMSNorm) as target_hiddens
+        # for correct logit computation via TargetHead.
+        # vLLM decoder layer hooks capture hidden states BEFORE the final
+        # RMSNorm, which leads to incorrect target_logits when used with
+        # TargetHead (lm_head projection). The norm hook captures the
+        # post-norm hidden states that match HF Transformers' behavior.
+        if normed_hidden_states is not None:
+            target_hidden_states = normed_hidden_states
+            print_with_rank(
+                f"[LLM] Using normed_hidden_states as target_hiddens, "
+                f"shape={normed_hidden_states.shape}, "
+                f"mean={normed_hidden_states.float().mean().item():.6f}, "
+                f"std={normed_hidden_states.float().std().item():.6f}"
+            )
+        else:
+            # Fallback to last layer hidden states (pre-norm) if norm hook
+            # did not fire (e.g., unsupported architecture)
+            print_with_rank(
+                "[LLM] WARNING: normed_hidden_states not available from vLLM hook. "
+                "Falling back to pre-norm last-layer hidden states. "
+                "This may cause incorrect target_logits computation. "
+                f"collected keys: {list(collected.keys())}"
+            )
+            target_hidden_states = all_hs[-1]
 
         # vLLM internally uses packed/flattened format, so hook-captured hidden
         # states are 2D (seq_len, hidden_size) without a batch dimension.
@@ -1478,6 +1696,28 @@ class VLLMBackend(BaseBackend):
             target_hidden_states = target_hidden_states.unsqueeze(0)
         if inputs_embeds is not None and inputs_embeds.dim() == 2:
             inputs_embeds = inputs_embeds.unsqueeze(0)
+
+        # Truncate to input_ids length to exclude decode-step hidden states.
+        # vLLM's generate() runs prefill (all input tokens) then decode
+        # (max_tokens=1 new token). Our hooks capture both stages, so the
+        # concatenated hidden states may be longer than the input sequence.
+        # We only need the prefill hidden states (matching input_ids length).
+        if attention_mask is not None:
+            expected_len = int(attention_mask.sum(dim=-1).max().item())
+        else:
+            expected_len = input_ids.shape[-1]
+
+        if aux_hidden_states.shape[1] > expected_len:
+            aux_hidden_states = aux_hidden_states[:, :expected_len, :]
+        if target_hidden_states.shape[1] > expected_len:
+            target_hidden_states = target_hidden_states[:, :expected_len, :]
+        if inputs_embeds is not None and inputs_embeds.shape[1] > expected_len:
+            inputs_embeds = inputs_embeds[:, :expected_len, :]
+        if position_ids is not None:
+            if position_ids.dim() == 1 and position_ids.shape[0] > expected_len:
+                position_ids = position_ids[:expected_len]
+            elif position_ids.dim() >= 2 and position_ids.shape[-1] > expected_len:
+                position_ids = position_ids[..., :expected_len]
 
         # Move results to the same device as input_ids
         device = input_ids.device

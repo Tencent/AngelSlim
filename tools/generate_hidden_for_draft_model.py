@@ -516,12 +516,6 @@ def parse_arguments() -> argparse.Namespace:
         help="Target model name or path (if different from model_name)",
     )
     parser.add_argument(
-        "--target_model_type",
-        type=str,
-        default=None,
-        help="Target model name or path (if different from model_name)",
-    )
-    parser.add_argument(
         "--target_backend",
         type=str,
         default="hf",
@@ -638,7 +632,7 @@ def load_dataset(args: argparse.Namespace, tokenizer, rank: int):
     dataset_manager = DatasetManager(
         data_args=args,
         tokenizer=tokenizer,
-        target_model_type=args.target_model_type,
+        target_model_type=None if args.modal_type in ("LLM", "TTS") else args.target_model_type,
         model_max_length=args.model_max_length,
         chat_template_type=args.chat_template_type,
         display=display,
@@ -717,8 +711,31 @@ def main():
 
     try:
         model_path = args.target_model_name_or_path
+        logger.info(
+            f"backend: {args.target_backend}, modal_type: {args.modal_type}", extra={"rank": rank}
+        )
+
+        draft_vocab_size = None
+        target_vocab_size = None
+        if args.draft_model_config_path is not None:
+            draft_config = DraftModelConfig.from_file(args.draft_model_config_path)
+            draft_vocab_size = getattr(draft_config, "draft_vocab_size", None)
+            target_vocab_size = getattr(draft_config, "vocab_size", None)
+            args.target_model_type = getattr(draft_config, "target_model_type", None)
+            logger.info(
+                f"Loaded from draft model config: draft_vocab_size={draft_vocab_size}, "
+                f"target_vocab_size={target_vocab_size}, "
+                f"target_model_type={args.target_model_type}",
+                extra={"rank": rank},
+            )
+        else:
+            raise ValueError("draft_model_config_path not specified")
+
         if args.chat_template_type is None:
-            _, _, inferred_chat_template_type = infer_model_params(model_path)
+            _, _, inferred_chat_template_type = infer_model_params(
+                model_name_or_path=model_path,
+                model_type=args.target_model_type,
+            )
             args.chat_template_type = (
                 inferred_chat_template_type
                 if inferred_chat_template_type is not None
@@ -734,9 +751,6 @@ def main():
                 extra={"rank": rank},
             )
 
-        logger.info(
-            f"backend: {args.target_backend}, modal_type: {args.modal_type}", extra={"rank": rank}
-        )
         # Load target model
         torch_dtype = get_torch_dtype(args.torch_dtype)
         target_model = create_target_model(
@@ -766,21 +780,6 @@ def main():
         # Generate hidden states
         output_dir = f"{args.outdir}/rank_{rank}"
         logger.info(f"writing hidden states to {output_dir}", extra={"rank": rank})
-
-        # Read draft_vocab_size and target_vocab_size from draft model config
-        draft_vocab_size = None
-        target_vocab_size = None
-        if args.draft_model_config_path is not None:
-            draft_config = DraftModelConfig.from_file(args.draft_model_config_path)
-            draft_vocab_size = getattr(draft_config, "draft_vocab_size", None)
-            target_vocab_size = getattr(draft_config, "vocab_size", None)
-            logger.info(
-                f"Loaded vocab sizes from config: draft_vocab_size={draft_vocab_size}, "
-                f"target_vocab_size={target_vocab_size}",
-                extra={"rank": rank},
-            )
-        else:
-            raise ValueError("draft_model_config_path not specified")
 
         generator = HiddenStateGenerator(
             target_model,

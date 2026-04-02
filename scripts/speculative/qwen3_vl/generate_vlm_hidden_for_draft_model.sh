@@ -19,5 +19,4 @@ torchrun --nproc_per_node=8 tools/generate_hidden_for_draft_model.py \
     --model_max_length $MODEL_MAX_LENGTH \
     --chat_template_type $CHAT_TEMPLATE_TYPE \
     --outdir $OUTPUT_DIR \
-    --num_proc 8 \
-    --target_model_type qwen3_vl
+    --num_proc 8

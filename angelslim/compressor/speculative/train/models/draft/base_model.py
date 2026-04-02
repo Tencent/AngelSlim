@@ -27,6 +27,8 @@ from ..model_utils import expand_mask, make_causal_mask
 
 
 class Eagle3BaseDraftModel(PreTrainedModel, ABC):
+    supports_gradient_checkpointing = True
+
     @abstractmethod
     def compute_logits(self, input_ids, attention_mask):
         pass
@@ -40,8 +42,11 @@ class Eagle3BaseDraftModel(PreTrainedModel, ABC):
         pass
 
     @abstractmethod
-    def get_input_embeddings(self, input_ids):
+    def embed_input_ids(self, input_ids):
         pass
+
+    def get_input_embeddings(self):
+        return self.embed_tokens
 
     def freeze_embed_weights(self):
         for param in self.embed_tokens.parameters():

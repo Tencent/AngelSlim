@@ -258,6 +258,12 @@ def parse_args():
             "'polynomial', 'constant', 'constant_with_warmup'"
         ),
     )
+    training_group.add_argument(
+        "--gradient_checkpointing",
+        action="store_true",
+        default=False,
+        help="Whether to use gradient checkpointing",
+    )
     training_group.add_argument("--run_name", type=str, default=None, help="Run name for tracking")
     training_group.add_argument(
         "--report_to",
@@ -275,8 +281,16 @@ def parse_args():
 def train():
     args = parse_args()
 
+    rank0_print(f"Loading draft model: {args.draft_model_config_path}")
+    draft_model_config = DraftModelConfig.from_file(args.draft_model_config_path)
+    target_model_type = getattr(draft_model_config, "target_model_type", None)
+    rank0_print(f"target_model_type from draft config: {target_model_type}")
+
     inferred_lm_head_key, inferred_embed_weight_key, inferred_chat_template_type = (
-        infer_model_params(args.target_model_name_or_path)
+        infer_model_params(
+            model_name_or_path=args.target_model_name_or_path,
+            model_type=target_model_type,
+        )
     )
     if args.lm_head_key is None:
         if inferred_lm_head_key is None:
@@ -302,8 +316,6 @@ def train():
             )
 
     # Create draft model
-    rank0_print(f"Loading draft model: {args.draft_model_config_path}")
-    draft_model_config = DraftModelConfig.from_file(args.draft_model_config_path)
     draft_model = create_draft_model(draft_model_config)
     draft_model.load_embed_weights(args.target_model_name_or_path, args.embed_weight_key)
     draft_model.freeze_embed_weights()
@@ -333,15 +345,12 @@ def train():
         f"(chat template: {args.chat_template_type})"
     )
 
-    target_model_type = getattr(draft_model_config, "target_model_type", None)
-    rank0_print(f"target_model_type: {target_model_type}")
-
     dataset_manager = DatasetManager(
         data_args=args,
         tokenizer=tokenizer,
         model_max_length=args.model_max_length,
         chat_template_type=args.chat_template_type,
-        target_model_type=target_model_type,
+        target_model_type=None if args.modal_type in ("LLM", "TTS") else target_model_type,
     )
 
     (
@@ -408,6 +417,7 @@ def train():
 
     distributed_args = {
         "deepspeed": args.deepspeed,
+        "gradient_checkpointing": args.gradient_checkpointing,
     }
 
     training_args = transformers.TrainingArguments(

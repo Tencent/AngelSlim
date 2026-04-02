@@ -267,6 +267,10 @@ class LlamaAttention(nn.Module):
             if scaling_type == "mrope" or self.config.rope_scaling.get("mrope_interleaved", False):
                 self.rotary_emb = MRotaryEmbedding(self.config)
                 self.rope_apply_func = apply_rotary_pos_emb_mrope
+            elif scaling_type == "default":
+                self.rotary_emb = LlamaRotaryEmbedding(
+                    self.head_dim, max_position_embeddings=self.max_position_embeddings
+                )
             elif scaling_type == "linear":
                 self.rotary_emb = LlamaLinearScalingRotaryEmbedding(
                     self.head_dim,
@@ -559,6 +563,9 @@ class Eagle3LlamaForCausalLM(Eagle3BaseDraftModel):
 
         self.lm_head = nn.Linear(config.hidden_size, config.draft_vocab_size, bias=False)
 
+        # Required by new transformers gradient checkpointing format
+        self.gradient_checkpointing = False
+
     def combine_hidden_states(self, hidden_states: torch.Tensor) -> torch.Tensor:
         return self.fc(hidden_states)
 
@@ -589,7 +596,7 @@ class Eagle3LlamaForCausalLM(Eagle3BaseDraftModel):
         logits = self.lm_head(norm_hidden_states)
         return logits.float()
 
-    def get_input_embeddings(self, input_ids):
+    def embed_input_ids(self, input_ids):
         inputs_embeds = self.embed_tokens(input_ids)
         return inputs_embeds
 

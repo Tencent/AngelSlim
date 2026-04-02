@@ -10,7 +10,18 @@
 
 数据生成包括：1）为目标模型生成采样数据，2）为Eagle3模型离线生成目标模型的hidden states。
 
-### 1.1 为目标模型生成采样数据
+### 1.1 数据组织形式
+所有数据需保存在jsonl文件中，训练数据格式可参考:
+
+- 数据示例:
+    ```json
+    {"id": "0", "conversations": [{"role": "user", "content": "xxx"}, {"role": "assistant", "content": "xxx"}]}
+    ```
+
+- 典型字段意义如下：
+    - id: 对话唯一标识
+
+### 1.2 为目标模型生成采样数据
 
 生成采样数据为可选项，当有足够数量以及足够质量的目标模型SFT数据时，此步可略过。当训练数据和目标模型不配套时，则需要为目标模型重新采样生成数据。
 
@@ -55,7 +66,7 @@ bash scripts/speculative/generate_data_for_target_model.sh
 - 数据生成过程可能需要较长时间，取决于样本数量和模型规模
 
 
-### 1.2 为Eagle3模型生成hidden states
+### 1.3 为Eagle3模型生成hidden states
 
 目前仅支持以HF为后端生成hidden states，调用脚本如下：
 ```shell
@@ -225,17 +236,112 @@ python3 tools/spec_benchmark.py \
 
 ### 3.2 vLLM基准测试
 
+#### 3.2.1 基本用法
+
 使用 `tools/vllm_spec_benchmark.py` 脚本进行投机采样基准测试：
 
 ```shell
-python3 vllm_spec_benchmark.py \
-    --model-dir "$MODEL_DIR" \
-    --eagle-dir "$EAGLE_DIR" \
-    --benchmark-name "$BENCHMARK_NAME" \
-    --stats-output-file "$OUTPUT_FILE" \
+python3 tools/vllm_spec_benchmark.py \
+    --target_model ${TARGET_MODEL_PATH} \
+    --draft_model ${EAGLE_MODEL_PATH} \
+    --dataset "gsm8k" \
+    --output_file ${OUTPUT_FILE} \
     --method eagle3 \
-    --output-len 1024 \
-    --max-num-seqs "$BATCH_SIZE"
+    --output_len 1024 \
+    --max_num_seqs ${BATCH_SIZE}
 ```
+
+#### 3.2.2 参数说明
+
+**模型配置参数：**
+- `--target_model`: 目标模型的HF名称或本地路径
+- `--draft_model`: 草稿模型（Eagle模型）的HF名称或本地路径
+
+**数据集配置：**
+- `--dataset`: 基准数据集名称或本地JSONL文件路径，默认为 `gsm8k`。支持逗号分隔指定多个数据集（如 `mt_bench,gsm8k,/path/to/local/question.jsonl`）。如果路径为已存在的文件则直接加载，否则视为 `dataset/` 目录下的benchmark名称
+- `--num_prompts`: 从数据集中加载的prompt数量，默认为 80
+
+**投机采样配置：**
+- `--method`: 投机采样方法，可选 `eagle`、`eagle3`、`ngram`、`mtp`、`ar`（无投机采样的基线），默认为 `eagle3`
+- `--num_spec_tokens`: 投机采样token数量，默认为 2
+- `--prompt_lookup_max`: ngram方法的最大查找长度，默认为 5
+- `--prompt_lookup_min`: ngram方法的最小查找长度，默认为 2
+
+**生成参数：**
+- `--temp`: 采样温度，默认为 0
+- `--top_p`: Top-p采样，默认为 1.0
+- `--top_k`: Top-k采样，默认为 -1（不启用）
+- `--output_len`: 最大生成token数，默认为 1024
+
+**硬件与引擎配置：**
+- `--tp`: tensor parallel大小，默认为 1
+- `--max_model_len`: 模型最大上下文长度，默认为 16384
+- `--max_num_seqs`: 最大并发序列数（batch size），默认为 1
+- `--enforce_eager`: 启用eager模式（禁用CUDA graph）
+- `--enable_chunked_prefill`: 启用chunked prefill
+
+**其他设置：**
+- `--seed`: 随机种子，默认为 42
+- `--output_file`: 结果输出文件路径（jsonl格式）
+- `--print_output`: 打印生成的文本内容
+- `--test`: 测试模式
+
+#### 3.2.3 使用示例
+
+**单数据集测试：**
+```shell
+python3 tools/vllm_spec_benchmark.py \
+    --target_model /path/to/base/model \
+    --draft_model /path/to/eagle/model \
+    --dataset "gsm8k" \
+    --output_file ./results/benchmark_stats.jsonl \
+    --method eagle3 \
+    --output_len 1024 \
+    --max_num_seqs 1
+```
+
+**多数据集测试（逗号分隔，支持混合使用benchmark名称和本地文件路径）：**
+```shell
+python3 tools/vllm_spec_benchmark.py \
+    --target_model /path/to/base/model \
+    --draft_model /path/to/eagle/model \
+    --dataset "mt_bench,gsm8k,/path/to/local/question.jsonl" \
+    --output_file ./results/benchmark_stats.jsonl \
+    --method eagle3 \
+    --output_len 1024 \
+    --max_num_seqs 1
+```
+
+**使用基线模式（无投机采样）进行对比：**
+```shell
+python3 tools/vllm_spec_benchmark.py \
+    --target_model /path/to/base/model \
+    --dataset "gsm8k" \
+    --method ar \
+    --output_len 1024
+```
+
+**多GPU配置：**
+```shell
+python3 tools/vllm_spec_benchmark.py \
+    --target_model /path/to/base/model \
+    --draft_model /path/to/eagle/model \
+    --dataset "gsm8k" \
+    --method eagle3 \
+    --tp 4 \
+    --output_len 1024
+```
+
+#### 3.2.4 性能报告
+
+运行完成后，工具会自动生成性能报告，包括：
+- 输出吞吐量（tokens/s）
+- 请求吞吐量（requests/s）
+- 平均每个样本的耗时
+- 投机采样的平均接受长度（mean acceptance length）
+- 各token位置的接受率
+
+当指定多个数据集时，还会额外输出所有数据集的平均统计结果。
+所有结果将以jsonl格式保存在指定的输出文件中，便于后续分析和比较。
 
 完整的vLLM benchmark结果可见[Benchmark](../../../performance/speculative_decoding/benchmarks.md)。

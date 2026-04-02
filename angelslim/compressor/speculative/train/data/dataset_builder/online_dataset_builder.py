@@ -70,6 +70,25 @@ class OnlineLLMDatasetBuilder(OnlineDatasetBuilder):
     def get_data_collator(self) -> Any:
         return DataCollatorWithPadding()
 
+    def _process_single_conversation(self, conversation_data):
+        """
+        compatible with two format:
+        {"id": "0", "conversations": [
+            {"role": "user", "content": "xxx"},
+            {"role": "assistant", "content": "xxx"}
+        ]}
+        {"id": "0", "conversations": [
+            {"role": "user", "content": [{"type": "text", "text": "xxx"}]},
+            {"role": "assistant", "content": [{"type": "text", "text": "xxx"}]}
+        ]}
+        """
+        if conversation_data:
+            for message in conversation_data:
+                content = message.get("content")
+                if isinstance(content, list):
+                    message["content"] = self._normalize_content(content)
+        return super()._process_single_conversation(conversation_data)
+
 
 @DatasetBuilderFactory.register("online", "VLM", "qwen2_5_vl")
 @DatasetBuilderFactory.register("online", "VLM", "qwen3_vl")
