@@ -1,7 +1,0 @@
-transformers==5.0.0
-accelerate
-matplotlib
-seaborn
-datasets
-torchcodec
-qwen_vl_utils

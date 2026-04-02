@@ -7,7 +7,7 @@
 请使用以下命令安装多模态相关的辅助依赖：
 
 ```bash
-uv pip install qwen_vl_utils
+uv pip install -r requirements/requirements_multimodal.txt
 ```
 
 ## 2. 配置集成评测环境 (lmms-eval)
