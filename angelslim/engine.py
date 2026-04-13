@@ -121,6 +121,7 @@ class Engine:
                     low_cpu_mem_usage=low_cpu_mem_usage,
                     use_cache=use_cache,
                     using_multi_nodes=using_multi_nodes,
+                    attn_implementation=attn_implementation,
                 )
                 self.model_path = model_path
         elif self.series in ["Omni"]:

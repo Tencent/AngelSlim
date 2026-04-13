@@ -51,6 +51,8 @@ class BaseLLMModel(metaclass=ABCMeta):
         self.modal_type = "LLM"
         self.pre_transformer_module_names = ["model.embed_tokens"]
         self.observer_layer_classes = [torch.nn.Linear]
+        # Store original forward methods for restoration
+        self._original_attn_forwards = {}
 
     def from_pretrained(
         self,
@@ -61,14 +63,20 @@ class BaseLLMModel(metaclass=ABCMeta):
         low_cpu_mem_usage=True,
         use_cache=False,
         using_multi_nodes=False,
+        attn_implementation="default",
     ):
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_path,
+        kwargs = dict(
             torch_dtype=torch_dtype,
             device_map=device_map,
             trust_remote_code=trust_remote_code,
             low_cpu_mem_usage=low_cpu_mem_usage,
             use_cache=use_cache,
+        )
+        if attn_implementation != "default":
+            kwargs["attn_implementation"] = attn_implementation
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            **kwargs,
         )
 
         # Load tokenizer
@@ -180,6 +188,9 @@ class BaseLLMModel(metaclass=ABCMeta):
             for k in observe_names
             if k.startswith(self.block_name) and k.split(".")[-2] + "." + k.split(".")[-1] in names
         ]
+
+    def patch_fp8_attention(self):
+        print_info("Warning: patch_fp8_attention not implemented for this model, skipping")
 
     def get_quant_config(self):
         assert self.quant_config is not None

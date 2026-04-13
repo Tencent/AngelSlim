@@ -16,13 +16,15 @@ import re
 
 import torch
 import torch.nn as nn
+from transformers.models.qwen3.modeling_qwen3 import apply_rotary_pos_emb, repeat_kv
 from transformers.models.qwen3_moe.modeling_qwen3_moe import (
     Qwen3MoeExperts,
     Qwen3MoeTopKRouter,
 )
 
+from ...compressor.qat.modules.quantizer import fp8_cast_ste
 from ...compressor.quant.core import PTQSaveVllmHF
-from ...utils.utils import find_layers, find_parent_layer_and_sub_name
+from ...utils.utils import find_layers, find_parent_layer_and_sub_name, print_info
 from ..base_model import BaseLLMModel
 from ..model_factory import SlimModelFactory
 
@@ -210,3 +212,84 @@ class Qwen(BaseLLMModel):
             input_observer_amax = self.input_observer_amax_dict[name]
 
         return weight_observer_amax, input_observer_amax
+
+    def get_attention_layers(self):
+        """Get all attention layers in the model."""
+        attention_layers = {}
+        for name, module in self.model.named_modules():
+            if name.endswith(".self_attn") and hasattr(module, "forward"):
+                # Verify it has k_proj and v_proj attributes
+                if hasattr(module, "k_proj") and hasattr(module, "v_proj"):
+                    attention_layers[name] = module
+        return attention_layers
+
+    def patch_fp8_attention(self):
+        attention_layers = self.get_attention_layers()
+
+        for attn_name, attn_module in attention_layers.items():
+            original_forward = attn_module.forward
+            self._original_attn_forwards.setdefault(attn_name, original_forward)
+
+            def _make_patched(attn_mod):
+                def patched_forward(
+                    hidden_states,
+                    position_embeddings,
+                    attention_mask=None,
+                    past_key_values=None,
+                    cache_position=None,
+                    **kwargs,
+                ):
+                    input_shape = hidden_states.shape[:-1]
+                    hidden_shape = (*input_shape, -1, attn_mod.head_dim)
+
+                    query_states = attn_mod.q_norm(
+                        attn_mod.q_proj(hidden_states).view(hidden_shape)
+                    ).transpose(1, 2)
+                    key_states = attn_mod.k_norm(
+                        attn_mod.k_proj(hidden_states).view(hidden_shape)
+                    ).transpose(1, 2)
+                    value_states = (
+                        attn_mod.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+                    )
+
+                    cos, sin = position_embeddings
+                    query_states, key_states = apply_rotary_pos_emb(
+                        query_states, key_states, cos, sin
+                    )
+
+                    if past_key_values is not None:
+                        cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position}
+                        key_states, value_states = past_key_values.update(
+                            key_states, value_states, attn_mod.layer_idx, cache_kwargs
+                        )
+
+                    dropout = 0.0 if not attn_mod.training else attn_mod.attention_dropout
+                    key_states = repeat_kv(key_states, attn_mod.num_key_value_groups)
+                    value_states = repeat_kv(value_states, attn_mod.num_key_value_groups)
+
+                    attn_weights = (
+                        torch.matmul(query_states, key_states.transpose(2, 3)) * attn_mod.scaling
+                    )
+                    if attention_mask is not None:
+                        attn_weights = attn_weights + attention_mask
+
+                    attn_weights = nn.functional.softmax(
+                        attn_weights, dim=-1, dtype=torch.float32
+                    ).to(query_states.dtype)
+                    attn_weights = nn.functional.dropout(
+                        attn_weights, p=dropout, training=attn_mod.training
+                    )
+                    # === FP8 cast simulation ===
+                    attn_weights = fp8_cast_ste(attn_weights)
+                    attn_output = torch.matmul(attn_weights, value_states)
+                    attn_output = attn_output.transpose(1, 2).contiguous()
+
+                    attn_output = attn_output.reshape(*input_shape, -1).contiguous()
+                    attn_output = attn_mod.o_proj(attn_output)
+                    return attn_output, attn_weights
+
+                return patched_forward
+
+            attn_module.forward = _make_patched(attn_module)
+
+        print_info(f"FP8 attention enabled for {len(attention_layers)} layers (patch forward)")

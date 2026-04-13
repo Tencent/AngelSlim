@@ -74,7 +74,15 @@ angelslim/data/
 4. **训练**：根据配置选择端到端训练或逐块训练模式
 5. **插件 `after_train`**：执行训练后处理
 6. **转换**：`convert()` 将 `QuantLinear` 替换为推理用的 `QDQModule`
-7. **保存**：支持 `fake`（仅伪量化的 state_dict）和 `real`（真实量化模型）两种保存格式
+7. **保存**：支持以下保存格式：
+
+| `save_format` | 描述 | 备注 |
+|---------------|------|------|
+| `fake` | 保存伪量化的 state_dict（`.pt` 文件） | **仅支持非分布式 / 单卡** |
+| `real` | 保存真实量化模型（通过模型子类的 `get_save_func` 导出） | |
+| `save_kvcache_only` | 仅导出 KV Cache 的 scale 参数到 `kv_cache_scales.safetensors` | |
+| `real_and_kvcache` | 同时保存真实量化模型 **和** KV Cache scales | |
+| 不设置 | 跳过保存 | |
 
 ---
 
@@ -129,6 +137,29 @@ compression:
 | `per-channel` | 每个输出通道一组参数 | 通用权重量化 |
 | `per-group` | 每 `group_size` 个元素一组参数 | INT4 权重量化，精度更优 |
 | `per-token` | 每个 token 一组参数（始终为动态） | 激活动态量化 |
+| `per-head` | 每个 KV head 一组参数 | QKV 投影输出量化（KV Cache 压缩） |
+
+### QKV / Attention 量化配置
+
+QAT 支持对 Q/K/V 投影层的**输出**进行独立量化配置，用于模拟 KV Cache 量化压缩的精度损失，使模型在训练阶段感知 KV Cache 量化带来的影响。同时支持 FP8 Attention 模拟，对 softmax 后的 attention weights 执行 FP8 cast。
+
+QKV 量化配置位于 `compression.QAT.plugin_config.quant_config` 下，与 `weight` / `activation` 平级：
+
+| 配置项 | 类型 | 描述 |
+|--------|------|------|
+| `fp8_attn` | bool | 是否启用 FP8 Attention 模拟。启用后会 monkey-patch attention forward，对 attn_weights 执行 FP8 cast（需模型子类实现 `patch_fp8_attention`） |
+| `q` | dict | Query 投影输出的量化配置 |
+| `k` | dict | Key 投影输出的量化配置（KV Cache 中的 Key） |
+| `v` | dict | Value 投影输出的量化配置（KV Cache 中的 Value） |
+
+每个 `q` / `k` / `v` 配置字典支持以下字段：
+
+| 字段 | 类型 | 描述 |
+|------|------|------|
+| `qtype` | str | 量化类型，如 `fp8`、`int8` |
+| `granularity` | str | 量化粒度：`per-token`、`per-head`、`per-tensor`、`per-channel` |
+| `group_size` | int | 分组大小，`-1` 表示不分组 |
+| `is_sym` | bool | 是否对称量化 |
 
 ### dataset — 校准数据集配置
 
@@ -151,7 +182,7 @@ dataset:
   training_mode: "end2end"          # 训练模式："end2end" 或 "blockwise"
   dist_mode: "hf"                   # 分布式模式："hf"（HuggingFace Trainer）
   do_train: true                    # 是否执行训练
-  save_format: "real"               # 保存格式："fake" / "real" / 不设置表示跳过保存
+  save_format: "real"               # 保存格式（见下表），不设置表示跳过保存
   resume_ckpt_dir: ""               # checkpoint 恢复路径，用于加载 save_format 为 fake 的权重。不设置表示不使用 resume
 
   # ========== 数据集配置 ==========
@@ -166,6 +197,12 @@ dataset:
       use_weight_quant: true        # 是否量化权重
       use_activation_quant: true    # 是否量化激活
       lazy_init_samples: 60         # activation 校准所需的样本数（默认 10）
+      # ========== 可学习参数控制（可选） ==========
+      learnable:
+        act_scale: true             # 激活量化器的 scale/zero_point（默认：true）
+        weight_scale: false         # 权重量化器的 scale/zero_point（默认：false）
+        kv_scale: false             # KV Cache 量化器的 scale（默认：false）
+        norm: false                 # Norm 层权重（默认：false）
       # 可选：覆盖 compression.quantization 中的默认量化配置
       weight:
         qtype: int8                 # 权重量化类型（如 int4, int8, fp8）
@@ -177,6 +214,25 @@ dataset:
         granularity: per-tensor     # 激活量化粒度
         is_sym: true                # 是否对称量化
         dynamic: false              # 是否动态量化
+
+      # ========== QKV / Attention 量化配置（可选） ==========
+      fp8_attn: true                # 是否启用 FP8 Attention 模拟（对 attn_weights 做 FP8 cast）
+                                      # 注意：开启 fp8_attn 时，需要在 model 配置中设置 attn_implementation: eager
+      q:                            # Query 投影输出量化
+        qtype: fp8                  # 量化类型（fp8 / int8 等）
+        granularity: per-token      # 量化粒度（per-token / per-tensor）
+        group_size: -1              # 分组大小（-1 表示不分组）
+        is_sym: true                # 是否对称量化
+      k:                            # Key 投影输出量化（通常用于 KV Cache 压缩）
+        qtype: fp8
+        granularity: per-head       # per-head 粒度，每个 KV head 独立 scale
+        group_size: -1
+        is_sym: true
+      v:                            # Value 投影输出量化
+        qtype: fp8
+        granularity: per-head
+        group_size: -1
+        is_sym: true
 
 ```
 
@@ -269,9 +325,33 @@ def forward(self, input: torch.Tensor):
 
 1. 遍历模型所有 `nn.Linear` 层（跳过 `ignore_layers` 指定的层），替换为 `QuantLinear`
 2. 对静态 activation 量化执行 lazy 校准初始化
-3. **冻结模型权重**，仅让量化参数（`scale` / `zero_point`）可学习
+3. 根据 `learnable` 配置选择性地设置哪些参数可训练
 
-这意味着在 Learnable Scale 模式下，优化器实际更新的参数是各层的量化 scale 和 zero_point，而非模型原始权重。
+#### Learnable 参数控制
+
+通过 `learnable` 配置字典，可以独立控制每种参数组是否参与训练。模型权重本身始终保持冻结。
+
+```yaml
+plugin_config:
+  enable_scale: true
+  quant_config:
+    learnable:
+      act_scale: true           # 激活量化器的 scale/zero_point（默认：true）
+      weight_scale: false       # 权重量化器的 scale/zero_point（默认：false）
+      kv_scale: false           # KV Cache 量化器的 scale（k_proj/v_proj 中的 qkv_quantizer）（默认：false）
+      norm: false               # Norm 层（RMSNorm / LayerNorm）的权重（默认：false）
+```
+
+| 配置项 | 类型 | 默认值 | 描述 |
+|--------|------|--------|------|
+| `act_scale` | bool | `true` | 是否学习激活量化器（`act_quantizer`）的 scale / zero_point |
+| `weight_scale` | bool | `false` | 是否学习权重量化器（`weight_quantizer`）的 scale / zero_point |
+| `kv_scale` | bool | `false` | 是否学习 KV Cache 量化器（`qkv_quantizer`）的 scale（仅 k_proj / v_proj） |
+| `norm` | bool | `false` | 是否学习 Norm 层（如 `input_layernorm`、`post_attention_layernorm`）的 weight 参数 |
+
+各开关可以自由组合，例如同时开启 `weight_scale` 和 `kv_scale` 来联合优化权重量化和 KV Cache 量化的 scale 参数。
+
+> **注意**：如果未提供 `learnable` 配置，默认行为等价于 `act_scale: true`（其余为 `false`），即仅学习激活量化器的 scale 参数。
 
 ### TrainerFactory — 训练器工厂
 

@@ -42,7 +42,7 @@ class End2EndTrainer:
         if self.training_mode == "end2end" and self.dist_mode == "hf":
             self.external_trainer = Seq2SeqTrainer(
                 model=self.quant_model.model,
-                tokenizer=self.quant_model.tokenizer,
+                processing_class=self.quant_model.tokenizer,
                 args=Seq2SeqTrainingArguments(
                     output_dir=self.config["global_config"].save_path,
                     **self.config["compress_config"].QAT.hf_args,
