@@ -30,6 +30,12 @@ def clamp_ste(x: torch.Tensor, min_val, max_val):
     return (x.clamp(min_val, max_val) - x).detach() + x
 
 
+def fp8_cast_ste(x: torch.Tensor):
+    """Simulate FP8 E4M3 cast with STE for gradient pass-through."""
+    x_fp8 = x.to(torch.float8_e4m3fn)
+    return (x_fp8.to(x.dtype) - x).detach() + x
+
+
 def _parse_bits_and_dtype(qtype_str):
     match = re.search(r"\d+", qtype_str)
     if match is None:
@@ -43,9 +49,10 @@ def _parse_bits_and_dtype(qtype_str):
 
 
 class Quantizer(nn.Module):
-    def __init__(self, config, quant_info, x=None, is_act=False, resume=False):
+    def __init__(self, config, quant_info, x=None, is_act=False, resume=False, num_heads=-1):
         super().__init__()
         self.is_act = is_act
+        self.num_heads = num_heads
         info = quant_info.quant_algo_info["w"]
         self.group_size = quant_info.quant_algo_info.get("w_group_size", -1)
         rewrite_conf = config.get("weight", {})
@@ -142,6 +149,7 @@ class Quantizer(nn.Module):
             s = torch.clamp(x_g.abs().max(dim=-1)[0], min=1e-8)  # shape: [out_channels, n_groups]
 
         elif granularity == "per-token":
+            init_shape = x.shape
             rx = x.reshape(-1, x.shape[-1])
             tmp = torch.zeros(rx.shape[0], device=x.device, dtype=x.dtype)
             xmax = torch.maximum(
@@ -150,6 +158,30 @@ class Quantizer(nn.Module):
             )
             s = xmax.unsqueeze(1)  # shape: [n_tokens, 1]
             s[xmax == 0] = 1
+            # Reshape scale back to match original input dims, e.g. [B, S, 1]
+            if len(init_shape) > 2:
+                s = s.reshape(*init_shape[:-1], 1)
+
+        elif granularity == "per-head":
+            # Per-head: reshape [..., num_heads * head_dim] -> [..., num_heads, head_dim]
+            # then reduce over all dims except num_heads to get scale shape (num_heads,)
+            assert self.num_heads > 0, "num_heads must be set for per-head granularity"
+            head_dim = x.shape[-1] // self.num_heads
+            x_heads = x.view(*x.shape[:-1], self.num_heads, head_dim)
+            # Flatten all dims except the num_heads dim, then take max per head
+            # x_heads: [..., num_heads, head_dim] -> reduce all except dim -2
+            s = (
+                torch.clamp(
+                    x_heads.abs().flatten(0, -3).amax(dim=(0, -1)),  # shape: (num_heads,)
+                    min=1e-8,
+                )
+                if x_heads.dim() > 2
+                else torch.clamp(
+                    x_heads.abs().amax(dim=-1),  # shape: (num_heads,)
+                    min=1e-8,
+                )
+            )
+
         else:
             raise ValueError(f"Unsupported granularity: {granularity}")
 
@@ -202,6 +234,29 @@ class Quantizer(nn.Module):
             zp = torch.round(-xmin / s) + self.qmin
             s = s.unsqueeze(1)
             zp = zp.unsqueeze(1)
+
+        elif granularity == "per-head":
+            # Per-head: reshape [..., num_heads * head_dim] -> [..., num_heads, head_dim]
+            # then reduce over all dims except num_heads to get scale/zp shape (num_heads,)
+            assert self.num_heads > 0, "num_heads must be set for per-head granularity"
+            head_dim = x.shape[-1] // self.num_heads
+            x_heads = x.view(*x.shape[:-1], self.num_heads, head_dim)
+            if x_heads.dim() > 2:
+                flat = x_heads.flatten(0, -3)  # (N, num_heads, head_dim)
+                reduce_dims = (0, -1)
+            else:
+                flat = x_heads  # (num_heads, head_dim)
+                reduce_dims = (-1,)
+            tmp = torch.zeros(self.num_heads, device=x.device, dtype=x.dtype)
+            xmin = torch.minimum(flat.amin(dim=reduce_dims), tmp)  # (num_heads,)
+            xmax = torch.maximum(flat.amax(dim=reduce_dims), tmp)  # (num_heads,)
+            mask = xmin == xmax
+            xmin[mask], xmax[mask] = -1.0, 1.0
+            s = torch.clamp((xmax - xmin) / (self.qmax - self.qmin), min=1e-8)
+            zp = torch.round(-xmin / s) + self.qmin
+
+        else:
+            raise ValueError(f"Unsupported granularity: {granularity}")
 
         zp = torch.clamp(
             zp if isinstance(zp, torch.Tensor) else torch.tensor(zp),
@@ -312,7 +367,14 @@ class Quantizer(nn.Module):
 
 class QuantLinear(nn.Module):
     def __init__(
-        self, org_module, config, quant_info, use_weight_quant, use_act_quant, resume=False
+        self,
+        org_module,
+        config,
+        quant_info,
+        use_weight_quant,
+        use_act_quant,
+        resume=False,
+        qkv_config=None,
     ):
         super().__init__()
         self.fwd_func = F.linear
@@ -327,6 +389,15 @@ class QuantLinear(nn.Module):
         if self.use_act_quant:
             self.act_quantizer = Quantizer(config, quant_info, is_act=True, resume=resume)
 
+        # QKV output quantization for KV cache compression simulation
+        self.use_qkv_quant = qkv_config is not None
+        if self.use_qkv_quant:
+            qkv_cfg = {**config, "activation": qkv_config}
+            num_heads = qkv_config.get("num_heads", -1) if isinstance(qkv_config, dict) else -1
+            self.qkv_quantizer = Quantizer(
+                qkv_cfg, quant_info, is_act=True, resume=resume, num_heads=num_heads
+            )
+
     def forward(self, input: torch.Tensor):
         if input.shape[0] == 0:
             return self.fwd_func(input, self.weight, self.bias)
@@ -334,8 +405,14 @@ class QuantLinear(nn.Module):
         weight = self.weight_quantizer(self.weight) if self.use_weight_quant else self.weight
         if self.use_act_quant:
             input = self.act_quantizer(input)
-        return self.fwd_func(input, weight, self.bias)
+        output = self.fwd_func(input, weight, self.bias)
+        if self.use_qkv_quant:
+            output = self.qkv_quantizer(output)
+        return output
 
-    def set_quant_state(self, weight_quant=False, act_quant=False):
+    def set_quant_state(self, weight_quant=False, act_quant=False, qkv_quant=None):
         self.use_weight_quant = weight_quant
         self.use_act_quant = act_quant
+        if qkv_quant is not None:
+            # Only enable qkv_quant if this module actually has a qkv_quantizer
+            self.use_qkv_quant = qkv_quant and hasattr(self, "qkv_quantizer")

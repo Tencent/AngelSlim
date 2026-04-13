@@ -1,0 +1,71 @@
+global:
+  save_path: ./output
+
+model:
+  name: Qwen
+  model_path: Qwen/Qwen3-4B
+  trust_remote_code: true
+  torch_dtype: auto
+  device_map: auto
+  low_cpu_mem_usage: true
+  use_cache: false
+
+compression:
+  name: QAT
+  quantization:
+    name: w4a8_fp8
+    bits: 8
+    quant_method:
+      weight: per-group
+      activation: per-tensor
+      group_size: 128
+    ignore_layers: ["lm_head", "embed_tokens"] # Skip quantization for these layers
+  QAT:
+    hf_dataset: Salesforce/wikitext,wikitext-2-raw-v1 # hf dataset name, will overwrite dataset.data_path
+    # hf_cache_dir: Specify your cache path, or not set(default)
+    training_mode: end2end
+    dist_mode: hf # "hf" is using HF Trainer
+    save_format: save_kvcache_only # "save_kvcache_only": only export KV cache scales; "real": save real-quant model; "real_and_kvcache": save real-quant model + KV cache scales; "fake": save fake-quant state_dict (non-distributed only); or not set(skip save)
+    do_train: true
+    # resume_ckpt_dir: Resume for fake checkpoint, when save_format=='fake', or not set
+    plugin_config:
+      enable_scale: true
+      quant_config:
+        use_weight_quant: true
+        use_activation_quant: true
+        lazy_init_samples: 10
+        # --- Learnable parameter control ---
+        # Each switch independently controls whether that parameter group is trainable.
+        # Model weights themselves always stay frozen.
+        learnable:
+          act_scale: true             # Activation quantizer scale/zero_point (default: true)
+          weight_scale: false         # Weight quantizer scale/zero_point (default: false)
+          kv_scale: false             # KV cache quantizer scale in k_proj/v_proj (default: false)
+          norm: false                 # Norm layer (RMSNorm/LayerNorm) weights (default: false)
+        # --- QKV / Attention FP8 quantization ---
+        fp8_attn: true              # Enable FP8 attention simulation (cast attn_weights to FP8)
+        q:                          # Query projection output quantization
+          qtype: fp8
+          granularity: per-token    # Dynamic per-token quantization for Q
+          group_size: -1
+          is_sym: true
+        k:                          # Key projection output quantization (KV cache compression)
+          qtype: fp8
+          granularity: per-head     # Per-head quantization, one scale per KV head
+          group_size: -1
+          is_sym: true
+        v:                          # Value projection output quantization (KV cache compression)
+          qtype: fp8
+          granularity: per-head
+          group_size: -1
+          is_sym: true
+    hf_args:
+      # output_dir: Not to set, same as global.save_path
+      # other arguments, see https://huggingface.co/docs/transformers/v5.1.0/en/main_classes/trainer#transformers.Seq2SeqTrainingArguments
+
+dataset:
+  name: TextDataset
+  data_path: ./dataset/sharegpt_gpt4_qwen/sharegpt_gpt4-qwen3_a22B_output.jsonl
+  max_seq_length: 2048
+  num_samples: 256
+  batch_size: 1

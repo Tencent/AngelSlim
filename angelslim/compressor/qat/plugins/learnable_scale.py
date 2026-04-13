@@ -20,6 +20,12 @@ from ..modules.quantizer import QuantLinear
 from .base_plugin import BasePlugin
 from .plugin_manager import PluginManager
 
+_QKV_PROJ_MAP = {
+    "q_proj": "q",
+    "k_proj": "k",
+    "v_proj": "v",
+}
+
 
 @PluginManager.plugin("learnable_scale")
 class LearnableScalePlugin(BasePlugin):
@@ -30,12 +36,30 @@ class LearnableScalePlugin(BasePlugin):
         self.resume_ckpt_dir = resume_ckpt_dir
         self.use_weight_quant = self.config.get("use_weight_quant", False)
         self.use_activation_quant = self.config.get("use_activation_quant", False)
+        self.fp8_attn = self.config.get("fp8_attn", False)
+
+        # Parse learnable config (boolean switches for each parameter group)
+        learnable_cfg = self.config.get("learnable", {})
+        self.learn_act_scale = learnable_cfg.get("act_scale", True)
+        self.learn_weight_scale = learnable_cfg.get("weight_scale", False)
+        self.learn_kv_scale = learnable_cfg.get("kv_scale", False)
+        self.learn_norm = learnable_cfg.get("norm", False)
 
     def before_train(self, **kwargs):
+        # Retrieve KV head count from model config for per-head quantization
+        model_config = getattr(self.quant_model.model, "config", None)
+        num_kv_heads = getattr(model_config, "num_key_value_heads", -1)
         for name, module in self.quant_model.model.named_modules():
             if isinstance(module, torch.nn.Linear):
                 if any(ig in name for ig in self.ignore_layers):
                     continue
+
+                qkv_cfg = _get_qkv_config_for_layer(name, self.config)
+                # Inject num_heads into qkv_config for per-head granularity
+                if qkv_cfg is not None:
+                    suffix = name.rsplit(".", 1)[-1]
+                    if suffix in ("k_proj", "v_proj"):
+                        qkv_cfg["num_heads"] = num_kv_heads
                 q_linear = QuantLinear(
                     module,
                     self.config,
@@ -43,8 +67,13 @@ class LearnableScalePlugin(BasePlugin):
                     self.use_weight_quant,
                     self.use_activation_quant,
                     resume=self.resume_ckpt_dir is not None,
+                    qkv_config=qkv_cfg,
                 )
                 set_op_by_name(self.quant_model.model, name, q_linear)
+
+        # FP8 attention simulation — delegate to model (model-specific override)
+        if self.fp8_attn:
+            self.quant_model.patch_fp8_attention()
 
         print_info(self.quant_model.model)
 
@@ -55,8 +84,37 @@ class LearnableScalePlugin(BasePlugin):
         ):
             self._lazy_init(**kwargs)
 
-        set_quant_parameters(self.quant_model.model, requires_grad=True)
-        set_weight_parameters(self.quant_model.model, requires_grad=False)
+        self._apply_learn_strategy()
+
+    def _apply_learn_strategy(self):
+        """Set requires_grad on parameters according to ``learnable`` config."""
+        model = self.quant_model.model
+
+        # Freeze everything first
+        set_quant_parameters(model, requires_grad=False)
+        set_weight_parameters(model, requires_grad=False)
+
+        # Selectively enable each parameter group based on boolean switches
+        _set_learnable_parameters(
+            model,
+            act_scale=self.learn_act_scale,
+            weight_scale=self.learn_weight_scale,
+            kv_scale=self.learn_kv_scale,
+        )
+
+        if self.learn_norm:
+            _set_norm_parameters(model, requires_grad=True)
+
+        learnable_summary = (
+            f"act_scale={self.learn_act_scale}, "
+            f"weight_scale={self.learn_weight_scale}, "
+            f"kv_scale={self.learn_kv_scale}, "
+            f"norm={self.learn_norm}"
+        )
+        print_info(
+            f"Learnable config ({learnable_summary}): "
+            f"{sum(1 for p in model.parameters() if p.requires_grad)} trainable params"
+        )
 
     def after_train(self):
         if self.use_weight_quant:
@@ -66,7 +124,7 @@ class LearnableScalePlugin(BasePlugin):
             )
 
     def _lazy_init(self, **kwargs):
-        set_quant_state(self.quant_model.model, weight_quant=False, act_quant=True)
+        set_quant_state(self.quant_model.model, weight_quant=False, act_quant=True, qkv_quant=True)
 
         init_samples = self.config.get("lazy_init_samples", 10)
         for i in tqdm(range(init_samples), desc="Lazy init"):
@@ -79,50 +137,53 @@ class LearnableScalePlugin(BasePlugin):
             with torch.no_grad():
                 self.quant_model.model(**inputs)
 
-        for _, module in self.quant_model.model.named_modules():
+        for name, module in self.quant_model.model.named_modules():
             if isinstance(module, QuantLinear):
-                module.act_quantizer.init = True
-                if not module.act_quantizer.dynamic and not isinstance(
-                    module.act_quantizer.scale, torch.nn.Parameter
-                ):  # for MoE
-                    if not hasattr(module.act_quantizer, "overall_scale"):
-                        scale = torch.tensor(
-                            1.0, dtype=module.weight.dtype, device=module.weight.device
-                        )
-                        zp = (
-                            torch.tensor(0.0, dtype=scale.dtype, device=scale.device)
-                            if not module.act_quantizer.is_sym
-                            else None
-                        )
-                        module.act_quantizer._set_quant_parameters(scale, zp)
-                        print_info(
-                            f"Not calibrate, init scale: {module.act_quantizer.scale.item()}"
-                        )
-                    else:
-                        max_scale = max(module.act_quantizer.overall_scale)
-                        max_idx = module.act_quantizer.overall_scale.index(max_scale)
-                        zp = (
-                            module.act_quantizer.overall_zero_point[max_idx]
-                            if not module.act_quantizer.is_sym
-                            else None
-                        )
-                        module.act_quantizer._set_quant_parameters(max_scale, zp)
-                        print_info(
-                            f"Lazy init done, scale: {module.act_quantizer.scale.item()}, samples: {module.act_quantizer.calib_count}"  # noqa: E501
-                        )
-                        del (
-                            module.act_quantizer.overall_scale,
-                            module.act_quantizer.overall_zero_point,
-                            module.act_quantizer.calib_count,
-                        )
+                dtype, device = module.weight.dtype, module.weight.device
+                _finalize_quantizer(module.act_quantizer, dtype, device, tag="act")
+                if module.use_qkv_quant:
+                    _finalize_quantizer(module.qkv_quantizer, dtype, device, tag=f"qkv({name})")
 
         set_quant_state(self.quant_model.model, weight_quant=self.use_weight_quant, act_quant=True)
 
 
-def set_quant_state(model, weight_quant=False, act_quant=False):
+def _finalize_quantizer(quantizer, dtype, device, tag=""):
+    if quantizer.dynamic:
+        return
+    quantizer.init = True
+    if isinstance(quantizer.scale, torch.nn.Parameter):
+        return
+    label = getattr(quantizer, "role", tag)
+    if not hasattr(quantizer, "overall_scale") or not quantizer.overall_scale:
+        scale = torch.tensor(1.0, dtype=dtype, device=device)
+        zp = torch.tensor(0.0, dtype=dtype, device=device) if not quantizer.is_sym else None
+        quantizer._set_quant_parameters(scale, zp)
+        print_info(f"Lazy init ({label}): no calib, init scale=1.0")
+    else:
+        scale = quantizer.overall_scale[0]
+        for s in quantizer.overall_scale[1:]:
+            scale = torch.maximum(scale, s)
+        zp = None
+        if hasattr(quantizer, "overall_zero_point") and not quantizer.is_sym:
+            zp = quantizer.overall_zero_point[0]
+            for z in quantizer.overall_zero_point[1:]:
+                zp = torch.maximum(zp, z)
+        quantizer._set_quant_parameters(scale, zp)
+        print_info(
+            f"Lazy init ({label}) done, scale: {quantizer.scale.max().item():.4f}, samples: {quantizer.calib_count}"  # noqa: E501
+        )
+        if hasattr(quantizer, "overall_zero_point"):
+            del quantizer.overall_scale, quantizer.overall_zero_point, quantizer.calib_count
+        else:
+            del quantizer.overall_scale, quantizer.calib_count
+
+
+def set_quant_state(model, weight_quant=False, act_quant=False, qkv_quant=None):
     for module in model.modules():
         if isinstance(module, QuantLinear):
-            module.set_quant_state(weight_quant=weight_quant, act_quant=act_quant)
+            module.set_quant_state(
+                weight_quant=weight_quant, act_quant=act_quant, qkv_quant=qkv_quant
+            )
 
 
 def set_quant_parameters(model, requires_grad):
@@ -163,6 +224,51 @@ def trainable_parameters(model):
         if m.requires_grad:
             params.append(m)
     return iter(params)
+
+
+def _set_learnable_parameters(model, act_scale=False, weight_scale=False, kv_scale=False):
+    _KV_SUFFIXES = ("k_proj", "v_proj")
+
+    for name, module in model.named_modules():
+        if not isinstance(module, QuantLinear):
+            continue
+
+        if act_scale and hasattr(module, "act_quantizer"):
+            for pname, param in module.act_quantizer.named_parameters():
+                if "scale" in pname or "zero_point" in pname:
+                    param.requires_grad = True
+
+        if weight_scale and hasattr(module, "weight_quantizer"):
+            for pname, param in module.weight_quantizer.named_parameters():
+                if "scale" in pname or "zero_point" in pname:
+                    param.requires_grad = True
+
+        if kv_scale and hasattr(module, "qkv_quantizer"):
+            suffix = name.rsplit(".", 1)[-1] if "." in name else name
+            if suffix in _KV_SUFFIXES:
+                for pname, param in module.qkv_quantizer.named_parameters():
+                    if "scale" in pname or "zero_point" in pname:
+                        param.requires_grad = True
+
+
+def _set_norm_parameters(model, requires_grad):
+    """Enable/disable gradient for norm layer (RMSNorm / LayerNorm) weight parameters."""
+    for name, param in model.named_parameters():
+        # Match typical norm layer parameter names, e.g.
+        #   input_layernorm.weight, post_attention_layernorm.weight, norm.weight
+        if "norm" in name and "weight" in name:
+            param.requires_grad = requires_grad
+
+
+def _get_qkv_config_for_layer(name, quant_config):
+    suffix = name.rsplit(".", 1)[-1] if "." in name else name
+    qkv_key = _QKV_PROJ_MAP.get(suffix)
+    if qkv_key is None:
+        return None
+    qkv_section = quant_config.get(qkv_key)
+    if qkv_section is None:
+        return None
+    return dict(qkv_section)
 
 
 @torch.no_grad()
