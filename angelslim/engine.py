@@ -253,12 +253,7 @@ class Engine:
                     f"Compression type {self.compress_type} is not implemented"
                 )
 
-    def save(self, save_path: Optional[str] = None, config: Optional[dataclass] = None) -> None:
-        """Save compressed model and tokenizer
-        Args:
-            save_path (str, optional): Path to save the compressed model and tokenizer.
-        """
-        assert save_path, "Save path must be provided in model_config or as an argument"
+    def convert(self):
         if isinstance(self.compressor, str):
             compressors = [self.compressor]
         elif isinstance(self.compressor, list):
@@ -270,25 +265,40 @@ class Engine:
                 # Execute model conversion
                 compressors[idx].convert()
 
+    def save(self, save_path: Optional[str] = None, config: Optional[dataclass] = None) -> None:
+        """Save compressed model and tokenizer
+        Args:
+            save_path (str, optional): Path to save the compressed model and tokenizer.
+        """
+        assert save_path, "Save path must be provided in model_config or as an argument"
+
+        compressors = self.compressor
+        for idx, compress_type in enumerate(self.compress_type):
+            if self.only_inference[idx]:
+                continue
             # Save quantized model
             compressors[idx].save(save_path)
 
-        # Save all config
-        if config is not None and compress_type != "QAT":
-            config_dict = asdict(config)
-            config_dict["debug_info"] = {
-                "python": sys.version,
-                "angelslim": get_package_info("angelslim"),
-                "torch": get_package_info("torch"),
-                "transformers": get_package_info("transformers"),
-                "torch_cuda_version": (torch.version.cuda if torch.cuda.is_available() else None),
-            }
-            config_dict["model_config"]["model_path"] = "Base Model Path"
-            config_dict["global_config"]["save_path"] = "Save Model Path"
-            if "dataset_config" in config_dict and isinstance(config_dict["dataset_config"], dict):
-                config_dict["dataset_config"]["data_path"] = "Data Path"
-            with open(os.path.join(save_path, "angelslim_config.json"), "w") as f:
-                json.dump(config_dict, f, indent=4)
+            # Save all config
+            if config is not None and compress_type != "QAT":
+                config_dict = asdict(config)
+                config_dict["debug_info"] = {
+                    "python": sys.version,
+                    "angelslim": get_package_info("angelslim"),
+                    "torch": get_package_info("torch"),
+                    "transformers": get_package_info("transformers"),
+                    "torch_cuda_version": (
+                        torch.version.cuda if torch.cuda.is_available() else None
+                    ),
+                }
+                config_dict["model_config"]["model_path"] = "Base Model Path"
+                config_dict["global_config"]["save_path"] = "Save Model Path"
+                if "dataset_config" in config_dict and isinstance(
+                    config_dict["dataset_config"], dict
+                ):
+                    config_dict["dataset_config"]["data_path"] = "Data Path"
+                with open(os.path.join(save_path, "angelslim_config.json"), "w") as f:
+                    json.dump(config_dict, f, indent=4)
 
         print_info(f"Compressed model saved to {save_path}")
 
@@ -323,7 +333,9 @@ class Engine:
                 outputs = model.model(batch)
                 if classifier is not None:
                     hidden_states = outputs[0]
-                    logits = classifier(hidden_states.to(classifier.weight.dtype))
+                    logits = classifier(
+                        hidden_states.to(classifier.weight.dtype).to(classifier.weight.device)
+                    )
                 else:
                     logits = outputs[0]
                 shift_logits = logits[:, :-1, :]

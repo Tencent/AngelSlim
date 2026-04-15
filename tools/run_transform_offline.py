@@ -68,7 +68,12 @@ def get_args():
         action="store_true",
         help="Verify logits are numerically unchanged after transform (atol=1e-2)",
     )
-    return args
+    parser.add_argument(
+        "--test-lm-eval",
+        action="store_true",
+        help="Run lm-eval on the transformed model",
+    )
+    return parser.parse_args()
 
 
 def merge_config(config, args):
@@ -106,7 +111,7 @@ def build_slim_config(transform_config: TransformConfig, global_config, compress
 # ---------------------------------------------------------------------------
 
 
-def run_transform(config, test_diff=False):
+def run_transform(config, test_diff=False, lm_eval=False):
     """Load model, apply transform, and save the result.
 
     Args:
@@ -119,10 +124,7 @@ def run_transform(config, test_diff=False):
     compress_config = config.compression_config
 
     if transform_config is None:
-        raise ValueError(
-            "No 'transform' section found in the YAML config. "
-            "Please add a 'transform:' block specifying the method to use."
-        )
+        print("[run_transform][warning] transform_config is None, skip transform")
 
     # ------------------------------------------------------------------
     # 1. Load model
@@ -151,7 +153,7 @@ def run_transform(config, test_diff=False):
     # ------------------------------------------------------------------
     # 2. Apply transform (with optional output diff test)
     # ------------------------------------------------------------------
-    print(f"[run_transform] Applying transform: {transform_config.name}")
+    # print(f"[run_transform] Applying transform: {transform_config.name}")
     slim_config = build_slim_config(transform_config, global_config, compress_config)
     slim_model.init_ptq(slim_config)
 
@@ -187,7 +189,9 @@ def run_transform(config, test_diff=False):
 
         max_diff = (logits_before - logits_after).abs().max().item()
         mean_diff = (logits_before - logits_after).abs().mean().item()
-        # diff = (logits_before - logits_after).abs().cpu().numpy()
+        print(f"[test] Logits BEFORE: \n{logits_before}")
+        print(f"[test] Logits AFTER:  \n{logits_after}")
+
         print(f"[test] Max  diff = {max_diff:.6e}")
         print(f"[test] Mean diff = {mean_diff:.6e}")
 
@@ -198,6 +202,36 @@ def run_transform(config, test_diff=False):
         print(
             f"[test] Generate AFTER:  {tokenizer.decode(output_ids[0], skip_special_tokens=True)}"
         )
+
+    if lm_eval:
+        # ------------------------------------------------------------------
+        # 2.5 lm-eval benchmark on the transformed model
+        # ------------------------------------------------------------------
+        try:
+            from lm_eval import evaluator as lm_evaluator
+            from lm_eval.models.huggingface import HFLM
+            from lm_eval.utils import make_table
+        except ImportError as e:
+            raise ImportError(
+                "lm-evaluation-harness is required for --test-lm-eval. "
+                "Install it with: pip install lm-eval"
+            ) from e
+
+        print("[lm_eval] Starting lm-eval benchmark on the transformed model ...")
+        tokenizer = slim_model.tokenizer
+        tokenizer.pad_token = tokenizer.eos_token
+        hf_model.eval()
+
+        lm_eval_model = HFLM(hf_model, tokenizer=tokenizer, batch_size=32)
+
+        task_names = ["arc_challenge"]
+        results = lm_evaluator.simple_evaluate(
+            model=lm_eval_model,
+            tasks=task_names,
+            num_fewshot=0,
+        )
+
+        print(make_table(results))
 
     # ------------------------------------------------------------------
     # 3. Save transformed model
@@ -227,4 +261,4 @@ if __name__ == "__main__":
     config = parser.parse(args.config)
     merge_config(config, args)
     print_config(config)
-    run_transform(config, test_diff=args.test_output_diff)
+    run_transform(config, test_diff=args.test_output_diff, lm_eval=args.test_lm_eval)

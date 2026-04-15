@@ -162,6 +162,8 @@ class PTQ:
             if "smooth" in self.quant_helpers:
                 self.smooth.convert()
             self._convert()
+
+        self.transform_runner.convert()
         print_info("convert model done.")
 
     def save(self, save_path: str):

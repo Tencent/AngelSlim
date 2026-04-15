@@ -101,7 +101,7 @@ def matmul_hadUt(X):
 def random_hadamard_matrix(size, device):
     # See https://cornell-relaxml.github.io/quip-sharp/ ,
     # Section "Randomized Hadamard Transformation"
-    Q = torch.randint(low=0, high=2, size=(size,)).to(torch.float64)
+    Q = torch.randint(low=0, high=2, size=(size,)).to(torch.float32)
     Q = Q * 2 - 1
     Q = torch.diag(Q)
     return matmul_hadU(Q).to(device)

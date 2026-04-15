@@ -19,6 +19,7 @@ from .packing_utils import (  # noqa: F401
     dequantize_gemm,
     pack_weight_to_int8,
     pack_weight_to_int8_gpu,
+    unpack_weight_omni,
 )
 from .quant_func import *  # noqa: F401 F403
 from .sample_func import EMASampler, MultiStepSampler  # noqa: F401

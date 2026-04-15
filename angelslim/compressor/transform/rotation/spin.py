@@ -24,10 +24,11 @@ from tqdm import tqdm
 
 from ..base import TransformBase
 from ..factory import TransformFactory
-from .fuse_norm_utils import center_embeddings, fuse_ln_linear
+from .fuse_norm_utils import fuse_ln_linear
 from .hadamard_utils import hadamard_matrix, random_hadamard_matrix
 from .mapping import linear_mapping as default_linear_mapping
 from .mapping import norm_mapping as default_norm_mapping
+from .permutation import Permutation, PermutationConfig
 
 __all__ = ["SpinQuant", "SpinConfig", "SpinquantRotation"]
 
@@ -60,8 +61,9 @@ class SpinConfig:
     ignore_layers: List[str] = field(default_factory=list)
     mappings: Optional[Dict] = field(default=None)
     norm_mappings: Optional[List] = field(default=None)
+    permutation: Optional[PermutationConfig] = field(default=None)  # R4 permutation
     device: str = "cpu"
-    max_threads: int = 64
+    max_threads: int = 4
 
 
 @TransformFactory.register("SpinQuant")
@@ -99,6 +101,7 @@ class SpinQuant(TransformBase):
 
     R3_linears: List[torch.nn.Linear] = None
     R4_linears: List[torch.nn.Linear] = None
+    R4_hooks: List = []
 
     def __init__(self, quant_model, quant_config=None, R1=None, R2=None):
         super().__init__(quant_model, quant_config)
@@ -139,7 +142,17 @@ class SpinQuant(TransformBase):
         self.R1 = R1
         self.R2 = R2 if R2 is not None else {}
 
-        self.R4_hooks = []
+        if self.spin_config.permutation is not None:
+            self.spin_config.permutation = (
+                PermutationConfig(**self.spin_config.permutation)
+                if isinstance(self.spin_config.permutation, dict)
+                else self.spin_config.permutation
+            )
+            if self.spin_config.permutation.mappings is None:
+                self.spin_config.permutation.mappings = self.spin_config.mappings
+            if len(self.spin_config.permutation.ignore_layers) < 1:
+                self.spin_config.permutation.ignore_layers = self.spin_config.ignore_layers
+            self.spin_config.permutation.device = self.spin_config.device
 
     def silent_run(self):
         """only set linears and Rotations"""
@@ -156,6 +169,7 @@ class SpinQuant(TransformBase):
     def run(self):
         # add rotation
         if "R1" in self.spin_config.rotation:
+            self._untie_word_embeddings()
             # fuse norm
             self._apply_fused_ln()
             self._apply_r1()
@@ -164,6 +178,11 @@ class SpinQuant(TransformBase):
         if "R3" in self.spin_config.rotation:
             self._apply_r3()
         if "R4" in self.spin_config.rotation:
+            if self.spin_config.permutation is not None:
+                self.permutation_runner = Permutation(
+                    self.quant_model, self.spin_config.permutation
+                )
+                self.permutation_runner.run()
             self._apply_r4()
 
     def _apply_linear_hook(self, linear, rotation, hook_input=True):
@@ -216,9 +235,7 @@ class SpinQuant(TransformBase):
             fuse_input: Matches the ``fuse_input`` semantics of
                 :meth:`_apply_linear_fuse`.
         """
-        # self.logger.warning(
-        #     f"[_meta_fuse] '{name}' weight is on meta device, attempting hook-based fuse"
-        # )
+
         hook = getattr(linear, "_hf_hook", None)
         if hook is None:
             self.logger.warning(
@@ -336,27 +353,43 @@ class SpinQuant(TransformBase):
         for f in futures:
             f.result()
 
+    def _untie_word_embeddings(self):
+        """Untie lm_head and embed_tokens if they share the same weight tensor.
+
+        When tie_word_embeddings=True (e.g. Qwen3), lm_head.weight IS embed_tokens.weight.
+        center_embeddings() and fuse_ln_linear() each modify the weight in-place with
+        conflicting transforms, corrupting both embedding lookup and lm_head output.
+        Cloning into an independent parameter before any fusing avoids this.
+        """
+        hf_model = self.quant_model.model
+        if not getattr(hf_model.config, "tie_word_embeddings", False):
+            return
+        lm_head_name = self.linear_mapping.get("lm_head", "lm_head")
+        lm_head = getattr(hf_model, lm_head_name, None)
+        embed_tokens_name = self.linear_mapping.get("embedding", "embed_tokens")
+        embed_tokens = None
+        for name, module in hf_model.named_modules():
+            if name.split(".")[-1] == embed_tokens_name:
+                embed_tokens = module
+                break
+        if lm_head is not None and embed_tokens is not None:
+            if lm_head.weight is embed_tokens.weight:
+                self.logger.info(
+                    "tie_word_embeddings=True detected: cloning lm_head.weight "
+                    "into an independent parameter before fusing norms."
+                )
+                lm_head.weight = torch.nn.Parameter(lm_head.weight.data.clone())
+        hf_model.config.tie_word_embeddings = False
+
     def _apply_fused_ln(self):
         """Apply fused layer norm to a linear layer.
-        1. centering embedding
-        2. fuse layer norm with adjacent linear layers
+        1. untie word embeddings (if tie_word_embeddings=True)
+        2. centering embedding
+        3. fuse layer norm with adjacent linear layers
         """
         self.logger.info("Applying fused layer norm to a linear layer")
 
-        hf_model = self.quant_model.model
-        if (
-            hasattr(hf_model, "lm_head")
-            and hasattr(hf_model, "model")
-            and hasattr(hf_model.model, "embed_tokens")
-        ):
-            if hf_model.lm_head.weight.data_ptr() == hf_model.model.embed_tokens.weight.data_ptr():
-                hf_model.lm_head.weight = torch.nn.Parameter(hf_model.lm_head.weight.data.clone())
-
-        for _, embedding in self.quant_model.get_rotation_mapping_layers(
-            None,
-            linear_mapping=([self.linear_mapping["embedding"]], self.ignore_layers),
-        ).items():
-            center_embeddings(embedding)
+        self._untie_word_embeddings()
 
         norm_layers = self.quant_model.get_rotation_mapping_layers(
             None,
@@ -491,7 +524,7 @@ class SpinQuant(TransformBase):
         raise NotImplementedError("SpinQuant._apply_r3 is not yet implemented.")
 
     @torch.no_grad()
-    def _apply_r4(self, no_transform=False):
+    def _apply_r4(self, no_transform=False, only_hook=False):
         """Insert online R4 Hadamard rotation for the down-projection input (FFN).
 
         Registers a forward pre-hook on down_proj that applies R4 to its input at runtime,
@@ -505,54 +538,60 @@ class SpinQuant(TransformBase):
             linear_mapping=(self.linear_mapping["mlp_out"], self.ignore_layers),
         )
 
-        if self.spin_config.had_dim > 0:
-            H = hadamard_matrix(self.spin_config.had_dim, self.spin_config.device)
-        else:
-            H = None
-        R4_dict = {}
-
-        if no_transform:
-            return
-
         # Phase 1 (sequential): build R4_dict and handle one-time weight scaling per shape.
         # This must run serially because R4_dict is populated on first encounter of each shape
         # and the weight pre-scaling of that first linear must complete before fuse.
+
+        R4_dict = {}
         weight_device = None
-        for _, linear in self.R4_linears.items():
-            if weight_device is None:
-                weight_device = linear.weight.device
-            if linear.weight.shape[-1] not in R4_dict:
-                if self.spin_config.had_dim < 0:
-                    rot = hadamard_matrix(linear.weight.shape[-1], self.spin_config.device)
-                    # rot = rot * (linear.weight.shape[-1] ** 0.5)  # reverse to +1/-1 matrix
-                    # linear.weight.data = linear.weight.data / (linear.weight.shape[-1] ** 0.5)
-                    R4_dict[linear.weight.shape[-1]] = rot
-                else:
-                    rot = torch.block_diag(
-                        *([H] * (linear.weight.shape[-1] // self.spin_config.had_dim))
-                    )
-                    # rot = rot * (self.spin_config.had_dim**0.5)  # reverse to +1/-1 matrix
-                    # linear.weight.data = linear.weight.data / (self.spin_config.had_dim**0.5)
-                    R4_dict[linear.weight.shape[-1]] = rot
-            if H is None:
-                H = R4_dict[linear.weight.shape[-1]]
+        if self.R4 is None:
+            if self.spin_config.had_dim > 0:
+                H = hadamard_matrix(self.spin_config.had_dim, self.spin_config.device)
+            else:
+                H = None
+
+            for _, linear in self.R4_linears.items():
+                if weight_device is None:
+                    weight_device = linear.weight.device
+                if linear.weight.shape[-1] not in R4_dict:
+                    if self.spin_config.had_dim < 0:
+                        rot = hadamard_matrix(linear.weight.shape[-1], self.spin_config.device)
+                        R4_dict[linear.weight.shape[-1]] = rot
+                    else:
+                        rot = torch.block_diag(
+                            *([H] * (linear.weight.shape[-1] // self.spin_config.had_dim))
+                        )
+                        R4_dict[linear.weight.shape[-1]] = rot
+                if H is None:
+                    H = R4_dict[linear.weight.shape[-1]]
+            self.R4_dict = R4_dict
+            self.R4 = H
+        else:
+            R4_dict = self.R4_dict
+
+        rot = next(iter(R4_dict.values()))
 
         assert len(R4_dict) == 1, "R4_dict must have only one entry, please check your model"
-        self.R4 = H
-        rot = next(iter(R4_dict.values()))
+
+        if no_transform:
+            return
 
         ORI_DEVICE_H = rot.to(weight_device)
 
         # Phase 2 (parallel): hook + fuse are independent per linear, safe to run concurrently.
         def _hook_and_fuse(name, linear, rotation):
             hook = self._apply_linear_hook(linear, ORI_DEVICE_H, hook_input=True)
-            self._apply_linear_fuse(linear, rotation, fuse_input=True, name=name)
+            if not only_hook:
+                self._apply_linear_fuse(linear, rotation, fuse_input=True, name=name)
             self.R4_hooks.append(hook)
 
         tasks = [
             (_hook_and_fuse, (name, linear, rot), {}) for name, linear in self.R4_linears.items()
         ]
         self._parallel_apply(tasks, desc="R4 fuse")
+
+        if only_hook:
+            return
 
         if self.deploy_vllm:
             transform_config = {
@@ -579,8 +618,19 @@ class SpinQuant(TransformBase):
             }
             self.quant_model.quant_config.transform_config = transform_config
 
+    def convert(self):
+        """
+        Hook model again, but not fuse model
+        """
+        if "R4" in self.spin_config.rotation:
+            for hook in tqdm(self.R4_hooks, desc="remove R4 hooks"):
+                hook.remove()
+            self.R4_hooks.clear()
+            self.R4_linears.clear()
+            self._apply_r4(no_transform=False, only_hook=True)
+
     @torch.no_grad()
-    def convert(self, R1=None, R2_list=None, R3_list=None, R4_list=None):
+    def fuse_other_matrix(self, R1=None, R2_list=None, R3_list=None, R4_list=None):
         """Fuse rotation matrices into weights after QAT training.
 
         Intended for use when hooks were registered during training (trainable mode).
@@ -648,6 +698,7 @@ class SpinQuant(TransformBase):
         # remove hooks
         for hook in tqdm(self.R4_hooks, desc="remove R4 hooks"):
             hook.remove()
+        self.R4_hooks.clear()
 
     def get_rotation_mat(self):
         """Get the rotation matrices."""

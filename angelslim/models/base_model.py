@@ -92,6 +92,7 @@ class BaseLLMModel(metaclass=ABCMeta):
                 - compress_config: the configuration for compression.
                 - global_config: the global configuration for the model.
         """
+
         quant_config = QuantConfig(slim_config["compress_config"], slim_config["global_config"])
         self.quant_config = quant_config
         self.act_scales_dict = {}
@@ -138,6 +139,16 @@ class BaseLLMModel(metaclass=ABCMeta):
             act_scale = self.act_scales_dict[name]
         if name in self.weight_scales_dict:
             weight_scale = self.weight_scales_dict[name]
+
+        if hasattr(self.quant_config.quant_algo_info, "w_group_size"):
+            self.group_size = self.quant_config.quant_algo_info.w_group_size
+        elif hasattr(self.quant_config.quant_algo_info, "group_size"):
+            self.group_size = self.quant_config.quant_algo_info.group_size
+        else:
+            self.group_size = 128
+
+        print_info(f"use weight group size {self.group_size}")
+
         if self.deploy_backend in ["vllm", "huggingface", "trtllm", "tensorrt"]:
             q_linear = QDQModule(
                 quant_algo=self.quant_config.quant_algo,
@@ -145,6 +156,7 @@ class BaseLLMModel(metaclass=ABCMeta):
                 weight_scale=weight_scale,
                 bias=sub_layer.bias,
                 input_scale=act_scale,
+                group_size=self.group_size,
             )
         else:
             print_info("current {} deploy_backend not support".format(self.deploy_backend))

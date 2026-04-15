@@ -40,6 +40,25 @@ def unpack_awq(qweight: torch.Tensor, qzeros: torch.Tensor, bits: int):
     return iweights, izeros
 
 
+def unpack_weight_omni(qweight: torch.Tensor, save_bit: int = 4, pack_bit: int = 8):
+    assert pack_bit % save_bit == 0, "pack_bit must be divisible by save_bit"
+    mask = (1 << save_bit) - 1  # e.g. 0x0F for 4-bit
+    sign_bit = 1 << (save_bit - 1)  # e.g. 0x08 for 4-bit
+    shifts = torch.arange(0, pack_bit, save_bit, device=qweight.device)
+    qweight = qweight.to(torch.int32)
+    # Extract each sub-value and apply sign extension
+    # bitwise_right_shift is arithmetic, so the highest slot (last shift) is already
+    # sign-extended correctly; all other slots need masking + manual sign extension.
+    iweights = torch.bitwise_right_shift(qweight[:, :, None], shifts[None, None, :]).to(
+        torch.int32
+    )
+    # Mask off upper bits and sign-extend for all slots except the topmost
+    iweights = iweights & mask  # isolate save_bit bits
+    iweights = iweights - ((iweights & sign_bit) << 1)  # sign extend
+    iweights = iweights.reshape(iweights.shape[0], -1)
+    return iweights
+
+
 def reverse_awq_order(iweights: torch.Tensor, izeros: torch.Tensor, bits: int):
     reverse_order_tensor = torch.arange(
         iweights.shape[-1],
