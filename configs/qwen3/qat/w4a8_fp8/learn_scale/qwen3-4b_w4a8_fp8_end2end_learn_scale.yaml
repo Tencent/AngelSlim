@@ -28,6 +28,10 @@ compression:
     save_format: fake # Set "fake" or "real", or not set(skip save)
     do_train: true
     # resume_ckpt_dir: Resume for fake checkpoint, when save_format=='fake', or not set
+    loss_type: origin # origin | kl | rkl | mse | kd | kl_top[_K] | r_kl_top[_K]
+    loss_topk: null # optional, overrides the K parsed from loss_type
+    kd_temperature: 1.0
+    kd_alpha: 0.5
     plugin_config:
       enable_scale: true
       quant_config:

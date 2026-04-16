@@ -40,8 +40,9 @@ class LearnableScalePlugin(BasePlugin):
 
         # Parse learnable config (boolean switches for each parameter group)
         learnable_cfg = self.config.get("learnable", {})
-        self.learn_act_scale = learnable_cfg.get("act_scale", True)
-        self.learn_weight_scale = learnable_cfg.get("weight_scale", False)
+        self.learn_act_scale = learnable_cfg.get("act_scale", False)
+        self.learn_weight_scale = learnable_cfg.get("weight_scale", True)
+        self.learn_lwc = learnable_cfg.get("lwc", False)
         self.learn_kv_scale = learnable_cfg.get("kv_scale", False)
         self.learn_norm = learnable_cfg.get("norm", False)
 
@@ -100,6 +101,7 @@ class LearnableScalePlugin(BasePlugin):
             act_scale=self.learn_act_scale,
             weight_scale=self.learn_weight_scale,
             kv_scale=self.learn_kv_scale,
+            lwc=self.learn_lwc,
         )
 
         if self.learn_norm:
@@ -109,7 +111,8 @@ class LearnableScalePlugin(BasePlugin):
             f"act_scale={self.learn_act_scale}, "
             f"weight_scale={self.learn_weight_scale}, "
             f"kv_scale={self.learn_kv_scale}, "
-            f"norm={self.learn_norm}"
+            f"norm={self.learn_norm}",
+            f"lwc={self.learn_lwc}",
         )
         print_info(
             f"Learnable config ({learnable_summary}): "
@@ -205,7 +208,7 @@ def quant_parameters(model):
 def set_weight_parameters(model, requires_grad):
     params = []
     for n, m in model.named_parameters():
-        if n.find("weight") > -1 and not (n.find("scale") > -1 or n.find("zero_point") > -1):
+        if n.endswith("weight") and not (n.find("scale") > -1 or n.find("zero_point") > -1):
             m.requires_grad = requires_grad
     return iter(params)
 
@@ -213,7 +216,7 @@ def set_weight_parameters(model, requires_grad):
 def weight_parameters(model):
     params = []
     for n, m in model.named_parameters():
-        if n.find("weight") > -1 and not (n.find("scale") > -1 or n.find("zero_point") > -1):
+        if n.endswith("weight") and not (n.find("scale") > -1 or n.find("zero_point") > -1):
             params.append(m)
     return iter(params)
 
@@ -226,7 +229,9 @@ def trainable_parameters(model):
     return iter(params)
 
 
-def _set_learnable_parameters(model, act_scale=False, weight_scale=False, kv_scale=False):
+def _set_learnable_parameters(
+    model, act_scale=False, weight_scale=False, kv_scale=False, lwc=False
+):
     _KV_SUFFIXES = ("k_proj", "v_proj")
 
     for name, module in model.named_modules():
@@ -241,6 +246,11 @@ def _set_learnable_parameters(model, act_scale=False, weight_scale=False, kv_sca
         if weight_scale and hasattr(module, "weight_quantizer"):
             for pname, param in module.weight_quantizer.named_parameters():
                 if "scale" in pname or "zero_point" in pname:
+                    param.requires_grad = True
+
+        if lwc and hasattr(module, "weight_quantizer"):
+            for pname, param in module.weight_quantizer.named_parameters():
+                if "clip_factor_w_max" in pname or "clip_factor_w_min" in pname:
                     param.requires_grad = True
 
         if kv_scale and hasattr(module, "qkv_quantizer"):

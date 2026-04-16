@@ -272,6 +272,10 @@ class QATTrainingConfig:
     hf_dataset: Optional[str] = None
     do_train: bool = field(default=True)
     resume_ckpt_dir: Optional[str] = None
+    loss_type: str = field(default="origin")
+    loss_topk: Optional[int] = None
+    kd_temperature: float = field(default=1.0)
+    kd_alpha: float = field(default=0.5)
     hf_args: Dict[str, Any] = field(default_factory=dict)
 
 

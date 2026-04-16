@@ -9,7 +9,6 @@ model:
   device_map: auto
   low_cpu_mem_usage: true
   use_cache: false
-  attn_implementation: eager # Required when fp8_attn is enabled
 
 compression:
   name: QAT
@@ -26,7 +25,7 @@ compression:
     # hf_cache_dir: Specify your cache path, or not set(default)
     training_mode: end2end
     dist_mode: hf # "hf" is using HF Trainer
-    save_format: save_kvcache_only # "save_kvcache_only": only export KV cache scales; "real": save real-quant model; "real_and_kvcache": save real-quant model + KV cache scales; "fake": save fake-quant state_dict (non-distributed only); or not set(skip save)
+    save_format: fake # Set "fake" or "real", or not set(skip save)
     do_train: true
     # resume_ckpt_dir: Resume for fake checkpoint, when save_format=='fake', or not set
     loss_type: origin # origin | kl | rkl | mse | kd | kl_top[_K] | r_kl_top[_K]
@@ -38,7 +37,7 @@ compression:
       quant_config:
         use_weight_quant: true
         use_activation_quant: true
-        use_qkv_quant: true
+        use_qkv_quant: false
         lazy_init_samples: 10
         # --- Learnable parameter control ---
         # Each switch independently controls whether that parameter group is trainable.
@@ -48,26 +47,24 @@ compression:
           weight_scale: true          # Weight quantizer scale/zero_point (default: true)
           kv_scale: false             # KV cache quantizer scale in k_proj/v_proj (default: false)
           norm: false                 # Norm layer (RMSNorm/LayerNorm) weights (default: false)
-        # --- QKV / Attention FP8 quantization ---
-        fp8_attn: true              # Enable FP8 attention simulation (cast attn_weights to FP8)
-        q:                          # Query projection output quantization
-          qtype: fp8
-          granularity: per-token    # Dynamic per-token quantization for Q
-          group_size: -1
-          is_sym: true
-        k:                          # Key projection output quantization (KV cache compression)
-          qtype: fp8
-          granularity: per-head     # Per-head quantization, one scale per KV head
-          group_size: -1
-          is_sym: true
-        v:                          # Value projection output quantization (KV cache compression)
-          qtype: fp8
-          granularity: per-head
-          group_size: -1
-          is_sym: true
+          lwc: true                  # LWC quantization (default: false)
+        # --- LWC quantization ---
+        lwc:
+          enable_lwc: true
+          lwc_init_value: 4.0
+          lwc_lr: 0.5 # default 0.5, can be set to 0.2
+
     hf_args:
       # output_dir: Not to set, same as global.save_path
       # other arguments, see https://huggingface.co/docs/transformers/v5.1.0/en/main_classes/trainer#transformers.Seq2SeqTrainingArguments
+      logging_steps: 1
+      logging_first_step: true
+      per_device_train_batch_size: 2
+      gradient_accumulation_steps: 2
+      learning_rate: 1e-5
+      lr_scheduler_type: constant
+      num_train_epochs: 1
+      save_strategy: 'no'
 
 dataset:
   name: TextDataset
@@ -75,3 +72,4 @@ dataset:
   max_seq_length: 2048
   num_samples: 256
   batch_size: 1
+

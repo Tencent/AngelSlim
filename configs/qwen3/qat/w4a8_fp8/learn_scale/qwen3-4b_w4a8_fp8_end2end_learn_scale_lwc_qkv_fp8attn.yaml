@@ -46,8 +46,14 @@ compression:
         learnable:
           act_scale: false            # Activation quantizer scale/zero_point (default: false)
           weight_scale: true          # Weight quantizer scale/zero_point (default: true)
-          kv_scale: false             # KV cache quantizer scale in k_proj/v_proj (default: false)
+          kv_scale: true             # KV cache quantizer scale in k_proj/v_proj (default: false)
           norm: false                 # Norm layer (RMSNorm/LayerNorm) weights (default: false)
+          lwc: true                  # LWC quantization (default: false)
+        # --- LWC quantization ---
+        lwc:
+          enable_lwc: true
+          lwc_init_value: 4.0
+          lwc_lr: 0.5 # default 0.5, can be set to 0.2
         # --- QKV / Attention FP8 quantization ---
         fp8_attn: true              # Enable FP8 attention simulation (cast attn_weights to FP8)
         q:                          # Query projection output quantization
@@ -68,6 +74,14 @@ compression:
     hf_args:
       # output_dir: Not to set, same as global.save_path
       # other arguments, see https://huggingface.co/docs/transformers/v5.1.0/en/main_classes/trainer#transformers.Seq2SeqTrainingArguments
+      logging_steps: 1
+      logging_first_step: true
+      per_device_train_batch_size: 2
+      gradient_accumulation_steps: 2
+      learning_rate: 5e-5
+      lr_scheduler_type: constant
+      num_train_epochs: 1
+      save_strategy: 'no'
 
 dataset:
   name: TextDataset

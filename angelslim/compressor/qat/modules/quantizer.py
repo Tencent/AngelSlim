@@ -69,6 +69,7 @@ class Quantizer(nn.Module):
         self._apply_settings(info, rewrite_conf)
         self._set_quant_range()
         self._init_quant_params(x)
+        self._init_lwc_params(x, config)
 
     def _apply_settings(self, info, rewrite_conf):
         if rewrite_conf:
@@ -129,6 +130,39 @@ class Quantizer(nn.Module):
                     x, self.granularity, self.group_size
                 )
                 self._set_quant_parameters(scale, zp.round())
+
+    def _init_lwc_params(self, x, config):
+        lwc_cfg = config.get("lwc", {})
+        if isinstance(lwc_cfg, dict):
+            self.lwc = (not self.is_act) and bool(lwc_cfg.get("enable_lwc", False))
+            self.lwc_init_value = float(lwc_cfg.get("lwc_init_value", 4.0))
+        else:
+            self.lwc = (not self.is_act) and bool(lwc_cfg)
+            self.lwc_init_value = 4.0
+
+        if self.lwc:
+            if x.dim() != 2:
+                x_for_shape = x.flatten(1)
+            else:
+                x_for_shape = x
+            out_dim, in_dim = x_for_shape.shape
+            if self.granularity == "per-group":
+                if not self.group_size or self.group_size <= 0:
+                    raise ValueError("per-group quantization requires positive group_size.")
+                assert in_dim % self.group_size == 0
+                n_groups = in_dim // self.group_size
+                dim1 = out_dim * n_groups
+            elif self.granularity == "per-channel":
+                dim1 = out_dim
+            else:
+                dim1 = 1
+
+            init = (
+                torch.ones((dim1, 1), device=x.device, dtype=torch.float32) * self.lwc_init_value
+            )
+            self.clip_factor_w_max = nn.Parameter(init.clone(), requires_grad=True)
+            self.clip_factor_w_min = nn.Parameter(init.clone(), requires_grad=True)
+            self.sigmoid = nn.Sigmoid()
 
     def _compute_scales(self, x, granularity="per-tensor", group_size=-1):
         if granularity == "per-tensor":
@@ -309,16 +343,129 @@ class Quantizer(nn.Module):
 
         elif self.granularity == "per-token":
             # scale: [n_tokens, 1] -> [n_tokens, in_features] then reshape to x.shape
-            init_shape = x.shape
-            rx = x.reshape(-1, x.shape[-1])
-            scale = _expand(scale, rx.shape).reshape(init_shape)
-            zero_point = (
-                _expand(zero_point, rx.shape).reshape(init_shape)
-                if zero_point is not None
-                else None
-            )
+            scale = _expand(scale, x.shape)
+            zero_point = _expand(zero_point, x.shape) if zero_point is not None else None
+
+        elif self.granularity == "per-head":
+            if self.num_heads <= 0:
+                raise ValueError("num_heads must be set for per-head granularity.")
+            if x.shape[-1] % self.num_heads != 0:
+                raise ValueError(
+                    f"last dim ({x.shape[-1]}) must be divisible by num_heads ({self.num_heads})"
+                )
+            head_dim = x.shape[-1] // self.num_heads
+            head_shape = (*x.shape[:-1], self.num_heads, head_dim)
+
+            def _expand_per_head(t):
+                if t is None:
+                    return None
+                # Broadcast one scale per head across that head's contiguous feature slice.
+                view_shape = (1,) * (x.dim() - 1) + (self.num_heads, 1)
+                return t.reshape(view_shape).expand(head_shape).reshape(x.shape)
+
+            scale = _expand_per_head(scale)
+            zero_point = _expand_per_head(zero_point)
 
         return scale, zero_point
+
+    def _expand_scale_zp_lwc(self, scale, zero_point, x):
+        def _expand(t, target_shape):
+            if t is None:
+                return None
+            return t.expand(target_shape)
+
+        if self.granularity == "per-channel":
+            scale = _expand(scale, x.shape)
+            zero_point = _expand(zero_point, x.shape)
+
+        elif self.granularity == "per-group":
+            group_size = self.group_size
+            scale = scale.unsqueeze(-1).expand(*scale.shape, group_size).reshape(x.shape)
+            if zero_point is not None:
+                zero_point = (
+                    zero_point.unsqueeze(-1).expand(*zero_point.shape, group_size).reshape(x.shape)
+                )
+
+        return scale, zero_point
+
+    def _lwc_fake_quant_weight(self, x: torch.Tensor) -> torch.Tensor:
+        # Weight-only LWC path (OmniQuant-style):
+        # compute scale/zp from (possibly grouped) xmin/xmax
+        # with learnable bound factors, then quantize with STE.
+        x_dtype = x.dtype
+        x_work = x
+        if x_work.dim() != 2:
+            x_work = x_work.flatten(1)
+
+        if self.granularity == "per-group":
+            out_dim, in_dim = x_work.shape
+            x_reduce = x_work.reshape(out_dim, in_dim // self.group_size, self.group_size)
+            xmin = x_reduce.amin(dim=-1)
+            xmax = x_reduce.amax(dim=-1)
+        elif self.granularity == "per-channel":
+            xmin = x_work.amin(dim=-1, keepdim=True)
+            xmax = x_work.amax(dim=-1, keepdim=True)
+        else:
+            # per-tensor (default)
+            xmin = x_work.amin().view(1, 1)
+            xmax = x_work.amax().view(1, 1)
+
+        xmax = self.sigmoid(self.clip_factor_w_max).reshape_as(xmax) * xmax
+        xmin = self.sigmoid(self.clip_factor_w_min).reshape_as(xmin) * xmin
+        if self.is_sym:
+            abs_max = torch.max(xmax.abs(), xmin.abs())
+            scale = (abs_max / self.qmax).to(dtype=x_work.dtype)
+            round_zero_point = None
+        else:
+            range_ = xmax - xmin
+            scale = (range_ / (self.qmax - self.qmin)).to(dtype=x_work.dtype)
+            zero_point = (-xmin) / range_ * (self.qmax - self.qmin) + self.qmin
+            round_zero_point = clamp_ste(round_ste(zero_point), self.qmin, self.qmax)
+        scale, round_zero_point = self._expand_scale_zp_lwc(scale, round_zero_point, x_work)
+        x_dequant = self._fake_quant_with_params(x_work, scale, round_zero_point)
+        return x_dequant.to(dtype=x_dtype).reshape(x.shape)
+
+    def _w4a8_fp8_ste_from_dequant(
+        self, x_dequant: torch.Tensor, scale: torch.Tensor
+    ) -> torch.Tensor:
+        fp8_scale = scale.max() * self.qmax / FP8_E4M3_QMAX
+        weight_fp8 = x_dequant / fp8_scale
+        weight_fp8_q = weight_fp8.clamp(FP8_E4M3_QMIN, FP8_E4M3_QMAX).to(torch.float8_e4m3fn)
+        weight_fp8_q = (weight_fp8_q.to(torch.bfloat16) - weight_fp8).detach() + weight_fp8
+        return weight_fp8_q * fp8_scale
+
+    def _fake_quant_with_params(
+        self,
+        x: torch.Tensor,
+        scale: torch.Tensor,
+        round_zero_point: torch.Tensor | None,
+    ) -> torch.Tensor:
+        scale = clamp_ste(scale, 1e-4, 1e4)
+        if round_zero_point is not None:
+            round_zero_point = clamp_ste(round_zero_point, self.qmin, self.qmax)
+
+        if self.is_w4a8_fp8:
+            x_int4 = round_ste(x / scale)
+            x_int4 = clamp_ste(x_int4, self.qmin, self.qmax)
+            x_dequant = x_int4.mul(scale)
+            return self._w4a8_fp8_ste_from_dequant(x_dequant, scale)
+
+        if self.dtype == "fp8":
+            weight_fp8 = x / scale
+            weight_fp8 = clamp_ste(weight_fp8, FP8_E4M3_QMIN, FP8_E4M3_QMAX)
+            weight_fp8_q = weight_fp8.to(torch.float8_e4m3fn).to(torch.bfloat16)
+            weight_fp8_q = (weight_fp8_q - weight_fp8).detach() + weight_fp8
+            return weight_fp8_q * scale
+
+        x_int = round_ste(x / scale)
+        if round_zero_point is not None:
+            x_int = x_int.add(round_zero_point)
+        x_int = clamp_ste(x_int, self.qmin, self.qmax)
+        x_dequant = x_int
+        if round_zero_point is not None:
+            x_dequant = x_dequant.sub(round_zero_point)
+        x_dequant = x_dequant.mul(scale)
+        return x_dequant
 
     def fake_quant(self, x):
         scale = clamp_ste(self.scale, 1e-4, 1e4)
@@ -326,29 +473,14 @@ class Quantizer(nn.Module):
             None if self.is_sym else clamp_ste(round_ste(self.zero_point), self.qmin, self.qmax)
         )
         scale, round_zero_point = self._expand_scale_zp(scale, round_zero_point, x)
-
-        if self.is_w4a8_fp8:
-            x_int4 = round_ste(x / scale)
-            x_int4 = clamp_ste(x_int4, self.qmin, self.qmax).mul(scale)
-            fp8_scale = scale.max() * self.qmax / FP8_E4M3_QMAX
-            weight_fp8 = (x_int4 / fp8_scale).clamp(-448, 448).to(torch.float8_e4m3fn)
-            return weight_fp8.to(torch.bfloat16) * fp8_scale
-
-        if self.dtype == "fp8":
-            weight_fp8 = (x / scale).clamp(-448, 448).to(torch.float8_e4m3fn)
-            return weight_fp8.to(torch.bfloat16) * scale
-
-        x_int = round_ste(x / scale)
-        if round_zero_point is not None:
-            x_int = x_int.add(round_zero_point)
-        x_int = clamp_ste(x_int, self.qmin, self.qmax)
-        if round_zero_point is not None:
-            x_int = x_int.sub(round_zero_point)
-        return x_int.mul(scale)
+        return self._fake_quant_with_params(x, scale, round_zero_point)
 
     def forward(self, x: torch.Tensor):
         if self.bits >= 16:
             return x
+
+        if self.lwc:
+            return self._lwc_fake_quant_weight(x)
 
         if self.is_act and not self.dynamic and not self.init:
             self._lazy_init(x)
