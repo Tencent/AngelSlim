@@ -431,6 +431,7 @@ document.write(`
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quantlinear">QuantLinear — 量化线性层</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#learnablescaleplugin-scale">LearnableScalePlugin — 可学习 Scale 插件</a><ul class="visible nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#learnable">Learnable 参数控制</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#lwc">LWC 配置</a></li>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#trainerfactory">TrainerFactory — 训练器工厂</a></li>
@@ -757,10 +758,16 @@ angelslim/data/
 <span class="w">      </span><span class="nt">lazy_init_samples</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60</span><span class="w">         </span><span class="c1"># activation 校准所需的样本数（默认 10）</span>
 <span class="w">      </span><span class="c1"># ========== 可学习参数控制（可选） ==========</span>
 <span class="w">      </span><span class="nt">learnable</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">act_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">             </span><span class="c1"># 激活量化器的 scale/zero_point（默认：true）</span>
-<span class="w">        </span><span class="nt">weight_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">         </span><span class="c1"># 权重量化器的 scale/zero_point（默认：false）</span>
+<span class="w">        </span><span class="nt">act_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">            </span><span class="c1"># 激活量化器的 scale/zero_point（默认：false）</span>
+<span class="w">        </span><span class="nt">weight_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">          </span><span class="c1"># 权重量化器的 scale/zero_point（默认：true）</span>
 <span class="w">        </span><span class="nt">kv_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">             </span><span class="c1"># KV Cache 量化器的 scale（默认：false）</span>
 <span class="w">        </span><span class="nt">norm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">                 </span><span class="c1"># Norm 层权重（默认：false）</span>
+<span class="w">        </span><span class="nt">lwc</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">                  </span><span class="c1"># LWC 裁剪参数 clip_factor_w_max/min（默认：false）</span>
+<span class="w">      </span><span class="c1"># ========== LWC 配置（可选） ==========</span>
+<span class="w">      </span><span class="nt">lwc</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">enable_lwc</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">            </span><span class="c1"># 是否真正启用 LWC；关闭时不会创建 clip 参数</span>
+<span class="w">        </span><span class="nt">lwc_init_value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4.0</span><span class="w">         </span><span class="c1"># clip_factor_w_max/min 的初始化值</span>
+<span class="w">        </span><span class="nt">lwc_lr</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.5</span><span class="w">                 </span><span class="c1"># 仅 end2end 模式生效：LWC 参数独立学习率</span>
 <span class="w">      </span><span class="c1"># 可选：覆盖 compression.quantization 中的默认量化配置</span>
 <span class="w">      </span><span class="nt">weight</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">qtype</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">int8</span><span class="w">                 </span><span class="c1"># 权重量化类型（如 int4, int8, fp8）</span>
@@ -803,11 +810,55 @@ angelslim/data/
 <span class="w">  </span><span class="nt">QAT</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">training_mode</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;end2end&quot;</span>
 <span class="w">    </span><span class="nt">dist_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hf</span>
+<span class="w">    </span><span class="nt">loss_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">origin</span><span class="w">               </span><span class="c1"># origin | kl | rkl | mse | kd | kl_top[_K] | r_kl_top[_K]</span>
+<span class="w">    </span><span class="nt">loss_topk</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span><span class="w">                 </span><span class="c1"># 仅 top-k KL loss 使用；可覆盖 loss_type 中内联的 K</span>
+<span class="w">    </span><span class="nt">kd_temperature</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span><span class="w">             </span><span class="c1"># 仅 loss_type=kd 时生效，必须 &gt; 0</span>
+<span class="w">    </span><span class="nt">kd_alpha</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.5</span><span class="w">                   </span><span class="c1"># 仅 loss_type=kd 时生效，必须在 [0, 1]</span>
 <span class="w">    </span><span class="nt">hf_args</span><span class="p">:</span>
 <span class="w">      </span><span class="c1"># output_dir: /path/to/output   训练输出目录，不需要再指定，同 global.save_path</span>
 <span class="w">      </span><span class="c1"># 其余参数同 HF 的 TrainingArguments</span>
 </pre></div>
 </div>
+<p>其中 loss 相关字段的含义如下：</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>配置项</p></th>
+<th class="head"><p>类型</p></th>
+<th class="head"><p>默认值</p></th>
+<th class="head"><p>描述</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">loss_type</span></code></p></td>
+<td><p>str</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">origin</span></code></p></td>
+<td><p>训练目标类型。<code class="docutils literal notranslate"><span class="pre">origin</span></code> 使用 HF 原生监督 loss；<code class="docutils literal notranslate"><span class="pre">kl</span></code> / <code class="docutils literal notranslate"><span class="pre">rkl</span></code> / <code class="docutils literal notranslate"><span class="pre">mse</span></code> / <code class="docutils literal notranslate"><span class="pre">kd</span></code> 使用 teacher-student logits 对齐；<code class="docutils literal notranslate"><span class="pre">kl_top[_K]</span></code> / <code class="docutils literal notranslate"><span class="pre">r_kl_top[_K]</span></code> 仅在 top-k token 上计算 KL</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">loss_topk</span></code></p></td>
+<td><p>int / null</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">null</span></code></p></td>
+<td><p>仅用于 <code class="docutils literal notranslate"><span class="pre">kl_top[_K]</span></code> / <code class="docutils literal notranslate"><span class="pre">r_kl_top[_K]</span></code>。若 <code class="docutils literal notranslate"><span class="pre">loss_type</span></code> 中未写内联 <code class="docutils literal notranslate"><span class="pre">_K</span></code>，则必须显式提供该字段</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">kd_temperature</span></code></p></td>
+<td><p>float</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1.0</span></code></p></td>
+<td><p>仅用于 <code class="docutils literal notranslate"><span class="pre">loss_type:</span> <span class="pre">kd</span></code>，必须大于 0</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">kd_alpha</span></code></p></td>
+<td><p>float</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.5</span></code></p></td>
+<td><p>仅用于 <code class="docutils literal notranslate"><span class="pre">loss_type:</span> <span class="pre">kd</span></code>，表示 CE loss 与 distillation loss 的混合系数，必须落在 <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1]</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>配置约束如下：</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">loss_type</span></code> 只能是 <code class="docutils literal notranslate"><span class="pre">origin</span></code>、<code class="docutils literal notranslate"><span class="pre">kl</span></code>、<code class="docutils literal notranslate"><span class="pre">rkl</span></code>、<code class="docutils literal notranslate"><span class="pre">mse</span></code>、<code class="docutils literal notranslate"><span class="pre">kd</span></code>、<code class="docutils literal notranslate"><span class="pre">kl_top[_K]</span></code>、<code class="docutils literal notranslate"><span class="pre">r_kl_top[_K]</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">loss_topk</span></code> 只能与 top-k KL loss 搭配使用，且必须为正整数</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">kd_temperature</span></code> 和 <code class="docutils literal notranslate"><span class="pre">kd_alpha</span></code> 只允许在 <code class="docutils literal notranslate"><span class="pre">loss_type:</span> <span class="pre">kd</span></code> 时设置为非默认值</p></li>
+<li><p>这些约束会在 YAML 解析阶段校验，避免训练运行到一半才报错</p></li>
+</ul>
 </section>
 <section id="blockwise">
 <h4>Blockwise 训练专属配置<a class="headerlink" href="#blockwise" title="Link to this heading">#</a></h4>
@@ -851,6 +902,7 @@ angelslim/data/
 <li><p>使用 <strong>STE（Straight-Through Estimator）</strong> 使 <code class="docutils literal notranslate"><span class="pre">round</span></code> 和 <code class="docutils literal notranslate"><span class="pre">clamp</span></code> 操作可微分，允许梯度通过量化操作反向传播</p></li>
 <li><p>支持 <strong>延迟初始化（Lazy Initialization）</strong>：对于静态 activation 量化，通过前 N 个样本校准确定 scale</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">scale</span></code> 和 <code class="docutils literal notranslate"><span class="pre">zero_point</span></code> 注册为 <code class="docutils literal notranslate"><span class="pre">nn.Parameter</span></code>，在训练过程中可学习优化</p></li>
+<li><p>支持 <strong>LWC（Learnable Weight Clipping）</strong>：为权重量化器引入可学习的裁剪因子 <code class="docutils literal notranslate"><span class="pre">clip_factor_w_max/min</span></code></p></li>
 </ul>
 <p><strong>伪量化过程</strong>（INT 类型为例）：</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>x → x / scale → round_ste → clamp(qmin, qmax) → × scale → x_quant
@@ -886,10 +938,11 @@ angelslim/data/
 <span class="w">  </span><span class="nt">enable_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 <span class="w">  </span><span class="nt">quant_config</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">learnable</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">act_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">           </span><span class="c1"># 激活量化器的 scale/zero_point（默认：true）</span>
-<span class="w">      </span><span class="nt">weight_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">       </span><span class="c1"># 权重量化器的 scale/zero_point（默认：false）</span>
+<span class="w">      </span><span class="nt">act_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">          </span><span class="c1"># 激活量化器的 scale/zero_point（默认：false）</span>
+<span class="w">      </span><span class="nt">weight_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">        </span><span class="c1"># 权重量化器的 scale/zero_point（默认：true）</span>
 <span class="w">      </span><span class="nt">kv_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">           </span><span class="c1"># KV Cache 量化器的 scale（k_proj/v_proj 中的 qkv_quantizer）（默认：false）</span>
 <span class="w">      </span><span class="nt">norm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">               </span><span class="c1"># Norm 层（RMSNorm / LayerNorm）的权重（默认：false）</span>
+<span class="w">      </span><span class="nt">lwc</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">                </span><span class="c1"># LWC 裁剪参数 clip_factor_w_max/min（默认：false）</span>
 </pre></div>
 </div>
 <div class="pst-scrollable-table-container"><table class="table">
@@ -903,12 +956,12 @@ angelslim/data/
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">act_scale</span></code></p></td>
 <td><p>bool</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">true</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">false</span></code></p></td>
 <td><p>是否学习激活量化器（<code class="docutils literal notranslate"><span class="pre">act_quantizer</span></code>）的 scale / zero_point</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">weight_scale</span></code></p></td>
 <td><p>bool</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">false</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">true</span></code></p></td>
 <td><p>是否学习权重量化器（<code class="docutils literal notranslate"><span class="pre">weight_quantizer</span></code>）的 scale / zero_point</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">kv_scale</span></code></p></td>
@@ -921,13 +974,66 @@ angelslim/data/
 <td><p><code class="docutils literal notranslate"><span class="pre">false</span></code></p></td>
 <td><p>是否学习 Norm 层（如 <code class="docutils literal notranslate"><span class="pre">input_layernorm</span></code>、<code class="docutils literal notranslate"><span class="pre">post_attention_layernorm</span></code>）的 weight 参数</p></td>
 </tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">lwc</span></code></p></td>
+<td><p>bool</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">false</span></code></p></td>
+<td><p>是否学习 LWC 的裁剪参数 <code class="docutils literal notranslate"><span class="pre">clip_factor_w_max</span></code> / <code class="docutils literal notranslate"><span class="pre">clip_factor_w_min</span></code></p></td>
+</tr>
 </tbody>
 </table>
 </div>
 <p>各开关可以自由组合，例如同时开启 <code class="docutils literal notranslate"><span class="pre">weight_scale</span></code> 和 <code class="docutils literal notranslate"><span class="pre">kv_scale</span></code> 来联合优化权重量化和 KV Cache 量化的 scale 参数。</p>
 <blockquote>
-<div><p><strong>注意</strong>：如果未提供 <code class="docutils literal notranslate"><span class="pre">learnable</span></code> 配置，默认行为等价于 <code class="docutils literal notranslate"><span class="pre">act_scale:</span> <span class="pre">true</span></code>（其余为 <code class="docutils literal notranslate"><span class="pre">false</span></code>），即仅学习激活量化器的 scale 参数。</p>
+<div><p><strong>注意</strong>：如果未提供 <code class="docutils literal notranslate"><span class="pre">learnable</span></code> 配置，默认行为等价于 <code class="docutils literal notranslate"><span class="pre">act_scale:</span> <span class="pre">false</span></code>、<code class="docutils literal notranslate"><span class="pre">weight_scale:</span> <span class="pre">true</span></code>（其余为 <code class="docutils literal notranslate"><span class="pre">false</span></code>），即默认仅学习权重量化器的 scale 参数。</p>
 </div></blockquote>
+</section>
+<section id="lwc">
+<h4>LWC 配置<a class="headerlink" href="#lwc" title="Link to this heading">#</a></h4>
+<p>LWC（Learnable Weight Clipping）用于在权重量化前引入可学习裁剪范围，帮助降低异常值对量化误差的影响。相关配置位于 <code class="docutils literal notranslate"><span class="pre">compression.QAT.plugin_config.quant_config.lwc</span></code>：</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">plugin_config</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enable_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">quant_config</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">learnable</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">lwc</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">lwc</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">enable_lwc</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">      </span><span class="nt">lwc_init_value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4.0</span>
+<span class="w">      </span><span class="nt">lwc_lr</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.5</span>
+</pre></div>
+</div>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>配置项</p></th>
+<th class="head"><p>类型</p></th>
+<th class="head"><p>默认值</p></th>
+<th class="head"><p>描述</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">enable_lwc</span></code></p></td>
+<td><p>bool</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">false</span></code></p></td>
+<td><p>是否真正启用 LWC。关闭时不会创建 <code class="docutils literal notranslate"><span class="pre">clip_factor_w_max/min</span></code>，即使存在 <code class="docutils literal notranslate"><span class="pre">lwc</span></code> 字段也不会生效</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">lwc_init_value</span></code></p></td>
+<td><p>float</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">4.0</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">clip_factor_w_max/min</span></code> 的初始化值</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">lwc_lr</span></code></p></td>
+<td><p>float</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.5</span></code></p></td>
+<td><p>仅 end-to-end 模式下生效，作为 LWC 参数组的独立学习率</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">learnable.lwc</span></code> 与 <code class="docutils literal notranslate"><span class="pre">lwc.enable_lwc</span></code> 的职责不同：</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">lwc.enable_lwc</span></code> 决定是否创建并启用 LWC 功能</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">learnable.lwc</span></code> 决定已创建的 <code class="docutils literal notranslate"><span class="pre">clip_factor_w_max/min</span></code> 是否参与训练</p></li>
+</ul>
+<p>通常只有在两者都为 <code class="docutils literal notranslate"><span class="pre">true</span></code> 时，LWC 才会既生效又可学习。</p>
 </section>
 </section>
 <section id="trainerfactory">
@@ -957,8 +1063,9 @@ angelslim/data/
 <h3>End-to-End 训练器<a class="headerlink" href="#id9" title="Link to this heading">#</a></h3>
 <ul class="simple">
 <li><p>使用 HuggingFace <code class="docutils literal notranslate"><span class="pre">Seq2SeqTrainer</span></code> 进行训练</p></li>
-<li><p>使用 <code class="docutils literal notranslate"><span class="pre">AdamW</span></code> 优化器，仅针对 <code class="docutils literal notranslate"><span class="pre">scale</span></code> 和 <code class="docutils literal notranslate"><span class="pre">zero_point</span></code> 参数（默认学习率 1e-5）</p></li>
+<li><p>使用 <code class="docutils literal notranslate"><span class="pre">AdamW</span></code> 优化器，默认优化 <code class="docutils literal notranslate"><span class="pre">scale</span></code> 和 <code class="docutils literal notranslate"><span class="pre">zero_point</span></code> 参数；若启用 LWC，则 <code class="docutils literal notranslate"><span class="pre">clip_factor_w_max/min</span></code> 会作为独立参数组使用 <code class="docutils literal notranslate"><span class="pre">lwc_lr</span></code></p></li>
 <li><p>支持 HuggingFace 生态的各种训练参数（学习率调度、梯度累积等）</p></li>
+<li><p>支持 <code class="docutils literal notranslate"><span class="pre">origin</span></code>、<code class="docutils literal notranslate"><span class="pre">kl</span></code>、<code class="docutils literal notranslate"><span class="pre">rkl</span></code>、<code class="docutils literal notranslate"><span class="pre">mse</span></code>、<code class="docutils literal notranslate"><span class="pre">kd</span></code>、<code class="docutils literal notranslate"><span class="pre">kl_top[_K]</span></code>、<code class="docutils literal notranslate"><span class="pre">r_kl_top[_K]</span></code> 等 loss 配置</p></li>
 <li><p>完整执行流程：<code class="docutils literal notranslate"><span class="pre">prepare_dataset</span></code> → <code class="docutils literal notranslate"><span class="pre">prepare_trainer</span></code> → <code class="docutils literal notranslate"><span class="pre">call_before_train</span></code> → 可选 <code class="docutils literal notranslate"><span class="pre">resume</span></code> → <code class="docutils literal notranslate"><span class="pre">train</span></code> → <code class="docutils literal notranslate"><span class="pre">call_after_train</span></code></p></li>
 </ul>
 </section>
@@ -1134,6 +1241,7 @@ angelslim/data/
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quantlinear">QuantLinear — 量化线性层</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#learnablescaleplugin-scale">LearnableScalePlugin — 可学习 Scale 插件</a><ul class="visible nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#learnable">Learnable 参数控制</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#lwc">LWC 配置</a></li>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#trainerfactory">TrainerFactory — 训练器工厂</a></li>

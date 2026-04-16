@@ -199,10 +199,16 @@ dataset:
       lazy_init_samples: 60         # activation 校准所需的样本数（默认 10）
       # ========== 可学习参数控制（可选） ==========
       learnable:
-        act_scale: true             # 激活量化器的 scale/zero_point（默认：true）
-        weight_scale: false         # 权重量化器的 scale/zero_point（默认：false）
+        act_scale: false            # 激活量化器的 scale/zero_point（默认：false）
+        weight_scale: true          # 权重量化器的 scale/zero_point（默认：true）
         kv_scale: false             # KV Cache 量化器的 scale（默认：false）
         norm: false                 # Norm 层权重（默认：false）
+        lwc: false                  # LWC 裁剪参数 clip_factor_w_max/min（默认：false）
+      # ========== LWC 配置（可选） ==========
+      lwc:
+        enable_lwc: true            # 是否真正启用 LWC；关闭时不会创建 clip 参数
+        lwc_init_value: 4.0         # clip_factor_w_max/min 的初始化值
+        lwc_lr: 0.5                 # 仅 end2end 模式生效：LWC 参数独立学习率
       # 可选：覆盖 compression.quantization 中的默认量化配置
       weight:
         qtype: int8                 # 权重量化类型（如 int4, int8, fp8）
@@ -248,10 +254,30 @@ compression:
   QAT:
     training_mode: "end2end"
     dist_mode: hf
+    loss_type: origin               # origin | kl | rkl | mse | kd | kl_top[_K] | r_kl_top[_K]
+    loss_topk: null                 # 仅 top-k KL loss 使用；可覆盖 loss_type 中内联的 K
+    kd_temperature: 1.0             # 仅 loss_type=kd 时生效，必须 > 0
+    kd_alpha: 0.5                   # 仅 loss_type=kd 时生效，必须在 [0, 1]
     hf_args:
       # output_dir: /path/to/output   训练输出目录，不需要再指定，同 global.save_path
       # 其余参数同 HF 的 TrainingArguments
 ```
+
+其中 loss 相关字段的含义如下：
+
+| 配置项 | 类型 | 默认值 | 描述 |
+|--------|------|--------|------|
+| `loss_type` | str | `origin` | 训练目标类型。`origin` 使用 HF 原生监督 loss；`kl` / `rkl` / `mse` / `kd` 使用 teacher-student logits 对齐；`kl_top[_K]` / `r_kl_top[_K]` 仅在 top-k token 上计算 KL |
+| `loss_topk` | int / null | `null` | 仅用于 `kl_top[_K]` / `r_kl_top[_K]`。若 `loss_type` 中未写内联 `_K`，则必须显式提供该字段 |
+| `kd_temperature` | float | `1.0` | 仅用于 `loss_type: kd`，必须大于 0 |
+| `kd_alpha` | float | `0.5` | 仅用于 `loss_type: kd`，表示 CE loss 与 distillation loss 的混合系数，必须落在 `[0, 1]` |
+
+配置约束如下：
+
+- `loss_type` 只能是 `origin`、`kl`、`rkl`、`mse`、`kd`、`kl_top[_K]`、`r_kl_top[_K]`
+- `loss_topk` 只能与 top-k KL loss 搭配使用，且必须为正整数
+- `kd_temperature` 和 `kd_alpha` 只允许在 `loss_type: kd` 时设置为非默认值
+- 这些约束会在 YAML 解析阶段校验，避免训练运行到一半才报错
 
 #### Blockwise 训练专属配置
 
@@ -297,6 +323,7 @@ global:
 - 使用 **STE（Straight-Through Estimator）** 使 `round` 和 `clamp` 操作可微分，允许梯度通过量化操作反向传播
 - 支持 **延迟初始化（Lazy Initialization）**：对于静态 activation 量化，通过前 N 个样本校准确定 scale
 - `scale` 和 `zero_point` 注册为 `nn.Parameter`，在训练过程中可学习优化
+- 支持 **LWC（Learnable Weight Clipping）**：为权重量化器引入可学习的裁剪因子 `clip_factor_w_max/min`
 
 **伪量化过程**（INT 类型为例）：
 
@@ -336,22 +363,53 @@ plugin_config:
   enable_scale: true
   quant_config:
     learnable:
-      act_scale: true           # 激活量化器的 scale/zero_point（默认：true）
-      weight_scale: false       # 权重量化器的 scale/zero_point（默认：false）
+      act_scale: false          # 激活量化器的 scale/zero_point（默认：false）
+      weight_scale: true        # 权重量化器的 scale/zero_point（默认：true）
       kv_scale: false           # KV Cache 量化器的 scale（k_proj/v_proj 中的 qkv_quantizer）（默认：false）
       norm: false               # Norm 层（RMSNorm / LayerNorm）的权重（默认：false）
+      lwc: false                # LWC 裁剪参数 clip_factor_w_max/min（默认：false）
 ```
 
 | 配置项 | 类型 | 默认值 | 描述 |
 |--------|------|--------|------|
-| `act_scale` | bool | `true` | 是否学习激活量化器（`act_quantizer`）的 scale / zero_point |
-| `weight_scale` | bool | `false` | 是否学习权重量化器（`weight_quantizer`）的 scale / zero_point |
+| `act_scale` | bool | `false` | 是否学习激活量化器（`act_quantizer`）的 scale / zero_point |
+| `weight_scale` | bool | `true` | 是否学习权重量化器（`weight_quantizer`）的 scale / zero_point |
 | `kv_scale` | bool | `false` | 是否学习 KV Cache 量化器（`qkv_quantizer`）的 scale（仅 k_proj / v_proj） |
 | `norm` | bool | `false` | 是否学习 Norm 层（如 `input_layernorm`、`post_attention_layernorm`）的 weight 参数 |
+| `lwc` | bool | `false` | 是否学习 LWC 的裁剪参数 `clip_factor_w_max` / `clip_factor_w_min` |
 
 各开关可以自由组合，例如同时开启 `weight_scale` 和 `kv_scale` 来联合优化权重量化和 KV Cache 量化的 scale 参数。
 
-> **注意**：如果未提供 `learnable` 配置，默认行为等价于 `act_scale: true`（其余为 `false`），即仅学习激活量化器的 scale 参数。
+> **注意**：如果未提供 `learnable` 配置，默认行为等价于 `act_scale: false`、`weight_scale: true`（其余为 `false`），即默认仅学习权重量化器的 scale 参数。
+
+#### LWC 配置
+
+LWC（Learnable Weight Clipping）用于在权重量化前引入可学习裁剪范围，帮助降低异常值对量化误差的影响。相关配置位于 `compression.QAT.plugin_config.quant_config.lwc`：
+
+```yaml
+plugin_config:
+  enable_scale: true
+  quant_config:
+    learnable:
+      lwc: true
+    lwc:
+      enable_lwc: true
+      lwc_init_value: 4.0
+      lwc_lr: 0.5
+```
+
+| 配置项 | 类型 | 默认值 | 描述 |
+|--------|------|--------|------|
+| `enable_lwc` | bool | `false` | 是否真正启用 LWC。关闭时不会创建 `clip_factor_w_max/min`，即使存在 `lwc` 字段也不会生效 |
+| `lwc_init_value` | float | `4.0` | `clip_factor_w_max/min` 的初始化值 |
+| `lwc_lr` | float | `0.5` | 仅 end-to-end 模式下生效，作为 LWC 参数组的独立学习率 |
+
+`learnable.lwc` 与 `lwc.enable_lwc` 的职责不同：
+
+- `lwc.enable_lwc` 决定是否创建并启用 LWC 功能
+- `learnable.lwc` 决定已创建的 `clip_factor_w_max/min` 是否参与训练
+
+通常只有在两者都为 `true` 时，LWC 才会既生效又可学习。
 
 ### TrainerFactory — 训练器工厂
 
@@ -365,8 +423,9 @@ plugin_config:
 ### End-to-End 训练器
 
 - 使用 HuggingFace `Seq2SeqTrainer` 进行训练
-- 使用 `AdamW` 优化器，仅针对 `scale` 和 `zero_point` 参数（默认学习率 1e-5）
+- 使用 `AdamW` 优化器，默认优化 `scale` 和 `zero_point` 参数；若启用 LWC，则 `clip_factor_w_max/min` 会作为独立参数组使用 `lwc_lr`
 - 支持 HuggingFace 生态的各种训练参数（学习率调度、梯度累积等）
+- 支持 `origin`、`kl`、`rkl`、`mse`、`kd`、`kl_top[_K]`、`r_kl_top[_K]` 等 loss 配置
 - 完整执行流程：`prepare_dataset` → `prepare_trainer` → `call_before_train` → 可选 `resume` → `train` → `call_after_train`
 
 ### Blockwise 训练器
