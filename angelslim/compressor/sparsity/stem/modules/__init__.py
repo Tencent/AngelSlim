@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .stem import StemInference  # noqa: F401
 
-__all__ = ["StemInference"]
+"""Stem attention forward module."""
+
+from .forward import attn_forward
+
+__all__ = ["attn_forward"]

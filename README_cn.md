@@ -95,7 +95,7 @@
           <li>
             <strong>稀疏注意力</strong>
             <ul style="padding-left: 1.5rem">
-              <li>Minference(建设中)</li>
+              <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/stem.html">Stem</a></li>
             </ul>
           </li>
         </ul>

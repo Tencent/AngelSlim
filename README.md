@@ -94,7 +94,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
           <li>
             <strong>Sparse Attention</strong>
             <ul style="padding-left: 1.5rem">
-              <li>Under Development</li>
+              <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/stem.html">Stem</a></li>
             </ul>
           </li>
         </ul>

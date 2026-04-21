@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .stem import StemInference  # noqa: F401
 
-__all__ = ["StemInference"]
+"""Stem backend implementations (torch / HPC)."""
+
+from .dispatcher import stem_forward
+
+__all__ = ["stem_forward"]

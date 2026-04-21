@@ -12,6 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .stem import StemInference  # noqa: F401
+
+"""Stem — Sparse Token Estimation Module for long-context LLM inference.
+
+Public API:
+    StemInference: Callable that patches a HuggingFace model to use Stem
+        sparse attention during the prefill stage.
+"""
+
+from .stem import StemInference
 
 __all__ = ["StemInference"]

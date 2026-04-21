@@ -12,6 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .stem import StemInference  # noqa: F401
 
-__all__ = ["StemInference"]
+"""Stem ops — Triton kernels for block-logit scoring."""
