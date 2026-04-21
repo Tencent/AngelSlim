@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>其他视觉 Token 压缩方法 &#8212; AngelSlim</title>
+    <title>稀疏注意力 &#8212; AngelSlim</title>
   
   
   
@@ -53,11 +53,13 @@
     <script src="../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'features/token_compressor/other_methods';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'features/sparse_attention/index';</script>
     <script src="../../_static/custom.js"></script>
     <link rel="icon" href="../../_static/angelslim_icon.png"/>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="Stem: Rethinking Causal Information Flow in Sparse Attention" href="stem.html" />
+    <link rel="prev" title="SpecExit" href="../speculative_decoding/spec_exit.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -173,10 +175,13 @@
 <li class="toctree-l1"><a class="reference internal" href="../../getting_started/quickstrat.html">快速开始</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">算法特性</span></p>
-<ul class="nav bd-sidenav">
+<ul class="current nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../quantization/index.html">量化</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../speculative_decoding/index.html">投机采样</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../sparse_attention/index.html">稀疏注意力</a></li>
+<li class="toctree-l1 current active has-children"><a class="current reference internal" href="#">稀疏注意力</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="stem.html">Stem: Rethinking Causal Information Flow in Sparse Attention</a></li>
+</ul>
+</details></li>
 <li class="toctree-l1"><a class="reference internal" href="../diffusion/index.html">文生图/视频/3D压缩</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">模型支持</span></p>
@@ -271,7 +276,7 @@
       
       
       
-      <li><a href="https://github.com/Tencent/AngelSlim/edit/main/docs/source/features/token_compressor/other_methods.md" target="_blank"
+      <li><a href="https://github.com/Tencent/AngelSlim/edit/main/docs/source/features/sparse_attention/index.md" target="_blank"
    class="btn btn-sm btn-source-edit-button dropdown-item"
    title="Suggest edit"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -301,7 +306,7 @@
       
       
       
-      <li><a href="../../_sources/features/token_compressor/other_methods.md" target="_blank"
+      <li><a href="../../_sources/features/sparse_attention/index.md" target="_blank"
    class="btn btn-sm btn-download-source-button dropdown-item"
    title="Download source file"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -372,9 +377,7 @@ document.write(`
   </button>
 `);
 </script>
-<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
-    <span class="fa-solid fa-list"></span>
-</button>
+
 </div></div>
       
     </div>
@@ -385,23 +388,11 @@ document.write(`
               
 
 <div id="jb-print-docs-body" class="onlyprint">
-    <h1>其他视觉 Token 压缩方法</h1>
+    <h1>稀疏注意力</h1>
     <!-- Table of contents -->
     <div id="print-main-content">
         <div id="jb-print-toc">
             
-            <div>
-                <h2> Contents </h2>
-            </div>
-            <nav aria-label="Page">
-                <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">运行示例</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#smoke-test">1. 功能验证 (Smoke Test)</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#evaluation">2. 精度评测 (Evaluation)</a></li>
-</ul>
-</li>
-</ul>
-            </nav>
         </div>
     </div>
 </div>
@@ -411,57 +402,15 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="token">
-<h1>其他视觉 Token 压缩方法<a class="headerlink" href="#token" title="Link to this heading">#</a></h1>
-<p>除了核心算法 IDPruner 外，AngelSlim 同样集成了多种业界主流的视觉 Token 压缩方案及基准（Baseline）方法：</p>
-<ul class="simple">
-<li><p><a class="reference external" href="https://arxiv.org/abs/2403.06764"><strong>FastV</strong></a></p></li>
-<li><p><a class="reference external" href="https://arxiv.org/abs/2502.11494"><strong>DART</strong></a></p></li>
-<li><p><a class="reference external" href="https://arxiv.org/abs/2503.02175"><strong>DivPrune</strong></a></p></li>
-<li><p><a class="reference external" href="https://arxiv.org/abs/2510.16598"><strong>VisionSelector</strong></a></p></li>
-<li><p><a class="reference external" href="https://arxiv.org/abs/2508.00553"><strong>HiPrune</strong></a></p></li>
-<li><p><a class="reference external" href="https://arxiv.org/abs/2412.04467"><strong>VisionZip</strong></a></p></li>
-<li><p><a class="reference external" href="https://arxiv.org/abs/2510.24214"><strong>SCOPE</strong></a></p></li>
-<li><p><a class="reference external" href="https://arxiv.org/abs/2412.01818"><strong>VisPruner</strong></a></p></li>
-<li><p><strong>Random</strong> (随机剪枝基准)</p></li>
+  <section id="id1">
+<h1>稀疏注意力<a class="headerlink" href="#id1" title="Link to this heading">#</a></h1>
+<p>稀疏注意力（Sparse Attention）是 AngelSlim 针对长上下文大模型推理开发的 Prefill 加速模块。其核心目标是在推理过程中动态跳过不重要的注意力块，从而显著降低 Prefill 阶段的计算量与延迟。</p>
+<div class="toctree-wrapper compound">
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="stem.html">Stem: Rethinking Causal Information Flow in Sparse Attention</a></li>
 </ul>
-<section id="id1">
-<h2>运行示例<a class="headerlink" href="#id1" title="Link to this heading">#</a></h2>
-<section id="smoke-test">
-<h3>1. 功能验证 (Smoke Test)<a class="headerlink" href="#smoke-test" title="Link to this heading">#</a></h3>
-<p>使用 <code class="docutils literal notranslate"><span class="pre">tools/test_token_pruning.py</span></code> 快速验证指定策略在模型上的适配性与单次推理逻辑：</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/test_token_pruning.py<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--config<span class="w"> </span>configs/qwen2_5_vl/pruning/scope_r0.75.yaml<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--model_path<span class="w"> </span><span class="s2">&quot;Qwen/Qwen2.5-VL-3B-Instruct&quot;</span>
-</pre></div>
 </div>
-<p><strong>Smoke Test 参数说明：</strong></p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">--config</span></code>: 指向对应的策略 YAML 配置文件。</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">--model_path</span></code>: 原始模型的本地路径或 HuggingFace ID。脚本将根据配置自动完成模型包装。</p></li>
-</ul>
-</section>
-<section id="evaluation">
-<h3>2. 精度评测 (Evaluation)<a class="headerlink" href="#evaluation" title="Link to this heading">#</a></h3>
-<p>使用 <code class="docutils literal notranslate"><span class="pre">tools/run_token_pruning_evaluation.py</span></code> 在标准数据集上评估剪枝后的模型性能。以下示例演示如何使用 <strong>SCOPE</strong> 策略在 <strong>TextVQA</strong> 任务上运行评测：</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/run_token_pruning_evaluation.py<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--model_path<span class="w"> </span><span class="s2">&quot;Qwen/Qwen2.5-VL-3B-Instruct&quot;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--configs<span class="w"> </span>configs/qwen2_5_vl/pruning/scope_r0.75.yaml<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--tasks<span class="w"> </span>textvqa<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--batch_size<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--output_dir<span class="w"> </span>./eval_results/scope_textvqa
-</pre></div>
-</div>
-<p><strong>Evaluation 参数说明：</strong></p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">--model_path</span></code>: 原始模型的路径或 HuggingFace ID。</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">--configs</span></code>: 指向一个或多个策略 YAML 配置文件（支持批量评测）。</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">--tasks</span></code>: 指定 <code class="docutils literal notranslate"><span class="pre">lmms-eval</span></code> 支持的任务名称（如 <code class="docutils literal notranslate"><span class="pre">textvqa</span></code>, <code class="docutils literal notranslate"><span class="pre">mmmu_val</span></code>）。</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">--batch_size</span></code>: 推理批大小。当前只支持 batch_size=1。</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">--output_dir</span></code>: 评测报告与详细指标的保存路径。</p></li>
-</ul>
-</section>
-</section>
 </section>
 
 
@@ -475,31 +424,30 @@ document.write(`
                 <footer class="prev-next-footer d-print-none">
                   
 <div class="prev-next-area">
+    <a class="left-prev"
+       href="../speculative_decoding/spec_exit.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">SpecExit</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="stem.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Stem: Rethinking Causal Information Flow in Sparse Attention</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
 </div>
                 </footer>
               
             </div>
             
             
-              
-                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
-
-
-  <div class="sidebar-secondary-item">
-  <div class="page-toc tocsection onthispage">
-    <i class="fa-solid fa-list"></i> Contents
-  </div>
-  <nav class="bd-toc-nav page-toc">
-    <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">运行示例</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#smoke-test">1. 功能验证 (Smoke Test)</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#evaluation">2. 精度评测 (Evaluation)</a></li>
-</ul>
-</li>
-</ul>
-  </nav></div>
-
-</div></div>
               
             
           </div>

@@ -179,8 +179,8 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="features/quantization/index.html">量化</a></li>
 <li class="toctree-l1"><a class="reference internal" href="features/speculative_decoding/index.html">投机采样</a></li>
+<li class="toctree-l1"><a class="reference internal" href="features/sparse_attention/index.html">稀疏注意力</a></li>
 <li class="toctree-l1"><a class="reference internal" href="features/diffusion/index.html">文生图/视频/3D压缩</a></li>
-<li class="toctree-l1"><a class="reference internal" href="features/token_compressor/index.html">Token 压缩</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">模型支持</span></p>
 <ul class="nav bd-sidenav">
@@ -437,144 +437,6 @@ document.write(`
 <li><p><strong>追求极致性能</strong>：在模型压缩流程、压缩算法部署方面，本工具持续端到端优化，致力于用更少的成本压缩部署大模型。</p></li>
 </ul>
 <p>目前支持的模型及压缩策略：</p>
-<div class="pst-scrollable-table-container"><table class="table table-center" id="index-overall">
-<caption><span class="caption-text">AngelSlim 支持的场景、模型和技术</span><a class="headerlink" href="#index-overall" title="Link to this table">#</a></caption>
-<colgroup>
-<col style="width: 20.0%" />
-<col style="width: 20.0%" />
-<col style="width: 25.0%" />
-<col style="width: 15.0%" />
-<col style="width: 20.0%" />
-</colgroup>
-<thead>
-<tr class="row-odd"><th class="head"><p>场景</p></th>
-<th class="head"><p>模型</p></th>
-<th class="head"><p>量化</p></th>
-<th class="head"><p>投机采样</p></th>
-<th class="head"><p>其他技术</p></th>
-</tr>
-</thead>
-<tbody>
-<tr class="row-even"><td><p><strong>文生文(LLM)</strong></p></td>
-<td><ul class="simple">
-<li><p>Hunyuan-Dense</p></li>
-<li><p>Hunyuan-MoE</p></li>
-<li><p>Qwen3</p></li>
-<li><p>DeepSeek-V3/R1</p></li>
-<li><p>GLM-4.6</p></li>
-<li><p>Qwen2.5</p></li>
-</ul>
-</td>
-<td><ul class="simple">
-<li><p>FP8-Static/Dynamic</p></li>
-<li><p>INT8-Dynamic</p></li>
-<li><p>INT4-GPTQ/AWQ/GPTAQ</p></li>
-<li><p>NVFP4</p></li>
-<li><p>LeptoQuant</p></li>
-<li><p>Tequila</p></li>
-</ul>
-</td>
-<td><ul class="simple">
-<li><p>Eagle3</p></li>
-<li><p>SpecExit</p></li>
-</ul>
-</td>
-<td><ul class="simple">
-<li><p><strong>稀疏注意力</strong></p>
-<ul>
-<li><p>Minference(建设中)</p></li>
-</ul>
-</li>
-</ul>
-</td>
-</tr>
-<tr class="row-odd"><td><p><strong>图/视频生文(VLM)</strong></p></td>
-<td><ul class="simple">
-<li><p>Hunyuan-VL</p></li>
-<li><p>HunyuanOCR</p></li>
-<li><p>Qwen3-VL</p></li>
-<li><p>Qwen2.5-VL</p></li>
-</ul>
-</td>
-<td><ul class="simple">
-<li><p>FP8-Static/Dynamic</p></li>
-<li><p>INT8-Dynamic</p></li>
-<li><p>INT4-GPTQ/AWQ/GPTAQ</p></li>
-</ul>
-</td>
-<td><ul class="simple">
-<li><p>Eagle3</p></li>
-</ul>
-</td>
-<td><ul class="simple">
-<li><p><strong>Token剪枝</strong></p>
-<ul>
-<li><p>建设中</p></li>
-</ul>
-</li>
-</ul>
-</td>
-</tr>
-<tr class="row-even"><td><p><strong>文生图/视频/3D</strong></p></td>
-<td><ul class="simple">
-<li><p>Hunyuan-Image</p></li>
-<li><p>Hunyuan-Video</p></li>
-<li><p>Hunyuan-3D</p></li>
-<li><p>Qwen-Image</p></li>
-<li><p>FLUX</p></li>
-<li><p>Wan</p></li>
-<li><p>SDXL</p></li>
-</ul>
-</td>
-<td><ul class="simple">
-<li><p>FP8-Dynamic</p></li>
-<li><p>FP8-Weight-Only</p></li>
-</ul>
-</td>
-<td><p>-</p></td>
-<td><ul class="simple">
-<li><p><strong>Cache技术</strong></p>
-<ul>
-<li><p>DeepCache</p></li>
-<li><p>TeaCache</p></li>
-</ul>
-</li>
-<li><p><strong>稀疏注意力</strong></p>
-<ul>
-<li><p>建设中</p></li>
-</ul>
-</li>
-</ul>
-</td>
-</tr>
-<tr class="row-odd"><td><p><strong>语音(TTS/ASR)</strong></p></td>
-<td><ul class="simple">
-<li><p>Qwen3-Omni</p></li>
-<li><p>Qwen2-Audio</p></li>
-<li><p>Fun-CosyVoice3</p></li>
-</ul>
-</td>
-<td><ul class="simple">
-<li><p>FP8-Static/Dynamic</p></li>
-<li><p>INT8-Dynamic</p></li>
-</ul>
-</td>
-<td><ul class="simple">
-<li><p>Eagle3</p></li>
-</ul>
-</td>
-<td><ul class="simple">
-<li><p><strong>Token剪枝</strong></p>
-<ul>
-<li><p>建设中</p></li>
-</ul>
-</li>
-</ul>
-</td>
-</tr>
-</tbody>
-</table>
-</div>
 <section id="id1">
 <h1>文档<a class="headerlink" href="#id1" title="Link to this heading">#</a></h1>
 <div class="toctree-wrapper compound">
@@ -589,8 +451,8 @@ document.write(`
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="features/quantization/index.html">量化</a></li>
 <li class="toctree-l1"><a class="reference internal" href="features/speculative_decoding/index.html">投机采样</a></li>
+<li class="toctree-l1"><a class="reference internal" href="features/sparse_attention/index.html">稀疏注意力</a></li>
 <li class="toctree-l1"><a class="reference internal" href="features/diffusion/index.html">文生图/视频/3D压缩</a></li>
-<li class="toctree-l1"><a class="reference internal" href="features/token_compressor/index.html">Token 压缩</a></li>
 </ul>
 </div>
 <div class="toctree-wrapper compound">

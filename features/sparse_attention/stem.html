@@ -1,0 +1,758 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Stem: Rethinking Causal Information Flow in Sparse Attention &#8212; AngelSlim</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../_static/custom.css" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=a5fa425f"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../_static/togglebutton.js?v=4a39c7ea"></script>
+    <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'features/sparse_attention/stem';</script>
+    <script src="../../_static/custom.js"></script>
+    <link rel="icon" href="../../_static/angelslim_icon.png"/>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="文生图/视频/3D压缩" href="../diffusion/index.html" />
+    <link rel="prev" title="稀疏注意力" href="index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../_static/angelslim_logo.png" class="logo__image only-light" alt="AngelSlim - Home"/>
+    <script>document.write(`<img src="../../_static/angelslim_logo.png" class="logo__image only-dark" alt="AngelSlim - Home"/>`);</script>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">入门指南</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/installation.html">安装教程</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/quickstrat.html">快速开始</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">算法特性</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../quantization/index.html">量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../speculative_decoding/index.html">投机采样</a></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">稀疏注意力</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Stem: Rethinking Causal Information Flow in Sparse Attention</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../diffusion/index.html">文生图/视频/3D压缩</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">模型支持</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../models/hunyuan/hunyuan_quant.html">混元模型量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/hunyuan_ocr/hunyuan_ocr_quant.html">HunyuanOCR量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/deepseek/deepseek_quant.html">DeepSeek量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwen/qwen_quant.html">Qwen量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwenvl/qwenvl_quant.html">Qwen2.5VL量化指南</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwen3_omni/qwen3_omni_quant.html">Qwen3-Omni量化指南</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">部署文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../deployment/deploy.html">压缩模型部署</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">性能表现</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../performance/quantization/benchmarks.html">量化benchmark</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../performance/speculative_decoding/benchmarks.html">投机采样Benchmark</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">设计文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../design/index.html">设计文档</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim/edit/main/docs/source/features/sparse_attention/stem.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../../_sources/features/sparse_attention/stem.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Stem: Rethinking Causal Information Flow in Sparse Attention</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">1. 算法动机</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">2. 技术原理</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-level-scoring">2.1 Block-Level Scoring</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#top-k-schedule">2.2 Top-k Schedule</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-sparse-attention">2.3 Block-Sparse Attention</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">3. 支持范围</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">4. 快速开始</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dense-stem-patch">Dense 对照（无 Stem patch）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#stem-hpc-bf16">Stem + HPC bf16</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#stem-hpc-fp8">Stem + HPC fp8</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#prompt">使用自定义 prompt</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">5. 参数说明</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">6. 代码结构</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#python-api">7. Python API</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="stem-rethinking-causal-information-flow-in-sparse-attention">
+<h1>Stem: Rethinking Causal Information Flow in Sparse Attention<a class="headerlink" href="#stem-rethinking-causal-information-flow-in-sparse-attention" title="Link to this heading">#</a></h1>
+<p><strong>Stem</strong> 是 AngelSlim 的稀疏注意力算法，用于加速长上下文 LLM 的 <strong>Prefill</strong> 阶段。它通过在 block 粒度上估计注意力重要性，动态选择 top-k 关键块执行 block-sparse attention，在保持生成质量的同时大幅降低 Prefill 延迟。</p>
+<section id="id1">
+<h2>1. 算法动机<a class="headerlink" href="#id1" title="Link to this heading">#</a></h2>
+<p>长上下文推理（如 32K–128K tokens）中，Prefill 阶段的全量 attention 计算是主要瓶颈：</p>
+<ul class="simple">
+<li><p>计算量随序列长度 <strong>二次增长</strong>，显存和延迟双重压力</p></li>
+<li><p>实际上大部分 attention block 对最终输出贡献极小，存在大量冗余</p></li>
+</ul>
+<p>Stem 的核心思路是：<strong>先用低成本的 block-level scoring 估计每个 attention block 的重要性，再只对重要的 block 执行精确 attention</strong>。</p>
+</section>
+<section id="id2">
+<h2>2. 技术原理<a class="headerlink" href="#id2" title="Link to this heading">#</a></h2>
+<p>Stem 的 Prefill 过程分为三步：</p>
+<section id="block-level-scoring">
+<h3>2.1 Block-Level Scoring<a class="headerlink" href="#block-level-scoring" title="Link to this heading">#</a></h3>
+<p>使用 <strong>Triton 加速的 strided group GEMM</strong> 计算下采样的 Q·K^T 分数矩阵，并结合 value-norm bonus 项，得到每个 query-block 对每个 key-block 的重要性估计：</p>
+<p>$$\text{score}(Q_i, K_j) = \frac{Q_i \cdot K_j^T}{\sqrt{d} \cdot s \cdot n} + \lambda \cdot \text{ReLU}(\bar{v}_j)$$</p>
+<p>其中 $s$ 为 stride 因子，$n$ 为归一化系数，$\bar{v}_j$ 为 value-norm 的标准化对数值。</p>
+</section>
+<section id="top-k-schedule">
+<h3>2.2 Top-k Schedule<a class="headerlink" href="#top-k-schedule" title="Link to this heading">#</a></h3>
+<p>每层根据预设的 keep-ratio 和 alpha 衰减因子，生成 per-block 的 top-k budget：</p>
+<ul class="simple">
+<li><p><strong>前 N 层（warmup）</strong>：alpha=1.0，保留更多 block 以保证底层特征提取的完整性</p></li>
+<li><p><strong>后续层</strong>：alpha=0.7，更激进的稀疏化以加速计算</p></li>
+<li><p>额外保证 <strong>initial blocks</strong>（sink tokens）和 <strong>sliding window</strong> blocks 始终被保留</p></li>
+</ul>
+</section>
+<section id="block-sparse-attention">
+<h3>2.3 Block-Sparse Attention<a class="headerlink" href="#block-sparse-attention" title="Link to this heading">#</a></h3>
+<p>根据 top-k mask 执行稀疏 attention：</p>
+<ul class="simple">
+<li><p>如果安装了 <code class="docutils literal notranslate"><span class="pre">block-sparse-attn</span></code> 库，使用真正的 block-sparse kernel</p></li>
+<li><p>否则自动 fallback 到 pseudo-sparse 实现（展开 mask 后做 dense attention）</p></li>
+<li><p><strong>HPC 后端</strong>支持 bf16 dense prefill 和 fp8 block-sparse prefill（varlen / paged 两种路径）</p></li>
+</ul>
+<p><strong>Decode 阶段不受影响</strong>，仍使用模型原始的 attention 实现（FlashAttention-2 / eager / SDPA）。</p>
+</section>
+</section>
+<section id="id3">
+<h2>3. 支持范围<a class="headerlink" href="#id3" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>维度</p></th>
+<th class="head"><p>支持情况</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>后端</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">torch</span></code>（纯 PyTorch + Triton）、<code class="docutils literal notranslate"><span class="pre">hpc</span></code>（HPC C++ 扩展）</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>HPC 精度</strong></p></td>
+<td><p>bf16（dense prefill）、fp8（block-sparse prefill，varlen / paged）</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>序列长度</strong></p></td>
+<td><p>无上限，建议 4K+ tokens 以体现加速效果</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="id4">
+<h2>4. 快速开始<a class="headerlink" href="#id4" title="Link to this heading">#</a></h2>
+<p>确保已安装 AngelSlim（<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">-e</span> <span class="pre">.</span></code> 或 <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">sync</span></code>），然后在项目根目录运行：</p>
+<section id="dense-stem-patch">
+<h3>Dense 对照（无 Stem patch）<a class="headerlink" href="#dense-stem-patch" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/run_stem.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--mode<span class="w"> </span>dense<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--model-path<span class="w"> </span>/path/to/Qwen3-8B<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--prompt-file<span class="w"> </span>prompt.txt<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--max-new-tokens<span class="w"> </span><span class="m">160</span>
+</pre></div>
+</div>
+</section>
+<section id="stem-hpc-bf16">
+<h3>Stem + HPC bf16<a class="headerlink" href="#stem-hpc-bf16" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/run_stem.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--mode<span class="w"> </span>stem<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--stem-backend<span class="w"> </span>hpc<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--hpc-dtype<span class="w"> </span>bf16<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--model-path<span class="w"> </span>/path/to/Qwen3-8B<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--prompt-file<span class="w"> </span>prompt.txt<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--max-new-tokens<span class="w"> </span><span class="m">160</span>
+</pre></div>
+</div>
+</section>
+<section id="stem-hpc-fp8">
+<h3>Stem + HPC fp8<a class="headerlink" href="#stem-hpc-fp8" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/run_stem.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--mode<span class="w"> </span>stem<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--stem-backend<span class="w"> </span>hpc<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--hpc-dtype<span class="w"> </span>fp8<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--model-path<span class="w"> </span>/path/to/Qwen3-8B<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--prompt-file<span class="w"> </span>prompt.txt<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--max-new-tokens<span class="w"> </span><span class="m">160</span>
+</pre></div>
+</div>
+</section>
+<section id="prompt">
+<h3>使用自定义 prompt<a class="headerlink" href="#prompt" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/run_stem.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--mode<span class="w"> </span>stem<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--stem-backend<span class="w"> </span>hpc<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--hpc-dtype<span class="w"> </span>bf16<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--model-path<span class="w"> </span>/path/to/Qwen3-8B<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--prompt-file<span class="w"> </span>my_long_document.txt<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--max-new-tokens<span class="w"> </span><span class="m">256</span>
+</pre></div>
+</div>
+<p>也可以通过封装脚本启动：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>bash<span class="w"> </span>scripts/sparsity/run_stem.sh<span class="w"> </span>/path/to/Qwen3-8B<span class="w"> </span>prompt.txt<span class="w"> </span>stem
+</pre></div>
+</div>
+</section>
+</section>
+<section id="id5">
+<h2>5. 参数说明<a class="headerlink" href="#id5" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>参数</p></th>
+<th class="head"><p>默认值</p></th>
+<th class="head"><p>说明</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">backend</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;torch&quot;</span></code></p></td>
+<td><p>后端选择：<code class="docutils literal notranslate"><span class="pre">&quot;torch&quot;</span></code> 或 <code class="docutils literal notranslate"><span class="pre">&quot;hpc&quot;</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">hpc_dtype</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;bf16&quot;</span></code></p></td>
+<td><p>HPC 后端精度：<code class="docutils literal notranslate"><span class="pre">&quot;bf16&quot;</span></code> 或 <code class="docutils literal notranslate"><span class="pre">&quot;fp8&quot;</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">hpc_fp8_path</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;paged&quot;</span></code></p></td>
+<td><p>FP8 执行路径：<code class="docutils literal notranslate"><span class="pre">&quot;varlen&quot;</span></code> 或 <code class="docutils literal notranslate"><span class="pre">&quot;paged&quot;</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stem_alpha</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1.0</span></code></p></td>
+<td><p>per-layer alpha 衰减因子，可传 list 实现分层控制</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">block_size</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">128</span></code></p></td>
+<td><p>attention block 大小</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stride</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">8</span></code></p></td>
+<td><p>scoring 阶段的下采样步长</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">chunk_size</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">2048</span></code></p></td>
+<td><p>scoring 阶段的分块宽度</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">norm</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1.0</span></code></p></td>
+<td><p>scoring 阶段的额外归一化系数</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">initial_blocks</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">4</span></code></p></td>
+<td><p>始终保留的头部 block 数量（sink tokens）</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">window_size</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">4</span></code></p></td>
+<td><p>sliding window 保留的尾部 block 数量</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="id6">
+<h2>6. 代码结构<a class="headerlink" href="#id6" title="Link to this heading">#</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>angelslim/compressor/sparsity/
+├── __init__.py                          # re-export StemInference
+└── stem/
+    ├── __init__.py                      # 包入口
+    ├── stem.py                          # StemInference 类（主入口）
+    ├── patch.py                         # 模型 patch 逻辑
+    ├── stem_configuration.py            # StemConfig 配置
+    ├── backends/
+    │   ├── dispatcher.py                # torch / hpc 路由
+    │   ├── torch_impl.py               # PyTorch + Triton 实现
+    │   └── hpc_impl.py                 # HPC C++ 扩展实现
+    ├── modules/
+    │   └── forward.py                   # patched attention forward
+    └── ops/
+        └── stem_kernel.py               # Triton kernel
+
+tools/run_stem.py                            # 推理入口
+scripts/sparsity/run_stem.sh             # 启动脚本
+</pre></div>
+</div>
+</section>
+<section id="python-api">
+<h2>7. Python API<a class="headerlink" href="#python-api" title="Link to this heading">#</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">angelslim.compressor.sparsity</span><span class="w"> </span><span class="kn">import</span> <span class="n">StemInference</span>
+
+<span class="n">stem</span> <span class="o">=</span> <span class="n">StemInference</span><span class="p">(</span><span class="n">attn_kwargs</span><span class="o">=</span><span class="p">{</span>
+    <span class="s2">&quot;backend&quot;</span><span class="p">:</span> <span class="s2">&quot;hpc&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;hpc_dtype&quot;</span><span class="p">:</span> <span class="s2">&quot;fp8&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;stem_alpha&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">5</span> <span class="o">+</span> <span class="p">[</span><span class="mf">0.7</span><span class="p">]</span> <span class="o">*</span> <span class="mi">31</span><span class="p">,</span>  <span class="c1"># 36 层 Qwen3-8B</span>
+<span class="p">})</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">stem</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>  <span class="c1"># 返回 patched 后的同一个 model 对象</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">稀疏注意力</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../diffusion/index.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">文生图/视频/3D压缩</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">1. 算法动机</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">2. 技术原理</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-level-scoring">2.1 Block-Level Scoring</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#top-k-schedule">2.2 Top-k Schedule</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-sparse-attention">2.3 Block-Sparse Attention</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">3. 支持范围</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">4. 快速开始</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dense-stem-patch">Dense 对照（无 Stem patch）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#stem-hpc-bf16">Stem + HPC bf16</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#stem-hpc-fp8">Stem + HPC fp8</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#prompt">使用自定义 prompt</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">5. 参数说明</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">6. 代码结构</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#python-api">7. Python API</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By the AngelSlim Team
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, AngelSlim Team.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>
