@@ -249,6 +249,17 @@ class PTQSaveVllmHF(PTQSaveBase):
             raise ValueError(f"{self.quant_model.quant_config.quant_algo} not supported")
 
         quantization_config = {"quant_method": save_name, ignore_field: ignored_layers}
+        # Set kv_cache_scheme if kv_cache quantization is enabled
+        c_quant_algo = self.quant_model.quant_config.quant_algo_info.get("c", None)
+        if c_quant_algo is not None:
+            kv_cache_scheme = {
+                "num_bits": 8,
+                "strategy": re.search(r"per-([a-zA-Z]+)", c_quant_algo).group(1),
+                "type": "float",
+            }
+        else:
+            kv_cache_scheme = None
+
         if save_name == "compressed-tensors":
             quantization_config.update(
                 {
@@ -260,13 +271,15 @@ class PTQSaveVllmHF(PTQSaveBase):
                             "targets": ["Linear"],
                         }
                     },
-                    "kv_cache_scheme": None,
+                    "kv_cache_scheme": kv_cache_scheme,
                     "format": quant_format,
                     "quantization_status": "compressed",
                 }
             )
         else:
             quantization_config["activation_scheme"] = "dynamic" if is_dynamic else "static"
+            if kv_cache_scheme is not None:
+                quantization_config["kv_cache_scheme"] = "static"
 
         if (
             hasattr(self.quant_model.quant_config, "transform_config")
@@ -287,6 +300,25 @@ class PTQSaveVllmHF(PTQSaveBase):
             json.dump(trtllm_config, f, indent=4)
 
         self.quant_model.tokenizer.save_pretrained(save_path)
+        # Save KV cache scales if available
+        if (
+            hasattr(self.quant_model, "kv_cache_scales_dict")
+            and self.quant_model.kv_cache_scales_dict
+        ):
+            kv_scales_path = os.path.join(save_path, "kv_cache_scales.safetensors")
+            kv_scales_dict = {}
+            kv_scale_map = {}
+            for name, scale in self.quant_model.kv_cache_scales_dict.items():
+                kv_scales_dict[name] = scale
+                kv_scale_map[name] = "kv_cache_scales.safetensors"
+            safe_save(kv_scales_dict, kv_scales_path)
+            print_info("Save KV cache scales to: {}".format(kv_scales_path))
+            new_model_index_file = os.path.join(save_path, "model.safetensors.index.json")
+            with open(new_model_index_file, "r") as f:
+                new_model_index = json.load(f)
+            new_model_index["weight_map"].update(kv_scale_map)
+            with open(os.path.join(save_path, "model.safetensors.index.json"), "w") as f:
+                json.dump(new_model_index, f, indent=2)
 
 
 class PTQOnlyScaleSave(PTQSaveBase):

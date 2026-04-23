@@ -205,7 +205,58 @@ class PTQ:
             save_func = self.quant_model.get_save_func()(self.quant_model)
             save_func.save(save_path)
 
+    def get_meta_weights_info(self, model):
+        """获取所有meta权重的详细信息"""
+        meta_params = []
+
+        for name, param in model.named_parameters():
+            if param.device.type == "meta":
+                meta_params.append(
+                    {
+                        "name": name,
+                    }
+                )
+        return meta_params
+
+    def set_meta_weights_info(self, model):
+        """替换所有meta权重"""
+        orign_w_dict = {}
+        for name, param in model.named_parameters():
+            if param.device.type == "meta":
+                with open(
+                    os.path.join(self.absolute_model_path, "model.safetensors.index.json"),
+                    "r",
+                ) as f:
+                    model_index = json.load(f)
+                orign_w_file = os.path.join(
+                    self.absolute_model_path,
+                    model_index["weight_map"][name],
+                )
+                if orign_w_file in orign_w_dict.keys():
+                    orign_w = orign_w_dict[orign_w_file]
+                else:
+                    orign_w = load_file(orign_w_file, device="cpu")
+                    orign_w_dict[orign_w_file] = orign_w
+
+                empty_tensor = torch.empty(param.data.shape, dtype=param.data.dtype, device="cpu")
+                new_param = torch.nn.Parameter(empty_tensor)
+                new_param.data = orign_w[name]
+                parts = name.split(".")
+                current_module = model
+
+                # 导航到包含参数的模块
+                for part in parts[:-1]:
+                    current_module = getattr(current_module, part)
+
+                # 设置新的参数
+                setattr(current_module, parts[-1], new_param)
+
+        del orign_w_dict
+
     def _convert(self):
+        self.set_meta_weights_info(self.quant_model.model)
+        print_info(f"Meta weight:{self.get_meta_weights_info(self.quant_model.model)}")
+
         # 1. get act, weight and kv-cache scale
         for name, sub_layer in self.ptq_hook.quant_layers_dict.items():
             if (

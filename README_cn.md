@@ -22,6 +22,7 @@
 </p>
 
 ## 📣最新进展
+- [26/04/23] 我们支持了 **Hy3-preview**（MoE A20B）模型的 FP8-Static 量化。
 - [26/03/25] 我们发布了量化算法DAQ，该方法在后训练参数更新较小时，可保留量化后模型能力 [[论文]](https://arxiv.org/abs/2603.22324) | [[文档]](docs/source/features/quantization/daq.md)
 - [26/02/09] 我们发布了 HY-1.8B-2Bit, 2比特端侧大模型, 模型可见[[Huggingface]](https://huggingface.co/AngelSlim/HY-1.8B-2Bit).
 - [26/01/13] 我们发布V0.3版本， 支持了全模态场景的投机采样训练及部署，文档：[Eagle3 for LLM/VLM/Audio](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html)。并且我们发布了 **Sherry** 新的硬件高效的1.25bit三值量化算法 [[论文]](https://arxiv.org/abs/2601.07892) | [[代码]](https://github.com/Tencent/AngelSlim/tree/sherry/Sherry)🔥🔥🔥
@@ -251,6 +252,12 @@ bash scripts/speculative/train_eagle3_online.sh
   ```
 
   该示例将会加载`HugggingFace`模型进行PTQ量化校准，最终量化产出模型权重.
+
+对 **Hy3-preview**（MoE A20B）进行 FP8-Static 量化：
+
+  ```shell
+  python tools/run.py -c configs/hunyuan/fp8_static/hunyuanv3_a20b_fp8_static_c8.yaml
+  ```
 
 <details>
 <summary>2、源码启动</summary>
