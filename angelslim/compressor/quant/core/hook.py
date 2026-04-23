@@ -62,7 +62,7 @@ class PTQHook:
             self._forward_hook_list.append(forward_hook_handle)
 
         # Apply KV cache observers using monkey patching (for attention-level observation)
-        if kv_cache_observer is not None and hasattr(self.quant_model, 'apply_kvcache_observers'):
+        if kv_cache_observer is not None and hasattr(self.quant_model, "apply_kvcache_observers"):
             quant_bits = self.quant_model.quant_algo_dict.get("c_quant_bits", 8)
             self.quant_model.apply_kvcache_observers(
                 kv_cache_observer_class=kv_cache_observer,
@@ -97,7 +97,7 @@ class PTQHook:
             hook.remove()
         self._forward_hook_list = []
         # Remove KV cache observer patches if available
-        if hasattr(self.quant_model, 'remove_kvcache_observers'):
+        if hasattr(self.quant_model, "remove_kvcache_observers"):
             self.quant_model.remove_kvcache_observers()
 
     def post_process(self):
@@ -123,7 +123,7 @@ class PTQHook:
                             )
         if self.quant_model.quant_algo_dict["c_quant_algo"] == "fp8":
             # Process KV cache scales from attention-level observers
-            if hasattr(self.quant_model, 'get_kvcache_scales'):
+            if hasattr(self.quant_model, "get_kvcache_scales"):
                 kv_scales = self.quant_model.get_kvcache_scales()
                 for k, v in kv_scales.items():
                     self.quant_model.kv_cache_scales_dict[k] = v / maxval.type(v.dtype)

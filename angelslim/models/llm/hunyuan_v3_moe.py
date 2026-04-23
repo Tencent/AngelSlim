@@ -160,9 +160,7 @@ class HYV3MoE(BaseLLMModel):
         the per-expert nn.Linear modules and register them with the PTQ hook.
         """
         for name, module in self.model.named_modules():
-            if isinstance(module, HYV3Experts) and not isinstance(
-                module, HYV3ExpertsWithLinear
-            ):
+            if isinstance(module, HYV3Experts) and not isinstance(module, HYV3ExpertsWithLinear):
                 parent_layer, sub_name = find_parent_layer_and_sub_name(self.model, name)
                 moe_linear = HYV3ExpertsWithLinear(module)
                 del module
@@ -315,9 +313,7 @@ class HYV3MoE(BaseLLMModel):
             value_states = value_states.transpose(1, 2)
 
             cos, sin = position_embeddings
-            query_states, key_states = apply_rotary_pos_emb(
-                query_states, key_states, cos, sin
-            )
+            query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
 
             # === OBSERVE KV CACHE AFTER RoPE ===
             key_observer(key_states)

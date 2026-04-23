@@ -210,21 +210,21 @@ class PTQ:
         meta_params = []
 
         for name, param in model.named_parameters():
-            if param.device.type == 'meta':
-                meta_params.append({
-                    'name': name,
-                })
+            if param.device.type == "meta":
+                meta_params.append(
+                    {
+                        "name": name,
+                    }
+                )
         return meta_params
 
     def set_meta_weights_info(self, model):
         """替换所有meta权重"""
         orign_w_dict = {}
         for name, param in model.named_parameters():
-            if param.device.type == 'meta':
+            if param.device.type == "meta":
                 with open(
-                    os.path.join(
-                        self.absolute_model_path, "model.safetensors.index.json"
-                    ),
+                    os.path.join(self.absolute_model_path, "model.safetensors.index.json"),
                     "r",
                 ) as f:
                     model_index = json.load(f)
@@ -238,10 +238,10 @@ class PTQ:
                     orign_w = load_file(orign_w_file, device="cpu")
                     orign_w_dict[orign_w_file] = orign_w
 
-                empty_tensor = torch.empty(param.data.shape, dtype=param.data.dtype, device='cpu')
+                empty_tensor = torch.empty(param.data.shape, dtype=param.data.dtype, device="cpu")
                 new_param = torch.nn.Parameter(empty_tensor)
                 new_param.data = orign_w[name]
-                parts = name.split('.')
+                parts = name.split(".")
                 current_module = model
 
                 # 导航到包含参数的模块
@@ -253,12 +253,9 @@ class PTQ:
 
         del orign_w_dict
 
-
-
     def _convert(self):
         self.set_meta_weights_info(self.quant_model.model)
         print_info(f"Meta weight:{self.get_meta_weights_info(self.quant_model.model)}")
-
 
         # 1. get act, weight and kv-cache scale
         for name, sub_layer in self.ptq_hook.quant_layers_dict.items():

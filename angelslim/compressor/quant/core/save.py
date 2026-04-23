@@ -301,7 +301,10 @@ class PTQSaveVllmHF(PTQSaveBase):
 
         self.quant_model.tokenizer.save_pretrained(save_path)
         # Save KV cache scales if available
-        if hasattr(self.quant_model, 'kv_cache_scales_dict') and self.quant_model.kv_cache_scales_dict:
+        if (
+            hasattr(self.quant_model, "kv_cache_scales_dict")
+            and self.quant_model.kv_cache_scales_dict
+        ):
             kv_scales_path = os.path.join(save_path, "kv_cache_scales.safetensors")
             kv_scales_dict = {}
             kv_scale_map = {}
