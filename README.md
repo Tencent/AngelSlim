@@ -22,6 +22,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
 </p>
 
 ## 📣Latest News
+- [26/04/29] We have released 2-bit and 1.25-bit versions of Tencent Hy-MT1.5-1.8B Translation Model: [Hy-MT1.5-1.8B-2bit](https://huggingface.co/AngelSlim/Hy-MT1.5-1.8B-2bit) and [Hy-MT1.5-1.8B-1.25bit](https://huggingface.co/AngelSlim/Hy-MT1.5-1.8B-1.25bit). Additionally, we have make an [offline translation demo](https://huggingface.co/AngelSlim/Hy-MT1.5-1.8B-1.25bit/blob/main/Hy-MT-demo.apk) for you to try out. We invite you to give it a spin! 🔥🔥🔥
 - [26/04/23] We now support FP8-Static quantization for **Hy3-preview** (MoE A20B).
 - [26/03/25] We have released **DAQ**, the quantization algorithm that preserves the knowledge acquired while the update of parameters is relatively small during post-training training.[[Paper]](https://arxiv.org/abs/2603.22324) | [[Docs]](docs/source/features/quantization/daq.md)
 - [26/02/09] We have released HY-1.8B-2Bit, 2bit on-device large language model,[[Huggingface]](https://huggingface.co/AngelSlim/HY-1.8B-2Bit).

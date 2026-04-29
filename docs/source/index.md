@@ -146,6 +146,7 @@ models/deepseek/deepseek_quant
 models/qwen/qwen_quant
 models/qwenvl/qwenvl_quant
 models/qwen3_omni/qwen3_omni_quant
+models/Hy-MT1.5/hy-mt1.5
 :::
 
 
