@@ -49,10 +49,18 @@ def set_op_by_name(layer, name, new_module):
     if len(levels) > 1:
         mod_ = layer
         for l_idx in range(len(levels) - 1):
-            if levels[l_idx].isdigit():
-                mod_ = mod_[int(levels[l_idx])]
+            part = levels[l_idx]
+            if part.isdigit():
+                # Prefer integer indexing for nn.ModuleList / nn.Sequential;
+                # fall back to getattr for custom containers (e.g. our
+                # LinearizedMoeExperts that registers experts via
+                # ``setattr(self, str(idx), ...)``).
+                try:
+                    mod_ = mod_[int(part)]
+                except (TypeError, IndexError, KeyError):
+                    mod_ = getattr(mod_, part)
             else:
-                mod_ = getattr(mod_, levels[l_idx])
+                mod_ = getattr(mod_, part)
         setattr(mod_, levels[-1], new_module)
     else:
         setattr(layer, name, new_module)

@@ -112,6 +112,7 @@ def multi_nodes_run(config):
             shuffle=dataset_config.shuffle,
             inference_settings=dataset_config.inference_settings,
             use_audio_in_video=model_config.use_audio_in_video,
+            is_sft_data=dataset_config.is_sft_data,
         )
 
     # Step 6: Initialize compressor
@@ -267,6 +268,32 @@ def weight_only_run(config):
         )
 
 
+def _prewarm_hf_deepspeed_config(config):
+    """Pre-construct ``Seq2SeqTrainingArguments`` so HF's
+    ``HfTrainerDeepSpeedConfig`` weak-ref is registered BEFORE
+    ``from_pretrained`` runs. That is what flips
+    ``is_deepspeed_zero3_enabled()`` to True and makes our
+    ``BaseLLMModel.from_pretrained`` take the ZeRO-3 path.
+
+    Returns the constructed TrainingArguments (kept alive via the caller's
+    local variable) or None if not applicable.
+    """
+    compress_cfg = getattr(config, "compression_config", None)
+    qat_cfg = getattr(compress_cfg, "QAT", None) if compress_cfg is not None else None
+    hf_args = getattr(qat_cfg, "hf_args", None) if qat_cfg is not None else None
+    if not hf_args or not hf_args.get("deepspeed"):
+        return None
+
+    from transformers import Seq2SeqTrainingArguments
+
+    trainer_args = Seq2SeqTrainingArguments(
+        output_dir=config.global_config.save_path,
+        **hf_args,
+    )
+    print_info("[DeepSpeed pre-warm] HfTrainerDeepSpeedConfig registered before model load.")
+    return trainer_args
+
+
 def run(config):
     """
     Run the LLM compression process based on the provided configuration.
@@ -295,6 +322,12 @@ def run(config):
         weight_only_run(config)
         return
 
+    # QAT + DeepSpeed: register HfTrainerDeepSpeedConfig BEFORE loading the
+    # model so ``from_pretrained`` takes the ZeRO-3 path. No-op otherwise.
+    # The returned object must stay alive until after the model is built
+    # because HF's weak-ref mechanism drops the config otherwise.
+    _hf_ds_args = _prewarm_hf_deepspeed_config(config)
+
     # Step 2: Execute complete pipeline
     slim_engine = Engine()
 
@@ -312,6 +345,9 @@ def run(config):
         attn_implementation=model_config.attn_implementation,
         deploy_backend=global_config.deploy_backend,
     )
+    # Safe to release now: the model is built and any deepspeed.zero.Init
+    # effects have already happened on all parameters.
+    del _hf_ds_args
 
     # Step 4: Prepare data (optional custom dataloader)
     if compress_config.need_dataset:
@@ -327,6 +363,7 @@ def run(config):
             use_audio_in_video=model_config.use_audio_in_video,
             model_name=model_config.name,
             quantization_config=compress_config.quantization,
+            is_sft_data=dataset_config.is_sft_data,
         )
 
     # Step 5: Initialize compressor

@@ -44,6 +44,7 @@ class DataLoaderFactory:
         use_audio_in_video: bool = False,
         model_name: str = None,
         quantization_config: str = None,
+        is_sft_data: bool = False,
     ) -> DataLoader:
         """
         Create appropriate DataLoader based on data source
@@ -85,6 +86,7 @@ class DataLoaderFactory:
                 max_length=max_length,
                 data_path=data_source,
                 num_samples=num_samples,
+                is_sft_data=is_sft_data,
             )
         elif data_type == "MultiModalDataset":
             dataset = MultiModalDataset(

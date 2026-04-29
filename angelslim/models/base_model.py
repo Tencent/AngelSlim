@@ -24,7 +24,13 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from ..compressor.quant.core import QuantConfig
 from ..compressor.quant.modules import NVFP4QDQModule, QDQModule
-from ..utils import common_prefix, print_info
+from ..utils import (
+    common_prefix,
+    is_deepspeed_zero3_enabled,
+    print_info,
+    stream_load_weights,
+    zero3_empty_model_from_pretrained,
+)
 
 __all__ = ["BaseLLMModel"]
 
@@ -65,6 +71,27 @@ class BaseLLMModel(metaclass=ABCMeta):
         using_multi_nodes=False,
         attn_implementation="default",
     ):
+        # DeepSpeed ZeRO-3 path: build an empty sharded model on every rank
+        # via deepspeed.zero.Init, linearize fused MoE experts, then stream
+        # the safetensors checkpoint into the (sharded) parameters. This
+        # avoids HF's path that materialises the full state_dict on every
+        # rank's CPU before sharding.
+        if is_deepspeed_zero3_enabled():
+            log_prefix = f"[{type(self).__name__}.from_pretrained]"
+            self.model = zero3_empty_model_from_pretrained(
+                model_path,
+                torch_dtype=torch_dtype,
+                trust_remote_code=trust_remote_code,
+                use_cache=use_cache,
+                attn_implementation=attn_implementation,
+                log_prefix=log_prefix,
+            )
+            stream_load_weights(self.model, model_path, log_prefix=log_prefix)
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                model_path, trust_remote_code=trust_remote_code
+            )
+            return
+
         kwargs = dict(
             torch_dtype=torch_dtype,
             device_map=device_map,

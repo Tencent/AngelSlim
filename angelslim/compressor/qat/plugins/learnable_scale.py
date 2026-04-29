@@ -15,7 +15,13 @@
 import torch
 from tqdm import tqdm
 
-from ....utils import print_info, set_op_by_name
+from ....utils import (
+    gathered_params_if_zero3,
+    is_deepspeed_zero3_enabled,
+    print_info,
+    set_op_by_name,
+    stream_load_scales,
+)
 from ..modules.quantizer import QuantLinear
 from .base_plugin import BasePlugin
 from .plugin_manager import PluginManager
@@ -29,11 +35,22 @@ _QKV_PROJ_MAP = {
 
 @PluginManager.plugin("learnable_scale")
 class LearnableScalePlugin(BasePlugin):
-    def __init__(self, quant_info=None, ignore_layers=None, resume_ckpt_dir=None, **kwargs):
+    def __init__(
+        self,
+        quant_info=None,
+        ignore_layers=None,
+        resume_ckpt_dir=None,
+        from_ptq_ckpt_dir=None,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.quant_info = quant_info
         self.ignore_layers = ignore_layers
         self.resume_ckpt_dir = resume_ckpt_dir
+        # Optional warm-start from a PTQ "real" checkpoint (only scales are
+        # read; base weights stay as loaded by from_pretrained). Required
+        # under DeepSpeed ZeRO-3.
+        self.from_ptq_ckpt_dir = from_ptq_ckpt_dir
         self.use_weight_quant = self.config.get("use_weight_quant", False)
         self.use_activation_quant = self.config.get("use_activation_quant", False)
         self.fp8_attn = self.config.get("fp8_attn", False)
@@ -47,9 +64,23 @@ class LearnableScalePlugin(BasePlugin):
         self.learn_norm = learnable_cfg.get("norm", False)
 
     def before_train(self, **kwargs):
+        zero3 = is_deepspeed_zero3_enabled()
+        if zero3 and not self.from_ptq_ckpt_dir:
+            raise ValueError(
+                "DeepSpeed ZeRO-3 QAT requires `compression.QAT.from_ptq_ckpt` "
+                "to warm-start scales (lazy_init via forward is impossible "
+                "on sharded weights)."
+            )
+
         # Retrieve KV head count from model config for per-head quantization
         model_config = getattr(self.quant_model.model, "config", None)
         num_kv_heads = getattr(model_config, "num_key_value_heads", -1)
+        # Pre-allocate ``act_quantizer.scale`` as a Parameter whenever we
+        # plan to fill it from a checkpoint (full resume OR PTQ warm-start
+        # OR ZeRO-3 — where lazy_init is impossible).
+        act_preallocate = (
+            self.resume_ckpt_dir is not None or self.from_ptq_ckpt_dir is not None or zero3
+        )
         for name, module in self.quant_model.model.named_modules():
             if isinstance(module, torch.nn.Linear):
                 if any(ig in name for ig in self.ignore_layers):
@@ -67,7 +98,7 @@ class LearnableScalePlugin(BasePlugin):
                     self.quant_info,
                     self.use_weight_quant,
                     self.use_activation_quant,
-                    resume=self.resume_ckpt_dir is not None,
+                    resume=act_preallocate,
                     qkv_config=qkv_cfg,
                 )
                 set_op_by_name(self.quant_model.model, name, q_linear)
@@ -78,10 +109,18 @@ class LearnableScalePlugin(BasePlugin):
 
         print_info(self.quant_model.model)
 
+        # Warm-start scales from a previous PTQ "real" checkpoint. Only
+        # quantizer Parameters are touched; base Linear weights are NOT
+        # overwritten.
+        if self.from_ptq_ckpt_dir is not None:
+            stream_load_scales(self.quant_model.model, self.from_ptq_ckpt_dir)
+
         if (
             self.use_activation_quant
             and not q_linear.act_quantizer.dynamic
             and self.resume_ckpt_dir is None
+            and not zero3
+            and self.from_ptq_ckpt_dir is None
         ):
             self._lazy_init(**kwargs)
 
@@ -284,5 +323,13 @@ def _get_qkv_config_for_layer(name, quant_config):
 @torch.no_grad()
 def quant_inplace(model):
     for _, module in model.named_modules():
-        if isinstance(module, QuantLinear):
+        if not isinstance(module, QuantLinear):
+            continue
+        # Gather the weight together with all weight_quantizer Parameters
+        # (scale / zero_point / optional LWC clip factors) so the
+        # fake-quant runs on the full materialised tensor under ZeRO-3.
+        params = [module.weight]
+        if hasattr(module, "weight_quantizer"):
+            params.extend(module.weight_quantizer.parameters(recurse=True))
+        with gathered_params_if_zero3(params, modifier_rank=None):
             module.weight.data = module.weight_quantizer(module.weight.data)

@@ -16,18 +16,48 @@ import re
 
 import torch
 import torch.nn as nn
-from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.models.hy_v3.modeling_hy_v3 import (
     ALL_ATTENTION_FUNCTIONS,
     HYV3Experts,
+    HYV3TopKRouter,
     apply_rotary_pos_emb,
     eager_attention_forward,
 )
 
 from ...compressor.quant.core import PTQSaveVllmHF
+from ...utils import is_deepspeed_zero3_enabled
 from ...utils.utils import find_layers, find_parent_layer_and_sub_name
 from ..base_model import BaseLLMModel
 from ..model_factory import SlimModelFactory
+
+
+def _patch_hyv3_router_for_zero3():
+    if getattr(HYV3TopKRouter, "_angelslim_zero3_dtype_patch", False):
+        return
+
+    def patched_forward(
+        self,
+        hidden_states: torch.Tensor,
+        e_score_correction_bias: torch.Tensor,
+    ) -> tuple:
+        hidden_states = hidden_states.reshape(-1, self.hidden_dim)
+        router_logits = nn.functional.linear(
+            hidden_states.to(self.weight.dtype),
+            self.weight,
+        ).to(torch.float32)
+        routing_weights = torch.sigmoid(router_logits)
+
+        scores_for_choice = routing_weights + e_score_correction_bias
+        _, top_k_index = torch.topk(scores_for_choice, self.top_k, dim=-1, sorted=False)
+        top_k_weights = routing_weights.gather(1, top_k_index)
+
+        top_k_weights = top_k_weights / (top_k_weights.sum(dim=-1, keepdim=True) + 1e-20)
+        top_k_weights = top_k_weights * self.router_scaling_factor
+
+        return router_logits, top_k_weights, top_k_index
+
+    HYV3TopKRouter.forward = patched_forward
+    HYV3TopKRouter._angelslim_zero3_dtype_patch = True
 
 
 class HYV3ExpertsWithLinear(HYV3Experts):
@@ -138,19 +168,18 @@ class HYV3MoE(BaseLLMModel):
     ):
         attn_implementation = "eager"
         torch_dtype = torch.bfloat16
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_path,
-            attn_implementation=attn_implementation,
+        if is_deepspeed_zero3_enabled():
+            _patch_hyv3_router_for_zero3()
+
+        super().from_pretrained(
+            model_path=model_path,
             torch_dtype=torch_dtype,
             device_map=device_map,
             trust_remote_code=trust_remote_code,
             low_cpu_mem_usage=low_cpu_mem_usage,
             use_cache=use_cache,
-        )
-
-        # Load tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            model_path, trust_remote_code=trust_remote_code
+            using_multi_nodes=using_multi_nodes,
+            attn_implementation=attn_implementation,
         )
 
     def replace_moe(self):
@@ -179,9 +208,9 @@ class HYV3MoE(BaseLLMModel):
             "mlp.gate_proj",
             "mlp.up_proj",
             "mlp.down_proj",
-            "shared_mlp.gate_proj",
-            "shared_mlp.up_proj",
-            "shared_mlp.down_proj",
+            "shared_experts.gate_proj",
+            "shared_experts.up_proj",
+            "shared_experts.down_proj",
         ]
         expert_pattern = [
             r"model\.layers\.\d+\.mlp\.experts\.\d+\.gate_proj",
@@ -326,11 +355,9 @@ class HYV3MoE(BaseLLMModel):
                     key_states, value_states, attn_module.layer_idx, cache_kwargs
                 )
 
-            attention_interface = eager_attention_forward
-            if attn_module.config._attn_implementation != "eager":
-                attention_interface = ALL_ATTENTION_FUNCTIONS[
-                    attn_module.config._attn_implementation
-                ]
+            attention_interface = ALL_ATTENTION_FUNCTIONS.get_interface(
+                attn_module.config._attn_implementation, eager_attention_forward
+            )
 
             attn_output, attn_weights = attention_interface(
                 attn_module,

@@ -101,6 +101,13 @@ class Engine:
         assert model_name, "model_name must be specified."
         assert model_path, "model_path must be specified."
 
+        # Normalize device_map for DeepSpeed ZeRO / distributed training: YAML
+        # configs often write ``None`` / ``"None"`` / ``"distributed"`` to
+        # mean "no pre-placement, let DeepSpeed shard". HF only accepts
+        # Python ``None`` there.
+        if isinstance(device_map, str) and device_map.lower() in ("none", "distributed"):
+            device_map = None
+
         # Initialize slim model by ModelFactory
         self.slim_model = SlimModelFactory.create(
             model_name, model=model, deploy_backend=deploy_backend
@@ -152,6 +159,7 @@ class Engine:
         use_audio_in_video=False,
         model_name=None,
         quantization_config=None,
+        is_sft_data=False,
     ) -> Optional[Any]:
         """Prepare compression dataset"""
         if custom_dataloader is not None:
@@ -178,6 +186,7 @@ class Engine:
             use_audio_in_video=use_audio_in_video,
             model_name=model_name,
             quantization_config=quantization_config,
+            is_sft_data=is_sft_data,
         )
         self.max_seq_length = max_length
 

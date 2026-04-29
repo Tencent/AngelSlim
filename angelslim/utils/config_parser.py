@@ -185,6 +185,7 @@ class DatasetConfig:
     batch_size: int = field(default=1)
     shuffle: bool = field(default=False)
     inference_settings: Optional[Dict[str, Any]] = field(default=None)
+    is_sft_data: bool = field(default=False)
 
 
 @dataclass
@@ -272,10 +273,23 @@ class QATTrainingConfig:
     hf_dataset: Optional[str] = None
     do_train: bool = field(default=True)
     resume_ckpt_dir: Optional[str] = None
+    # Optional warm-start directory (a previous ``save_fmt="real"`` output).
+    # When set, scales / zero_points / kv-cache scales are loaded from this
+    # directory into the freshly-created ``QuantLinear`` quantizers; base
+    # ``Linear`` weights still come from ``model.model_path``. Required when
+    # DeepSpeed ZeRO-3 is enabled (no calibration is possible on shards).
+    from_ptq_ckpt: Optional[str] = None
     loss_type: str = field(default="origin")
     loss_topk: Optional[int] = None
     kd_temperature: float = field(default=1.0)
     kd_alpha: float = field(default=0.5)
+    # ---- new loss-weight controls (compose LM + KD loss) ----
+    # lm_loss_weight: weight on the HF CausalLM CE loss (labels must be set).
+    # kd_loss_weight: weight on the chosen distillation loss (kl / rkl / mse
+    #   / kl_top_K / r_kl_top_K / cakld / jsd ...). Only loss components
+    #   with a strictly-positive weight are computed AND logged.
+    lm_loss_weight: float = field(default=1.0)
+    kd_loss_weight: float = field(default=0.0)
     hf_args: Dict[str, Any] = field(default_factory=dict)
 
 

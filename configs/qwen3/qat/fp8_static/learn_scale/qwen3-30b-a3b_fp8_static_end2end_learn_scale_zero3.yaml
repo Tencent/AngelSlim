@@ -1,0 +1,86 @@
+global:
+  save_path: ./output
+
+model:
+  name: Qwen
+  # Local directory or HuggingFace repo id of the base Qwen3-30B-A3B model.
+  model_path: Qwen/Qwen3-30B-A3B
+  trust_remote_code: true
+  torch_dtype: auto
+  # ZeRO-3 wants HF to NOT place the model with ``device_map``. Pass
+  # ``None`` here; the Engine normalises the string "None"/"distributed".
+  device_map: None
+  low_cpu_mem_usage: true
+  use_cache: false
+
+compression:
+  name: QAT
+  quantization:
+    name: fp8_static
+    bits: 8
+    quant_method:
+      weight: per-tensor
+      activation: per-tensor
+    ignore_layers: ["lm_head", "embed_tokens", "gate.weight"]
+  QAT:
+    # Leave ``hf_dataset`` unset → the trainer falls back to the local
+    # TextDataset defined in the ``dataset:`` section below.
+    hf_dataset: null
+    # REQUIRED under ZeRO-3: warm-start scales from a previous PTQ "real"
+    # checkpoint. Produce it with e.g.
+    #   python tools/run.py -c configs/qwen3/ptq/fp8_static/qwen3-a3b_fp8_static.yaml
+    from_ptq_ckpt: ./output_ptq_30b/qwen3-a3b_fp8_static
+    training_mode: end2end
+    dist_mode: hf
+    save_format: real
+    do_train: true
+    # KD + LM loss combination: loss_type picks the KD variant,
+    # lm_loss_weight / kd_loss_weight control the outer mix.
+    # loss_type choices: kl | rkl | mse | cakld | kd | kl_top_K | r_kl_top_K
+    loss_type: cakld
+    loss_topk: null
+    kd_temperature: 1.0
+    kd_alpha: 0.5
+    lm_loss_weight: 1.0
+    kd_loss_weight: 1.0
+    plugin_config:
+      enable_scale: true
+      quant_config:
+        use_weight_quant: true
+        use_activation_quant: true
+        use_qkv_quant: false
+        # Init values used when weight data is not accessible (e.g. under
+        # ZeRO-3) and for quantizer parameters missing from the PTQ
+        # checkpoint.
+        weight_scale_init_value: 0.1
+        activation_scale_init_value: 0.1
+        learnable:
+          act_scale: false
+          weight_scale: true
+          kv_scale: false
+          norm: false
+          lwc: false
+    hf_args:
+      bf16: true
+      logging_steps: 1
+      logging_first_step: true
+      per_device_train_batch_size: 1
+      gradient_accumulation_steps: 1
+      learning_rate: 1.0e-6
+      lr_scheduler_type: cosine
+      num_train_epochs: 1
+      max_steps: 3
+      save_strategy: "no"
+      warmup_ratio: 0.0
+      max_grad_norm: 1.0
+      gradient_checkpointing: true
+      gradient_checkpointing_kwargs:
+        use_reentrant: true
+      deepspeed: configs/qwen3/qat/fp8_static/learn_scale/ds_config_zero3.json
+
+dataset:
+  name: TextDataset
+  data_path: ./dataset/sharegpt_gpt4_qwen/sharegpt_gpt4-qwen3_a22B_output.jsonl
+  max_seq_length: 4096
+  num_samples: 256
+  batch_size: 1
