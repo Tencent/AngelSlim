@@ -1,0 +1,1043 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>QAT + DeepSpeed ZeRO-3 &#8212; AngelSlim</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../_static/custom.css" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=a5fa425f"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../_static/togglebutton.js?v=4a39c7ea"></script>
+    <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'features/quantization/qat_zero3';</script>
+    <script src="../../_static/custom.js"></script>
+    <link rel="icon" href="../../_static/angelslim_icon.png"/>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="DAQ量化" href="daq.html" />
+    <link rel="prev" title="QAT 量化感知训练" href="qat.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../_static/angelslim_logo.png" class="logo__image only-light" alt="AngelSlim - Home"/>
+    <script>document.write(`<img src="../../_static/angelslim_logo.png" class="logo__image only-dark" alt="AngelSlim - Home"/>`);</script>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">入门指南</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/installation.html">安装教程</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/quickstrat.html">快速开始</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">算法特性</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">量化</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="fp8.html">FP8量化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="int8.html">INT8量化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="awq.html">AWQ量化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gptq.html">GPTQ量化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fp8_lepto.html">FP8_LEPTO量化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="qat.html">QAT 量化感知训练</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">QAT + DeepSpeed ZeRO-3</a></li>
+<li class="toctree-l2"><a class="reference internal" href="daq.html">DAQ量化</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../speculative_decoding/index.html">投机采样</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../sparse_attention/index.html">稀疏注意力</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../diffusion/index.html">文生图/视频/3D压缩</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">模型支持</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../models/hunyuan/hunyuan_quant.html">混元模型量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/hunyuan_ocr/hunyuan_ocr_quant.html">HunyuanOCR量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/deepseek/deepseek_quant.html">DeepSeek量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwen/qwen_quant.html">Qwen量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwenvl/qwenvl_quant.html">Qwen2.5VL量化指南</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwen3_omni/qwen3_omni_quant.html">Qwen3-Omni量化指南</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/Hy-MT1.5/hy-mt1.5.html">Hy-MT1.5 量化</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">部署文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../deployment/deploy.html">压缩模型部署</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">性能表现</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../performance/quantization/benchmarks.html">量化benchmark</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../performance/speculative_decoding/benchmarks.html">投机采样Benchmark</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">设计文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../design/index.html">设计文档</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim/edit/main/docs/source/features/quantization/qat_zero3.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../../_sources/features/quantization/qat_zero3.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>QAT + DeepSpeed ZeRO-3</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">概述</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">架构设计</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">模块目录结构</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#zero-3">执行流程（ZeRO-3 路径）</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">使用方法</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">前置条件</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">完整两阶段流程</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#ptq-scale">阶段 1：PTQ 校准生成初始 scale</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#zero-3-qat">阶段 2：ZeRO-3 QAT</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#b">最小 4B 烟囱测试</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">配置说明</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#zero-3-qat-compression-qat">ZeRO-3 QAT 新增 / 修改字段（<code class="docutils literal notranslate"><span class="pre">compression.QAT</span></code>）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#kd-loss-type">KD 变体（<code class="docutils literal notranslate"><span class="pre">loss_type</span></code>）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id8">训练日志</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dataset-assistant">Dataset：仅监督最后一个 assistant 回复</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#deepspeed">DeepSpeed 配置</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quantizer">Quantizer 初始值</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#yaml">示例 yaml 关键片段</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id9">核心实现要点</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#zero3-io-py-api"><code class="docutils literal notranslate"><span class="pre">zero3_io.py</span></code> 中的主要 API</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id10"><code class="docutils literal notranslate"><span class="pre">Quantizer</span></code> 的变更</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id11">优化器去重</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#convert-save"><code class="docutils literal notranslate"><span class="pre">convert</span></code> + <code class="docutils literal notranslate"><span class="pre">save</span></code> 的内存控制</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id12">已验证场景</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="qat-deepspeed-zero-3">
+<h1>QAT + DeepSpeed ZeRO-3<a class="headerlink" href="#qat-deepspeed-zero-3" title="Link to this heading">#</a></h1>
+<section id="id1">
+<h2>概述<a class="headerlink" href="#id1" title="Link to this heading">#</a></h2>
+<p>本文档描述 AngelSlim QAT 模块的 <strong>DeepSpeed ZeRO-3</strong> 支持。核心动机：当基础模型体量超过单卡显存（例如 Qwen3-30B-A3B 这类 MoE 模型）时，需要把模型参数、梯度、优化器状态都切片到多张 GPU 上，HuggingFace + DeepSpeed 的 ZeRO-3 是一套成熟的方案，但直接用在 QAT 流程里会遇到以下问题：</p>
+<ol class="arabic simple">
+<li><p>HuggingFace <code class="docutils literal notranslate"><span class="pre">from_pretrained</span></code> 在 ZeRO-3 下会让每个 rank 先在 CPU 上加载<strong>完整</strong> state_dict，再 partition，峰值内存约 <code class="docutils literal notranslate"><span class="pre">world_size</span> <span class="pre">×</span> <span class="pre">model_size</span></code>，大模型必然 OOM。</p></li>
+<li><p>QAT 会把原始 <code class="docutils literal notranslate"><span class="pre">nn.Linear</span></code> 替换成 <code class="docutils literal notranslate"><span class="pre">QuantLinear</span></code>，又会把 fused MoE expert 拆成 per-expert <code class="docutils literal notranslate"><span class="pre">nn.Linear</span></code>。这些替换操作如果在 ZeRO-3 sharded 参数上执行，会同时触发切片 / 合并 / 重分发，逻辑极易出错、峰值不可控。</p></li>
+<li><p>QAT 的 activation scale 默认通过 forward 校准（lazy init），在 ZeRO-3 下无法运行；weight scale 的初始化依赖读取完整权重，也不可行。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">convert()</span></code> 把 <code class="docutils literal notranslate"><span class="pre">QuantLinear</span></code> 转为 <code class="docutils literal notranslate"><span class="pre">QDQModule</span></code>，以及 <code class="docutils literal notranslate"><span class="pre">save_format=real</span></code> 导出压缩权重时，需要在多卡之间合并参数并保持 CPU 内存在 <strong>rank0 一份</strong>。</p></li>
+</ol>
+<p>针对上述问题，本实现的关键设计如下：</p>
+<ul class="simple">
+<li><p><strong>每个 rank 独立构造一个空模型</strong>（不读磁盘权重），通过 <code class="docutils literal notranslate"><span class="pre">deepspeed.zero.Init</span></code> 立即 partition，峰值内存仅 <code class="docutils literal notranslate"><span class="pre">model_size</span> <span class="pre">/</span> <span class="pre">world_size</span></code>。</p></li>
+<li><p><strong>fused MoE 拆解发生在空模型阶段</strong>（duck-typing 识别 <code class="docutils literal notranslate"><span class="pre">gate_up_proj</span> <span class="pre">/</span> <span class="pre">down_proj</span> <span class="pre">/</span> <span class="pre">num_experts</span> <span class="pre">/</span> <span class="pre">hidden_dim</span> <span class="pre">/</span> <span class="pre">intermediate_dim</span> <span class="pre">/</span> <span class="pre">act_fn</span></code>），新建的 per-expert <code class="docutils literal notranslate"><span class="pre">nn.Linear</span></code> 被 <code class="docutils literal notranslate"><span class="pre">deepspeed.zero.Init</span></code> 立即切片，<strong>不需要从旧的 fused tensor 拷贝数据</strong>。</p></li>
+<li><p><strong>权重和 scale 都通过 safetensors 流式加载</strong>：rank0 按文件顺序读取，其它 rank 通过 <code class="docutils literal notranslate"><span class="pre">GatheredParameters(modifier_rank=0)</span></code> 接收数据。fused MoE 的 <code class="docutils literal notranslate"><span class="pre">.experts.gate_up_proj</span></code> / <code class="docutils literal notranslate"><span class="pre">.experts.down_proj</span></code> key 会被自动切片写入每个 per-expert target。</p></li>
+<li><p><strong>ZeRO-3 下 scale 强制从外部 PTQ checkpoint 加载</strong>（<code class="docutils literal notranslate"><span class="pre">from_ptq_ckpt</span></code>），跳过 forward 校准；未命中的 scale 按 <code class="docutils literal notranslate"><span class="pre">weight_scale_init_value</span></code> / <code class="docutils literal notranslate"><span class="pre">activation_scale_init_value</span></code> 填充。</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">convert</span> <span class="pre">/</span> <span class="pre">save</span></code> 只在 rank0 构造 <code class="docutils literal notranslate"><span class="pre">QDQModule</span></code> 并直接写入合并 state_dict</strong>，其它 rank 只参与 NCCL gather 的 collective，不持有 CPU 数据。</p></li>
+</ul>
+<p>整体流程下，非 ZeRO-3 路径的行为与 main 分支完全保持一致——所有 ZeRO-3 逻辑都收敛在一个新文件 <code class="docutils literal notranslate"><span class="pre">angelslim/utils/zero3_io.py</span></code> 中，其他文件只做少量薄调用。</p>
+</section>
+<section id="id2">
+<h2>架构设计<a class="headerlink" href="#id2" title="Link to this heading">#</a></h2>
+<section id="id3">
+<h3>模块目录结构<a class="headerlink" href="#id3" title="Link to this heading">#</a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>angelslim/
+├── utils/
+│   └── zero3_io.py                 # ALL ZeRO-3 helpers: detection,
+│                                   # gather/scatter, empty-model build,
+│                                   # streaming weight/scale loaders,
+│                                   # consolidated save, optimizer patch.
+├── compressor/qat/
+│   ├── qat.py                      # ZeRO-3 branch for convert() / save()
+│   ├── modules/quantizer.py        # init scales from init_value when
+│                                   # weight data is not accessible; dtype
+│                                   # alignment for DeepSpeed autocast.
+│   ├── plugins/learnable_scale.py  # stream_load_scales + skip lazy_init
+│   │                               # + gathered quant_inplace
+│   └── trainers/end2end_trainer.py # lm_loss + kd_loss composition with
+│                                   # cakld support + per-component logging
+├── data/text_dataset.py            # supervise ONLY the last assistant turn
+├── models/base_model.py            # from_pretrained → ZeRO-3 path
+├── engine.py                       # normalise ``device_map`` string
+└── utils/
+    ├── config_parser.py            # QATTrainingConfig new fields
+    ├── utils.py                    # set_op_by_name handles string-indexed
+    └── __init__.py                 # re-export zero3_io helpers
+</pre></div>
+</div>
+</section>
+<section id="zero-3">
+<h3>执行流程（ZeRO-3 路径）<a class="headerlink" href="#zero-3" title="Link to this heading">#</a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>tools/run.py
+  └── _prewarm_hf_deepspeed_config()             # register HfTrainerDeepSpeedConfig
+  └── Engine.prepare_model()
+      └── BaseLLMModel.from_pretrained()         # ZeRO-3 branch
+          ├── zero3_empty_model_from_pretrained()
+          │   ├── AutoModelForCausalLM.from_config(...)
+          │   │   # triggers deepspeed.zero.Init for every Parameter
+          │   └── linearize_moe_experts_empty()
+          │       # fused Qwen3MoeExperts → empty LinearizedMoeExperts
+          └── stream_load_weights()              # rank0 reads safetensors
+  └── QAT.__init__()
+      ├── init_ptq() → Qwen.replace_moe()        # no-op: already linearised
+      └── register LearnableScalePlugin(from_ptq_ckpt_dir=...)
+  └── LearnableScalePlugin.before_train()
+      ├── replace nn.Linear with QuantLinear
+      │   └── Quantizer allocates scale Parameters using init_value
+      │       (no dependency on weight data)
+      └── stream_load_scales(from_ptq_ckpt)      # fill weight/act/kv scales
+  └── End2EndTrainer.prepare_trainer()
+      ├── _init_optimizer() with id-deduped scale/LWC params
+      ├── patch_deepspeed_duplicate_check()      # scales may be tied
+      └── HF Trainer.train()
+          # student + teacher forward → lm_loss + kd_loss composition
+  └── QAT.convert() + QAT.save()
+      # rank0-only QDQModule + consolidated state_dict → single rank write
+</pre></div>
+</div>
+</section>
+</section>
+<section id="id4">
+<h2>使用方法<a class="headerlink" href="#id4" title="Link to this heading">#</a></h2>
+<section id="id5">
+<h3>前置条件<a class="headerlink" href="#id5" title="Link to this heading">#</a></h3>
+<ol class="arabic simple">
+<li><p>安装依赖：<code class="docutils literal notranslate"><span class="pre">deepspeed</span></code>、<code class="docutils literal notranslate"><span class="pre">safetensors</span></code>、<code class="docutils literal notranslate"><span class="pre">compressed-tensors</span></code>（可选，用于读取导出的 fp8 checkpoint）。</p></li>
+<li><p>硬件：支持 NCCL 的多 GPU 节点；ZeRO-3 路径要求 <code class="docutils literal notranslate"><span class="pre">torchrun</span> <span class="pre">--nproc_per_node=N</span></code>。</p></li>
+</ol>
+</section>
+<section id="id6">
+<h3>完整两阶段流程<a class="headerlink" href="#id6" title="Link to this heading">#</a></h3>
+<section id="ptq-scale">
+<h4>阶段 1：PTQ 校准生成初始 scale<a class="headerlink" href="#ptq-scale" title="Link to this heading">#</a></h4>
+<p>ZeRO-3 QAT 启动时<strong>不再</strong>跑 forward 校准，因此必须先产出一个带 scale 的 PTQ checkpoint。使用现有 PTQ 配置（单卡即可）：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/run.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-c<span class="w"> </span>configs/qwen3/ptq/fp8_static/qwen3-a3b_fp8_static.yaml<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--model-path<span class="w"> </span>/path/to/Qwen3-30B-A3B<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--save-path<span class="w"> </span>./output_ptq_30b
+</pre></div>
+</div>
+<p>产出的 <code class="docutils literal notranslate"><span class="pre">./output_ptq_30b/qwen3-a3b_fp8_static/model-*.safetensors</span></code> 中包含 <code class="docutils literal notranslate"><span class="pre">&lt;layer&gt;.weight_scale</span></code> 和 <code class="docutils literal notranslate"><span class="pre">&lt;layer&gt;.input_scale</span></code>。</p>
+</section>
+<section id="zero-3-qat">
+<h4>阶段 2：ZeRO-3 QAT<a class="headerlink" href="#zero-3-qat" title="Link to this heading">#</a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>bash<span class="w"> </span>scripts/qat/run_qat_for_qwen_30b_a3b_zero3.sh
+</pre></div>
+</div>
+<p>或直接：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>torchrun<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">8</span><span class="w"> </span>tools/run.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-c<span class="w"> </span>configs/qwen3/qat/fp8_static/learn_scale/qwen3-30b-a3b_fp8_static_end2end_learn_scale_zero3.yaml
+</pre></div>
+</div>
+<p>训练完成后，压缩权重会保存到 <code class="docutils literal notranslate"><span class="pre">./output/qwen3-30b-a3b_fp8_static_end2end_learn_scale_zero3/final_quant_checkpoint/</span></code>。</p>
+</section>
+</section>
+<section id="b">
+<h3>最小 4B 烟囱测试<a class="headerlink" href="#b" title="Link to this heading">#</a></h3>
+<p>快速验证流程（2 张卡、5 步训练）：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Step 1: PTQ</span>
+python<span class="w"> </span>tools/run.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-c<span class="w"> </span>configs/qwen3/ptq/fp8_static/qwen3-4b_fp8_static.yaml<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--model-path<span class="w"> </span>Qwen/Qwen3-4B<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--save-path<span class="w"> </span>./output_ptq
+
+<span class="c1"># Step 2: QAT</span>
+bash<span class="w"> </span>scripts/qat/run_qat_for_qwen_4b_zero3.sh
+</pre></div>
+</div>
+</section>
+</section>
+<section id="id7">
+<h2>配置说明<a class="headerlink" href="#id7" title="Link to this heading">#</a></h2>
+<section id="zero-3-qat-compression-qat">
+<h3>ZeRO-3 QAT 新增 / 修改字段（<code class="docutils literal notranslate"><span class="pre">compression.QAT</span></code>）<a class="headerlink" href="#zero-3-qat-compression-qat" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>字段</p></th>
+<th class="head"><p>类型</p></th>
+<th class="head"><p>默认值</p></th>
+<th class="head"><p>描述</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">from_ptq_ckpt</span></code></p></td>
+<td><p>str / null</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">null</span></code></p></td>
+<td><p>PTQ <code class="docutils literal notranslate"><span class="pre">save_format=&quot;real&quot;</span></code> 产出目录。ZeRO-3 下<strong>必填</strong>，否则 <code class="docutils literal notranslate"><span class="pre">before_train</span></code> 会报错。目录可指向最顶层（自动识别嵌套的 <code class="docutils literal notranslate"><span class="pre">final_quant_checkpoint/</span></code>）。</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">lm_loss_weight</span></code></p></td>
+<td><p>float</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1.0</span></code></p></td>
+<td><p>HF CausalLM CE loss 的权重。为 0 则不计算 lm loss，也不出现在日志中。</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">kd_loss_weight</span></code></p></td>
+<td><p>float</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.0</span></code></p></td>
+<td><p>KD loss 的权重（使用 <code class="docutils literal notranslate"><span class="pre">loss_type</span></code> 选定的 KD 变体）。为 0 则不计算 KD，也不启动 teacher forward。</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>注：<code class="docutils literal notranslate"><span class="pre">lm_loss_weight</span></code> / <code class="docutils literal notranslate"><span class="pre">kd_loss_weight</span></code> 任意一个 &gt; 0 即可参与训练；两者都为 0 会在 <code class="docutils literal notranslate"><span class="pre">compute_loss</span></code> 中抛错。</p>
+</section>
+<section id="kd-loss-type">
+<h3>KD 变体（<code class="docutils literal notranslate"><span class="pre">loss_type</span></code>）<a class="headerlink" href="#kd-loss-type" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p><code class="docutils literal notranslate"><span class="pre">loss_type</span></code></p></th>
+<th class="head"><p>描述</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">kl</span></code></p></td>
+<td><p>`KL(teacher</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">rkl</span></code></p></td>
+<td><p>`KL(student</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">mse</span></code></p></td>
+<td><p>student 与 teacher logits 的 MSE（per-valid-token 平均）</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">cakld</span></code></p></td>
+<td><p>Confidence-Aware KL Distillation：按 teacher 在 label 上的概率做 token-wise 的 <code class="docutils literal notranslate"><span class="pre">fkl</span></code> / <code class="docutils literal notranslate"><span class="pre">rkl</span></code> 混合，<code class="docutils literal notranslate"><span class="pre">conf</span> <span class="pre">*</span> <span class="pre">rkl</span> <span class="pre">+</span> <span class="pre">(1</span> <span class="pre">-</span> <span class="pre">conf)</span> <span class="pre">*</span> <span class="pre">fkl</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">kd</span></code></p></td>
+<td><p>经典 temperature KD：`T² * KL(soft_student</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">kl_top_K</span></code> / <code class="docutils literal notranslate"><span class="pre">r_kl_top_K</span></code></p></td>
+<td><p>top-K token 上的 forward / reverse KL。<code class="docutils literal notranslate"><span class="pre">K</span></code> 可写在 <code class="docutils literal notranslate"><span class="pre">loss_type</span></code> 字符串里（例如 <code class="docutils literal notranslate"><span class="pre">kl_top_1000</span></code>），或通过 <code class="docutils literal notranslate"><span class="pre">loss_topk</span></code> 字段指定</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">origin</span></code></p></td>
+<td><p>纯 HF CE loss（等价于 <code class="docutils literal notranslate"><span class="pre">kd_loss_weight</span> <span class="pre">=</span> <span class="pre">0</span></code>）</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>选择 <code class="docutils literal notranslate"><span class="pre">loss_type</span> <span class="pre">=</span> <span class="pre">cakld</span></code> 时的核心公式（参考 <code class="docutils literal notranslate"><span class="pre">_compute_kd_components</span></code>）：</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># 仅在 labels != -100 的 token 上计算</span>
+<span class="n">forward_kl</span>  <span class="o">=</span> <span class="n">KL</span><span class="p">(</span><span class="n">log_softmax</span><span class="p">(</span><span class="n">student</span><span class="p">),</span> <span class="n">softmax</span><span class="p">(</span><span class="n">teacher</span><span class="p">))</span>
+<span class="n">backward_kl</span> <span class="o">=</span> <span class="n">KL</span><span class="p">(</span><span class="n">log_softmax</span><span class="p">(</span><span class="n">teacher</span><span class="p">),</span> <span class="n">softmax</span><span class="p">(</span><span class="n">student</span><span class="p">))</span>
+<span class="n">conf</span>        <span class="o">=</span> <span class="n">softmax</span><span class="p">(</span><span class="n">teacher</span><span class="p">)</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">label</span><span class="p">)</span>      <span class="c1"># teacher 对目标 token 的置信度</span>
+<span class="n">cakld</span>       <span class="o">=</span> <span class="p">(</span><span class="n">conf</span> <span class="o">*</span> <span class="n">backward_kl</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">conf</span><span class="p">)</span> <span class="o">*</span> <span class="n">forward_kl</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="id8">
+<h3>训练日志<a class="headerlink" href="#id8" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">QATSeq2SeqTrainer.log()</span></code> 会自动把下列指标注入 HF Trainer 的标准日志字典（所以 wandb / console / tqdm 都能看到），仅当对应权重 &gt; 0 时才会出现：</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>指标</p></th>
+<th class="head"><p>含义</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">lm_loss</span></code></p></td>
+<td><p>HF CausalLM CE loss（仅对 assistant 回复位置计算，见下）</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">kd/&lt;loss_type&gt;</span></code></p></td>
+<td><p>当前选定的 KD 主 loss（<code class="docutils literal notranslate"><span class="pre">cakld</span></code> / <code class="docutils literal notranslate"><span class="pre">kl</span></code> / …）</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">kd/forward_kl</span></code></p></td>
+<td><p>诊断用：`KL(teacher</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">kd/backward_kl</span></code></p></td>
+<td><p>诊断用：`KL(student</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">total_loss</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">lm_loss_weight</span> <span class="pre">*</span> <span class="pre">lm_loss</span> <span class="pre">+</span> <span class="pre">kd_loss_weight</span> <span class="pre">*</span> <span class="pre">kd/&lt;loss_type&gt;</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>示例输出（30B-A3B，3 步训练）：</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s1">&#39;loss&#39;</span><span class="p">:</span> <span class="mf">2.08</span><span class="p">,</span> <span class="s1">&#39;grad_norm&#39;</span><span class="p">:</span> <span class="mf">43.1</span><span class="p">,</span> <span class="s1">&#39;learning_rate&#39;</span><span class="p">:</span> <span class="mf">1e-6</span><span class="p">,</span>
+ <span class="s1">&#39;lm_loss&#39;</span><span class="p">:</span> <span class="mf">1.23</span><span class="p">,</span> <span class="s1">&#39;kd/cakld&#39;</span><span class="p">:</span> <span class="mf">0.0075</span><span class="p">,</span> <span class="s1">&#39;kd/forward_kl&#39;</span><span class="p">:</span> <span class="mf">0.0075</span><span class="p">,</span> <span class="s1">&#39;kd/backward_kl&#39;</span><span class="p">:</span> <span class="mf">0.0075</span><span class="p">,</span>
+ <span class="s1">&#39;total_loss&#39;</span><span class="p">:</span> <span class="mf">1.24</span><span class="p">,</span> <span class="s1">&#39;epoch&#39;</span><span class="p">:</span> <span class="mf">0.03</span><span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="dataset-assistant">
+<h3>Dataset：仅监督最后一个 assistant 回复<a class="headerlink" href="#dataset-assistant" title="Link to this heading">#</a></h3>
+<p>对于 JSONL 格式的 SFT 数据（<code class="docutils literal notranslate"><span class="pre">messages</span></code> / <code class="docutils literal notranslate"><span class="pre">conversations</span></code> / <code class="docutils literal notranslate"><span class="pre">input+output</span></code> 三种 schema），<code class="docutils literal notranslate"><span class="pre">TextDataset._load_jsonl_data</span></code> 现在只对<strong>最后一个 assistant 回复</strong>位置计算 loss：</p>
+<ul class="simple">
+<li><p>拼接 prompt（对话中最后一个 assistant 之前的所有 turn）并通过 <code class="docutils literal notranslate"><span class="pre">apply_chat_template(...,</span> <span class="pre">add_generation_prompt=True)</span></code> tokenize，得到 <code class="docutils literal notranslate"><span class="pre">prompt_len</span></code>。</p></li>
+<li><p>拼接完整对话（含最后 assistant）tokenize 得到 <code class="docutils literal notranslate"><span class="pre">input_ids</span></code>，<code class="docutils literal notranslate"><span class="pre">labels</span> <span class="pre">=</span> <span class="pre">input_ids.clone()</span></code>。</p></li>
+<li><p>把 <code class="docutils literal notranslate"><span class="pre">labels[:,</span> <span class="pre">:prompt_len]</span></code> 和 padding 位置都置为 <code class="docutils literal notranslate"><span class="pre">-100</span></code>，HF CausalLM loss 会自动忽略。</p></li>
+</ul>
+<p>这与 HF CausalLM 内部的 shift 行为一致（<code class="docutils literal notranslate"><span class="pre">shift_logits[...,</span> <span class="pre">:-1]</span></code> 对齐 <code class="docutils literal notranslate"><span class="pre">shift_labels[...,</span> <span class="pre">1:]</span></code>），<strong>不需要</strong>手动 <code class="docutils literal notranslate"><span class="pre">roll</span></code>。</p>
+</section>
+<section id="deepspeed">
+<h3>DeepSpeed 配置<a class="headerlink" href="#deepspeed" title="Link to this heading">#</a></h3>
+<p>参考 <code class="docutils literal notranslate"><span class="pre">configs/qwen3/qat/fp8_static/learn_scale/ds_config_zero3.json</span></code>。关键项：</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;bf16&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;auto&quot;</span><span class="p">},</span>
+<span class="w">    </span><span class="nt">&quot;zero_optimization&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;stage&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;stage3_gather_16bit_weights_on_model_save&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;overlap_comm&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;contiguous_gradients&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">&quot;gradient_accumulation_steps&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;gradient_clipping&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;train_batch_size&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;train_micro_batch_size_per_gpu&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;auto&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">hf_args</span></code> 中需要设 <code class="docutils literal notranslate"><span class="pre">bf16:</span> <span class="pre">true</span></code>（或 <code class="docutils literal notranslate"><span class="pre">fp16:</span> <span class="pre">true</span></code>）显式开启混合精度，否则 DeepSpeed 的 <code class="docutils literal notranslate"><span class="pre">zero3_linear_wrap</span></code> 会默认用 fp16 autocast，而模型权重是 bf16，导致 dtype 失配。</p>
+</section>
+<section id="quantizer">
+<h3>Quantizer 初始值<a class="headerlink" href="#quantizer" title="Link to this heading">#</a></h3>
+<p>当 ZeRO-3 启用（或 weight 是 ZeRO-3 sharded / meta / 0 numel 的任一情况）时，<code class="docutils literal notranslate"><span class="pre">Quantizer._init_quant_params</span></code> 不再依赖权重数值，而是直接按 shape 创建 <code class="docutils literal notranslate"><span class="pre">nn.Parameter</span></code>：</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>配置项</p></th>
+<th class="head"><p>默认值</p></th>
+<th class="head"><p>描述</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">weight_scale_init_value</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1.0</span></code></p></td>
+<td><p>Weight quantizer scale 的初始值，在 <code class="docutils literal notranslate"><span class="pre">from_ptq_ckpt</span></code> 未命中时保留</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">activation_scale_init_value</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1.0</span></code></p></td>
+<td><p>Activation quantizer scale 的初始值</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>典型场景下 PTQ 产出的 weight scale 约为 <code class="docutils literal notranslate"><span class="pre">max(|W|)</span> <span class="pre">/</span> <span class="pre">448</span> <span class="pre">≈</span> <span class="pre">1e-3</span></code>，建议在 yaml 里把 init value 设为 <code class="docutils literal notranslate"><span class="pre">0.1</span></code> 左右作为保底（<code class="docutils literal notranslate"><span class="pre">from_ptq_ckpt</span></code> 命中时这些值会被覆盖）。</p>
+</section>
+<section id="yaml">
+<h3>示例 yaml 关键片段<a class="headerlink" href="#yaml" title="Link to this heading">#</a></h3>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">compression</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">QAT</span>
+<span class="w">  </span><span class="nt">quantization</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">fp8_static</span>
+<span class="w">    </span><span class="nt">quant_method</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">per-tensor</span>
+<span class="w">      </span><span class="nt">activation</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">per-tensor</span>
+<span class="w">    </span><span class="nt">ignore_layers</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;lm_head&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;embed_tokens&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;gate.weight&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="nt">QAT</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">hf_dataset</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span>
+<span class="w">    </span><span class="nt">from_ptq_ckpt</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./output_ptq_30b/qwen3-a3b_fp8_static</span>
+<span class="w">    </span><span class="nt">training_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">end2end</span>
+<span class="w">    </span><span class="nt">dist_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hf</span>
+<span class="w">    </span><span class="nt">save_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">real</span>
+<span class="w">    </span><span class="nt">loss_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cakld</span>
+<span class="w">    </span><span class="nt">lm_loss_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
+<span class="w">    </span><span class="nt">kd_loss_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
+<span class="w">    </span><span class="nt">plugin_config</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">enable_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">      </span><span class="nt">quant_config</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">use_weight_quant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">        </span><span class="nt">use_activation_quant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">        </span><span class="nt">weight_scale_init_value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.1</span>
+<span class="w">        </span><span class="nt">activation_scale_init_value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.1</span>
+<span class="w">        </span><span class="nt">learnable</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">act_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">          </span><span class="nt">weight_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">          </span><span class="nt">kv_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">          </span><span class="nt">norm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">          </span><span class="nt">lwc</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">hf_args</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">bf16</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">      </span><span class="nt">per_device_train_batch_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<span class="w">      </span><span class="nt">learning_rate</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0e-6</span>
+<span class="w">      </span><span class="nt">gradient_checkpointing</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">      </span><span class="nt">deepspeed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">configs/qwen3/qat/fp8_static/learn_scale/ds_config_zero3.json</span>
+</pre></div>
+</div>
+<p>完整示例：</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">configs/qwen3/qat/fp8_static/learn_scale/qwen3-4b_fp8_static_end2end_learn_scale_zero3.yaml</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">configs/qwen3/qat/fp8_static/learn_scale/qwen3-30b-a3b_fp8_static_end2end_learn_scale_zero3.yaml</span></code></p></li>
+</ul>
+</section>
+</section>
+<section id="id9">
+<h2>核心实现要点<a class="headerlink" href="#id9" title="Link to this heading">#</a></h2>
+<section id="zero3-io-py-api">
+<h3><code class="docutils literal notranslate"><span class="pre">zero3_io.py</span></code> 中的主要 API<a class="headerlink" href="#zero3-io-py-api" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>函数 / 类</p></th>
+<th class="head"><p>作用</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">is_deepspeed_zero3_enabled()</span></code></p></td>
+<td><p>通过 HF 的 <code class="docutils literal notranslate"><span class="pre">HfTrainerDeepSpeedConfig</span></code> 弱引用判断是否已注册 ZeRO-3 配置</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">is_zero3_param(p)</span></code></p></td>
+<td><p>判断 Parameter 是否带有 <code class="docutils literal notranslate"><span class="pre">ds_id</span> <span class="pre">/</span> <span class="pre">ds_status</span> <span class="pre">/</span> <span class="pre">ds_numel</span> <span class="pre">/</span> <span class="pre">ds_tensor</span></code> 元数据</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">gathered_param_if_zero3(p,</span> <span class="pre">modifier_rank=None)</span></code></p></td>
+<td><p>上下文管理器；非 ZeRO-3 参数为 no-op</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">LinearizedMoeExperts</span></code></p></td>
+<td><p>通用空 per-expert <code class="docutils literal notranslate"><span class="pre">nn.Linear</span></code> 容器，<code class="docutils literal notranslate"><span class="pre">forward</span></code> 与 HF fused 等价</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">linearize_moe_experts_empty(model)</span></code></p></td>
+<td><p>duck-typing 扫描并原地替换，在 <code class="docutils literal notranslate"><span class="pre">deepspeed.zero.Init</span></code> 内构造以直接 partition</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">zero3_empty_model_from_pretrained(model_path,</span> <span class="pre">...)</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">no_init_weights</span></code> + <code class="docutils literal notranslate"><span class="pre">from_config</span></code> 构造空模型 + 自动拆 MoE</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">stream_load_weights(model,</span> <span class="pre">model_path)</span></code></p></td>
+<td><p>流式灌权，支持 fused MoE key 的 per-expert 切片分发</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stream_load_scales(model,</span> <span class="pre">ckpt_dir)</span></code></p></td>
+<td><p>流式灌 scale，支持 <code class="docutils literal notranslate"><span class="pre">.weight_scale</span> <span class="pre">/</span> <span class="pre">.input_scale</span> <span class="pre">/</span> <span class="pre">.k_cache.scale</span> <span class="pre">/</span> <span class="pre">.v_cache.scale</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">save_via_model_save_func(quant_model,</span> <span class="pre">save_func,</span> <span class="pre">path,</span> <span class="pre">prebuilt_state_dict)</span></code></p></td>
+<td><p>只在 rank0 调用原 save_func，<code class="docutils literal notranslate"><span class="pre">state_dict()</span></code> 被 patch 返回合并后的字典</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">patch_deepspeed_duplicate_check()</span></code></p></td>
+<td><p>置空 <code class="docutils literal notranslate"><span class="pre">DeepSpeedEngine._check_for_duplicates</span></code>，允许 tied scale 参数</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="id10">
+<h3><code class="docutils literal notranslate"><span class="pre">Quantizer</span></code> 的变更<a class="headerlink" href="#id10" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>新增 <code class="docutils literal notranslate"><span class="pre">weight_shape</span></code> 构造参数：<code class="docutils literal notranslate"><span class="pre">QuantLinear.__init__</span></code> 传入 <code class="docutils literal notranslate"><span class="pre">(out_features,</span> <span class="pre">in_features)</span></code>，使得 Quantizer 在不访问权重数据的情况下也能计算 scale 的形状。</p></li>
+<li><p>新增 <code class="docutils literal notranslate"><span class="pre">weight_scale_init_value</span></code> / <code class="docutils literal notranslate"><span class="pre">activation_scale_init_value</span></code> 配置项；<code class="docutils literal notranslate"><span class="pre">_init_quant_params</span></code> / <code class="docutils literal notranslate"><span class="pre">_init_lwc_params</span></code> 在 <code class="docutils literal notranslate"><span class="pre">_needs_external_weight_init(x)</span></code> 为真时使用。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">QuantLinear.forward</span></code> 末尾的 <code class="docutils literal notranslate"><span class="pre">F.linear</span></code> 现在包在 <code class="docutils literal notranslate"><span class="pre">torch.amp.autocast(device_type=&quot;cuda&quot;,</span> <span class="pre">enabled=False)</span></code> 中，并在调用前把 <code class="docutils literal notranslate"><span class="pre">input.dtype</span></code> 对齐到 <code class="docutils literal notranslate"><span class="pre">weight.dtype</span></code>，以避免 DeepSpeed <code class="docutils literal notranslate"><span class="pre">zero3_linear_wrap</span></code> 的 autocast 把 bf16 input 回转成 fp16。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">fake_quant</span></code> 末尾把 <code class="docutils literal notranslate"><span class="pre">out</span></code> cast 回 <code class="docutils literal notranslate"><span class="pre">x.dtype</span></code>，防止 <code class="docutils literal notranslate"><span class="pre">bf16</span> <span class="pre">*</span> <span class="pre">fp32</span> <span class="pre">=</span> <span class="pre">fp32</span></code> 的 dtype 泄漏。</p></li>
+</ul>
+</section>
+<section id="id11">
+<h3>优化器去重<a class="headerlink" href="#id11" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">End2EndTrainer._init_optimizer</span></code> 使用 <code class="docutils literal notranslate"><span class="pre">_unique_named_params(...)</span></code> 根据 <code class="docutils literal notranslate"><span class="pre">id()</span></code> 去重收集 trainable 的 scale / LWC 参数，避免同一 Parameter 被多次加入 param group（在 MoE expert 共享 tensor 的场景下会触发）。配合 <code class="docutils literal notranslate"><span class="pre">patch_deepspeed_duplicate_check()</span></code> 即可通过 DeepSpeed 的安全检查。</p>
+</section>
+<section id="convert-save">
+<h3><code class="docutils literal notranslate"><span class="pre">convert</span></code> + <code class="docutils literal notranslate"><span class="pre">save</span></code> 的内存控制<a class="headerlink" href="#convert-save" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">QAT.convert</span></code> 在 ZeRO-3 路径下：</p>
+<ol class="arabic simple">
+<li><p>对每个 <code class="docutils literal notranslate"><span class="pre">QuantLinear</span></code>：<strong>所有 rank</strong> 都进入 <code class="docutils literal notranslate"><span class="pre">gathered_param_if_zero3</span></code> 拿到完整 weight（NCCL collective 保持对称），但<strong>只 rank0</strong> 保留 CPU clone。</p></li>
+<li><p>rank0 在临时 <code class="docutils literal notranslate"><span class="pre">QDQModule</span></code> 内部跑一次 fp8/int 量化，把 <code class="docutils literal notranslate"><span class="pre">weight</span> <span class="pre">/</span> <span class="pre">weight_scale</span> <span class="pre">/</span> <span class="pre">input_scale</span> <span class="pre">/</span> <span class="pre">bias</span></code> 取出塞进 <code class="docutils literal notranslate"><span class="pre">self._rank0_state_dict</span></code>，随后丢弃临时模块。</p></li>
+<li><p><strong>不修改模型结构</strong>：保持 <code class="docutils literal notranslate"><span class="pre">QuantLinear</span></code>，使得第二轮扫描（收集非 QuantLinear 参数，如 embed、lm_head、layernorm、MoE router gate）在所有 rank 上 <code class="docutils literal notranslate"><span class="pre">named_parameters</span></code> 顺序一致，collective gather 不会死锁。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">QAT.save</span></code> 把 <code class="docutils literal notranslate"><span class="pre">_rank0_state_dict</span></code> 透传给 <code class="docutils literal notranslate"><span class="pre">save_via_model_save_func</span></code>，后者 patch <code class="docutils literal notranslate"><span class="pre">hf_model.state_dict</span></code>，<strong>只 rank0</strong> 调原 <code class="docutils literal notranslate"><span class="pre">save_func.save(...)</span></code>。</p></li>
+</ol>
+<p>rank&gt;0 convert 阶段 CPU 峰值 ≈ 一层的完整 weight（几十 MB 到 GB 量级）；rank0 峰值 ≈ 累积的合并 state_dict（完整模型大小）。</p>
+</section>
+</section>
+<section id="id12">
+<h2>已验证场景<a class="headerlink" href="#id12" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>场景</p></th>
+<th class="head"><p>模型</p></th>
+<th class="head"><p>硬件</p></th>
+<th class="head"><p>结果</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Dense ZeRO-3 QAT</p></td>
+<td><p>Qwen3-4B</p></td>
+<td><p>2×H20</p></td>
+<td><p>✓ PTQ→QAT→save 打通，产物能被 transformers 加载</p></td>
+</tr>
+<tr class="row-odd"><td><p>MoE ZeRO-3 QAT</p></td>
+<td><p>Qwen3-30B-A3B（48 层 × 128 experts）</p></td>
+<td><p>8×H20</p></td>
+<td><p>✓ <code class="docutils literal notranslate"><span class="pre">stream_load_scales</span></code> 命中 37248 个 scale，训练 loss 稳定，输出 31 GB fp8 checkpoint</p></td>
+</tr>
+<tr class="row-even"><td><p>KD + LM loss 组合</p></td>
+<td><p>同上</p></td>
+<td><p>同上</p></td>
+<td><p>✓ <code class="docutils literal notranslate"><span class="pre">lm_loss</span> <span class="pre">/</span> <span class="pre">kd/cakld</span> <span class="pre">/</span> <span class="pre">kd/forward_kl</span> <span class="pre">/</span> <span class="pre">kd/backward_kl</span> <span class="pre">/</span> <span class="pre">total_loss</span></code> 按权重打印</p></td>
+</tr>
+<tr class="row-odd"><td><p>最后 assistant 仅监督</p></td>
+<td><p>TextDataset(jsonl)</p></td>
+<td><p>-</p></td>
+<td><p>✓ 首个 valid label idx 落在 <code class="docutils literal notranslate"><span class="pre">&lt;|im_start|&gt;assistant\n</span></code> 之后</p></td>
+</tr>
+<tr class="row-even"><td><p>非 ZeRO-3 回归</p></td>
+<td><p>Qwen3-4B 单卡 PTQ</p></td>
+<td><p>1×H20</p></td>
+<td><p>✓ 行为与 main 一致，无回归</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="qat.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">QAT 量化感知训练</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="daq.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">DAQ量化</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">概述</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">架构设计</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">模块目录结构</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#zero-3">执行流程（ZeRO-3 路径）</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">使用方法</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">前置条件</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">完整两阶段流程</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#ptq-scale">阶段 1：PTQ 校准生成初始 scale</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#zero-3-qat">阶段 2：ZeRO-3 QAT</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#b">最小 4B 烟囱测试</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">配置说明</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#zero-3-qat-compression-qat">ZeRO-3 QAT 新增 / 修改字段（<code class="docutils literal notranslate"><span class="pre">compression.QAT</span></code>）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#kd-loss-type">KD 变体（<code class="docutils literal notranslate"><span class="pre">loss_type</span></code>）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id8">训练日志</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dataset-assistant">Dataset：仅监督最后一个 assistant 回复</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#deepspeed">DeepSpeed 配置</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quantizer">Quantizer 初始值</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#yaml">示例 yaml 关键片段</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id9">核心实现要点</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#zero3-io-py-api"><code class="docutils literal notranslate"><span class="pre">zero3_io.py</span></code> 中的主要 API</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id10"><code class="docutils literal notranslate"><span class="pre">Quantizer</span></code> 的变更</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id11">优化器去重</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#convert-save"><code class="docutils literal notranslate"><span class="pre">convert</span></code> + <code class="docutils literal notranslate"><span class="pre">save</span></code> 的内存控制</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id12">已验证场景</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By the AngelSlim Team
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, AngelSlim Team.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>
