@@ -1,0 +1,7 @@
+DATASETS:
+  dataset_root: "data/downloaded_datasets"
+  datasets:
+    #example:
+    example: "/path/to/your/dataset/example.jsonl"
+
+    

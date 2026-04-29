@@ -1,0 +1,3 @@
+[submodule "SA-MAP/almeval/models/kimi_audio/kimia_infer/models/tokenizer/glm4"]
+	path = SA-MAP/almeval/models/kimi_audio/kimia_infer/models/tokenizer/glm4
+	url = https://github.com/THUDM/GLM-4-Voice.git
