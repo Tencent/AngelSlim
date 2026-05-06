@@ -17,13 +17,13 @@ import subprocess
 
 from setuptools import find_packages, setup
 
-BASE_VERSION = None
+BASE_VERSION = "0.0.0_dev"
 
-if "main" in subprocess.getoutput("git branch"):
-    BASE_VERSION = "0.0.0_dev"
-else:
-    tag_list = subprocess.getoutput("git tag").split("\n")
-    BASE_VERSION = tag_list[-1]
+# if "main" in subprocess.getoutput("git branch"):
+#     BASE_VERSION = "0.0.0_dev"
+# else:
+#     tag_list = subprocess.getoutput("git tag").split("\n")
+#     BASE_VERSION = tag_list[-1]
 
 
 def get_version_with_cuda_torch():

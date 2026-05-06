@@ -241,7 +241,7 @@ class HYV3MoE(BaseLLMModel):
     def apply_kvcache_observers(self, kv_cache_observer_class, quant_bits=8):
         """
         Apply KV cache observers to attention layers using monkey patching.
-        This observes key_states and value_states AFTER RoPE is applied.
+        This observes query_states, key_states and value_states AFTER RoPE is applied.
 
         Args:
             kv_cache_observer_class: The observer class to use (e.g., AbsmaxPertensorObserver)
@@ -255,7 +255,11 @@ class HYV3MoE(BaseLLMModel):
         attention_layers = self.get_attention_layers()
 
         for attn_name, attn_module in attention_layers.items():
-            # Create observers for key and value states
+            # Create observers for query, key and value states (all after RoPE)
+            query_observer = kv_cache_observer_class(
+                layer=attn_module.q_proj,
+                quant_bits=quant_bits,
+            )
             key_observer = kv_cache_observer_class(
                 layer=attn_module.k_proj,
                 quant_bits=quant_bits,
@@ -267,6 +271,7 @@ class HYV3MoE(BaseLLMModel):
 
             # Store observers
             self.kv_cache_observers[attn_name] = {
+                "query_observer": query_observer,
                 "key_observer": key_observer,
                 "value_observer": value_observer,
             }
@@ -279,75 +284,97 @@ class HYV3MoE(BaseLLMModel):
 
     def _patch_attention_forward(self, attn_module, attn_name):
         """
-        Patch the attention module's forward method to observe KV cache after RoPE.
+        Patch the attention module's forward method to observe QKV after RoPE.
 
-        Adapted to the new transformers ``HYV3Attention.forward`` signature, where
-        rotary embeddings are pre-computed and passed in as ``position_embeddings``
-        (a ``(cos, sin)`` tuple), ``q_norm``/``k_norm`` are applied unconditionally
-        on the pre-transpose view, and attention dispatch goes through
-        ``ALL_ATTENTION_FUNCTIONS``.
+        Aligned to the custom modeling_HY_v3.py signature:
+          forward(self, hidden_states, attention_mask, position_ids,
+                  rope_cache, past_key_value, output_attentions,
+                  use_cache, cache_position, **kwargs)
+          returns: (attn_output, attn_weights, past_key_value)  <- 3 values
+
+        RoPE is applied via apply_rotary_emb_with_positions(q, k, rope_cache, cache_position).
         """
+        from transformers.models.hy_v3.modeling_hy_v3 import apply_rotary_pos_emb as _unused  # noqa
+        # Import the custom apply_rotary_emb_with_positions from the cached model
+        import importlib, sys
+        _custom_mod = sys.modules.get(
+            "transformers_modules.global_step_hf.modeling_HY_v3", None
+        )
+        if _custom_mod is None:
+            import importlib.util, os
+            _spec = importlib.util.spec_from_file_location(
+                "modeling_HY_v3",
+                os.path.expanduser(
+                    "~/.cache/huggingface/modules/transformers_modules/"
+                    "global_step_hf/modeling_HY_v3.py"
+                ),
+            )
+            _custom_mod = importlib.util.module_from_spec(_spec)
+            _spec.loader.exec_module(_custom_mod)
+        _apply_rope = _custom_mod.apply_rotary_emb_with_positions
+
+        query_observer = self.kv_cache_observers[attn_name]["query_observer"]
         key_observer = self.kv_cache_observers[attn_name]["key_observer"]
         value_observer = self.kv_cache_observers[attn_name]["value_observer"]
 
+        original_forward = self._original_attn_forwards[attn_name]
+
         def patched_forward(
             hidden_states,
-            position_embeddings,
-            attention_mask,
-            past_key_values=None,
+            attention_mask=None,
+            position_ids=None,
+            rope_cache=None,
+            past_key_value=None,
+            output_attentions=False,
+            use_cache=False,
             cache_position=None,
             **kwargs,
         ):
-            input_shape = hidden_states.shape[:-1]
-            hidden_shape = (*input_shape, -1, attn_module.head_dim)
+            # Call original forward to get correct output (attn_output, attn_weights, past_key_value)
+            attn_output, attn_weights, present_key_value = original_forward(
+                hidden_states,
+                attention_mask=attention_mask,
+                position_ids=position_ids,
+                rope_cache=rope_cache,
+                past_key_value=past_key_value,
+                output_attentions=output_attentions,
+                use_cache=use_cache,
+                cache_position=cache_position,
+                **kwargs,
+            )
 
-            query_states = attn_module.q_proj(hidden_states).view(hidden_shape)
-            key_states = attn_module.k_proj(hidden_states).view(hidden_shape)
-            value_states = attn_module.v_proj(hidden_states).view(hidden_shape)
+            # Re-compute QKV after RoPE for observation only (no grad)
+            with torch.no_grad():
+                bsz, q_len, _ = hidden_states.size()
+                query_states = attn_module.q_proj(hidden_states).view(
+                    bsz, q_len, attn_module.num_heads, attn_module.head_dim
+                ).transpose(1, 2)
+                key_states = attn_module.k_proj(hidden_states).view(
+                    bsz, q_len, attn_module.num_key_value_heads, attn_module.head_dim
+                ).transpose(1, 2)
+                value_states = attn_module.v_proj(hidden_states).view(
+                    bsz, q_len, attn_module.num_key_value_heads, attn_module.head_dim
+                ).transpose(1, 2)
 
-            query_states = attn_module.q_norm(query_states)
-            key_states = attn_module.k_norm(key_states)
+                if attn_module.use_qk_norm:
+                    query_states = attn_module.q_norm(query_states)
+                    key_states = attn_module.k_norm(key_states)
 
-            query_states = query_states.transpose(1, 2)
-            key_states = key_states.transpose(1, 2)
-            value_states = value_states.transpose(1, 2)
+                # Apply RoPE using the custom model's function
+                query_states, key_states = _apply_rope(
+                    query_states, key_states, rope_cache, cache_position
+                )
 
-            cos, sin = position_embeddings
-            query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
-
-            # === OBSERVE KV CACHE AFTER RoPE ===
+            # === OBSERVE QKV AFTER RoPE ===
+            query_observer(query_states)
             key_observer(key_states)
             value_observer(value_states)
             # === END OBSERVE ===
 
-            if past_key_values is not None:
-                cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position}
-                key_states, value_states = past_key_values.update(
-                    key_states, value_states, attn_module.layer_idx, cache_kwargs
-                )
+            return attn_output, attn_weights, present_key_value
 
-            attention_interface = eager_attention_forward
-            if attn_module.config._attn_implementation != "eager":
-                attention_interface = ALL_ATTENTION_FUNCTIONS[
-                    attn_module.config._attn_implementation
-                ]
-
-            attn_output, attn_weights = attention_interface(
-                attn_module,
-                query_states,
-                key_states,
-                value_states,
-                attention_mask,
-                dropout=0.0 if not attn_module.training else attn_module.attention_dropout,
-                scaling=attn_module.scaling,
-                **kwargs,
-            )
-
-            attn_output = attn_output.reshape(*input_shape, -1).contiguous()
-            attn_output = attn_module.o_proj(attn_output)
-            return attn_output, attn_weights
-
-        # Replace the forward method
+        # Replace the forward method directly (plain function, no MethodType needed
+        # because nn.Module.__call__ invokes self.forward via __get__ descriptor)
         attn_module.forward = patched_forward
 
     def remove_kvcache_observers(self):
@@ -364,14 +391,17 @@ class HYV3MoE(BaseLLMModel):
 
     def get_kvcache_scales(self):
         """
-        Get KV cache scales from observers.
-        Returns dict with format: {"layer_name.k_cache.scale": scale,
+        Get QKV cache scales from observers.
+        Returns dict with format: {"layer_name.q_cache.scale": scale,
+                                   "layer_name.k_cache.scale": scale,
                                    "layer_name.v_cache.scale": scale}
         """
         kv_scales = {}
         for attn_name, observers in self.kv_cache_observers.items():
+            query_scale = observers["query_observer"].scales()
             key_scale = observers["key_observer"].scales()
             value_scale = observers["value_observer"].scales()
+            kv_scales[f"{attn_name}.q_cache.scale"] = query_scale
             kv_scales[f"{attn_name}.k_cache.scale"] = key_scale
             kv_scales[f"{attn_name}.v_cache.scale"] = value_scale
         return kv_scales

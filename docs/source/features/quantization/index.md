@@ -14,4 +14,5 @@ gptq
 fp8_lepto
 qat
 daq
+transformer_qkv_calibration
 :::
