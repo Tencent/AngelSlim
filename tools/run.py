@@ -113,6 +113,7 @@ def multi_nodes_run(config):
             inference_settings=dataset_config.inference_settings,
             use_audio_in_video=model_config.use_audio_in_video,
             is_sft_data=dataset_config.is_sft_data,
+            dtype=slim_engine.slim_model.model.dtype,
         )
 
     # Step 6: Initialize compressor
@@ -364,6 +365,7 @@ def run(config):
             model_name=model_config.name,
             quantization_config=compress_config.quantization,
             is_sft_data=dataset_config.is_sft_data,
+            dtype=slim_engine.slim_model.model.dtype,
         )
 
     # Step 5: Initialize compressor
