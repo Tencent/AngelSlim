@@ -430,7 +430,7 @@ document.write(`
 <p>Qwen3-Omni模型可采用<strong>FP8（static、dynamic）</strong> 方式进行模型压缩，以下是详细的量化配置与操作说明。</p>
 <section id="fp8-w8a8">
 <h2>FP8 量化（W8A8）<a class="headerlink" href="#fp8-w8a8" title="Link to this heading">#</a></h2>
-<p>Qwen3-Omni的FP8量化采用<strong>per-tensor粒度</strong>，支持thinker与talker的llm模块的动态量化（dynamic）和静态量化（static）两种模式。</p>
+<p>Qwen3-Omni的FP8量化采用<strong>per-tensor粒度</strong>，支持thinker与talker的llm模块的动态量化（dynamic）和静态量化（static）两种模式；可通过<code class="docutils literal notranslate"><span class="pre">quantization.quant_talker</span></code>控制是否量化talker。</p>
 <section id="id1">
 <h3>配置参数说明<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
 <p>FP8量化的配置文件可参考路径：<code class="docutils literal notranslate"><span class="pre">configs/qwen3_omni/fp8_static</span></code> 和 <code class="docutils literal notranslate"><span class="pre">configs/qwen3_omni/fp8_dynamic</span></code>，核心参数如下：</p>
@@ -450,6 +450,7 @@ document.write(`
 <li><p><code class="docutils literal notranslate"><span class="pre">quantization.name</span></code>：量化算法类型，根据需求选择<code class="docutils literal notranslate"><span class="pre">fp8_static</span></code>（静态量化）或<code class="docutils literal notranslate"><span class="pre">fp8_dynamic</span></code>（动态量化）。</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">quantization.bits</span></code>：量化比特数，FP8量化固定填写<code class="docutils literal notranslate"><span class="pre">8</span></code>。</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">quantization.quant_method</span></code>：权重量化粒度，FP8量化固定为<code class="docutils literal notranslate"><span class="pre">per-tensor</span></code>。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quantization.quant_talker</span></code>：是否量化Qwen3-Omni的talker LLM模块，默认<code class="docutils literal notranslate"><span class="pre">false</span></code>；设为<code class="docutils literal notranslate"><span class="pre">false</span></code>时仅量化thinker。</p></li>
 </ul>
 </section>
 <section id="dataset">
@@ -482,14 +483,17 @@ python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class
 </section>
 <section id="id3">
 <h2>模型部署<a class="headerlink" href="#id3" title="Link to this heading">#</a></h2>
-<p>vLLM框架支持Qwen3-Omni的FP8（per-tensor）量化模型部署，建议使用官方部署方式：</p>
 <section id="vllm">
 <h3>vllm<a class="headerlink" href="#vllm" title="Link to this heading">#</a></h3>
-<p>参考<a class="reference internal" href="#URL"><span class="xref myst">https://github.com/QwenLM/Qwen3-Omni?tab=readme-ov-file#vllm-usage</span></a></p>
+<p>vLLM框架支持Qwen3-Omni的FP8（per-tensor）量化模型部署，只部署Thinker，可参考以下命令：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>vllm<span class="w"> </span>serve<span class="w"> </span><span class="nv">$model_path</span><span class="w"> </span>--port<span class="w"> </span><span class="m">8021</span><span class="w"> </span>-tp<span class="w"> </span><span class="m">4</span><span class="w"> </span>--gpu-memory-utilization<span class="w"> </span><span class="m">0</span>.8
+</pre></div>
+</div>
+<p>要部署完整的Qwen3-Omni，参考vllm-omni的部署方式：<a class="reference internal" href="#URL"><span class="xref myst">https://docs.vllm.ai/projects/vllm-omni/en/latest/user_guide/examples/online_serving/qwen3_omni/</span></a></p>
 </section>
 <section id="transformers">
 <h3>transformers<a class="headerlink" href="#transformers" title="Link to this heading">#</a></h3>
-<p>参考<a class="reference internal" href="#URL"><span class="xref myst">https://github.com/QwenLM/Qwen3-Omni?tab=readme-ov-file#transformers-usage</span></a></p>
+<p>参考：<a class="reference internal" href="#URL"><span class="xref myst">https://github.com/QwenLM/Qwen3-Omni?tab=readme-ov-file#transformers-usage</span></a></p>
 </section>
 </section>
 </section>
