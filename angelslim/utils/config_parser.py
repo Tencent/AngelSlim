@@ -200,6 +200,7 @@ class QuantizationConfig:
         quant_method: Algorithm used for quantization
         modules_to_quantize: List of module types to quantize
         ignore_layers: List of layer names to skip
+        quant_talker: Whether to quantize Qwen3-Omni talker LLM module
     """
 
     name: str = field(default="fp8_dynamic")
@@ -222,6 +223,7 @@ class QuantizationConfig:
     ignore_layers: List[str] = field(default_factory=list)
     quant_analyse: bool = field(default=False)
     quant_vit: bool = field(default=False)
+    quant_talker: bool = field(default=False)
     # DAQ-specific fields
     base_model_path: Optional[str] = field(default=None)
     base_is_fp8: bool = field(default=False)

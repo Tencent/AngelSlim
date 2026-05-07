@@ -23,6 +23,7 @@ compression:
     quant_method:
       weight: "per-tensor"
       activation: "per-tensor"
+    quant_talker: false  # Whether to quantize Qwen3-Omni talker LLM module
 
 # Dataset for calibration
 dataset:

@@ -160,6 +160,7 @@ class Engine:
         model_name=None,
         quantization_config=None,
         is_sft_data=False,
+        dtype=None,
     ) -> Optional[Any]:
         """Prepare compression dataset"""
         if custom_dataloader is not None:
@@ -187,6 +188,7 @@ class Engine:
             model_name=model_name,
             quantization_config=quantization_config,
             is_sft_data=is_sft_data,
+            dtype=dtype,
         )
         self.max_seq_length = max_length
 
