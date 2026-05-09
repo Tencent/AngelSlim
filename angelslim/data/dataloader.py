@@ -45,6 +45,7 @@ class DataLoaderFactory:
         model_name: str = None,
         quantization_config: str = None,
         is_sft_data: bool = False,
+        dtype=None,
     ) -> DataLoader:
         """
         Create appropriate DataLoader based on data source
@@ -114,6 +115,7 @@ class DataLoaderFactory:
                 data_source=data_source,
                 is_hf_dataset=not os.path.isfile(data_source),
                 use_audio_in_video=use_audio_in_video,
+                dtype=dtype,
             )
         elif data_type == "AudioDataset":
             dataset = AudioDataset(

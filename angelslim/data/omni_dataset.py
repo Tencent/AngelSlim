@@ -35,10 +35,12 @@ class OmniDataset(BaseDataset):
         data_source: Union[str, Dict] = None,
         is_hf_dataset: bool = False,
         use_audio_in_video: bool = False,
+        dtype=None,
     ):
         super().__init__(processor, device, max_length)
         self.is_hf_dataset = is_hf_dataset
         self.use_audio_in_video = use_audio_in_video
+        self.dtype = dtype
 
         self._load_file_based_dataset(data_source, num_samples)
 
@@ -112,10 +114,11 @@ class OmniDataset(BaseDataset):
         inputs = self.processor(
             text=text,
             images=images,
-            audios=audios,
+            audio=audios,
             videos=videos,
             padding=True,
             return_tensors="pt",
             use_audio_in_video=self.use_audio_in_video,
         )
+        inputs = inputs.to(self.device).to(self.dtype)
         self.data.append(inputs)

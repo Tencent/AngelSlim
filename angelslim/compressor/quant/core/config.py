@@ -66,6 +66,7 @@ class QuantConfig:
         kv_cache_quant_method = quantization_args.quant_method.get("kv_cache", None)
         self.cpu_convert = quantization_args.cpu_convert
         self.save_name = quantization_args.save_name
+        self.quant_talker = getattr(quantization_args, "quant_talker", False)
 
         if global_config:
             self.max_seq_length = global_config.max_seq_length
