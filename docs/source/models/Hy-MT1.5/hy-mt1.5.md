@@ -100,7 +100,78 @@ Demo device: Snapdragon 7+ Gen 2, 16GB RAM.
 :::
 
 ## 💻 Deployment
-Our llama.cpp kernel (including STQ kernel) is coming soon. 
+
+### Clone llama.cpp
+
+```bash
+git clone https://github.com/ggml-org/llama.cpp.git
+```
+
+### Enter the llama.cpp folder
+
+```bash
+cd llama.cpp
+```
+
+### Fetch and check out the PR branch
+
+```bash
+git fetch origin pull/22836/head:pr-22836-stq_0
+git checkout pr-22836-stq_0
+```
+
+### Build llama.cpp
+
+```bash
+pip install -r requirements.txt
+cmake -B build
+cmake --build build --config Release
+```
+
+### Download the HF model
+
+
+```bash
+pip install huggingface_hub
+huggingface-cli download AngelSlim/Hy-MT1.5-1.8B-1.25bit \
+    --local-dir model_zoo/Hy-MT1.5-1.8B-1.25bit
+```
+
+### Convert HF → bf16 GGUF
+
+```bash
+python convert_hf_to_gguf.py model_zoo/Hy-MT1.5-1.8B-1.25bit \
+    --outfile model_zoo/Hy-MT1.5-1.8B-bf16.gguf \
+    --outtype bf16
+```
+
+### Quantize bf16 → STQ1_0
+
+```bash
+./build/bin/llama-quantize \
+    model_zoo/Hy-MT1.5-1.8B-bf16.gguf \
+    model_zoo/Hy-MT1.5-1.8B-STQ1_0.gguf \
+    STQ1_0
+```
+
+### Run a completion example
+
+The prompt format can be viewed at [HY-MT1.5-1.8B](https://huggingface.co/tencent/HY-MT1.5-1.8B)
+
+```bash
+./build/bin/llama-completion \
+  --model model_zoo/Hy-MT1.5-1.8B-STQ1_0.gguf \
+  -p "Translate the following segment into Chinese, without additional explanation. Hello " \
+  --jinja \
+  -ngl 0 \
+  -n 64 -st
+```
+
+### Run the llama.cpp benchmark
+
+```bash
+./build/bin/llama-bench -m model_zoo/Hy-MT1.5-1.8B-STQ1_0.gguf -ngl 0
+```
 
 ## 📥 Download Links
 

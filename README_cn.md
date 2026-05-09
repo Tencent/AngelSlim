@@ -22,6 +22,7 @@
 </p>
 
 ## 📣最新进展
+- [26/05/08] 我们发布了用于 1.25-bit 模型的 STQ1_0 内核，并向 llama.cpp 提交了 [PR #22836](https://github.com/ggml-org/llama.cpp/pull/22836)！如果您对 STQ_0 有任何疑问或建议，欢迎在该 PR 下留言！🔥🔥🔥
 - [26/04/29] 我们发布了 2bit 与 1.25bit 腾讯混元翻译模型 [Hy-MT1.5-1.8B-2bit](https://huggingface.co/AngelSlim/Hy-MT1.5-1.8B-2bit), [Hy-MT1.5-1.8B-1.25bit](https://huggingface.co/AngelSlim/Hy-MT1.5-1.8B-1.25bit)。并且还制作了 [离线翻译体验 Demo](https://huggingface.co/AngelSlim/Hy-MT1.5-1.8B-1.25bit/blob/main/Hy-MT-demo.apk)。 欢迎体验 🔥🔥🔥
 - [26/04/23] 我们支持了 **Hy3-preview**（MoE A20B）模型的 FP8-Static 量化。
 - [26/03/25] 我们发布了量化算法DAQ，该方法在后训练参数更新较小时，可保留量化后模型能力 [[论文]](https://arxiv.org/abs/2603.22324) | [[文档]](docs/source/features/quantization/daq.md)
