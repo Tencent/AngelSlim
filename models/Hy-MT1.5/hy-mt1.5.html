@@ -416,7 +416,18 @@ document.write(`
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#background-word-extraction-mode">Background Word Extraction Mode</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#deployment">💻 Deployment</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#deployment">💻 Deployment</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#clone-llama-cpp">Clone llama.cpp</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#enter-the-llama-cpp-folder">Enter the llama.cpp folder</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fetch-and-check-out-the-pr-branch">Fetch and check out the PR branch</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#build-llama-cpp">Build llama.cpp</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#download-the-hf-model">Download the HF model</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#convert-hf-bf16-gguf">Convert HF → bf16 GGUF</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quantize-bf16-stq1-0">Quantize bf16 → STQ1_0</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#run-a-completion-example">Run a completion example</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#run-the-llama-cpp-benchmark">Run the llama.cpp benchmark</a></li>
+</ul>
+</li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#download-links">📥 Download Links</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#technical-reports">📄 Technical Reports</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#license">📝 License</a></li>
@@ -528,7 +539,76 @@ document.write(`
 </section>
 <section id="deployment">
 <h2>💻 Deployment<a class="headerlink" href="#deployment" title="Link to this heading">#</a></h2>
-<p>Our llama.cpp kernel (including STQ kernel) is coming soon.</p>
+<section id="clone-llama-cpp">
+<h3>Clone llama.cpp<a class="headerlink" href="#clone-llama-cpp" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/ggml-org/llama.cpp.git
+</pre></div>
+</div>
+</section>
+<section id="enter-the-llama-cpp-folder">
+<h3>Enter the llama.cpp folder<a class="headerlink" href="#enter-the-llama-cpp-folder" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>llama.cpp
+</pre></div>
+</div>
+</section>
+<section id="fetch-and-check-out-the-pr-branch">
+<h3>Fetch and check out the PR branch<a class="headerlink" href="#fetch-and-check-out-the-pr-branch" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>fetch<span class="w"> </span>origin<span class="w"> </span>pull/22836/head:pr-22836-stq_0
+git<span class="w"> </span>checkout<span class="w"> </span>pr-22836-stq_0
+</pre></div>
+</div>
+</section>
+<section id="build-llama-cpp">
+<h3>Build llama.cpp<a class="headerlink" href="#build-llama-cpp" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>requirements.txt
+cmake<span class="w"> </span>-B<span class="w"> </span>build
+cmake<span class="w"> </span>--build<span class="w"> </span>build<span class="w"> </span>--config<span class="w"> </span>Release
+</pre></div>
+</div>
+</section>
+<section id="download-the-hf-model">
+<h3>Download the HF model<a class="headerlink" href="#download-the-hf-model" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>huggingface_hub
+huggingface-cli<span class="w"> </span>download<span class="w"> </span>AngelSlim/Hy-MT1.5-1.8B-1.25bit<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--local-dir<span class="w"> </span>model_zoo/Hy-MT1.5-1.8B-1.25bit
+</pre></div>
+</div>
+</section>
+<section id="convert-hf-bf16-gguf">
+<h3>Convert HF → bf16 GGUF<a class="headerlink" href="#convert-hf-bf16-gguf" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>convert_hf_to_gguf.py<span class="w"> </span>model_zoo/Hy-MT1.5-1.8B-1.25bit<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--outfile<span class="w"> </span>model_zoo/Hy-MT1.5-1.8B-bf16.gguf<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--outtype<span class="w"> </span>bf16
+</pre></div>
+</div>
+</section>
+<section id="quantize-bf16-stq1-0">
+<h3>Quantize bf16 → STQ1_0<a class="headerlink" href="#quantize-bf16-stq1-0" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>./build/bin/llama-quantize<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>model_zoo/Hy-MT1.5-1.8B-bf16.gguf<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>model_zoo/Hy-MT1.5-1.8B-STQ1_0.gguf<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>STQ1_0
+</pre></div>
+</div>
+</section>
+<section id="run-a-completion-example">
+<h3>Run a completion example<a class="headerlink" href="#run-a-completion-example" title="Link to this heading">#</a></h3>
+<p>The prompt format can be viewed at <a class="reference external" href="https://huggingface.co/tencent/HY-MT1.5-1.8B">HY-MT1.5-1.8B</a></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>./build/bin/llama-completion<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--model<span class="w"> </span>model_zoo/Hy-MT1.5-1.8B-STQ1_0.gguf<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-p<span class="w"> </span><span class="s2">&quot;Translate the following segment into Chinese, without additional explanation. Hello &quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--jinja<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-ngl<span class="w"> </span><span class="m">0</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-n<span class="w"> </span><span class="m">64</span><span class="w"> </span>-st
+</pre></div>
+</div>
+</section>
+<section id="run-the-llama-cpp-benchmark">
+<h3>Run the llama.cpp benchmark<a class="headerlink" href="#run-the-llama-cpp-benchmark" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>./build/bin/llama-bench<span class="w"> </span>-m<span class="w"> </span>model_zoo/Hy-MT1.5-1.8B-STQ1_0.gguf<span class="w"> </span>-ngl<span class="w"> </span><span class="m">0</span>
+</pre></div>
+</div>
+</section>
 </section>
 <section id="download-links">
 <h2>📥 Download Links<a class="headerlink" href="#download-links" title="Link to this heading">#</a></h2>
@@ -653,7 +733,18 @@ document.write(`
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#background-word-extraction-mode">Background Word Extraction Mode</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#deployment">💻 Deployment</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#deployment">💻 Deployment</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#clone-llama-cpp">Clone llama.cpp</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#enter-the-llama-cpp-folder">Enter the llama.cpp folder</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fetch-and-check-out-the-pr-branch">Fetch and check out the PR branch</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#build-llama-cpp">Build llama.cpp</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#download-the-hf-model">Download the HF model</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#convert-hf-bf16-gguf">Convert HF → bf16 GGUF</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quantize-bf16-stq1-0">Quantize bf16 → STQ1_0</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#run-a-completion-example">Run a completion example</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#run-the-llama-cpp-benchmark">Run the llama.cpp benchmark</a></li>
+</ul>
+</li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#download-links">📥 Download Links</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#technical-reports">📄 Technical Reports</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#license">📝 License</a></li>
