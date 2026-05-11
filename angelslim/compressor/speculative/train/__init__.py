@@ -1,5 +1,7 @@
 from .data import (
     DatasetManager,
+    GaussianNoise,
+    TransformDataset,
     convert_sharegpt_data,
     convert_ultrachat_data,
     data_generation_work_flow,
@@ -23,6 +25,8 @@ __all__ = [
     "convert_sharegpt_data",
     "convert_ultrachat_data",
     "DatasetManager",
+    "GaussianNoise",
+    "TransformDataset",
     "get_supported_chat_template_type_strings",
     "TargetHead",
     "infer_model_params",
