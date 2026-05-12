@@ -380,7 +380,9 @@ def train():
         offline_train_dataset = TransformDataset(
             offline_train_dataset, GaussianNoise(std=args.hidden_noise_std)
         )
-        rank0_print(f"Applying GaussianNoise augmentation to train dataset (std={args.hidden_noise_std})")
+        rank0_print(
+            f"Applying GaussianNoise augmentation to train dataset (std={args.hidden_noise_std})"
+        )
 
     # Build vocabulary mapping for draft model from pre-computed vocab mapping
     rank0_print("Loading vocabulary mapping for draft model...")
