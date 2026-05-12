@@ -145,9 +145,9 @@ def process_token_dict_to_mappings(
 
     assert d2t.shape == (draft_vocab_size,), f"d2t shape {d2t.shape} != ({draft_vocab_size},)"
     assert t2d.shape == (target_vocab_size,), f"t2d shape {t2d.shape} != ({target_vocab_size},)"
-    assert t2d.sum().item() == draft_vocab_size, (
-        f"t2d has {t2d.sum().item()} True entries, expected {draft_vocab_size}"
-    )
+    assert (
+        t2d.sum().item() == draft_vocab_size
+    ), f"t2d has {t2d.sum().item()} True entries, expected {draft_vocab_size}"
 
     return d2t, t2d
 
