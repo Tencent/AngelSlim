@@ -135,7 +135,7 @@ def _init_selector_entry(selector_path: str, device: torch.device):
         config = json.load(f)
 
     # 3. Dynamically load the model class definition
-    module_name = f"dynamic_selector_{int(time.time()*1000)}"
+    module_name = f"dynamic_selector_{int(time.time() * 1000)}"
     spec = importlib.util.spec_from_file_location(module_name, py_files[0])
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
