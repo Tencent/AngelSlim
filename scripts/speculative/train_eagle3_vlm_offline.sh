@@ -11,6 +11,7 @@ export RUN_NAME=
 export MODEL_MAX_LENGTH=4096
 export LM_HEAD_KEY=
 export CHAT_TEMPLATE_TYPE=qwen3_vl
+export HIDDEN_NOISE_STD=0.0
 
 torchrun --nproc_per_node=8 tools/train_eagle3_offline.py \
     --modal_type VLM \
@@ -38,4 +39,5 @@ torchrun --nproc_per_node=8 tools/train_eagle3_offline.py \
     --report_to wandb \
     --run_name  $RUN_NAME \
     --num_proc 48 \
+    --hidden_noise_std $HIDDEN_NOISE_STD \
     --bf16

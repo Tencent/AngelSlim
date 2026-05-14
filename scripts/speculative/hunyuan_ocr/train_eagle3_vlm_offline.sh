@@ -8,6 +8,7 @@ EVAL_HIDDEN_PATH=
 OUTPUT_DIR=
 RUN_NAME=hunyuan-ocr-eagle3-angelslim
 MODEL_MAX_LENGTH=8192
+HIDDEN_NOISE_STD=0.0
 export MAX_PIXELS=
 
 torchrun --nproc_per_node=8 tools/train_eagle3_offline.py \
@@ -36,4 +37,5 @@ torchrun --nproc_per_node=8 tools/train_eagle3_offline.py \
     --run_name  $RUN_NAME \
     --num_proc 8 \
     --training_time_test_length 4 \
+    --hidden_noise_std $HIDDEN_NOISE_STD \
     --bf16
