@@ -29,6 +29,7 @@ class CompressionMethod(str, Enum):
     CACHE = "Cache"
     PTQ = "PTQ"
     QAT = "QAT"
+    DISTILL = "Distill"
     SPECULATIVE_DECODING = "speculative_decoding"
     PTQ_WEIGHT_ONLY = "PTQWeightOnly"
 
@@ -296,6 +297,36 @@ class QATTrainingConfig:
 
 
 @dataclass
+class DistillTrainingConfig:
+    """
+    Knowledge distillation training configuration.
+    """
+
+    teacher_model_path: str = field(default="")
+    teacher_torch_dtype: str = field(default="auto")
+    teacher_device_map: Optional[Union[str, Dict[str, Any]]] = field(default=None)
+    teacher_trust_remote_code: bool = field(default=True)
+    teacher_low_cpu_mem_usage: bool = field(default=True)
+    teacher_use_cache: bool = field(default=False)
+    teacher_cache_dir: Optional[str] = field(default=None)
+    student_type: str = field(default="quantized")
+    trainable_parameters: str = field(default="quant")
+    save_format: Optional[str] = None
+    plugin_config: Dict[str, Any] = field(default_factory=dict)
+    hf_cache_dir: Optional[str] = None
+    hf_dataset: Optional[str] = None
+    do_train: bool = field(default=True)
+    resume_ckpt_dir: Optional[str] = None
+    from_ptq_ckpt: Optional[str] = None
+    loss_type: str = field(default="kd")
+    loss_topk: Optional[int] = None
+    kd_temperature: float = field(default=1.0)
+    lm_loss_weight: float = field(default=1.0)
+    kd_loss_weight: float = field(default=1.0)
+    hf_args: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class CompressionConfig:
     """
     Compression configurations container for LLM.
@@ -311,6 +342,7 @@ class CompressionConfig:
     cache: Optional[CacheConfig] = None
     calibrate: Optional["CalibrateConfig"] = None
     QAT: Optional[QATTrainingConfig] = None
+    Distill: Optional[DistillTrainingConfig] = None
     # speculative_decoding: Optional[SpeculativeDecodingConfig] = None
 
     @property
@@ -321,6 +353,8 @@ class CompressionConfig:
 
         for method in self.name:
             # PTQ/QAT usually need calibration dataset
+            if method == "Distill":
+                return True
             if method in ["PTQ", "QAT"]:
                 # DAQ is data-free, no calibration dataset needed
                 if self.quantization and self.quantization.name == "daq":
@@ -519,10 +553,21 @@ class SlimConfigParser:
 
             # Initialize compression config
             compression_conf = CompressionConfig(name=compress_names)
+            distill_dict = compression_dict.get("Distill", None)
+            if CompressionMethod.DISTILL.value in compress_names:
+                if not distill_dict:
+                    raise ValueError(
+                        "Distill compression requires a 'compression.Distill' section."
+                    )
+                compression_conf.Distill = DistillTrainingConfig(**distill_dict)
 
             # Parse method-specific configurations for each specified method
             for method_name in compress_names:
-                if method_name in ["PTQ", "QAT"]:
+                requires_quantization = method_name in ["PTQ", "QAT"] or (
+                    method_name == CompressionMethod.DISTILL.value
+                    and compression_conf.Distill.student_type.lower() == "quantized"
+                )
+                if requires_quantization:
                     # Validate quantization type
                     quant_dict = compression_dict.get("quantization", {})
                     quant_method = quant_dict.get("name")
@@ -549,6 +594,8 @@ class SlimConfigParser:
                                 "used to compute delta weights."
                             )
 
+                elif method_name == CompressionMethod.DISTILL.value:
+                    pass
                 elif method_name == CompressionMethod.CACHE.value:
                     # Parse cache configuration (only set if not already set)
                     cache_dict = compression_dict.get("cache", {})
@@ -589,6 +636,10 @@ class SlimConfigParser:
         qat_dict = compression_dict.get("QAT", None)
         if qat_dict:
             compression_conf.QAT = QATTrainingConfig(**qat_dict)
+
+        distill_dict = compression_dict.get("Distill", None)
+        if distill_dict and compression_conf.Distill is None:
+            compression_conf.Distill = DistillTrainingConfig(**distill_dict)
 
         # Transform configuration (e.g. SpinQuant)
         transform_conf = None

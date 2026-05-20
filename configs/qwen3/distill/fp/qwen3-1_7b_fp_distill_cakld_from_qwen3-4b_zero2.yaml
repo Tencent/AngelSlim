@@ -1,0 +1,55 @@
+global:
+  save_path: ./output_qwen3_1_7b_fp_distill_from_qwen3_4b_zero2
+
+model:
+  name: Qwen
+  model_path: Qwen/Qwen3-1.7B
+  trust_remote_code: true
+  torch_dtype: auto
+  device_map: None
+  low_cpu_mem_usage: true
+  use_cache: false
+
+compression:
+  name: Distill
+  Distill:
+    teacher_model_path: Qwen/Qwen3-4B
+    teacher_torch_dtype: auto
+    teacher_device_map: null
+    teacher_trust_remote_code: true
+    teacher_low_cpu_mem_usage: true
+    teacher_use_cache: false
+    student_type: fp
+    trainable_parameters: all
+    save_format: hf
+    do_train: true
+    loss_type: cakld
+    loss_topk: null
+    kd_temperature: 1.0
+    lm_loss_weight: 1.0
+    kd_loss_weight: 1.0
+    hf_args:
+      bf16: true
+      logging_steps: 1
+      logging_first_step: true
+      per_device_train_batch_size: 1
+      gradient_accumulation_steps: 1
+      learning_rate: 1.0e-5
+      lr_scheduler_type: cosine
+      num_train_epochs: 1
+      max_steps: 5
+      save_strategy: "no"
+      warmup_ratio: 0.0
+      max_grad_norm: 1.0
+      gradient_checkpointing: true
+      gradient_checkpointing_kwargs:
+        use_reentrant: true
+      deepspeed: configs/qwen3/distill/w4a8_fp8/ds_config_zero2.json
+
+dataset:
+  name: TextDataset
+  data_path: Salesforce/wikitext,wikitext-2-raw-v1
+  max_seq_length: 512
+  num_samples: 16
+  batch_size: 1
+  is_sft_data: false

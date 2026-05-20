@@ -50,6 +50,18 @@ def _parse_bits_and_dtype(qtype_str):
     raise ValueError(f"Unsupported dtype in: {qtype_str}")
 
 
+def _build_weight_quantizer(config, quant_info, weight, weight_shape):
+    impl = str(config.get("weight_quantizer", config.get("quantizer_impl", "default"))).lower()
+    if impl in ("default", "quantizer"):
+        return Quantizer(config, quant_info, x=weight, weight_shape=weight_shape)
+    if impl in ("special", "sherry", "absmean", "twn", "lsq", "seq", "dlt"):
+        from .special_quantizer import SpecialWeightQuantizer
+
+        method = None if impl == "special" else impl
+        return SpecialWeightQuantizer(config, weight_shape=weight_shape, quant_method=method)
+    raise ValueError(f"Unsupported weight quantizer implementation: {impl}")
+
+
 class Quantizer(nn.Module):
     def __init__(
         self,
@@ -615,11 +627,11 @@ class QuantLinear(nn.Module):
         # rather than inspecting the (possibly sharded) tensor.
         weight_shape = (org_module.out_features, org_module.in_features)
         if self.use_weight_quant:
-            self.weight_quantizer = Quantizer(
+            self.weight_quantizer = _build_weight_quantizer(
                 config,
                 quant_info,
-                x=org_module.weight,
-                weight_shape=weight_shape,
+                org_module.weight,
+                weight_shape,
             )
         if self.use_act_quant:
             self.act_quantizer = Quantizer(config, quant_info, is_act=True, resume=resume)

@@ -201,6 +201,11 @@ class TextDataset(BaseDataset):
                     labels[:, :prompt_len] = -100
                 # Also mask padding tokens.
                 labels[attention_mask == 0] = -100
+                if (labels != -100).sum().item() == 0:
+                    # Fully truncated prompt / empty assistant targets make
+                    # HF CE unstable (mean over no labels) and add no KD
+                    # signal. Skip such samples instead of emitting NaNs.
+                    continue
 
                 self.data.append(
                     {

@@ -23,7 +23,9 @@ from angelslim.compressor.speculative import (
     DatasetManager,
     DraftModelConfig,
     Eagle3TrainerFactory,
+    GaussianNoise,
     TargetHead,
+    TransformDataset,
     create_draft_model,
     get_supported_chat_template_type_strings,
     infer_model_params,
@@ -156,6 +158,15 @@ def parse_args():
         action="store_true",
         default=False,
         help="Display data samples during preprocessing (default: False)",
+    )
+    data_group.add_argument(
+        "--hidden_noise_std",
+        type=float,
+        default=0.0,
+        help=(
+            "Standard deviation of Gaussian noise added to hidden_states during training. "
+            "0.0 = no augmentation (default). Use tools/test_dataloader.py to calibrate."
+        ),
     )
 
     # Training arguments
@@ -364,6 +375,14 @@ def train():
         "Offline eval dataset size: "
         f"{len(offline_eval_dataset) if offline_eval_dataset else 0}"
     )
+
+    if args.hidden_noise_std > 0.0:
+        offline_train_dataset = TransformDataset(
+            offline_train_dataset, GaussianNoise(std=args.hidden_noise_std)
+        )
+        rank0_print(
+            f"Applying GaussianNoise augmentation to train dataset (std={args.hidden_noise_std})"
+        )
 
     # Build vocabulary mapping for draft model from pre-computed vocab mapping
     rank0_print("Loading vocabulary mapping for draft model...")
