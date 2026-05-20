@@ -1,0 +1,767 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Distillation &#8212; AngelSlim</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../_static/custom.css" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=a5fa425f"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../_static/togglebutton.js?v=4a39c7ea"></script>
+    <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'features/distill/index';</script>
+    <script src="../../_static/custom.js"></script>
+    <link rel="icon" href="../../_static/angelslim_icon.png"/>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="混元模型量化" href="../../models/hunyuan/hunyuan_quant.html" />
+    <link rel="prev" title="Diffusion模型Cache" href="../diffusion/cache.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../_static/angelslim_logo.png" class="logo__image only-light" alt="AngelSlim - Home"/>
+    <script>document.write(`<img src="../../_static/angelslim_logo.png" class="logo__image only-dark" alt="AngelSlim - Home"/>`);</script>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">入门指南</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/installation.html">安装教程</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/quickstrat.html">快速开始</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">算法特性</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../quantization/index.html">量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../speculative_decoding/index.html">投机采样</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../sparse_attention/index.html">稀疏注意力</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../token_compressor/index.html">Token 压缩</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../diffusion/index.html">文生图/视频/3D压缩</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Distillation</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">模型支持</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../models/hunyuan/hunyuan_quant.html">混元模型量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/hunyuan_ocr/hunyuan_ocr_quant.html">HunyuanOCR量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/deepseek/deepseek_quant.html">DeepSeek量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwen/qwen_quant.html">Qwen量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwenvl/qwenvl_quant.html">Qwen2.5VL量化指南</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwen3_omni/qwen3_omni_quant.html">Qwen3-Omni量化指南</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/Hy-MT1.5/hy-mt1.5.html">Hy-MT1.5 量化</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">部署文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../deployment/deploy.html">压缩模型部署</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">性能表现</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../performance/quantization/benchmarks.html">量化benchmark</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../performance/speculative_decoding/benchmarks.html">投机采样Benchmark</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">设计文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../design/index.html">设计文档</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim/edit/main/docs/source/features/distill/index.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../../_sources/features/distill/index.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Distillation</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#features">Features</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example-1-distill-a-smaller-full-precision-model">Example 1: Distill a Smaller Full-Precision Model</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example-2-distill-a-quantized-model">Example 2: Distill a Quantized Model</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example-3-distill-with-special-weight-quantizers">Example 3: Distill with Special Weight Quantizers</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#experiment-results">Experiment Results</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#dataset-format">Dataset Format</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#main-distill-fields">Main Distill Fields</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="distillation">
+<h1>Distillation<a class="headerlink" href="#distillation" title="Link to this heading">#</a></h1>
+<p>AngelSlim Distill trains a student model with a separate full-precision teacher model. The student can be either a full-precision HuggingFace model or a quantized QAT-style model.</p>
+<section id="features">
+<h2>Features<a class="headerlink" href="#features" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p>Load an independent teacher from <code class="docutils literal notranslate"><span class="pre">compression.Distill.teacher_model_path</span></code>.</p></li>
+<li><p>Support full-precision students with HuggingFace <code class="docutils literal notranslate"><span class="pre">save_pretrained</span></code> output.</p></li>
+<li><p>Support quantized students by reusing QAT quantization, learnable-scale plugins, conversion, and save paths.</p></li>
+<li><p>Select trainable parameters with <code class="docutils literal notranslate"><span class="pre">trainable_parameters:</span> <span class="pre">all</span></code> or <code class="docutils literal notranslate"><span class="pre">trainable_parameters:</span> <span class="pre">quant</span></code>.</p></li>
+<li><p>Combine supervised CausalLM loss and knowledge distillation loss with <code class="docutils literal notranslate"><span class="pre">lm_loss_weight</span></code> and <code class="docutils literal notranslate"><span class="pre">kd_loss_weight</span></code>.</p></li>
+<li><p>Pass HuggingFace trainer options through <code class="docutils literal notranslate"><span class="pre">compression.Distill.hf_args</span></code>, including DeepSpeed ZeRO configs.</p></li>
+</ul>
+</section>
+<section id="example-1-distill-a-smaller-full-precision-model">
+<h2>Example 1: Distill a Smaller Full-Precision Model<a class="headerlink" href="#example-1-distill-a-smaller-full-precision-model" title="Link to this heading">#</a></h2>
+<p>This example distills a Qwen3-1.7B full-precision student from a Qwen3-4B full-precision teacher.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>torchrun<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>tools/run.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-c<span class="w"> </span>configs/qwen3/distill/fp/qwen3-1_7b_fp_distill_from_qwen3-4b_zero2.yaml
+</pre></div>
+</div>
+<p>Key fields:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">model</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">model_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Qwen/Qwen3-1.7B</span>
+
+<span class="nt">compression</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Distill</span>
+<span class="w">  </span><span class="nt">Distill</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">teacher_model_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Qwen/Qwen3-4B</span>
+<span class="w">    </span><span class="nt">student_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">fp</span>
+<span class="w">    </span><span class="nt">trainable_parameters</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">all</span>
+<span class="w">    </span><span class="nt">save_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hf</span>
+<span class="w">    </span><span class="nt">loss_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cakld</span>
+<span class="w">    </span><span class="nt">lm_loss_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
+<span class="w">    </span><span class="nt">kd_loss_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
+</pre></div>
+</div>
+</section>
+<section id="example-2-distill-a-quantized-model">
+<h2>Example 2: Distill a Quantized Model<a class="headerlink" href="#example-2-distill-a-quantized-model" title="Link to this heading">#</a></h2>
+<p>This example distills a W4A8-FP8 Qwen3-4B student from a full-precision Qwen3-4B teacher. The quantized student reuses QAT learnable-scale plugins and trains only quantization parameters.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>torchrun<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>tools/run.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-c<span class="w"> </span>configs/qwen3/distill/w4a8_fp8/qwen3-4b_w4a8_fp8_distill_zero2.yaml
+</pre></div>
+</div>
+<p>Key fields:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">compression</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Distill</span>
+<span class="w">  </span><span class="nt">quantization</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">w4a8_fp8</span>
+<span class="w">  </span><span class="nt">Distill</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">teacher_model_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Qwen/Qwen3-4B</span>
+<span class="w">    </span><span class="nt">student_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quantized</span>
+<span class="w">    </span><span class="nt">trainable_parameters</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quant</span>
+<span class="w">    </span><span class="nt">save_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">real</span>
+<span class="w">    </span><span class="nt">plugin_config</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">enable_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</pre></div>
+</div>
+</section>
+<section id="example-3-distill-with-special-weight-quantizers">
+<h2>Example 3: Distill with Special Weight Quantizers<a class="headerlink" href="#example-3-distill-with-special-weight-quantizers" title="Link to this heading">#</a></h2>
+<p>The special weight quantizer path keeps the standard <code class="docutils literal notranslate"><span class="pre">QuantLinear</span></code> wrapper and switches only the weight quantizer implementation through config. Six demo configs are provided:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>configs/qwen3/distill/special/qwen3-1_7b_sherry_distill_from_qwen3-4b_zero2.yaml
+configs/qwen3/distill/special/qwen3-1_7b_absmean_distill_from_qwen3-4b_zero2.yaml
+configs/qwen3/distill/special/qwen3-1_7b_twn_distill_from_qwen3-4b_zero2.yaml
+configs/qwen3/distill/special/qwen3-1_7b_lsq_distill_from_qwen3-4b_zero2.yaml
+configs/qwen3/distill/special/qwen3-1_7b_seq_distill_from_qwen3-4b_zero2.yaml
+configs/qwen3/distill/special/qwen3-1_7b_dlt_distill_from_qwen3-4b_zero2.yaml
+</pre></div>
+</div>
+<p>Run one method by selecting its config:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>torchrun<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>tools/run.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-c<span class="w"> </span>configs/qwen3/distill/special/qwen3-1_7b_sherry_distill_from_qwen3-4b_zero2.yaml
+</pre></div>
+</div>
+<p>A Hunyuan translation-style 2-bit SEQ distillation demo is also provided:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>configs/hunyuan/distill/special/hunyuan_seq_2bit_distill_zero2.yaml
+</pre></div>
+</div>
+<p>Replace <code class="docutils literal notranslate"><span class="pre">model.model_path</span></code>, <code class="docutils literal notranslate"><span class="pre">compression.Distill.teacher_model_path</span></code>, and <code class="docutils literal notranslate"><span class="pre">dataset.data_path</span></code> with local model and translation-data paths before running it.</p>
+<p>Key fields:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">plugin_config</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enable_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">quant_config</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">use_weight_quant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">use_activation_quant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">weight_quantizer</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">special</span>
+<span class="w">    </span><span class="nt">special</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">quant_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sherry</span><span class="w">  </span><span class="c1"># sherry, absmean, twn, lsq, seq, or dlt</span>
+<span class="w">      </span><span class="nt">granularity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">per_group</span>
+<span class="w">      </span><span class="nt">group_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">128</span>
+<span class="w">      </span><span class="nt">w_bits</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<span class="w">      </span><span class="nt">N</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
+<span class="w">      </span><span class="nt">M</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span>
+</pre></div>
+</div>
+<p>For the 2-bit SEQ demo, the special weight quantizer uses per-channel scaling:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">plugin_config</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enable_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">quant_config</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">use_weight_quant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">use_activation_quant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">weight_quantizer</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">special</span>
+<span class="w">    </span><span class="nt">special</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">quant_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">seq</span>
+<span class="w">      </span><span class="nt">granularity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">per_channel</span>
+<span class="w">      </span><span class="nt">w_bits</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
+</pre></div>
+</div>
+</section>
+<section id="experiment-results">
+<h2>Experiment Results<a class="headerlink" href="#experiment-results" title="Link to this heading">#</a></h2>
+<p>The following benchmark compares a Qwen3-1.7B base model with a Qwen3-1.7B full-precision student distilled from a Qwen3-4B teacher. PPL is not included in this table.</p>
+<p>Experiment setting:</p>
+<ul class="simple">
+<li><p>Teacher: Qwen3-4B full-precision model.</p></li>
+<li><p>Student: Qwen3-1.7B full-precision model.</p></li>
+<li><p>Training data: Qwen3-4B teacher rollouts generated from public instruction datasets. See <code class="docutils literal notranslate"><span class="pre">dataset/qwen3_4b_rollout_10k/README.md</span></code> for the data construction workflow.</p></li>
+<li><p>Sequence length: <code class="docutils literal notranslate"><span class="pre">8192</span></code>.</p></li>
+<li><p>Global batch size: <code class="docutils literal notranslate"><span class="pre">32</span></code> with 8 GPUs, per-device batch size <code class="docutils literal notranslate"><span class="pre">1</span></code>, and gradient accumulation steps <code class="docutils literal notranslate"><span class="pre">4</span></code>.</p></li>
+<li><p>Loss: CausalLM loss plus CAKLD loss, both with weight <code class="docutils literal notranslate"><span class="pre">1.0</span></code>.</p></li>
+<li><p>Evaluation: generation-based benchmark with vLLM. IFEval generation is reported without the official strict scorer.</p></li>
+</ul>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Group</p></th>
+<th class="head text-right"><p>Task</p></th>
+<th class="head text-right"><p>Base</p></th>
+<th class="head text-right"><p>Distilled</p></th>
+<th class="head text-right"><p>Delta</p></th>
+<th class="head text-right"><p>Samples</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>General</p></td>
+<td class="text-right"><p>PIQA</p></td>
+<td class="text-right"><p>0.6638</p></td>
+<td class="text-right"><p>0.7383</p></td>
+<td class="text-right"><p>+0.0745</p></td>
+<td class="text-right"><p>1838</p></td>
+</tr>
+<tr class="row-odd"><td><p>General</p></td>
+<td class="text-right"><p>ARC Easy</p></td>
+<td class="text-right"><p>0.8930</p></td>
+<td class="text-right"><p>0.8912</p></td>
+<td class="text-right"><p>-0.0018</p></td>
+<td class="text-right"><p>570</p></td>
+</tr>
+<tr class="row-even"><td><p>General</p></td>
+<td class="text-right"><p>ARC Challenge</p></td>
+<td class="text-right"><p>0.7258</p></td>
+<td class="text-right"><p>0.7224</p></td>
+<td class="text-right"><p>-0.0034</p></td>
+<td class="text-right"><p>299</p></td>
+</tr>
+<tr class="row-odd"><td><p>General</p></td>
+<td class="text-right"><p>HellaSwag</p></td>
+<td class="text-right"><p>0.5908</p></td>
+<td class="text-right"><p>0.6257</p></td>
+<td class="text-right"><p>+0.0349</p></td>
+<td class="text-right"><p>10042</p></td>
+</tr>
+<tr class="row-even"><td><p>General</p></td>
+<td class="text-right"><p>Winogrande</p></td>
+<td class="text-right"><p>0.5446</p></td>
+<td class="text-right"><p>0.5304</p></td>
+<td class="text-right"><p>-0.0142</p></td>
+<td class="text-right"><p>1267</p></td>
+</tr>
+<tr class="row-odd"><td><p>General</p></td>
+<td class="text-right"><p>MMLU</p></td>
+<td class="text-right"><p>0.5291</p></td>
+<td class="text-right"><p>0.5096</p></td>
+<td class="text-right"><p>-0.0195</p></td>
+<td class="text-right"><p>14042</p></td>
+</tr>
+<tr class="row-even"><td><p>Reasoning</p></td>
+<td class="text-right"><p>GSM8K</p></td>
+<td class="text-right"><p>0.7991</p></td>
+<td class="text-right"><p>0.7612</p></td>
+<td class="text-right"><p>-0.0379</p></td>
+<td class="text-right"><p>1319</p></td>
+</tr>
+<tr class="row-odd"><td><p>Reasoning</p></td>
+<td class="text-right"><p>MATH subset</p></td>
+<td class="text-right"><p>0.6081</p></td>
+<td class="text-right"><p>0.6040</p></td>
+<td class="text-right"><p>-0.0041</p></td>
+<td class="text-right"><p>500</p></td>
+</tr>
+<tr class="row-even"><td><p>Reasoning</p></td>
+<td class="text-right"><p>BBH subset</p></td>
+<td class="text-right"><p>0.7000</p></td>
+<td class="text-right"><p>0.8000</p></td>
+<td class="text-right"><p>+0.1000</p></td>
+<td class="text-right"><p>250</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="dataset-format">
+<h2>Dataset Format<a class="headerlink" href="#dataset-format" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">TextDataset</span></code> supports plain language-modeling data and chat-style SFT data. For chat-style JSONL data, set <code class="docutils literal notranslate"><span class="pre">is_sft_data:</span> <span class="pre">true</span></code>; prompt tokens are masked with <code class="docutils literal notranslate"><span class="pre">-100</span></code>, and only the final assistant response contributes to the loss.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;messages&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span><span class="nt">&quot;role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;user&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Explain knowledge distillation.&quot;</span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span><span class="nt">&quot;role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;assistant&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Knowledge distillation trains a smaller student model to match a larger teacher model.&quot;</span><span class="p">}</span>
+<span class="w">  </span><span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="main-distill-fields">
+<h2>Main Distill Fields<a class="headerlink" href="#main-distill-fields" title="Link to this heading">#</a></h2>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">compression</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Distill</span>
+<span class="w">  </span><span class="nt">Distill</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">teacher_model_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Qwen/Qwen3-4B</span>
+<span class="w">    </span><span class="nt">teacher_torch_dtype</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span>
+<span class="w">    </span><span class="nt">teacher_device_map</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span>
+<span class="w">    </span><span class="nt">student_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">fp</span><span class="w">          </span><span class="c1"># fp or quantized</span>
+<span class="w">    </span><span class="nt">trainable_parameters</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">all</span><span class="w"> </span><span class="c1"># all or quant</span>
+<span class="w">    </span><span class="nt">save_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hf</span><span class="w">           </span><span class="c1"># hf/full/real for fp; real/fake for quantized paths</span>
+<span class="w">    </span><span class="nt">loss_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cakld</span><span class="w">          </span><span class="c1"># origin, kl, rkl, kd, cakld, mse, kl_top, rkl_top</span>
+<span class="w">    </span><span class="nt">kd_temperature</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
+<span class="w">    </span><span class="nt">lm_loss_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
+<span class="w">    </span><span class="nt">kd_loss_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
+<span class="w">    </span><span class="nt">hf_args</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">deepspeed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">configs/qwen3/distill/w4a8_fp8/ds_config_zero2.json</span>
+</pre></div>
+</div>
+<p>Use <code class="docutils literal notranslate"><span class="pre">loss_type:</span> <span class="pre">origin</span></code> with <code class="docutils literal notranslate"><span class="pre">kd_loss_weight:</span> <span class="pre">0.0</span></code> to run a supervised fine-tuning baseline with the same trainer path.</p>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="../diffusion/cache.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Diffusion模型Cache</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../../models/hunyuan/hunyuan_quant.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">混元模型量化</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#features">Features</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example-1-distill-a-smaller-full-precision-model">Example 1: Distill a Smaller Full-Precision Model</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example-2-distill-a-quantized-model">Example 2: Distill a Quantized Model</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example-3-distill-with-special-weight-quantizers">Example 3: Distill with Special Weight Quantizers</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#experiment-results">Experiment Results</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#dataset-format">Dataset Format</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#main-distill-fields">Main Distill Fields</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By the AngelSlim Team
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, AngelSlim Team.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>
