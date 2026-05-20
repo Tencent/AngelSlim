@@ -206,7 +206,7 @@ class PTQ:
             save_func.save(save_path)
 
     def get_meta_weights_info(self, model):
-        """获取所有meta权重的详细信息"""
+        """Get detailed information of all meta weights."""
         meta_params = []
 
         for name, param in model.named_parameters():
@@ -219,7 +219,7 @@ class PTQ:
         return meta_params
 
     def set_meta_weights_info(self, model):
-        """替换所有meta权重"""
+        """Replace all meta weights with the real ones loaded from disk."""
         orign_w_dict = {}
         for name, param in model.named_parameters():
             if param.device.type == "meta":
@@ -244,11 +244,11 @@ class PTQ:
                 parts = name.split(".")
                 current_module = model
 
-                # 导航到包含参数的模块
+                # Navigate to the module that owns the parameter
                 for part in parts[:-1]:
                     current_module = getattr(current_module, part)
 
-                # 设置新的参数
+                # Set the new parameter on the target module
                 setattr(current_module, parts[-1], new_param)
 
         del orign_w_dict

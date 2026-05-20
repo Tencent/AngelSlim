@@ -6,10 +6,10 @@
 # Stage 1: tools/run_vllm_calibrate.py
 #   * Loads the bf16 model with vLLM, runs forward passes on the PTQ dataset,
 #     and dumps activation_stats.json / moe_expert_stats.json / kv_cache_*
-#     into ${act_dir}.
+#     into ${stats_dir}.
 #
 # Stage 2: tools/fp8_quant_with_vllm_activation.py
-#   * Reads ${act_dir}/activation_stats.json (+ moe_expert_stats.json if any)
+#   * Reads ${stats_dir}/activation_stats.json (+ moe_expert_stats.json if any)
 #     plus the original bf16 weights, applies per-tensor FP8 quantization
 #     with calibrated input scales, and writes the FP8 HF model into
 #     ${fp8_path} (including kv_cache_scales.safetensors when per-head KV
@@ -20,7 +20,7 @@
 #       (run both stages back-to-back)
 #
 #   bash run_vllm_calibrate_and_quantize_for_HY3_0_622post3.sh --skip-calibrate
-#       (skip stage 1, only quantize using existing ${act_dir})
+#       (skip stage 1, only quantize using existing ${stats_dir})
 #
 #   bash run_vllm_calibrate_and_quantize_for_HY3_0_622post3.sh --skip-quantize
 #       (only run stage 1, do not produce the FP8 model)
@@ -73,7 +73,7 @@ export PRECISIONMODE=HF
 run_name=log_name
 model_path=/path/to/input/model
 ptq_data_path=/path/to/dataset
-act_dir=/path/to/statistics
+stats_dir=/path/to/statistics
 fp8_path=/path/to/output/fp8_model
 
 # Stage-1 calibration args
@@ -104,12 +104,12 @@ mkdir -p logs
 if [[ "${do_calibrate}" -eq 1 ]]; then
     echo "[pipeline] === Stage 1/2: activation calibration ==="
     echo "[pipeline] model_path=${model_path}"
-    echo "[pipeline] act_dir   =${act_dir}"
+    echo "[pipeline] stats_dir   =${stats_dir}"
 
     python3 tools/run_vllm_calibrate.py \
         --model-path "${model_path}" \
         --ptq-data-path "${ptq_data_path}" \
-        --output-dir "${act_dir}" \
+        --output-dir "${stats_dir}" \
         --tp-size "${tp_size}" \
         --batch-size "${batch_size}" \
         --num-samples "${num_samples}" \
@@ -124,29 +124,29 @@ if [[ "${do_calibrate}" -eq 1 ]]; then
         --search-kv-num-steps "${search_kv_num_steps}" \
         2>&1 | tee "logs/${run_name}.log"
 
-    echo "[pipeline] Stage 1 finished. Activation stats saved under: ${act_dir}"
+    echo "[pipeline] Stage 1 finished. Activation stats saved under: ${stats_dir}"
 else
     echo "[pipeline] --skip-calibrate set, skipping stage 1."
 fi
 
 # ============================================================================
-# Stage 2: FP8 quantization (uses calibration outputs in ${act_dir})
+# Stage 2: FP8 quantization (uses calibration outputs in ${stats_dir})
 # ============================================================================
 if [[ "${do_quantize}" -eq 1 ]]; then
     echo "[pipeline] === Stage 2/2: FP8 quantization ==="
     echo "[pipeline] input bf16 model = ${model_path}"
-    echo "[pipeline] input act stats  = ${act_dir}"
+    echo "[pipeline] input act stats  = ${stats_dir}"
     echo "[pipeline] output FP8 model = ${fp8_path}"
 
-    if [[ ! -f "${act_dir}/activation_stats.json" ]]; then
-        echo "[pipeline][ERROR] ${act_dir}/activation_stats.json is missing." >&2
+    if [[ ! -f "${stats_dir}/activation_stats.json" ]]; then
+        echo "[pipeline][ERROR] ${stats_dir}/activation_stats.json is missing." >&2
         echo "[pipeline][ERROR] Run stage 1 first (drop --skip-calibrate)." >&2
         exit 1
     fi
 
     python3 tools/fp8_quant_with_vllm_activation.py \
         --input_bf16_hf_path "${model_path}" \
-        --input_vllm_ac_json_path "${act_dir}" \
+        --input_vllm_ac_json_path "${stats_dir}" \
         --output_fp8_hf_path "${fp8_path}" \
         2>&1 | tee "logs/${run_name}-quantize.log"
 

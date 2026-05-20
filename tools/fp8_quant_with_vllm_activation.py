@@ -222,7 +222,7 @@ def main(bf16_path, fp8_path, block_size, ac_json_data):
     for result in return_dict.values():
         index.update(result)
 
-    # 拷贝配置文件
+    # Copy config / auxiliary files from the bf16 model dir
     for file in os.listdir(bf16_path):
         src_path = os.path.join(bf16_path, file)
         dst_path = os.path.join(fp8_path, file)
@@ -235,7 +235,7 @@ def main(bf16_path, fp8_path, block_size, ac_json_data):
             print(f"cp {src_path} {dst_path}")
             shutil.copy2(src_path, dst_path)
 
-    # 用于vllm加载的量化配置
+    # Quantization config consumed by vLLM at load time
     with open(os.path.join(fp8_path, "config.json"), "r") as f:
         config = json.load(f)
     config["quantization_config"] = {
@@ -336,23 +336,26 @@ def main(bf16_path, fp8_path, block_size, ac_json_data):
 def merge_vllm_act_moe_jsonl(ac_json_data):
     def process_moe_values(data: Dict[str, Dict]) -> Dict[str, Dict]:
         """
-        处理MoE专家值：对于每一层的gate/up/down部分，将该部分所有专家值的最大值赋给该部分的每个专家。
-        非MoE线性层的键值对保持不变。
+        Process MoE expert values: for each layer's gate/up/down section,
+        broadcast the maximum value across all experts in that section to
+        every expert in the same section. Non-MoE linear-layer entries are
+        left untouched.
 
-        参数:
-            data: 原始字典，键为层+线性层名称，值为一个数
+        Args:
+            data: original dict whose keys are "<layer>.<linear>" names and
+                whose values are scalar numbers.
 
-        返回:
-            处理后的字典（直接修改原字典并返回）
+        Returns:
+            The processed dict (modified in place and returned).
         """
-        # 存储分组：group_key -> [(原始键, 值), ...]
+        # Grouping store: group_key -> [(original_key, value), ...]
         groups: Dict[str, List[Tuple[str, float]]] = {}
 
-        # 遍历所有键值对
+        # Iterate over all key/value pairs
         for key, value in data.items():
             parts = key.split(".")
             # print(parts)
-            # 寻找 expert 或 experts 关键词
+            # Look for the "expert" or "experts" keyword
             expert_idx = None
             for i, part in enumerate(parts):
                 if part in ("expert", "experts"):
@@ -360,17 +363,17 @@ def merge_vllm_act_moe_jsonl(ac_json_data):
                     break
 
             if expert_idx is None:
-                # 没有专家关键词，跳过（非MoE键）
-                # print("skip key",key)
+                # No expert keyword, skip (non-MoE key)
+                # print("skip key", key)
                 continue
 
-            # 检查 expert 后面是否有数字索引
+            # Check whether the segment after "expert" is a numeric index
             if expert_idx + 1 >= len(parts):
                 continue
 
-            int(parts[expert_idx + 1])  # 尝试转换为整数
+            int(parts[expert_idx + 1])  # try to parse as int
 
-            # # 检查 expert 之前是否存在 gate/up/down
+            # # Optionally also require gate/up/down before the expert idx
             # expert_types = {'gate', 'up', 'down'}
             # found_type = False
             # for j in range(expert_idx):
@@ -380,16 +383,16 @@ def merge_vllm_act_moe_jsonl(ac_json_data):
             # if not found_type:
             #     continue
 
-            # 确认是 MoE 专家键，构建组标识（去掉数字索引部分）
+            # Confirmed MoE expert key; build the group id (drop the numeric idx)
             group_parts = parts[: expert_idx + 1] + parts[expert_idx + 2 :]
 
             group_key = ".".join(group_parts)
             # print(group_key)
 
-            # 加入分组
+            # Add to its group
             groups.setdefault(group_key, []).append((key, value["max"]))
 
-        # 对每个分组计算最大值并更新
+        # For each group, compute the max and broadcast it back
         for _group_key, items in groups.items():
             values = [v for _, v in items]
             max_val = max(values)
@@ -408,17 +411,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--input_bf16_hf_path",
         type=str,
-        default="/apdcephfs_gy7/share_303171455/linchuanxie/new_hy3_vllm/HY3.0_A20B_bus0212_aisearch_full_exp3_spv2_HF",  # noqa: E501
+        default="",
     )
     parser.add_argument(
         "--input_vllm_ac_json_path",
         type=str,
-        default="/apdcephfs_gy7/share_303171455/linchuanxie/new_hy3_vllm/HY3.0_A20B_bus0212_aisearch_full_exp3_spv2_HF_fp8",  # noqa: E501
+        default="",
     )
     parser.add_argument(
         "--output_fp8_hf_path",
         type=str,
-        default="/apdcephfs_gy7/share_303171455/linchuanxie/new_hy3_vllm/HY3.0_A20B_bus0212_aisearch_full_exp3_spv2_HF_fp8",  # noqa: E501
+        default="",
     )
     args = parser.parse_args()
     print(args)

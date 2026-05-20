@@ -86,7 +86,7 @@ bash tools/vllm_patch/install.sh install
 1. 通过 `python3 -c 'import vllm'` 定位当前 Python 环境下的 vLLM 安装目录。
 2. **首次安装时** 把 `envs.py` 与 `model_executor/layers/fused_moe/fused_moe.py` 备份为 `*.bak`（重复执行不会覆盖已有备份）。
 3. 用 `tools/vllm_patch/{envs.py, fused_moe.py}` 替换原文件。
-4. 把 `angelslim/compressor/quant/core/vllm_calibrate_utils.py` 拷贝到 `<vllm_install_dir>/tools/vllm_calibrate_utils.py`（`fused_moe.py` 运行时会从这里 import `collect_fused_moe_internal_stats`）。
+4. 把 `angelslim/compressor/quant/core/vllm_calibrate_utils/` 拷贝到 `<vllm_install_dir>/tools/vllm_calibrate_utils/`（`fused_moe.py` 运行时会从这里 import `collect_fused_moe_internal_stats`，拆分后仍以包名 `vllm_calibrate_utils` 暴露该符号）。
 5. 自动跑一次 `check`，校验补丁标记是否生效。
 
 #### 2.2 验证 / 还原
@@ -101,7 +101,7 @@ bash tools/vllm_patch/install.sh --help      # 查看完整用法
 
 - `envs.py` 包含 `VLLM_MOE_COLLECT_PER_EXPERT_STATS`
 - `fused_moe.py` 包含 `collect_fused_moe_internal_stats`
-- `<vllm_install_dir>/tools/vllm_calibrate_utils.py` 存在
+- `<vllm_install_dir>/tools/vllm_calibrate_utils/__init__.py` 存在
 
 #### 2.3 多节点 / 多环境注意事项
 
@@ -121,7 +121,7 @@ bash tools/vllm_patch/install.sh --help      # 查看完整用法
 | --- | --- | --- |
 | [`run_vllm_quant_for_HY3.sh`](./run_vllm_quant_for_HY3.sh) | ★ 推荐的"一键流水线"：校准 + 量化 | `tools/run_vllm_calibrate.py` + `tools/fp8_quant_with_vllm_activation.py` |
 | [`run_vllm_calibrate_for_HY3.sh`](./run_vllm_calibrate_for_HY3.sh) | 仅 W8A8C8 联合校准 | `tools/run_vllm_calibrate.py` |
-| [`run_kvcache_calibrate_for_HY3.sh`](./run_kvcache_calibrate_for_HY3.sh) | 仅 KV-cache 校准（轻量） | `tools/run_kvcache_calibrate.py` |
+| [`run_kvcache_calibrate_for_HY3.sh`](./run_kvcache_calibrate_for_HY3.sh) | 仅 KV-cache 校准（轻量） | `tools/kvcache/run_kvcache_calibrate.py` |
 
 ---
 
@@ -186,7 +186,7 @@ bash run_vllm_quant_for_HY3.sh --help             # 打印用法
 
 **功能**：只校准 KV-cache（K/V min/max），不做 weight / activation / MoE 统计。
 
-- **入口**：`tools/run_kvcache_calibrate.py`
+- **入口**：`tools/kvcache/run_kvcache_calibrate.py`
 
 #### 关键差异（与 `run_vllm_calibrate_for_HY3.sh` 对比）
 
@@ -201,3 +201,28 @@ bash run_vllm_quant_for_HY3.sh --help             # 打印用法
 
 - 已有 W8A8 量化模型，想单独研究 / 调优 KV scale。
 - 多组 KV 搜索参数对比实验，节省"无关"前向计算。
+
+---
+
+### 4. `tools/kvcache/replace_kv_scales.py` — KV scale 离线替换器
+
+**功能**：把上述任一校准脚本产出的 `kv_cache_tuned_scales*.json` 写回到已量化 FP8 模型的 `kv_cache_scales.safetensors`，并同步更新该模型 `config.json` 中的 `attn_quant_config`。
+
+- **入口**：`tools/kvcache/replace_kv_scales.py`（详见 [`tools/kvcache/README.md`](../../tools/kvcache/README.md)）
+- **支持粒度**：`per-tensor`、`per-head`（默认 `per-head`），由 `--granularity` 切换；JSON 布局自动匹配。
+- **典型用法**：
+  ```bash
+  # per-head：把 kvcache 校准产物写回到现有 FP8 模型
+  python3 tools/kvcache/replace_kv_scales.py \
+      --granularity per-head \
+      --json   ${stats_dir}/kv_cache_tuned_scales_per_head.json \
+      --src    ${fp8_path}/kv_cache_scales.safetensors \
+      --output ${fp8_path}/kv_cache_scales.safetensors \
+      --num-kv-heads 8
+  ```
+  省略 `--output` 时会原地覆盖 `--src`，并自动保留 `*.bak` 备份。
+
+#### 适用场景
+
+- 已经量化好的 FP8 模型，只想刷一组新的 KV scale，不愿重跑 `fp8_quant_with_vllm_activation.py`。
+- A/B 对比不同搜索范围（multiplier / num_steps）下的 KV scale，对**同一个**底层 FP8 模型快速热替换。

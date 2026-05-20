@@ -16,24 +16,27 @@
 Replace kv_cache_scales.safetensors with per-head scales from
 kv_cache_tuned_scales_per_head.json.
 
-Background
-----------
-The JSON is produced by ``tools/run_kvcache_calibrate.py`` in per-head mode.
-After the K/V-split optimisation (see ``vllm_calibrate_utils.py``), each
-layer's K/V slot has exactly ``num_kv_heads`` entries in the JSON – one per
-real KV head.  We simply load them in head-index order and write a float32
-tensor of shape ``(num_kv_heads,)`` into the safetensors file.
+Supports two granularities:
 
-(Legacy JSON files produced *before* the K/V-split optimisation contained
-``tp_size`` replicated entries per slot.  If such a file is encountered and
-``len(head_dict) == tp_size`` with ``tp_size > num_kv_heads``, we
-automatically de-duplicate by taking the primary replica.)
+* ``per-tensor``  – one scalar scale per layer-slot.
+* ``per-head``    – one scale per KV head.
 
 Usage
 -----
-    python tools/replace_kv_scales_perhead.py \
-        --json   /path/to/kv_cache_tuned_scales_per_head.json \
-        --src    /path/to/model_dir/kv_cache_scales.safetensors \
+Per-head (default)::
+
+    python tools/kvcache/replace_kv_scales.py \\
+        --granularity per-head \\
+        --json   /path/to/kv_cache_tuned_scales_per_head.json \\
+        --src    /path/to/model_dir/kv_cache_scales.safetensors \\
+        --output /path/to/output_dir/kv_cache_scales.safetensors
+
+Per-tensor::
+
+    python tools/kvcache/replace_kv_scales.py \\
+        --granularity per-tensor \\
+        --json   /path/to/kv_cache_tuned_scales.json \\
+        --src    /path/to/model_dir/kv_cache_scales.safetensors \\
         --output /path/to/output_dir/kv_cache_scales.safetensors
 
 If --output is omitted the source file is overwritten in-place (a .bak
@@ -52,12 +55,22 @@ import torch
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Replace kv_cache_scales.safetensors with calibrated per-head scales."
+        description="Replace kv_cache_scales.safetensors with calibrated scales "
+        "(supports per-tensor and per-head granularities).",
+    )
+    parser.add_argument(
+        "--granularity",
+        choices=["per-tensor", "per-head"],
+        default="per-head",
+        help="Calibration granularity that matches the JSON layout. "
+        "'per-tensor' expects scalar scales per layer-slot; "
+        "'per-head' expects one scale per KV head (default: per-head).",
     )
     parser.add_argument(
         "--json",
         required=True,
-        help="Path to kv_cache_tuned_scales_per_head.json.",
+        help="Path to the tuned-scales JSON file "
+        "(per-tensor or per-head depending on --granularity).",
     )
     parser.add_argument(
         "--src",
@@ -74,19 +87,39 @@ def parse_args():
         "--tp-size",
         type=int,
         default=16,
-        help="TP size used during calibration (used only for legacy JSON "
+        help="TP size used during calibration (used only for legacy per-head JSON "
         "files that still contain replicated heads; default: 16).",
     )
     parser.add_argument(
         "--num-kv-heads",
         type=int,
         default=8,
-        help="Actual number of KV heads in the model (default: 8).",
+        help="Actual number of KV heads in the model (per-head only; default: 8).",
     )
     return parser.parse_args()
 
 
-def load_json_scales(json_path: str, tp_size: int, num_kv_heads: int) -> dict:
+def load_json_scales_pertensor(json_path: str, ref_tensors: dict) -> dict:
+    """
+    Load per-tensor scalar scales from JSON and return a dict mapping each
+    key to a 1-D torch.Tensor with the same dtype as the corresponding
+    tensor in ``ref_tensors`` (falling back to float32 if the key is new).
+
+    JSON keys are expected to be of the form
+    ``"model.layers.N.self_attn.{k,v}_cache.scale"`` with float values.
+    """
+    with open(json_path) as f:
+        raw = json.load(f)
+
+    out: dict[str, torch.Tensor] = {}
+    for key, val in raw.items():
+        ref = ref_tensors.get(key)
+        dtype = ref.dtype if isinstance(ref, torch.Tensor) else torch.float32
+        out[key] = torch.tensor([val], dtype=dtype)
+    return out
+
+
+def load_json_scales_perhead(json_path: str, tp_size: int, num_kv_heads: int) -> dict:
     """
     Load per-head scales from JSON and return a dict mapping
     ``"model.layers.N.self_attn.{k,v}_cache.scale"`` to a float32 torch.Tensor
@@ -149,30 +182,13 @@ def load_json_scales(json_path: str, tp_size: int, num_kv_heads: int) -> dict:
     return out
 
 
-def main():
-    args = parse_args()
-
-    # ------------------------------------------------------------------ #
-    # 1. Load and de-duplicate per-head scales from JSON                  #
-    # ------------------------------------------------------------------ #
-    print(f"Loading per-head scales from: {args.json}")
-    print(f"  num_kv_heads={args.num_kv_heads} " f"(legacy-fallback tp_size={args.tp_size})")
-    new_scales = load_json_scales(args.json, args.tp_size, args.num_kv_heads)
-    print(
-        f"  Loaded {len(new_scales)} layer-slot entries "
-        f"(each is a tensor of shape [{args.num_kv_heads}])"
-    )
-
-    # ------------------------------------------------------------------ #
-    # 2. Load existing safetensors                                        #
-    # ------------------------------------------------------------------ #
-    print(f"\nLoading existing safetensors from: {args.src}")
-    existing = st.load_file(args.src)
-    print(f"  Existing keys: {len(existing)}")
-
-    # ------------------------------------------------------------------ #
-    # 3. Merge: replace matching keys; warn on missing ones               #
-    # ------------------------------------------------------------------ #
+def merge_and_save(existing: dict, new_scales: dict, src_path: str, output_path: str) -> dict:
+    """
+    Merge ``new_scales`` into ``existing`` (replacing matching keys, adding
+    new ones, warning on shape mismatch / missing keys), then save to
+    ``output_path``.  If the output overwrites the source, a .bak backup
+    is created.  Returns the merged dict.
+    """
     updated = dict(existing)
     replaced = 0
     for key, tensor in new_scales.items():
@@ -197,22 +213,23 @@ def main():
             f"(no corresponding entry in JSON): {missing[:5]}{'...' if len(missing) > 5 else ''}"
         )
 
-    # ------------------------------------------------------------------ #
-    # 4. Save                                                             #
-    # ------------------------------------------------------------------ #
-    output_path = args.output if args.output else args.src
-    if output_path == args.src and os.path.exists(args.src):
-        bak = args.src + ".bak"
-        shutil.copy2(args.src, bak)
+    if output_path == src_path and os.path.exists(src_path):
+        bak = src_path + ".bak"
+        shutil.copy2(src_path, bak)
         print(f"\nBackup saved to: {bak}")
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     st.save_file(updated, output_path)
     print(f"Saved updated safetensors to: {output_path}")
+    return updated
 
-    # ------------------------------------------------------------------ #
-    # 5. Update config.json with attn_quant_config                        #
-    # ------------------------------------------------------------------ #
+
+def update_config_json(output_path: str, granularity: str) -> None:
+    """
+    Write/overwrite ``attn_quant_config`` in the ``config.json`` next to
+    ``output_path`` according to the requested calibration granularity.
+    """
+    cfg_granularity = "per_tensor" if granularity == "per-tensor" else "per_head"
     config_path = os.path.join(os.path.dirname(os.path.abspath(output_path)), "config.json")
     with open(config_path, "r") as f:
         config = json.load(f)
@@ -220,8 +237,8 @@ def main():
     config["attn_quant_config"] = {
         "kv_cache_quant": {
             "dtype": "fp8_e4m3",
-            "k_quant": {"scheme": "static", "granularity": "per_head"},
-            "v_quant": {"scheme": "static", "granularity": "per_head"},
+            "k_quant": {"scheme": "static", "granularity": cfg_granularity},
+            "v_quant": {"scheme": "static", "granularity": cfg_granularity},
         },
         "q_quant": {"dtype": "fp8_e4m3", "scheme": "dynamic", "granularity": "per_token_per_head"},
     }
@@ -230,8 +247,49 @@ def main():
         json.dump(config, f, indent=2, ensure_ascii=False)
     print(f"\nUpdated config.json: {config_path}")
 
+
+def main():
+    args = parse_args()
+
     # ------------------------------------------------------------------ #
-    # 6. Quick sanity check                                               #
+    # 1. Load existing safetensors (needed early for per-tensor dtype     #
+    #    inference)                                                       #
+    # ------------------------------------------------------------------ #
+    print(f"Loading existing safetensors from: {args.src}")
+    existing = st.load_file(args.src)
+    print(f"  Existing keys: {len(existing)}")
+
+    # ------------------------------------------------------------------ #
+    # 2. Load scales from JSON (layout depends on --granularity)          #
+    # ------------------------------------------------------------------ #
+    print(f"\nLoading {args.granularity} scales from: {args.json}")
+    if args.granularity == "per-tensor":
+        new_scales = load_json_scales_pertensor(args.json, existing)
+        print(
+            f"  Loaded {len(new_scales)} layer-slot entries "
+            f"(each is a scalar tensor of shape [1])"
+        )
+    else:
+        print(f"  num_kv_heads={args.num_kv_heads} (legacy-fallback tp_size={args.tp_size})")
+        new_scales = load_json_scales_perhead(args.json, args.tp_size, args.num_kv_heads)
+        print(
+            f"  Loaded {len(new_scales)} layer-slot entries "
+            f"(each is a tensor of shape [{args.num_kv_heads}])"
+        )
+
+    # ------------------------------------------------------------------ #
+    # 3. Merge and save                                                   #
+    # ------------------------------------------------------------------ #
+    output_path = args.output if args.output else args.src
+    merge_and_save(existing, new_scales, args.src, output_path)
+
+    # ------------------------------------------------------------------ #
+    # 4. Update config.json with attn_quant_config                        #
+    # ------------------------------------------------------------------ #
+    update_config_json(output_path, args.granularity)
+
+    # ------------------------------------------------------------------ #
+    # 5. Quick sanity check                                               #
     # ------------------------------------------------------------------ #
     verify = st.load_file(output_path)
     sample_key = next(iter(new_scales))

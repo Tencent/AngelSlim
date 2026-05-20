@@ -16,22 +16,35 @@ These patches are aligned with the **current** vLLM version installed in the
 calibration environment. If your vLLM version differs, the patch files may
 need to be regenerated against your specific vLLM source.
 
-## Required companion file: `vllm_calibrate_utils.py`
+## Required companion package: `vllm_calibrate_utils/`
 
 `fused_moe.py` imports `collect_fused_moe_internal_stats` from a module named
 `vllm_calibrate_utils`. The lookup logic walks up from the patched
 `fused_moe.py` location and appends `vllm/tools/`, so the calibration utils
-file **must** be placed inside the installed vLLM package as:
+package **must** be placed inside the installed vLLM package as:
 
 ```
-<vllm_install_dir>/tools/vllm_calibrate_utils.py
+<vllm_install_dir>/tools/vllm_calibrate_utils/
+├── __init__.py        # re-exports every public symbol (incl.
+│                      #   collect_fused_moe_internal_stats)
+├── _common.py         # shared low-level helpers
+├── hooks.py           # all forward-hook based calibration:
+│                      #   activations, KV (per-tensor / per-head /
+│                      #   KV-only), MoE stats (collect_fused_moe_internal_stats),
+│                      #   MTP draft model
+└── search.py          # KV-cache FP8 scale grid-search
+                       #   (per-tensor + per-head)
 ```
 
-The single source of truth for this file lives at:
+The single source of truth for this package lives at:
 
 ```
-angelslim/compressor/quant/core/vllm_calibrate_utils.py
+angelslim/compressor/quant/core/vllm_calibrate_utils/
 ```
+
+`install.sh` copies this whole directory in one shot; `uninstall` removes it
+(and also cleans up the legacy single-file `vllm_calibrate_utils.py` from
+pre-split installations if it is still around).
 
 ## Deployment
 

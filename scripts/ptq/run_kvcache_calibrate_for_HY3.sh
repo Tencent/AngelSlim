@@ -38,7 +38,7 @@ per_head="--per-head"                  # set to "--per-head" to enable per-KV-he
 
 mkdir -p logs
 
-python3 tools/run_kvcache_calibrate.py \
+python3 tools/kvcache/run_kvcache_calibrate.py \
     --model-path $model_path \
     --ptq-data-path $ptq_data_path \
     --output-dir $output_dir \
