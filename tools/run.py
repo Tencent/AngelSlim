@@ -281,7 +281,10 @@ def _prewarm_hf_deepspeed_config(config):
     """
     compress_cfg = getattr(config, "compression_config", None)
     qat_cfg = getattr(compress_cfg, "QAT", None) if compress_cfg is not None else None
+    distill_cfg = getattr(compress_cfg, "Distill", None) if compress_cfg is not None else None
     hf_args = getattr(qat_cfg, "hf_args", None) if qat_cfg is not None else None
+    if not hf_args:
+        hf_args = getattr(distill_cfg, "hf_args", None) if distill_cfg is not None else None
     if not hf_args or not hf_args.get("deepspeed"):
         return None
 
@@ -323,7 +326,7 @@ def run(config):
         weight_only_run(config)
         return
 
-    # QAT + DeepSpeed: register HfTrainerDeepSpeedConfig BEFORE loading the
+    # Trainer + DeepSpeed: register HfTrainerDeepSpeedConfig BEFORE loading the
     # model so ``from_pretrained`` takes the ZeRO-3 path. No-op otherwise.
     # The returned object must stay alive until after the model is built
     # because HF's weak-ref mechanism drops the config otherwise.

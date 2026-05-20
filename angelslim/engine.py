@@ -258,6 +258,8 @@ class Engine:
                 compressors[idx].calibrate(self.dataloader)
             elif compress_type == "QAT":
                 compressors[idx].run(self.dataloader)
+            elif compress_type == "Distill":
+                compressors[idx].run(self.dataloader)
             else:
                 raise NotImplementedError(
                     f"Compression type {self.compress_type} is not implemented"
@@ -271,7 +273,7 @@ class Engine:
         for idx, compress_type in enumerate(self.compress_type):
             if self.only_inference[idx]:
                 continue
-            if compress_type in ["PTQ", "QAT"]:
+            if compress_type in ["PTQ", "QAT", "Distill"]:
                 # Execute model conversion
                 compressors[idx].convert()
 

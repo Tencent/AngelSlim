@@ -50,19 +50,29 @@ class QATDataset(IterableDataset):
             for k, t in concatenated.items()
         }
         result["labels"] = result["input_ids"].copy()
-        return [
-            {"input_ids": result["input_ids"][i], "labels": result["labels"][i]}
-            for i in range(len(result["input_ids"]))
-        ]
+        samples = []
+        for i in range(len(result["input_ids"])):
+            sample = {
+                "input_ids": result["input_ids"][i],
+                "labels": result["labels"][i],
+            }
+            if "attention_mask" in result:
+                sample["attention_mask"] = result["attention_mask"][i]
+            samples.append(sample)
+        return samples
 
     def _build_from_internal(self, dataset):
-        return [
-            {
-                "input_ids": dataset[i]["input_ids"].tolist()[0],
-                "labels": dataset[i]["labels"].tolist()[0],
+        samples = []
+        for i in range(len(dataset)):
+            item = dataset[i]
+            sample = {
+                "input_ids": item["input_ids"].tolist()[0],
+                "labels": item["labels"].tolist()[0],
             }
-            for i in range(len(dataset))
-        ]
+            if "attention_mask" in item:
+                sample["attention_mask"] = item["attention_mask"].tolist()[0]
+            samples.append(sample)
+        return samples
 
 
 class BlockTrainDataset(Dataset):

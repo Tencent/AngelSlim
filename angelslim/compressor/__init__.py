@@ -13,5 +13,6 @@
 # limitations under the License.
 
 from .compressor_factory import CompressorFactory  # noqa: F401
+from .distill import Distill  # noqa: F401
 from .qat.qat import QAT  # noqa: F401
 from .quant import PTQ  # noqa: F401

@@ -1,0 +1,81 @@
+global:
+  save_path: ./output_hunyuan_seq_2bit_distill_zero2
+
+model:
+  name: HunyuanDense
+  model_path: /path/to/hunyuan-translation-model
+  trust_remote_code: true
+  torch_dtype: auto
+  device_map: cuda
+  low_cpu_mem_usage: true
+  use_cache: false
+
+compression:
+  name: Distill
+  quantization:
+    name: w4a8_fp8
+    bits: 8
+    quant_method:
+      weight: per-channel
+      activation: per-tensor
+      group_size: -1
+    ignore_layers: ["lm_head", "embed_tokens"]
+  Distill:
+    teacher_model_path: /path/to/hunyuan-translation-model
+    teacher_torch_dtype: auto
+    teacher_device_map: cuda
+    teacher_trust_remote_code: true
+    teacher_low_cpu_mem_usage: true
+    teacher_use_cache: false
+    student_type: quantized
+    trainable_parameters: all
+    save_format: fake
+    do_train: true
+    from_ptq_ckpt: null
+    resume_ckpt_dir: null
+    loss_type: cakld
+    loss_topk: null
+    kd_temperature: 1.0
+    lm_loss_weight: 1.0
+    kd_loss_weight: 1.0
+    plugin_config:
+      enable_scale: true
+      quant_config:
+        use_weight_quant: true
+        use_activation_quant: false
+        weight_quantizer: special
+        special:
+          quant_method: seq
+          granularity: per_channel
+          w_bits: 2
+          N: 3
+          M: 4
+          max_eps: 0.0
+    hf_args:
+      bf16: true
+      logging_steps: 1
+      logging_first_step: true
+      per_device_train_batch_size: 4
+      gradient_accumulation_steps: 1
+      learning_rate: 1.0e-4
+      lr_scheduler_type: cosine
+      num_train_epochs: 1
+      max_steps: 1000
+      save_strategy: "steps"
+      save_steps: 1000
+      save_total_limit: 10
+      warmup_ratio: 0.05
+      max_grad_norm: 1.0
+      gradient_checkpointing: true
+      gradient_checkpointing_kwargs:
+        use_reentrant: true
+      dataloader_num_workers: 8
+      deepspeed: configs/qwen3/distill/w4a8_fp8/ds_config_zero2.json
+
+dataset:
+  name: TextDataset
+  data_path: /path/to/translation_train.jsonl
+  max_seq_length: 8192
+  num_samples: 25600
+  batch_size: 1
+  is_sft_data: true
