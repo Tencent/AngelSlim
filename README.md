@@ -104,7 +104,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
           <li>
             <strong>Distillation</strong>
             <ul style="padding-left: 1.5rem">
-              <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/stem.html">Quantized Distillation</a></li>
+              <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/distill/index.html">Quantized Distillation</a></li>
             </ul>
           </li>
         </ul>
