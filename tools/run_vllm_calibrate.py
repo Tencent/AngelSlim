@@ -102,18 +102,30 @@ def parse_args():
         description="vLLM Calibration Tool - Collect activation and MoE expert statistics"
     )
 
-    # Model configuration
+    # YAML config (values override argparse defaults; explicit CLI flags still win)
     parser.add_argument(
-        "--model-path", type=str, required=True, help="Path to the model directory"
+        "-c",
+        "--config",
+        type=str,
+        default=None,
+        help="Path to a YAML config file. Keys must match argparse dest names "
+        "(e.g. model_path, tp_size, search_kv_scale). Values override argparse "
+        "defaults; explicit command-line flags still take final precedence.",
     )
+
+    # Model configuration
+    # NOTE: required=False because these can also come from the YAML config.
+    # apply_yaml_config() runs after parse_args(); we validate required fields
+    # manually below.
+    parser.add_argument("--model-path", type=str, default=None, help="Path to the model directory")
     parser.add_argument(
         "--ptq-data-path",
         type=str,
-        required=True,
+        default=None,
         help="Path to the PTQ calibration data (JSONL format)",
     )
     parser.add_argument(
-        "--output-dir", type=str, required=True, help="Directory to save output statistics"
+        "--output-dir", type=str, default=None, help="Directory to save output statistics"
     )
 
     # Model loading configuration
@@ -219,7 +231,34 @@ def parse_args():
         "Candidates are sampled on a log-uniform grid.",
     )
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    # Lazy-import _yaml_args (sibling module in tools/). Done here instead of
+    # at module top so flake8 doesn't trip on a sys.path mutation between
+    # imports.
+    import sys
+
+    _tools_dir = os.path.dirname(os.path.abspath(__file__))
+    if _tools_dir not in sys.path:
+        sys.path.insert(0, _tools_dir)
+    from _yaml_args import apply_yaml_config
+
+    apply_yaml_config(parser, args)
+
+    # Validate fields that used to be ``required=True`` but now may come
+    # from either the CLI or the YAML config.
+    missing = [
+        name
+        for name in ("model_path", "ptq_data_path", "output_dir")
+        if getattr(args, name, None) in (None, "")
+    ]
+    if missing:
+        parser.error(
+            "the following arguments are required (via CLI or YAML config): "
+            + ", ".join("--" + n.replace("_", "-") for n in missing)
+        )
+
+    return args
 
 
 def save_stats_to_json(

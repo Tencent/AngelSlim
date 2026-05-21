@@ -6,28 +6,26 @@
 # Stage 1: tools/run_vllm_calibrate.py
 #   * Loads the bf16 model with vLLM, runs forward passes on the PTQ dataset,
 #     and dumps activation_stats.json / moe_expert_stats.json / kv_cache_*
-#     into ${stats_dir}.
+#     into the directory given by ``output_dir`` in CALIB_CONFIG.
 #
 # Stage 2: tools/fp8_quant_with_vllm_activation.py
-#   * Reads ${stats_dir}/activation_stats.json (+ moe_expert_stats.json if any)
-#     plus the original bf16 weights, applies per-tensor FP8 quantization
-#     with calibrated input scales, and writes the FP8 HF model into
-#     ${fp8_path} (including kv_cache_scales.safetensors when per-head KV
-#     stats are available).
+#   * Reads activation_stats.json (+ moe_expert_stats.json if any) plus the
+#     original bf16 weights, applies per-tensor FP8 quantization with
+#     calibrated input scales, and writes the FP8 HF model into the directory
+#     given by ``output_fp8_hf_path`` in QUANT_CONFIG.
+#
+# IMPORTANT: ``input_vllm_ac_json_path`` in QUANT_CONFIG must equal
+# ``output_dir`` in CALIB_CONFIG, otherwise stage 2 cannot find the stats.
 #
 # Usage:
-#   bash run_vllm_calibrate_and_quantize_for_HY3_0_622post3.sh
+#   bash run_vllm_quant_for_HY3.sh
 #       (run both stages back-to-back)
 #
-#   bash run_vllm_calibrate_and_quantize_for_HY3_0_622post3.sh --skip-calibrate
-#       (skip stage 1, only quantize using existing ${stats_dir})
+#   bash run_vllm_quant_for_HY3.sh --skip-calibrate
+#       (skip stage 1, only quantize using existing stats dir)
 #
-#   bash run_vllm_calibrate_and_quantize_for_HY3_0_622post3.sh --skip-quantize
+#   bash run_vllm_quant_for_HY3.sh --skip-quantize
 #       (only run stage 1, do not produce the FP8 model)
-#
-# NOTE: must be invoked from the AngelSlim repository root, the same way as
-# run_vllm_calibrate_for_HY3_0_622post3.sh, because the inner python commands
-# use repo-relative paths (tools/...).
 # =============================================================================
 
 # Strict-mode: stop on first error and propagate failures inside `cmd | tee`.
@@ -68,33 +66,10 @@ export VLLM_ENABLE_PREFIX_CACHING=1
 export PRECISIONMODE=HF
 
 # ----------------------------------------------------------------------------
-# Shared configuration (single source of truth for both stages)
+# YAML configs (one per stage)
 # ----------------------------------------------------------------------------
-run_name=log_name
-model_path=/path/to/input/model
-ptq_data_path=/path/to/dataset
-stats_dir=/path/to/statistics
-fp8_path=/path/to/output/fp8_model
-
-# Stage-1 calibration args
-tp_size=16
-batch_size=4
-num_samples=512
-max_length=16384
-
-# Boolean flags (non-empty to enable, empty to disable)
-skip_weight_loading=""  # set to "--skip-weight-loading" to enable debug mode
-verbose=""              # set to "--verbose" to enable
-
-
-
-# KV cache scale search settings
-search_kv_scale="--search-kv-scale"    # set to "--search-kv-scale" to enable scale search
-search_kv_num_samples=64               # number of samples used for the search
-search_kv_min_multiplier=0.8           # lower bound of multiplier search range
-search_kv_max_multiplier=16.0          # upper bound of multiplier search range
-search_kv_num_steps=50                 # number of log-uniform grid points
-kv_granularity="per-head"              # KV-cache granularity: none | per-tensor | per-head
+CALIB_CONFIG=configs/HY3/ptq/HY3_vllm_calibrate.yaml
+QUANT_CONFIG=configs/HY3/ptq/HY3_vllm_quant_fp8.yaml
 
 mkdir -p logs
 
@@ -103,54 +78,29 @@ mkdir -p logs
 # ============================================================================
 if [[ "${do_calibrate}" -eq 1 ]]; then
     echo "[pipeline] === Stage 1/2: activation calibration ==="
-    echo "[pipeline] model_path=${model_path}"
-    echo "[pipeline] stats_dir   =${stats_dir}"
+    echo "[pipeline] CALIB_CONFIG=${CALIB_CONFIG}"
 
     python3 tools/run_vllm_calibrate.py \
-        --model-path "${model_path}" \
-        --ptq-data-path "${ptq_data_path}" \
-        --output-dir "${stats_dir}" \
-        --tp-size "${tp_size}" \
-        --batch-size "${batch_size}" \
-        --num-samples "${num_samples}" \
-        --max-length "${max_length}" \
-        --kv-granularity "${kv_granularity}" \
-        ${skip_weight_loading} \
-        ${verbose} \
-        ${search_kv_scale} \
-        --search-kv-num-samples "${search_kv_num_samples}" \
-        --search-kv-min-multiplier "${search_kv_min_multiplier}" \
-        --search-kv-max-multiplier "${search_kv_max_multiplier}" \
-        --search-kv-num-steps "${search_kv_num_steps}" \
-        2>&1 | tee "logs/${run_name}.log"
+        -c "${CALIB_CONFIG}" \
+        2>&1 | tee "logs/run_vllm_quant_HY3-calibrate.log"
 
-    echo "[pipeline] Stage 1 finished. Activation stats saved under: ${stats_dir}"
+    echo "[pipeline] Stage 1 finished."
 else
     echo "[pipeline] --skip-calibrate set, skipping stage 1."
 fi
 
 # ============================================================================
-# Stage 2: FP8 quantization (uses calibration outputs in ${stats_dir})
+# Stage 2: FP8 quantization (uses calibration outputs)
 # ============================================================================
 if [[ "${do_quantize}" -eq 1 ]]; then
     echo "[pipeline] === Stage 2/2: FP8 quantization ==="
-    echo "[pipeline] input bf16 model = ${model_path}"
-    echo "[pipeline] input act stats  = ${stats_dir}"
-    echo "[pipeline] output FP8 model = ${fp8_path}"
-
-    if [[ ! -f "${stats_dir}/activation_stats.json" ]]; then
-        echo "[pipeline][ERROR] ${stats_dir}/activation_stats.json is missing." >&2
-        echo "[pipeline][ERROR] Run stage 1 first (drop --skip-calibrate)." >&2
-        exit 1
-    fi
+    echo "[pipeline] QUANT_CONFIG=${QUANT_CONFIG}"
 
     python3 tools/fp8_quant_with_vllm_activation.py \
-        --input_bf16_hf_path "${model_path}" \
-        --input_vllm_ac_json_path "${stats_dir}" \
-        --output_fp8_hf_path "${fp8_path}" \
-        2>&1 | tee "logs/${run_name}-quantize.log"
+        -c "${QUANT_CONFIG}" \
+        2>&1 | tee "logs/run_vllm_quant_HY3-quantize.log"
 
-    echo "[pipeline] Stage 2 finished. FP8 model saved to: ${fp8_path}"
+    echo "[pipeline] Stage 2 finished."
 else
     echo "[pipeline] --skip-quantize set, skipping stage 2."
 fi

@@ -1,0 +1,19 @@
+# Stage-2 of the HY3 PTQ pipeline: FP8 quantization of bf16 weights using
+# the activation_stats / moe_expert_stats produced by stage-1 calibration.
+# Consumed by: tools/fp8_quant_with_vllm_activation.py
+#
+# Keys here match the script's argparse `dest` names. Values listed below
+# override argparse defaults; explicit command-line flags still take final
+# precedence (e.g. `python3 ... -c this.yaml --num-workers 8` will use 8).
+#
+# IMPORTANT: input_vllm_ac_json_path MUST equal the `output_dir` used in
+# stage 1 (HY3_vllm_calibrate.yaml), otherwise the FP8 quantizer will not
+# find activation_stats.json / moe_expert_stats.json.
+
+input_bf16_hf_path: /path/to/input/model
+input_vllm_ac_json_path: /path/to/statistics
+output_fp8_hf_path: /path/to/output/fp8_model
+
+# Optional: leave at defaults unless you know what you are doing
+block_size: [-1, -1]
+num_workers: 16

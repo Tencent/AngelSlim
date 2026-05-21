@@ -406,6 +406,17 @@ def merge_vllm_act_moe_jsonl(ac_json_data):
 
 if __name__ == "__main__":
     parser = ArgumentParser()
+    # YAML config (values override argparse defaults; explicit CLI flags still win).
+    parser.add_argument(
+        "-c",
+        "--config",
+        type=str,
+        default=None,
+        help="Path to a YAML config file. Keys must match argparse dest names "
+        "(e.g. input_bf16_hf_path, output_fp8_hf_path, block_size). Values "
+        "override argparse defaults; explicit command-line flags still take "
+        "final precedence.",
+    )
     parser.add_argument("--block-size", type=int, nargs=2, default=(-1, -1))
     parser.add_argument("--num-workers", type=int, default=16)
     parser.add_argument(
@@ -424,6 +435,31 @@ if __name__ == "__main__":
         default="",
     )
     args = parser.parse_args()
+
+    # Lazy-import _yaml_args (sibling module in tools/). Done here instead of
+    # at module top so flake8 doesn't trip on a sys.path mutation between
+    # imports.
+    import sys
+
+    _tools_dir = os.path.dirname(os.path.abspath(__file__))
+    if _tools_dir not in sys.path:
+        sys.path.insert(0, _tools_dir)
+    from _yaml_args import apply_yaml_config
+
+    apply_yaml_config(parser, args)
+
+    # Validate required paths (may come from CLI or YAML).
+    missing = [
+        name
+        for name in ("input_bf16_hf_path", "input_vllm_ac_json_path", "output_fp8_hf_path")
+        if not getattr(args, name, "")
+    ]
+    if missing:
+        parser.error(
+            "the following arguments are required (via CLI or YAML config): "
+            + ", ".join("--" + n for n in missing)
+        )
+
     print(args)
     with open(os.path.join(args.input_bf16_hf_path, "config.json"), "r", encoding="utf8") as fp:
         json_data = json.load(fp)
