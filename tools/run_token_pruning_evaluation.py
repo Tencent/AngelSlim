@@ -227,7 +227,7 @@ def main():
 
     # 2. Iterate through provided strategy configurations
     for i, cfg_path in enumerate(args.configs):
-        eval_logger.info(f"Starting Experiment {i+1}/{len(args.configs)}: {cfg_path}")
+        eval_logger.info(f"Starting Experiment {i + 1}/{len(args.configs)}: {cfg_path}")
 
         try:
             config_result = run_single_config_eval(
