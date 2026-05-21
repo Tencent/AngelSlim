@@ -9,14 +9,14 @@
 # -------- Paths --------
 model_path: /path/to/model
 ptq_data_path: /path/to/dataset
-output_dir: /path/to/output
+output_dir: /path/to/statistics
 
 # -------- Model loading / runtime --------
 tp_size: 16
 batch_size: 4
 num_samples: 512
 max_length: 16384
-distributed_executor_backend: mp        # ray | mp
+distributed_executor_backend: ray       # ray | mp
 skip_weight_loading: false              # true => dummy weights (debug only)
 
 # -------- MTP (Multi-Token Prediction) --------

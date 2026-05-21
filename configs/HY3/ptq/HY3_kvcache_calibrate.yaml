@@ -15,7 +15,7 @@ tp_size: 16
 batch_size: 4
 num_samples: 512
 max_length: 32768
-distributed_executor_backend: mp        # ray | mp
+distributed_executor_backend: ray       # ray | mp
 skip_weight_loading: false              # true => dummy weights (debug only)
 
 # -------- KV-cache granularity --------
