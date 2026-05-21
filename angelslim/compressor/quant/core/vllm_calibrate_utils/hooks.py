@@ -329,9 +329,11 @@ def print_activation_stats(model):
         _print_stats_table(model._kcache_stats, "K-cache Statistics")
         _print_stats_table(model._vcache_stats, "V-cache Statistics")
 
+
 # =============================================================================
 # Per-Head KV-Cache Calibration
 # =============================================================================
+
 
 def _get_num_heads_from_tensor(k: torch.Tensor, module) -> int:
     """
@@ -873,9 +875,11 @@ def remove_kvcache_perhead_hooks(model):
         del model._kvcache_perhead_stats
     return "KV-perhead hooks removed"
 
+
 # =============================================================================
 # KV-cache only calibration (lightweight: no Linear / MoE hooks)
 # =============================================================================
+
 
 def setup_kvcache_only_hooks(model):
     """
@@ -1003,9 +1007,11 @@ def remove_kvcache_only_hooks(model):
         del model._kvcache_only_stats
     return "KV-only hooks removed"
 
+
 # =============================================================================
 # MoE statistics collection (vLLM patch entry point lives here)
 # =============================================================================
+
 
 def collect_fused_moe_internal_stats(
     stage,
@@ -1195,9 +1201,11 @@ def print_moe_stats(model, verbose=False):
         print(f"\n[Global statistics across {world_size} workers]")
     _print_stats_table(model._moe_activation_stats, "MoE gate_up and down Statistics")
 
+
 # =============================================================================
 # MTP (Multi-Token Prediction) draft model activation hooks
 # =============================================================================
+
 
 def setup_mtp_activation_hooks(draft_model):
     """

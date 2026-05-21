@@ -15,12 +15,7 @@ are kept module-private with the underscore prefix.
 
 import torch
 
-from ._common import (
-    _compute_perhead_layout,
-    _find_layers,
-    _get_dist_info,
-    _get_kv_role,
-)
+from ._common import _compute_perhead_layout, _find_layers, _get_dist_info, _get_kv_role
 from .hooks import _get_num_heads_from_tensor, _infer_num_kv_heads_total
 
 __all__ = [
