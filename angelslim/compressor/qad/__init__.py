@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .distill import Distill  # noqa: F401
-from .loss import DistillLoss  # noqa: F401
+from .qad import QAD  # noqa: F401
 
-__all__ = ["Distill", "DistillLoss"]
+__all__ = ["QAD"]
