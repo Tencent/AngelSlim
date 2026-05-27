@@ -156,6 +156,7 @@ class SpinQuant(TransformBase):
 
     def silent_run(self):
         """only set linears and Rotations"""
+        self._untie_word_embeddings()
         self._apply_fused_ln()
         if "R1" in self.spin_config.rotation:
             self._apply_r1(no_transform=True)
@@ -167,11 +168,11 @@ class SpinQuant(TransformBase):
             self._apply_r4(no_transform=True)
 
     def run(self):
+        self._untie_word_embeddings()
+        # fuse norm
+        self._apply_fused_ln()
         # add rotation
         if "R1" in self.spin_config.rotation:
-            self._untie_word_embeddings()
-            # fuse norm
-            self._apply_fused_ln()
             self._apply_r1()
         if "R2" in self.spin_config.rotation:
             self._apply_r2()
@@ -388,8 +389,6 @@ class SpinQuant(TransformBase):
         3. fuse layer norm with adjacent linear layers
         """
         self.logger.info("Applying fused layer norm to a linear layer")
-
-        self._untie_word_embeddings()
 
         norm_layers = self.quant_model.get_rotation_mapping_layers(
             None,
