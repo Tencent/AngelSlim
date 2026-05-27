@@ -1,24 +1,24 @@
 # Distillation
 
-AngelSlim Distill trains a student model with a separate full-precision teacher model. The student can be either a full-precision HuggingFace model or a quantized QAT-style model.
+AngelSlim Distill trains a full-precision student with an independent full-precision teacher. It is the fp-only distillation path: it does not initialize PTQ, QAT plugins, or quantized save logic. Use QAD when the student should be quantized during distillation.
 
 ## Features
 
 - Load an independent teacher from `compression.Distill.teacher_model_path`.
-- Support full-precision students with HuggingFace `save_pretrained` output.
-- Support quantized students by reusing QAT quantization, learnable-scale plugins, conversion, and save paths.
-- Select trainable parameters with `trainable_parameters: all` or `trainable_parameters: quant`.
+- Train all full-precision student parameters with HuggingFace `Seq2SeqTrainer`.
 - Combine supervised CausalLM loss and knowledge distillation loss with `lm_loss_weight` and `kd_loss_weight`.
+- Support `kl`, `rkl`, `mse`, `kd`, `cakld`, `kl_top`, and `rkl_top` loss variants.
 - Pass HuggingFace trainer options through `compression.Distill.hf_args`, including DeepSpeed ZeRO configs.
+- Save the final student with HuggingFace `save_pretrained`.
 
-## Example 1: Distill a Smaller Full-Precision Model
+## Example
 
 This example distills a Qwen3-1.7B full-precision student from a Qwen3-4B full-precision teacher.
 
 ```bash
 torchrun --nproc_per_node=8 \
   tools/run.py \
-  -c configs/qwen3/distill/fp/qwen3-1_7b_fp_distill_from_qwen3-4b_zero2.yaml
+  -c configs/qwen3/distill/fp/qwen3-1_7b_fp_distill_cakld_from_qwen3-4b_zero2.yaml
 ```
 
 Key fields:
@@ -37,94 +37,6 @@ compression:
     loss_type: cakld
     lm_loss_weight: 1.0
     kd_loss_weight: 1.0
-```
-
-## Example 2: Distill a Quantized Model
-
-This example distills a W4A8-FP8 Qwen3-4B student from a full-precision Qwen3-4B teacher. The quantized student reuses QAT learnable-scale plugins and trains only quantization parameters.
-
-```bash
-torchrun --nproc_per_node=8 \
-  tools/run.py \
-  -c configs/qwen3/distill/w4a8_fp8/qwen3-4b_w4a8_fp8_distill_zero2.yaml
-```
-
-Key fields:
-
-```yaml
-compression:
-  name: Distill
-  quantization:
-    name: w4a8_fp8
-  Distill:
-    teacher_model_path: Qwen/Qwen3-4B
-    student_type: quantized
-    trainable_parameters: quant
-    save_format: real
-    plugin_config:
-      enable_scale: true
-```
-
-## Example 3: Distill with Special Weight Quantizers
-
-The special weight quantizer path keeps the standard `QuantLinear` wrapper and switches only the weight quantizer implementation through config. Six demo configs are provided:
-
-```text
-configs/qwen3/distill/special/qwen3-1_7b_sherry_distill_from_qwen3-4b_zero2.yaml
-configs/qwen3/distill/special/qwen3-1_7b_absmean_distill_from_qwen3-4b_zero2.yaml
-configs/qwen3/distill/special/qwen3-1_7b_twn_distill_from_qwen3-4b_zero2.yaml
-configs/qwen3/distill/special/qwen3-1_7b_lsq_distill_from_qwen3-4b_zero2.yaml
-configs/qwen3/distill/special/qwen3-1_7b_seq_distill_from_qwen3-4b_zero2.yaml
-configs/qwen3/distill/special/qwen3-1_7b_dlt_distill_from_qwen3-4b_zero2.yaml
-```
-
-Run one method by selecting its config:
-
-```bash
-torchrun --nproc_per_node=8 \
-  tools/run.py \
-  -c configs/qwen3/distill/special/qwen3-1_7b_sherry_distill_from_qwen3-4b_zero2.yaml
-```
-
-A Hunyuan translation-style 2-bit SEQ distillation demo is also provided:
-
-```text
-configs/hunyuan/distill/special/hunyuan_seq_2bit_distill_zero2.yaml
-```
-
-Replace `model.model_path`, `compression.Distill.teacher_model_path`, and `dataset.data_path` with local model and translation-data paths before running it.
-
-Key fields:
-
-```yaml
-plugin_config:
-  enable_scale: true
-  quant_config:
-    use_weight_quant: true
-    use_activation_quant: false
-    weight_quantizer: special
-    special:
-      quant_method: sherry  # sherry, absmean, twn, lsq, seq, or dlt
-      granularity: per_group
-      group_size: 128
-      w_bits: 1
-      N: 3
-      M: 4
-```
-
-For the 2-bit SEQ demo, the special weight quantizer uses per-channel scaling:
-
-```yaml
-plugin_config:
-  enable_scale: true
-  quant_config:
-    use_weight_quant: true
-    use_activation_quant: false
-    weight_quantizer: special
-    special:
-      quant_method: seq
-      granularity: per_channel
-      w_bits: 2
 ```
 
 ## Experiment Results
@@ -166,7 +78,7 @@ Experiment setting:
 }
 ```
 
-## Main Distill Fields
+## Main Fields
 
 ```yaml
 compression:
@@ -175,15 +87,15 @@ compression:
     teacher_model_path: Qwen/Qwen3-4B
     teacher_torch_dtype: auto
     teacher_device_map: null
-    student_type: fp          # fp or quantized
-    trainable_parameters: all # all or quant
-    save_format: hf           # hf/full/real for fp; real/fake for quantized paths
+    student_type: fp
+    trainable_parameters: all
+    save_format: hf           # hf/full/real
     loss_type: cakld          # origin, kl, rkl, kd, cakld, mse, kl_top, rkl_top
     kd_temperature: 1.0
     lm_loss_weight: 1.0
     kd_loss_weight: 1.0
     hf_args:
-      deepspeed: configs/qwen3/distill/w4a8_fp8/ds_config_zero2.json
+      deepspeed: configs/qwen3/distill/fp/ds_config_zero2.json
 ```
 
 Use `loss_type: origin` with `kd_loss_weight: 0.0` to run a supervised fine-tuning baseline with the same trainer path.

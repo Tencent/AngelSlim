@@ -58,7 +58,7 @@
     <link rel="icon" href="../../_static/angelslim_icon.png"/>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="混元模型量化" href="../../models/hunyuan/hunyuan_quant.html" />
+    <link rel="next" title="Quantization-Aware Distillation" href="../qad/index.html" />
     <link rel="prev" title="Diffusion模型Cache" href="../diffusion/cache.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
@@ -182,6 +182,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../token_compressor/index.html">Token 压缩</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../diffusion/index.html">文生图/视频/3D压缩</a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Distillation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../qad/index.html">Quantization-Aware Distillation</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">模型支持</span></p>
 <ul class="nav bd-sidenav">
@@ -401,12 +402,10 @@ document.write(`
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#features">Features</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example-1-distill-a-smaller-full-precision-model">Example 1: Distill a Smaller Full-Precision Model</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example-2-distill-a-quantized-model">Example 2: Distill a Quantized Model</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example-3-distill-with-special-weight-quantizers">Example 3: Distill with Special Weight Quantizers</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example">Example</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#experiment-results">Experiment Results</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#dataset-format">Dataset Format</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#main-distill-fields">Main Distill Fields</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#main-fields">Main Fields</a></li>
 </ul>
             </nav>
         </div>
@@ -420,24 +419,24 @@ document.write(`
                   
   <section id="distillation">
 <h1>Distillation<a class="headerlink" href="#distillation" title="Link to this heading">#</a></h1>
-<p>AngelSlim Distill trains a student model with a separate full-precision teacher model. The student can be either a full-precision HuggingFace model or a quantized QAT-style model.</p>
+<p>AngelSlim Distill trains a full-precision student with an independent full-precision teacher. It is the fp-only distillation path: it does not initialize PTQ, QAT plugins, or quantized save logic. Use QAD when the student should be quantized during distillation.</p>
 <section id="features">
 <h2>Features<a class="headerlink" href="#features" title="Link to this heading">#</a></h2>
 <ul class="simple">
 <li><p>Load an independent teacher from <code class="docutils literal notranslate"><span class="pre">compression.Distill.teacher_model_path</span></code>.</p></li>
-<li><p>Support full-precision students with HuggingFace <code class="docutils literal notranslate"><span class="pre">save_pretrained</span></code> output.</p></li>
-<li><p>Support quantized students by reusing QAT quantization, learnable-scale plugins, conversion, and save paths.</p></li>
-<li><p>Select trainable parameters with <code class="docutils literal notranslate"><span class="pre">trainable_parameters:</span> <span class="pre">all</span></code> or <code class="docutils literal notranslate"><span class="pre">trainable_parameters:</span> <span class="pre">quant</span></code>.</p></li>
+<li><p>Train all full-precision student parameters with HuggingFace <code class="docutils literal notranslate"><span class="pre">Seq2SeqTrainer</span></code>.</p></li>
 <li><p>Combine supervised CausalLM loss and knowledge distillation loss with <code class="docutils literal notranslate"><span class="pre">lm_loss_weight</span></code> and <code class="docutils literal notranslate"><span class="pre">kd_loss_weight</span></code>.</p></li>
+<li><p>Support <code class="docutils literal notranslate"><span class="pre">kl</span></code>, <code class="docutils literal notranslate"><span class="pre">rkl</span></code>, <code class="docutils literal notranslate"><span class="pre">mse</span></code>, <code class="docutils literal notranslate"><span class="pre">kd</span></code>, <code class="docutils literal notranslate"><span class="pre">cakld</span></code>, <code class="docutils literal notranslate"><span class="pre">kl_top</span></code>, and <code class="docutils literal notranslate"><span class="pre">rkl_top</span></code> loss variants.</p></li>
 <li><p>Pass HuggingFace trainer options through <code class="docutils literal notranslate"><span class="pre">compression.Distill.hf_args</span></code>, including DeepSpeed ZeRO configs.</p></li>
+<li><p>Save the final student with HuggingFace <code class="docutils literal notranslate"><span class="pre">save_pretrained</span></code>.</p></li>
 </ul>
 </section>
-<section id="example-1-distill-a-smaller-full-precision-model">
-<h2>Example 1: Distill a Smaller Full-Precision Model<a class="headerlink" href="#example-1-distill-a-smaller-full-precision-model" title="Link to this heading">#</a></h2>
+<section id="example">
+<h2>Example<a class="headerlink" href="#example" title="Link to this heading">#</a></h2>
 <p>This example distills a Qwen3-1.7B full-precision student from a Qwen3-4B full-precision teacher.</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>torchrun<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>tools/run.py<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>-c<span class="w"> </span>configs/qwen3/distill/fp/qwen3-1_7b_fp_distill_from_qwen3-4b_zero2.yaml
+<span class="w">  </span>-c<span class="w"> </span>configs/qwen3/distill/fp/qwen3-1_7b_fp_distill_cakld_from_qwen3-4b_zero2.yaml
 </pre></div>
 </div>
 <p>Key fields:</p>
@@ -454,81 +453,6 @@ document.write(`
 <span class="w">    </span><span class="nt">loss_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cakld</span>
 <span class="w">    </span><span class="nt">lm_loss_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
 <span class="w">    </span><span class="nt">kd_loss_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
-</pre></div>
-</div>
-</section>
-<section id="example-2-distill-a-quantized-model">
-<h2>Example 2: Distill a Quantized Model<a class="headerlink" href="#example-2-distill-a-quantized-model" title="Link to this heading">#</a></h2>
-<p>This example distills a W4A8-FP8 Qwen3-4B student from a full-precision Qwen3-4B teacher. The quantized student reuses QAT learnable-scale plugins and trains only quantization parameters.</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>torchrun<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>tools/run.py<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>-c<span class="w"> </span>configs/qwen3/distill/w4a8_fp8/qwen3-4b_w4a8_fp8_distill_zero2.yaml
-</pre></div>
-</div>
-<p>Key fields:</p>
-<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">compression</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Distill</span>
-<span class="w">  </span><span class="nt">quantization</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">w4a8_fp8</span>
-<span class="w">  </span><span class="nt">Distill</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">teacher_model_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Qwen/Qwen3-4B</span>
-<span class="w">    </span><span class="nt">student_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quantized</span>
-<span class="w">    </span><span class="nt">trainable_parameters</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quant</span>
-<span class="w">    </span><span class="nt">save_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">real</span>
-<span class="w">    </span><span class="nt">plugin_config</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">enable_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</pre></div>
-</div>
-</section>
-<section id="example-3-distill-with-special-weight-quantizers">
-<h2>Example 3: Distill with Special Weight Quantizers<a class="headerlink" href="#example-3-distill-with-special-weight-quantizers" title="Link to this heading">#</a></h2>
-<p>The special weight quantizer path keeps the standard <code class="docutils literal notranslate"><span class="pre">QuantLinear</span></code> wrapper and switches only the weight quantizer implementation through config. Six demo configs are provided:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>configs/qwen3/distill/special/qwen3-1_7b_sherry_distill_from_qwen3-4b_zero2.yaml
-configs/qwen3/distill/special/qwen3-1_7b_absmean_distill_from_qwen3-4b_zero2.yaml
-configs/qwen3/distill/special/qwen3-1_7b_twn_distill_from_qwen3-4b_zero2.yaml
-configs/qwen3/distill/special/qwen3-1_7b_lsq_distill_from_qwen3-4b_zero2.yaml
-configs/qwen3/distill/special/qwen3-1_7b_seq_distill_from_qwen3-4b_zero2.yaml
-configs/qwen3/distill/special/qwen3-1_7b_dlt_distill_from_qwen3-4b_zero2.yaml
-</pre></div>
-</div>
-<p>Run one method by selecting its config:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>torchrun<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>tools/run.py<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>-c<span class="w"> </span>configs/qwen3/distill/special/qwen3-1_7b_sherry_distill_from_qwen3-4b_zero2.yaml
-</pre></div>
-</div>
-<p>A Hunyuan translation-style 2-bit SEQ distillation demo is also provided:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>configs/hunyuan/distill/special/hunyuan_seq_2bit_distill_zero2.yaml
-</pre></div>
-</div>
-<p>Replace <code class="docutils literal notranslate"><span class="pre">model.model_path</span></code>, <code class="docutils literal notranslate"><span class="pre">compression.Distill.teacher_model_path</span></code>, and <code class="docutils literal notranslate"><span class="pre">dataset.data_path</span></code> with local model and translation-data paths before running it.</p>
-<p>Key fields:</p>
-<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">plugin_config</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">enable_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-<span class="w">  </span><span class="nt">quant_config</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">use_weight_quant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-<span class="w">    </span><span class="nt">use_activation_quant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
-<span class="w">    </span><span class="nt">weight_quantizer</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">special</span>
-<span class="w">    </span><span class="nt">special</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">quant_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sherry</span><span class="w">  </span><span class="c1"># sherry, absmean, twn, lsq, seq, or dlt</span>
-<span class="w">      </span><span class="nt">granularity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">per_group</span>
-<span class="w">      </span><span class="nt">group_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">128</span>
-<span class="w">      </span><span class="nt">w_bits</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
-<span class="w">      </span><span class="nt">N</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
-<span class="w">      </span><span class="nt">M</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span>
-</pre></div>
-</div>
-<p>For the 2-bit SEQ demo, the special weight quantizer uses per-channel scaling:</p>
-<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">plugin_config</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">enable_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-<span class="w">  </span><span class="nt">quant_config</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">use_weight_quant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-<span class="w">    </span><span class="nt">use_activation_quant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
-<span class="w">    </span><span class="nt">weight_quantizer</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">special</span>
-<span class="w">    </span><span class="nt">special</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">quant_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">seq</span>
-<span class="w">      </span><span class="nt">granularity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">per_channel</span>
-<span class="w">      </span><span class="nt">w_bits</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
 </pre></div>
 </div>
 </section>
@@ -635,23 +559,23 @@ configs/qwen3/distill/special/qwen3-1_7b_dlt_distill_from_qwen3-4b_zero2.yaml
 </pre></div>
 </div>
 </section>
-<section id="main-distill-fields">
-<h2>Main Distill Fields<a class="headerlink" href="#main-distill-fields" title="Link to this heading">#</a></h2>
+<section id="main-fields">
+<h2>Main Fields<a class="headerlink" href="#main-fields" title="Link to this heading">#</a></h2>
 <div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">compression</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Distill</span>
 <span class="w">  </span><span class="nt">Distill</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">teacher_model_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Qwen/Qwen3-4B</span>
 <span class="w">    </span><span class="nt">teacher_torch_dtype</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span>
 <span class="w">    </span><span class="nt">teacher_device_map</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span>
-<span class="w">    </span><span class="nt">student_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">fp</span><span class="w">          </span><span class="c1"># fp or quantized</span>
-<span class="w">    </span><span class="nt">trainable_parameters</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">all</span><span class="w"> </span><span class="c1"># all or quant</span>
-<span class="w">    </span><span class="nt">save_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hf</span><span class="w">           </span><span class="c1"># hf/full/real for fp; real/fake for quantized paths</span>
+<span class="w">    </span><span class="nt">student_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">fp</span>
+<span class="w">    </span><span class="nt">trainable_parameters</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">all</span>
+<span class="w">    </span><span class="nt">save_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hf</span><span class="w">           </span><span class="c1"># hf/full/real</span>
 <span class="w">    </span><span class="nt">loss_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cakld</span><span class="w">          </span><span class="c1"># origin, kl, rkl, kd, cakld, mse, kl_top, rkl_top</span>
 <span class="w">    </span><span class="nt">kd_temperature</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
 <span class="w">    </span><span class="nt">lm_loss_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
 <span class="w">    </span><span class="nt">kd_loss_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
 <span class="w">    </span><span class="nt">hf_args</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">deepspeed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">configs/qwen3/distill/w4a8_fp8/ds_config_zero2.json</span>
+<span class="w">      </span><span class="nt">deepspeed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">configs/qwen3/distill/fp/ds_config_zero2.json</span>
 </pre></div>
 </div>
 <p>Use <code class="docutils literal notranslate"><span class="pre">loss_type:</span> <span class="pre">origin</span></code> with <code class="docutils literal notranslate"><span class="pre">kd_loss_weight:</span> <span class="pre">0.0</span></code> to run a supervised fine-tuning baseline with the same trainer path.</p>
@@ -679,11 +603,11 @@ configs/qwen3/distill/special/qwen3-1_7b_dlt_distill_from_qwen3-4b_zero2.yaml
       </div>
     </a>
     <a class="right-next"
-       href="../../models/hunyuan/hunyuan_quant.html"
+       href="../qad/index.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">混元模型量化</p>
+        <p class="prev-next-title">Quantization-Aware Distillation</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -704,12 +628,10 @@ configs/qwen3/distill/special/qwen3-1_7b_dlt_distill_from_qwen3-4b_zero2.yaml
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#features">Features</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example-1-distill-a-smaller-full-precision-model">Example 1: Distill a Smaller Full-Precision Model</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example-2-distill-a-quantized-model">Example 2: Distill a Quantized Model</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example-3-distill-with-special-weight-quantizers">Example 3: Distill with Special Weight Quantizers</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example">Example</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#experiment-results">Experiment Results</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#dataset-format">Dataset Format</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#main-distill-fields">Main Distill Fields</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#main-fields">Main Fields</a></li>
 </ul>
   </nav></div>
 

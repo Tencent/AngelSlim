@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>稀疏注意力 &#8212; AngelSlim</title>
+    <title>Quantization-Aware Distillation &#8212; AngelSlim</title>
   
   
   
@@ -53,13 +53,13 @@
     <script src="../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'features/sparse_attention/index';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'features/qad/index';</script>
     <script src="../../_static/custom.js"></script>
     <link rel="icon" href="../../_static/angelslim_icon.png"/>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Stem: Rethinking Causal Information Flow in Sparse Attention" href="stem.html" />
-    <link rel="prev" title="SpecExit" href="../speculative_decoding/spec_exit.html" />
+    <link rel="next" title="混元模型量化" href="../../models/hunyuan/hunyuan_quant.html" />
+    <link rel="prev" title="Distillation" href="../distill/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -178,14 +178,11 @@
 <ul class="current nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../quantization/index.html">量化</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../speculative_decoding/index.html">投机采样</a></li>
-<li class="toctree-l1 current active has-children"><a class="current reference internal" href="#">稀疏注意力</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="stem.html">Stem: Rethinking Causal Information Flow in Sparse Attention</a></li>
-</ul>
-</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../sparse_attention/index.html">稀疏注意力</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../token_compressor/index.html">Token 压缩</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../diffusion/index.html">文生图/视频/3D压缩</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../distill/index.html">Distillation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../qad/index.html">Quantization-Aware Distillation</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Quantization-Aware Distillation</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">模型支持</span></p>
 <ul class="nav bd-sidenav">
@@ -280,7 +277,7 @@
       
       
       
-      <li><a href="https://github.com/Tencent/AngelSlim/edit/main/docs/source/features/sparse_attention/index.md" target="_blank"
+      <li><a href="https://github.com/Tencent/AngelSlim/edit/main/docs/source/features/qad/index.md" target="_blank"
    class="btn btn-sm btn-source-edit-button dropdown-item"
    title="Suggest edit"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -310,7 +307,7 @@
       
       
       
-      <li><a href="../../_sources/features/sparse_attention/index.md" target="_blank"
+      <li><a href="../../_sources/features/qad/index.md" target="_blank"
    class="btn btn-sm btn-download-source-button dropdown-item"
    title="Download source file"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -381,7 +378,9 @@ document.write(`
   </button>
 `);
 </script>
-
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
 </div></div>
       
     </div>
@@ -392,11 +391,22 @@ document.write(`
               
 
 <div id="jb-print-docs-body" class="onlyprint">
-    <h1>稀疏注意力</h1>
+    <h1>Quantization-Aware Distillation</h1>
     <!-- Table of contents -->
     <div id="print-main-content">
         <div id="jb-print-toc">
             
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#features">Features</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#w4a8-fp8-example">W4A8-FP8 Example</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#special-weight-quantizers">Special Weight Quantizers</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#main-fields">Main Fields</a></li>
+</ul>
+            </nav>
         </div>
     </div>
 </div>
@@ -406,15 +416,106 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="id1">
-<h1>稀疏注意力<a class="headerlink" href="#id1" title="Link to this heading">#</a></h1>
-<p>稀疏注意力（Sparse Attention）是 AngelSlim 针对长上下文大模型推理开发的 Prefill 加速模块。其核心目标是在推理过程中动态跳过不重要的注意力块，从而显著降低 Prefill 阶段的计算量与延迟。</p>
-<div class="toctree-wrapper compound">
-<p aria-level="2" class="caption" role="heading"><span class="caption-text">Contents</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="stem.html">Stem: Rethinking Causal Information Flow in Sparse Attention</a></li>
+  <section id="quantization-aware-distillation">
+<h1>Quantization-Aware Distillation<a class="headerlink" href="#quantization-aware-distillation" title="Link to this heading">#</a></h1>
+<p>QAD trains a quantized student with an independent full-precision teacher. It is the bridge between the QAT and Distill paths: QAD reuses QAT quantization modules, learnable-scale plugins, conversion, and save logic, while sharing the Distill trainer and distillation losses.</p>
+<p>Use <code class="docutils literal notranslate"><span class="pre">Distill</span></code> for full-precision students. Use <code class="docutils literal notranslate"><span class="pre">QAD</span></code> when the student should be quantized during training.</p>
+<section id="features">
+<h2>Features<a class="headerlink" href="#features" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p>Build the student with the same quantization configuration used by QAT.</p></li>
+<li><p>Load an independent teacher from <code class="docutils literal notranslate"><span class="pre">compression.QAD.teacher_model_path</span></code>.</p></li>
+<li><p>Train all student parameters or only quantization-related parameters with <code class="docutils literal notranslate"><span class="pre">trainable_parameters</span></code>.</p></li>
+<li><p>Reuse QAT plugin configuration, including learnable weight, activation, KV, norm, and LWC parameters.</p></li>
+<li><p>Support the same supervised and distillation loss composition as Distill.</p></li>
+<li><p>Save quantized outputs through QAT save formats such as <code class="docutils literal notranslate"><span class="pre">fake</span></code>, <code class="docutils literal notranslate"><span class="pre">real</span></code>, and <code class="docutils literal notranslate"><span class="pre">real_and_kvcache</span></code>.</p></li>
 </ul>
+</section>
+<section id="w4a8-fp8-example">
+<h2>W4A8-FP8 Example<a class="headerlink" href="#w4a8-fp8-example" title="Link to this heading">#</a></h2>
+<p>This example distills a W4A8-FP8 Qwen3-4B student from a full-precision Qwen3-4B teacher and trains only quantization parameters.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>torchrun<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>tools/run.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-c<span class="w"> </span>configs/qwen3/qad/w4a8_fp8/qwen3-4b_w4a8_fp8_qad_zero2.yaml
+</pre></div>
 </div>
+<p>Key fields:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">compression</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">QAD</span>
+<span class="w">  </span><span class="nt">quantization</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">w4a8_fp8</span>
+<span class="w">  </span><span class="nt">QAD</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">teacher_model_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Qwen/Qwen3-4B</span>
+<span class="w">    </span><span class="nt">student_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quantized</span>
+<span class="w">    </span><span class="nt">trainable_parameters</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quant</span>
+<span class="w">    </span><span class="nt">save_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">real</span>
+<span class="w">    </span><span class="nt">plugin_config</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">enable_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</pre></div>
+</div>
+</section>
+<section id="special-weight-quantizers">
+<h2>Special Weight Quantizers<a class="headerlink" href="#special-weight-quantizers" title="Link to this heading">#</a></h2>
+<p>The special weight quantizer path keeps the standard <code class="docutils literal notranslate"><span class="pre">QuantLinear</span></code> wrapper and switches only the weight quantizer implementation through config. The Qwen3 examples are:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>configs/qwen3/qad/special/qwen3-1_7b_sherry_qad_from_qwen3-4b_zero2.yaml
+configs/qwen3/qad/special/qwen3-1_7b_absmean_qad_from_qwen3-4b_zero2.yaml
+configs/qwen3/qad/special/qwen3-1_7b_twn_qad_from_qwen3-4b_zero2.yaml
+configs/qwen3/qad/special/qwen3-1_7b_lsq_qad_from_qwen3-4b_zero2.yaml
+configs/qwen3/qad/special/qwen3-1_7b_seq_qad_from_qwen3-4b_zero2.yaml
+configs/qwen3/qad/special/qwen3-1_7b_dlt_qad_from_qwen3-4b_zero2.yaml
+</pre></div>
+</div>
+<p>Run one method by selecting its config:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>torchrun<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>tools/run.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-c<span class="w"> </span>configs/qwen3/qad/special/qwen3-1_7b_sherry_qad_from_qwen3-4b_zero2.yaml
+</pre></div>
+</div>
+<p>Key fields:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">plugin_config</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enable_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">quant_config</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">use_weight_quant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">use_activation_quant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">weight_quantizer</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">special</span>
+<span class="w">    </span><span class="nt">special</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">quant_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sherry</span>
+<span class="w">      </span><span class="nt">granularity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">per_group</span>
+<span class="w">      </span><span class="nt">group_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">128</span>
+<span class="w">      </span><span class="nt">w_bits</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<span class="w">      </span><span class="nt">N</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
+<span class="w">      </span><span class="nt">M</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span>
+</pre></div>
+</div>
+<p>A Hunyuan translation-style 2-bit SEQ QAD demo is also provided:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>configs/hunyuan/qad/special/hunyuan_seq_2bit_qad_zero2.yaml
+</pre></div>
+</div>
+<p>Replace <code class="docutils literal notranslate"><span class="pre">model.model_path</span></code>, <code class="docutils literal notranslate"><span class="pre">compression.QAD.teacher_model_path</span></code>, and <code class="docutils literal notranslate"><span class="pre">dataset.data_path</span></code> with local model and dataset locations before running it.</p>
+</section>
+<section id="main-fields">
+<h2>Main Fields<a class="headerlink" href="#main-fields" title="Link to this heading">#</a></h2>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">compression</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">QAD</span>
+<span class="w">  </span><span class="nt">quantization</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">w4a8_fp8</span>
+<span class="w">  </span><span class="nt">QAD</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">teacher_model_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Qwen/Qwen3-4B</span>
+<span class="w">    </span><span class="nt">teacher_torch_dtype</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span>
+<span class="w">    </span><span class="nt">teacher_device_map</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cuda</span>
+<span class="w">    </span><span class="nt">student_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quantized</span>
+<span class="w">    </span><span class="nt">trainable_parameters</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quant</span><span class="w">  </span><span class="c1"># all or quant</span>
+<span class="w">    </span><span class="nt">save_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">real</span><span class="w">            </span><span class="c1"># fake, real, save_kvcache_only, real_and_kvcache</span>
+<span class="w">    </span><span class="nt">loss_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cakld</span>
+<span class="w">    </span><span class="nt">lm_loss_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
+<span class="w">    </span><span class="nt">kd_loss_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
+<span class="w">    </span><span class="nt">plugin_config</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">enable_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">hf_args</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">deepspeed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">configs/qwen3/qad/w4a8_fp8/ds_config_zero2.json</span>
+</pre></div>
+</div>
+</section>
 </section>
 
 
@@ -429,20 +530,20 @@ document.write(`
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="../speculative_decoding/spec_exit.html"
+       href="../distill/index.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">SpecExit</p>
+        <p class="prev-next-title">Distillation</p>
       </div>
     </a>
     <a class="right-next"
-       href="stem.html"
+       href="../../models/hunyuan/hunyuan_quant.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Stem: Rethinking Causal Information Flow in Sparse Attention</p>
+        <p class="prev-next-title">混元模型量化</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -452,6 +553,24 @@ document.write(`
             </div>
             
             
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#features">Features</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#w4a8-fp8-example">W4A8-FP8 Example</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#special-weight-quantizers">Special Weight Quantizers</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#main-fields">Main Fields</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
               
             
           </div>
