@@ -43,19 +43,18 @@ class GPTQModule:
         self.quant_bits = quant_bits
 
     def add_batch(self, inp, out):
+        # Handle 4D input (e.g., Conv2d or multi-head attention internals)
         if len(inp.shape) == 4:
             inp = inp[0, 0, :, :]
-        inp = inp.squeeze()
-        if len(inp.shape) == 2:
-            inp = inp.unsqueeze(0)
-        tmp = inp.shape[0]
+        # Flatten to 2D: [total_tokens, feature_dim]
         if len(inp.shape) == 3:
             inp = inp.reshape((-1, inp.shape[-1]))
         inp = inp.float()
+        tmp = inp.shape[0]  # number of tokens
         inp = inp.t()
         self.h *= self.nsamples / (self.nsamples + tmp)
         self.nsamples += tmp
-        inp = math.sqrt(2 / self.nsamples) * inp.float()
+        inp = math.sqrt(2 / self.nsamples) * inp
         self.h += inp.matmul(inp.t())
 
     def fasterquant(
@@ -173,10 +172,10 @@ class GPTQModule:
 
         group_size = group_size if group_size != -1 else self.columns
         if static_groups and actorder:
-            g_idx = [perm[i] // group_size for i in range(self.columns)]
+            g_idx = perm // group_size
         else:
-            g_idx = [i // group_size for i in range(self.columns)]
-        g_idx = torch.tensor(g_idx, dtype=torch.int32, device=q_weight.device)
+            g_idx = torch.arange(self.columns, device=q_weight.device) // group_size
+        g_idx = g_idx.to(dtype=torch.int32)
         if actorder:
             q_weight = q_weight[:, invperm]
             g_idx = g_idx[invperm]

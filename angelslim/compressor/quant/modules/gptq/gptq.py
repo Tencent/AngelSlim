@@ -27,6 +27,19 @@ from ...modules.helper_layer import GPTQQuantLinear
 from .gptaq_module import GPTAQModule
 from .gptq_module import GPTQModule
 
+
+def _extract_hidden_states(output):
+    """Extract hidden_states tensor from a layer's forward output.
+
+    Some decoder layers return a plain tensor, others return a tuple where
+    the first element is hidden_states.  Using ``output[0]`` unconditionally
+    is wrong for the plain-tensor case because it strips the batch dimension.
+    """
+    if isinstance(output, tuple):
+        return output[0]
+    return output
+
+
 __all__ = ["GPTQ"]
 
 
@@ -64,21 +77,20 @@ class GPTQ:
         print_info("dev = :{}".format(dev))
 
         nsamples = len(dataloader)
-        inps = torch.zeros(
-            (nsamples, self.seq_length, self.hidden_size), device=dev, dtype=self.dtype
-        )
-        cache = {"i": 0}
 
         pre_transformer_modules_dict = self.model.get_pre_transformer_modules()
         for _, module in pre_transformer_modules_dict.items():
             module.to(dev)
         layers[0] = layers[0].to(dev)
-        layers[0] = Catcher(layers[0], inps, cache)
-        # get modle input in dataloader
+        layers[0] = Catcher(layers[0], max_seq_length=self.seq_length)
+        # get model input in dataloader
         self.model.model_forward(dataloader)
-        layer_kwargs = layers[0].layer_kwargs
 
-        print_info("cache['i']:{}".format(cache["i"]))
+        # Retrieve dynamically captured inputs and per-sample kwargs
+        inps = layers[0].captured_inputs
+        layer_kwargs_list = layers[0].captured_kwargs
+        nsamples = len(inps)
+        print_info("captured samples: {}".format(nsamples))
 
         layers[0] = layers[0].module
         for _, module in pre_transformer_modules_dict.items():
@@ -86,16 +98,23 @@ class GPTQ:
         layers[0].cpu()
         torch.cuda.empty_cache()
 
-        outs = torch.zeros_like(inps)
+        # Move all captured inputs and kwargs to the target device
+        inps = [x.to(dev) for x in inps]
+        layer_kwargs_list = [
+            {k: v.to(dev) if isinstance(v, torch.Tensor) else v for k, v in kw.items()}
+            for kw in layer_kwargs_list
+        ]
+
+        outs = [torch.zeros_like(x) for x in inps]
         if "gptaq" in self.quant_algo:
-            native_inps = inps.clone().detach()
+            native_inps = [x.clone().detach() for x in inps]
         # begin the gptq process
         print_info("Ready.")
 
         layers = layers.cpu()
 
         for i in range(len(layers)):
-            layer = layers[i].to(inps.device)
+            layer = layers[i].to(dev)
             subset = find_layers(layer, layers=self.model.observer_layer_classes)
             print_info("subset:{}".format(subset))
 
@@ -104,7 +123,7 @@ class GPTQ:
                 self.native_inp_caches = {}
             print_info("GPTQMoe start layer {}".format(i))
             for name in subset:
-                if name in self.ignore_layers:
+                if any(ignore in name for ignore in self.ignore_layers):
                     continue
                 if "gptaq" in self.quant_algo:
                     self.native_inp_caches[name] = []
@@ -121,11 +140,13 @@ class GPTQ:
 
             def add_batch(layer_name):
                 def tmp(_, inp, out):
+                    # Some modules return a tuple from forward; extract the tensor
+                    out_data = out[0].data if isinstance(out, tuple) else out.data
                     if "gptaq" in self.quant_algo:
                         native_inp = self.native_inp_caches[layer_name].pop(0)
-                        self.gptq[layer_name].add_batch(inp[0].data, out.data, native_inp)
+                        self.gptq[layer_name].add_batch(inp[0].data, out_data, native_inp)
                     else:
-                        self.gptq[layer_name].add_batch(inp[0].data, out.data)
+                        self.gptq[layer_name].add_batch(inp[0].data, out_data)
 
                 return tmp
 
@@ -136,14 +157,16 @@ class GPTQ:
                         subset[name].register_forward_hook(pre_process_fwd_hook(name))
                     )
 
-                # being native hook
+                # native hook forward
                 for j in range(nsamples):
                     with torch.no_grad():
-                        outs[j, :, :] = layer(
-                            hidden_states=native_inps[j, :, :].unsqueeze(0),
-                            **layer_kwargs,
-                        )[0].squeeze(1)
-                native_inps = outs
+                        outs[j] = _extract_hidden_states(
+                            layer(
+                                hidden_states=native_inps[j],
+                                **layer_kwargs_list[j],
+                            )
+                        )
+                native_inps = [x.clone().detach() for x in outs]
 
                 print_info("Native HOOK Step{}".format(j))
                 for h in native_handles:
@@ -153,19 +176,19 @@ class GPTQ:
             for name in self.gptq:
                 handles.append(subset[name].register_forward_hook(add_batch(name)))
 
-            # being hook
+            # hook forward
             for j in range(nsamples):
                 with torch.no_grad():
-                    outs[j, :, :] = layer(
-                        hidden_states=inps[j, :, :].unsqueeze(0), **layer_kwargs
-                    )[0].squeeze(1)
+                    outs[j] = _extract_hidden_states(
+                        layer(hidden_states=inps[j], **layer_kwargs_list[j])
+                    )
 
             print_info("HOOK Step{}".format(j))
             for h in handles:
                 h.remove()
 
-            for name in subset:
-                if name in self.ignore_layers:
+            for name in self.gptq:
+                if any(ignore in name for ignore in self.ignore_layers):
                     continue
                 print_info(f"Quant {name} ,nsamples: {self.gptq[name].nsamples}...")
                 scale, zero, g_idx = self.gptq[name].fasterquant(
@@ -185,23 +208,20 @@ class GPTQ:
 
             for j in range(nsamples):
                 with torch.no_grad():
-                    outs[j, :, :] = layer(
-                        hidden_states=inps[j, :, :].unsqueeze(0), **layer_kwargs
-                    )[0].squeeze(1)
+                    outs[j] = _extract_hidden_states(
+                        layer(hidden_states=inps[j], **layer_kwargs_list[j])
+                    )
 
             for name in self.gptq:
                 del self.gptq[name].layer
 
             layers[i] = layer.cpu()
             del layer
-            # del gptq
             torch.cuda.empty_cache()
             gc.collect()
             inps, outs = outs, inps
             print_info("GPTQ end layer {}\n".format(i))
 
-        # inps = inps.cpu()
-        # outs = outs.cpu()
         del inps, outs
         torch.cuda.empty_cache()
         print_info("GPTQ done.")
@@ -220,9 +240,14 @@ class GPTQ:
             if name in names:
                 ori_layer_device = next(submodule.parameters()).device
 
-                in_features = submodule.in_features
-                out_features = submodule.out_features
-                bias = submodule.bias is not None
+                # Support non-standard Linear modules (e.g. TopKRouter) that lack
+                # in_features/out_features by inferring from weight shape
+                if hasattr(submodule, "in_features"):
+                    in_features = submodule.in_features
+                    out_features = submodule.out_features
+                else:
+                    out_features, in_features = submodule.weight.shape
+                bias = getattr(submodule, "bias", None) is not None
                 new_layer = self.quant_linear_cls(
                     bits,
                     group_size,
