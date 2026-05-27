@@ -1,4 +1,4 @@
-# KV-cache calibration + scale search for HY3 (standalone, no weight/MoE hooks)
+# KV-cache calibration + scale search for hy3 (standalone, no weight/MoE hooks)
 # Consumed by: tools/kvcache/run_kvcache_calibrate.py
 #
 # Keys here match the script's argparse `dest` names. Values listed below

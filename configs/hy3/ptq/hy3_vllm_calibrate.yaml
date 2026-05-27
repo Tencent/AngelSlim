@@ -1,4 +1,4 @@
-# vLLM activation calibration for HY3 (collects activation + MoE expert stats,
+# vLLM activation calibration for hy3 (collects activation + MoE expert stats,
 # and optionally KV-cache stats / scale search).
 # Consumed by: tools/run_vllm_calibrate.py
 #
