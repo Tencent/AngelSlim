@@ -281,8 +281,11 @@ def _prewarm_hf_deepspeed_config(config):
     """
     compress_cfg = getattr(config, "compression_config", None)
     qat_cfg = getattr(compress_cfg, "QAT", None) if compress_cfg is not None else None
+    qad_cfg = getattr(compress_cfg, "QAD", None) if compress_cfg is not None else None
     distill_cfg = getattr(compress_cfg, "Distill", None) if compress_cfg is not None else None
     hf_args = getattr(qat_cfg, "hf_args", None) if qat_cfg is not None else None
+    if not hf_args:
+        hf_args = getattr(qad_cfg, "hf_args", None) if qad_cfg is not None else None
     if not hf_args:
         hf_args = getattr(distill_cfg, "hf_args", None) if distill_cfg is not None else None
     if not hf_args or not hf_args.get("deepspeed"):

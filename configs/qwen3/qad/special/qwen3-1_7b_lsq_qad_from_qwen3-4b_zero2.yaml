@@ -1,6 +1,5 @@
 global:
-  save_path: ./output_qwen3_1_7b_sherry_distill_from_qwen3_4b_zero2
-
+  save_path: ./output_qwen3_1_7b_lsq_qad_from_qwen3_4b_zero2
 model:
   name: Qwen
   model_path: Qwen/Qwen3-1.7B
@@ -9,9 +8,8 @@ model:
   device_map: cuda
   low_cpu_mem_usage: true
   use_cache: false
-
 compression:
-  name: Distill
+  name: QAD
   quantization:
     name: w4a8_fp8
     bits: 8
@@ -19,8 +17,10 @@ compression:
       weight: per-group
       activation: per-tensor
       group_size: 128
-    ignore_layers: ["lm_head", "embed_tokens"]
-  Distill:
+    ignore_layers:
+    - lm_head
+    - embed_tokens
+  QAD:
     teacher_model_path: Qwen/Qwen3-4B
     teacher_torch_dtype: auto
     teacher_device_map: cuda
@@ -46,7 +46,7 @@ compression:
         weight_quantizer: special
         group_size: 128
         special:
-          quant_method: sherry
+          quant_method: lsq
           granularity: per_group
           group_size: 128
           w_bits: 1
@@ -59,18 +59,17 @@ compression:
       logging_first_step: true
       per_device_train_batch_size: 1
       gradient_accumulation_steps: 1
-      learning_rate: 1.0e-6
+      learning_rate: 1.0e-06
       lr_scheduler_type: cosine
       num_train_epochs: 1
       max_steps: 5
-      save_strategy: "no"
+      save_strategy: 'no'
       warmup_ratio: 0.0
       max_grad_norm: 1.0
       gradient_checkpointing: true
       gradient_checkpointing_kwargs:
         use_reentrant: true
-      deepspeed: configs/qwen3/distill/w4a8_fp8/ds_config_zero2.json
-
+      deepspeed: configs/qwen3/qad/w4a8_fp8/ds_config_zero2.json
 dataset:
   name: TextDataset
   data_path: Salesforce/wikitext,wikitext-2-raw-v1

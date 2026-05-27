@@ -1,17 +1,15 @@
 global:
-  save_path: ./output_qwen3_4b_w4a8_fp8_distill_zero2
-
+  save_path: ./output_qwen3_1_7b_seq_qad_from_qwen3_4b_zero2
 model:
   name: Qwen
-  model_path: Qwen/Qwen3-4B
+  model_path: Qwen/Qwen3-1.7B
   trust_remote_code: true
   torch_dtype: auto
   device_map: cuda
   low_cpu_mem_usage: true
   use_cache: false
-
 compression:
-  name: Distill
+  name: QAD
   quantization:
     name: w4a8_fp8
     bits: 8
@@ -19,8 +17,10 @@ compression:
       weight: per-group
       activation: per-tensor
       group_size: 128
-    ignore_layers: ["lm_head", "embed_tokens"]
-  Distill:
+    ignore_layers:
+    - lm_head
+    - embed_tokens
+  QAD:
     teacher_model_path: Qwen/Qwen3-4B
     teacher_torch_dtype: auto
     teacher_device_map: cuda
@@ -28,8 +28,8 @@ compression:
     teacher_low_cpu_mem_usage: true
     teacher_use_cache: false
     student_type: quantized
-    trainable_parameters: quant
-    save_format: real
+    trainable_parameters: all
+    save_format: fake
     do_train: true
     from_ptq_ckpt: null
     resume_ckpt_dir: null
@@ -42,35 +42,34 @@ compression:
       enable_scale: true
       quant_config:
         use_weight_quant: true
-        use_activation_quant: true
-        use_qkv_quant: false
-        lazy_init_samples: 10
-        weight_scale_init_value: 0.1
-        activation_scale_init_value: 0.1
-        learnable:
-          act_scale: true
-          weight_scale: true
-          kv_scale: false
-          norm: false
-          lwc: false
+        use_activation_quant: false
+        weight_quantizer: special
+        group_size: 128
+        special:
+          quant_method: seq
+          granularity: per_group
+          group_size: 128
+          w_bits: 1
+          N: 3
+          M: 4
+          max_eps: 0.0
     hf_args:
       bf16: true
       logging_steps: 1
       logging_first_step: true
       per_device_train_batch_size: 1
       gradient_accumulation_steps: 1
-      learning_rate: 1.0e-5
+      learning_rate: 1.0e-06
       lr_scheduler_type: cosine
       num_train_epochs: 1
       max_steps: 5
-      save_strategy: "no"
+      save_strategy: 'no'
       warmup_ratio: 0.0
       max_grad_norm: 1.0
       gradient_checkpointing: true
       gradient_checkpointing_kwargs:
         use_reentrant: true
-      deepspeed: configs/qwen3/distill/w4a8_fp8/ds_config_zero2.json
-
+      deepspeed: configs/qwen3/qad/w4a8_fp8/ds_config_zero2.json
 dataset:
   name: TextDataset
   data_path: Salesforce/wikitext,wikitext-2-raw-v1

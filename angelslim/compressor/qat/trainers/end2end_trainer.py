@@ -18,7 +18,7 @@ from transformers import Seq2SeqTrainer, Seq2SeqTrainingArguments
 
 from ....data.qat_dataset import QATDataset
 from ....utils import patch_deepspeed_duplicate_check, print_info
-from ..plugins.distill_loss import DistillLoss
+from ...distill.loss import DistillLoss
 from ..plugins.learnable_scale import set_quant_state
 from .trainer_factory import TrainerFactory
 

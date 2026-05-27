@@ -1,27 +1,27 @@
 global:
-  save_path: ./output_hunyuan_seq_2bit_distill_zero2
-
+  save_path: ./output_qwen3_1_7b_dlt_qad_from_qwen3_4b_zero2
 model:
-  name: HunyuanDense
-  model_path: /path/to/hunyuan-translation-model
+  name: Qwen
+  model_path: Qwen/Qwen3-1.7B
   trust_remote_code: true
   torch_dtype: auto
   device_map: cuda
   low_cpu_mem_usage: true
   use_cache: false
-
 compression:
-  name: Distill
+  name: QAD
   quantization:
     name: w4a8_fp8
     bits: 8
     quant_method:
-      weight: per-channel
+      weight: per-group
       activation: per-tensor
-      group_size: -1
-    ignore_layers: ["lm_head", "embed_tokens"]
-  Distill:
-    teacher_model_path: /path/to/hunyuan-translation-model
+      group_size: 128
+    ignore_layers:
+    - lm_head
+    - embed_tokens
+  QAD:
+    teacher_model_path: Qwen/Qwen3-4B
     teacher_torch_dtype: auto
     teacher_device_map: cuda
     teacher_trust_remote_code: true
@@ -44,10 +44,12 @@ compression:
         use_weight_quant: true
         use_activation_quant: false
         weight_quantizer: special
+        group_size: 128
         special:
-          quant_method: seq
-          granularity: per_channel
-          w_bits: 2
+          quant_method: dlt
+          granularity: per_group
+          group_size: 128
+          w_bits: 1
           N: 3
           M: 4
           max_eps: 0.0
@@ -55,27 +57,23 @@ compression:
       bf16: true
       logging_steps: 1
       logging_first_step: true
-      per_device_train_batch_size: 4
+      per_device_train_batch_size: 1
       gradient_accumulation_steps: 1
-      learning_rate: 1.0e-4
+      learning_rate: 1.0e-06
       lr_scheduler_type: cosine
       num_train_epochs: 1
-      max_steps: 1000
-      save_strategy: "steps"
-      save_steps: 1000
-      save_total_limit: 10
-      warmup_ratio: 0.05
+      max_steps: 5
+      save_strategy: 'no'
+      warmup_ratio: 0.0
       max_grad_norm: 1.0
       gradient_checkpointing: true
       gradient_checkpointing_kwargs:
         use_reentrant: true
-      dataloader_num_workers: 8
-      deepspeed: configs/qwen3/distill/w4a8_fp8/ds_config_zero2.json
-
+      deepspeed: configs/qwen3/qad/w4a8_fp8/ds_config_zero2.json
 dataset:
   name: TextDataset
-  data_path: /path/to/translation_train.jsonl
-  max_seq_length: 8192
-  num_samples: 25600
+  data_path: Salesforce/wikitext,wikitext-2-raw-v1
+  max_seq_length: 512
+  num_samples: 16
   batch_size: 1
-  is_sft_data: true
+  is_sft_data: false

@@ -22,20 +22,7 @@ from transformers import AutoModelForCausalLM, Seq2SeqTrainingArguments
 from ...data.qat_dataset import QATDataset
 from ...utils import patch_deepspeed_duplicate_check, print_info
 from ..compressor_factory import CompressorFactory
-from ..qat.plugins import PluginManager
-from ..qat.qat import QAT
 from .trainer import DistillSeq2SeqTrainer
-
-
-def _unique_named_params(model, predicate):
-    seen = set()
-    result = []
-    for name, param in model.named_parameters():
-        if id(param) in seen or not predicate(name, param):
-            continue
-        seen.add(id(param))
-        result.append(param)
-    return result
 
 
 def _normalize_device_map(device_map):
@@ -45,50 +32,35 @@ def _normalize_device_map(device_map):
 
 
 @CompressorFactory.register
-class Distill(QAT):
+class Distill:
+    """Full-precision knowledge distillation.
+
+    Quantized-student distillation lives in ``angelslim.compressor.qad``.
+    Keeping this path fp-only prevents it from inheriting QAT state or save
+    semantics by accident.
+    """
+
     def __init__(self, model, slim_config=None):
         self.quant_model = model
         self.config = slim_config
         self.distill_config = slim_config["compress_config"].Distill
-        self.student_type = self.distill_config.student_type.lower()
+        self.student_type = getattr(self.distill_config, "student_type", "fp").lower()
         self.trainable_parameters = self.distill_config.trainable_parameters.lower()
         self.save_fmt = self.distill_config.save_format
-        self.plugin_config = self.distill_config.plugin_config
-        self.plugin_manager = PluginManager()
         self.trainer = SimpleNamespace(external_trainer=None)
-        self._rank0_state_dict = None
         self.teacher_model = None
         self.train_dataset = None
 
         self._validate_config()
-        self.is_quantized_student = self.student_type == "quantized"
-        if self.is_quantized_student:
-            self.quant_model.init_ptq(slim_config)
-            self.quant_info = self.quant_model.quant_config
-            self._init_plugins()
-        else:
-            self.quant_info = None
 
     def _validate_config(self):
         if not self.distill_config.teacher_model_path:
             raise ValueError("Distill requires compression.Distill.teacher_model_path.")
-        if self.student_type not in ("fp", "quantized"):
-            raise ValueError("Distill student_type must be 'fp' or 'quantized'.")
-        if self.trainable_parameters not in ("all", "quant"):
-            raise ValueError("Distill trainable_parameters must be 'all' or 'quant'.")
-        if self.student_type == "fp" and self.trainable_parameters == "quant":
-            raise ValueError("trainable_parameters='quant' requires a quantized student.")
-
-    def _init_plugins(self):
-        if self.plugin_config.get("enable_scale", False):
-            self.plugin_manager.register_plugin(
-                "learnable_scale",
-                quant_info=self.quant_info,
-                ignore_layers=self.config["compress_config"].quantization.ignore_layers,
-                resume_ckpt_dir=self.distill_config.resume_ckpt_dir,
-                from_ptq_ckpt_dir=self.distill_config.from_ptq_ckpt,
-                config=self.plugin_config.get("quant_config", {}),
-                quant_model=self.quant_model,
+        if self.student_type != "fp":
+            raise ValueError("Distill only supports fp students. Use QAD for quantized students.")
+        if self.trainable_parameters != "all":
+            raise ValueError(
+                "Distill trainable_parameters must be 'all'. Use QAD for quant params."
             )
 
     def _prepare_dataset(self, dataloader):
@@ -128,49 +100,11 @@ class Distill(QAT):
 
     def _apply_trainable_parameters(self):
         model = self.quant_model.model
-        if self.trainable_parameters == "all":
-            for param in model.parameters():
-                param.requires_grad = True
-            return
-
-        if not any(param.requires_grad for param in model.parameters()):
-            raise ValueError("Distill quant optimizer has no trainable parameters.")
+        for param in model.parameters():
+            param.requires_grad = True
 
     def _init_optimizer(self):
-        if self.trainable_parameters == "all":
-            return None
-
-        lr = float(self.distill_config.hf_args.get("learning_rate", 1e-5))
-        wd = float(self.distill_config.hf_args.get("weight_decay", 0))
-        lwc_names = ("clip_factor_w_max", "clip_factor_w_min")
-        base_params = _unique_named_params(
-            self.quant_model.model,
-            lambda n, p: p.requires_grad and not any(key in n for key in lwc_names),
-        )
-        params = [{"params": base_params, "weight_decay": wd, "lr": lr}]
-
-        lwc_params = _unique_named_params(
-            self.quant_model.model,
-            lambda n, p: p.requires_grad and any(key in n for key in lwc_names),
-        )
-        if lwc_params:
-            lwc_lr = float(
-                self.plugin_config.get("quant_config", {}).get("lwc", {}).get("lwc_lr", lr)
-            )
-            params.append({"params": lwc_params, "weight_decay": wd, "lr": lwc_lr})
-            print_info(
-                f"Init distill optimizer with {len(base_params)} params, "
-                f"{len(lwc_params)} lwc params, lr={lr}, lwc_lr={lwc_lr}, weight_decay={wd}"
-            )
-        else:
-            print_info(
-                f"Init distill optimizer with {len(base_params)} params, "
-                f"lr={lr}, weight_decay={wd}"
-            )
-
-        if not any(group["params"] for group in params):
-            raise ValueError("Distill optimizer has no trainable parameters.")
-        return torch.optim.AdamW(params)
+        return None
 
     def _prepare_trainer(self, place_teacher_on_device):
         optimizer = self._init_optimizer()
@@ -212,9 +146,6 @@ class Distill(QAT):
 
     def run(self, dataloader):
         self._prepare_dataset(dataloader)
-        if self.is_quantized_student:
-            self.plugin_manager.call_before_train(train_dataset=self.train_dataset)
-
         self._apply_trainable_parameters()
         self._load_resume_checkpoint()
         self.teacher_model, place_teacher_on_device = self._load_teacher_model()
@@ -223,17 +154,10 @@ class Distill(QAT):
         if self.distill_config.do_train:
             self.trainer.external_trainer.train()
 
-        if self.is_quantized_student:
-            self.plugin_manager.call_after_train()
-
     def convert(self):
-        if self.is_quantized_student:
-            super().convert()
+        return None
 
     def save(self, save_path: str):
-        if self.is_quantized_student:
-            return super().save(save_path)
-
         if self.save_fmt not in ("hf", "real", "full"):
             print_info("Save format not specified, skip save.")
             return None

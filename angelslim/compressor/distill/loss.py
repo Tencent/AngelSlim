@@ -96,7 +96,7 @@ class DistillLoss:
             kd = self._kl_from_logps(top_s_logp, top_t_logp).mean()
         else:
             raise ValueError(
-                f"Unsupported QAT kd loss_type: {self.loss_type}. "
+                f"Unsupported distill loss_type: {self.loss_type}. "
                 "Valid: kl, rkl, mse, kd, cakld, kl_top[_K], r_kl_top[_K]."
             )
 
