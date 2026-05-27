@@ -45,6 +45,7 @@ class Qwen_Omni(BaseLLMModel):
             deploy_backend=deploy_backend,
         )
         self.modal_type = "Omni"
+        self.block_name = "thinker.model.layers"
         self.thinker_block_name = "thinker.model.layers"
         self.talker_block_name = "talker.model.layers"
         self.observer_layer_classes = [
@@ -205,8 +206,6 @@ class Qwen_Omni(BaseLLMModel):
         ]
 
     def model_forward(self, dataloader, **kwargs):
-        self.model.use_cache = False
-
         calibrated_cnt = 0
         if (
             "gptq" in self.quant_config.quant_algo
