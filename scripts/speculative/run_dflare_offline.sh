@@ -1,29 +1,38 @@
 #!/bin/bash
 
 # ==========================================================================
-# AngelSlim DFlash Online Training — Fully Aligned Configuration
+# AngelSlim DFlare Offline Training — Fully Aligned Configuration
 # ==========================================================================
 #
-# Recommended training entry for DFlash. Enables all AngelSlim DFlash
-# alignment features:
+# Trains a DFlare draft model from pre-computed hidden-state .ckpt files.
+# DFlare is the enhanced DFlash variant with separate context/noise k/v
+# projections and learnable per-layer fusion weights. Training-side logic
+# is identical to DFlash, so this script reuses tools/train_dflash_offline.py
+# and selects DFlare via --draft_arch.
 #
-#   - loss_decay_gamma: 7 (fixed by default; pass --gamma_warmup to enable
-#     per-epoch increment via --gamma_warmup_step).
+# Prerequisite: run scripts/speculative/generate_dflash_data.sh with a
+# DFlare-compatible draft config first to produce the .ckpt files at
+# $TRAIN_HIDDEN_PATH. Specifically the .ckpt's hidden_states must contain
+# the SAME number of target layers that the DFlare config expects (i.e.
+# len(dflash_config.target_layer_ids) in qwen3_dflare.json).
+#
+# Enables all AngelSlim DFlash alignment features (same as the online entry,
+# minus the on-the-fly target-model forward):
+#
 #   - block_size: 16, num_anchors: 512.
 #   - batch_size: 2, lr: 6e-4, cosine schedule, warmup_ratio: 0.04.
-#   - max_length: 3072, num_epochs: 6.
-#   - num_proc: 64 for data preprocessing.
-#   - Target model uses flash_attention_2 (matches the inference kernel and
-#     avoids train/test attention-backend mismatch).
+#   - max_length: 3072.
 #   - dataloader_drop_last=True (avoids FSDP shape mismatches on the
 #     trailing batch).
 #   - FP32 master weights optimizer (fp32 accumulation + fp32 grad clip;
 #     only the final copy-back introduces bf16 quantization).
 #   - FSDP shard_grad_op + auto_wrap (with configs/fsdp_config.json:
 #     NO_WRAP, use_orig_params=True).
+#   - loss_decay_gamma: 7 (fixed by default; pass --gamma_warmup to enable
+#     per-epoch increment via --gamma_warmup_step).
 #
 # Usage:
-#   bash scripts/speculative/run_dflash_online.sh [NUM_GPUS] [ATTENTION_BACKEND]
+#   bash scripts/speculative/run_dflare_offline.sh [NUM_GPUS] [ATTENTION_BACKEND]
 #
 # ==========================================================================
 
@@ -42,16 +51,19 @@ ATTENTION_BACKEND=${2:-flex_attention}
 # Paths — set these before running (left empty by default for portability)
 # ==========================================================================
 TARGET_MODEL_PATH=${TARGET_MODEL_PATH:-""}
-DRAFT_CONFIG_PATH=${DRAFT_CONFIG_PATH:-"${ROOT_DIR}/configs/qwen3_dflash.json"}
-TRAIN_DATA_PATH=${TRAIN_DATA_PATH:-""}
-OUTPUT_DIR=${OUTPUT_DIR:-"${ROOT_DIR}/outputs/qwen3-4b-dflash-online"}
+DRAFT_CONFIG_PATH=${DRAFT_CONFIG_PATH:-"${ROOT_DIR}/configs/qwen3_dflare.json"}
+TRAIN_HIDDEN_PATH=${TRAIN_HIDDEN_PATH:-""}
+EVAL_HIDDEN_PATH=${EVAL_HIDDEN_PATH:-""}
+OUTPUT_DIR=${OUTPUT_DIR:-"${ROOT_DIR}/outputs/qwen3-4b-dflare-offline"}
 
 if [ -z "$TARGET_MODEL_PATH" ]; then
     echo "[ERROR] TARGET_MODEL_PATH is empty. Export it to your local Qwen3 (or other) HF model dir."
     exit 1
 fi
-if [ -z "$TRAIN_DATA_PATH" ]; then
-    echo "[ERROR] TRAIN_DATA_PATH is empty. Export it to a JSON/JSONL conversation dataset file."
+if [ -z "$TRAIN_HIDDEN_PATH" ]; then
+    echo "[ERROR] TRAIN_HIDDEN_PATH is empty. Set it to the directory holding "
+    echo "        pre-computed .ckpt files (output of generate_dflash_data.sh"
+    echo "        run with a DFlare-compatible draft config so target_layer_ids match)."
     exit 1
 fi
 
@@ -61,15 +73,10 @@ fi
 export TORCHINDUCTOR_CACHE_DIR=${TORCHINDUCTOR_CACHE_DIR:-${ROOT_DIR}/cache/compiled_kernels}
 
 # ==========================================================================
-# Data preprocessing parallelism
-# ==========================================================================
-DATA_NUM_PROC=${DATA_NUM_PROC:-64}
-
-# ==========================================================================
 # WandB configuration
 # ==========================================================================
-export WANDB_PROJECT=${WANDB_PROJECT:-"angelslim-qwen3-4b-dflash"}
-WANDB_RUN_NAME=${WANDB_RUN_NAME:-"angelslim-qwen3-4b-dflash-online-fp32master"}
+export WANDB_PROJECT=${WANDB_PROJECT:-"angelslim-qwen3-4b-dflare"}
+WANDB_RUN_NAME=${WANDB_RUN_NAME:-"angelslim-qwen3-4b-dflare-offline-fp32master"}
 
 # ==========================================================================
 # Multi-node configuration (optional)
@@ -107,12 +114,19 @@ if [ "$NNODES" -gt 1 ]; then
     export NCCL_TIMEOUT=1800
 fi
 
+# Optional eval-data argument (only added if path provided)
+EVAL_FLAGS=""
+if [ -n "$EVAL_HIDDEN_PATH" ]; then
+    EVAL_FLAGS="--eval_hidden_path $EVAL_HIDDEN_PATH"
+fi
+
 echo "[INFO] Draft config: $DRAFT_CONFIG_PATH"
 echo "[INFO] Target model: $TARGET_MODEL_PATH"
-echo "[INFO] Train data: $TRAIN_DATA_PATH"
+echo "[INFO] Train hidden path: $TRAIN_HIDDEN_PATH"
+echo "[INFO] Eval hidden path: ${EVAL_HIDDEN_PATH:-<none>}"
 echo "[INFO] Output dir: $OUTPUT_DIR"
 echo "[INFO] Attention backend (draft): $ATTENTION_BACKEND"
-echo "[INFO] Target model attn: flash_attention_2 (set in target_model_wrapper.py)"
+echo "[INFO] Draft architecture: dflare (--draft_arch dflare)"
 echo "[INFO] WandB project: $WANDB_PROJECT, run: $WANDB_RUN_NAME"
 echo ""
 
@@ -120,14 +134,14 @@ echo ""
 # Launch training
 # ==========================================================================
 torchrun $DISTRIBUTED_ARGS \
-    $ROOT_DIR/tools/train_dflash_online.py \
+    $ROOT_DIR/tools/train_dflash_offline.py \
     --target_model_name_or_path $TARGET_MODEL_PATH \
     --draft_model_config_path $DRAFT_CONFIG_PATH \
-    --train_data_path $TRAIN_DATA_PATH \
+    --draft_arch dflare \
+    --train_hidden_path $TRAIN_HIDDEN_PATH \
+    $EVAL_FLAGS \
     --output_dir $OUTPUT_DIR \
-    --modal_type DFlash \
-    --training_mode online \
-    --num_train_epochs 6 \
+    --num_train_epochs 12 \
     --per_device_train_batch_size 2 \
     --learning_rate 6e-4 \
     --warmup_ratio 0.04 \
@@ -138,7 +152,6 @@ torchrun $DISTRIBUTED_ARGS \
     --block_size 16 \
     --num_anchors 512 \
     --loss_decay_gamma 7 \
-    --num_proc $DATA_NUM_PROC \
     --logging_steps 50 \
     --save_strategy steps \
     --save_steps 5000 \

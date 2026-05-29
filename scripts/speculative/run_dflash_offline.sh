@@ -40,14 +40,18 @@ NUM_GPUS=${1:-8}
 ATTENTION_BACKEND=${2:-flex_attention}
 
 # ==========================================================================
-# Paths — modify to match your environment
+# Paths — set these before running (left empty by default for portability)
 # ==========================================================================
-TARGET_MODEL_PATH=${TARGET_MODEL_PATH:-"/apdcephfs_gy5_303770945/share_303770945/jiebin/hf_models/Qwen/Qwen3-4B"}
+TARGET_MODEL_PATH=${TARGET_MODEL_PATH:-""}
 DRAFT_CONFIG_PATH=${DRAFT_CONFIG_PATH:-"${ROOT_DIR}/configs/qwen3_dflash.json"}
 TRAIN_HIDDEN_PATH=${TRAIN_HIDDEN_PATH:-""}
 EVAL_HIDDEN_PATH=${EVAL_HIDDEN_PATH:-""}
 OUTPUT_DIR=${OUTPUT_DIR:-"${ROOT_DIR}/outputs/qwen3-4b-dflash-offline"}
 
+if [ -z "$TARGET_MODEL_PATH" ]; then
+    echo "[ERROR] TARGET_MODEL_PATH is empty. Export it to your local Qwen3 (or other) HF model dir."
+    exit 1
+fi
 if [ -z "$TRAIN_HIDDEN_PATH" ]; then
     echo "[ERROR] TRAIN_HIDDEN_PATH is empty. Set it to the directory holding "
     echo "        pre-computed .ckpt files (output of generate_dflash_data.sh)."
