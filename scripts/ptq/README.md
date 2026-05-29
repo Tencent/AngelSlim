@@ -141,8 +141,14 @@ bash tools/vllm_patch/install.sh --help      # 查看完整用法
 #### 阶段 2：调用 `tools/fp8_quant_with_vllm_activation.py`
 
 - 读取 `${stats_dir}` 下的 `activation_stats.json` / `moe_expert_stats.json`，结合原 bf16 权重，做 per-tensor FP8 量化（含 weight + input scale），写出到 `${fp8_path}`。
-- KV-cache scale 的写入行为由量化 YAML 中的 `k_scheme` / `v_scheme` 控制：
-  - `static`：将校准得到的 scale 写入 `kv_cache_scales.safetensors`，粒度由 `k_granularity` / `v_granularity` 决定（`none` | `per-tensor` | `per-head`）。
+- 校准（stage-1）与量化（stage-2）共享 **同一份 YAML**：[`configs/Hy3/ptq/fp8/Hy3_vllm_ptq_per_tensor.yaml`](../../configs/Hy3/ptq/fp8/Hy3_vllm_ptq_per_tensor.yaml)。
+  - 路径只配一次：stage-2 的 `input_bf16_hf_path` 默认回退到 stage-1 的 `model_path`，`input_vllm_ac_json_path` 默认回退到 stage-1 的 `output_dir`。
+  - 每个阶段只读取自己关心的字段，不认识的字段会打一行 `[yaml-config] WARNING: unknown keys` 然后忽略，属于正常现象。
+- KV-cache 的"校准粒度"与"量化粒度"分开控制：
+  - 校准阶段（stage-1）由 `kv_granularity`（`none` | `per-tensor` | `per-head`）决定 KV scale 的收集粒度。
+  - 量化阶段（stage-2）由 `k_scheme` / `v_scheme`（`dynamic` | `static`）决定是否把 scale 写进 safetensor；当 scheme=`static` 时，再由 `quant_k_granularity` / `quant_v_granularity`（`none` | `per-tensor` | `per-head`）决定写入粒度。
+- KV-cache scale 的写入行为由量化阶段的 `k_scheme` / `v_scheme` 控制：
+  - `static`：将校准得到的 scale 写入 `kv_cache_scales.safetensors`，粒度由 `quant_k_granularity` / `quant_v_granularity` 决定（`none` | `per-tensor` | `per-head`）。
   - `dynamic`：不写入对应的 scale（`model.safetensors.index.json` 中也不包含对应 key），`config.json` 中标记为 `"scheme": "dynamic", "granularity": "per_token_per_head"`（与 `q_quant` 一致）。
 - 产出的 `config.json` 中 `attn_quant_config.kv_cache_quant` 的 `k_quant` 和 `v_quant` 独立配置，支持 K/V 使用不同的 scheme。
 

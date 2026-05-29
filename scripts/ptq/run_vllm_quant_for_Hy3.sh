@@ -6,16 +6,17 @@
 # Stage 1: tools/run_vllm_calibrate.py
 #   * Loads the bf16 model with vLLM, runs forward passes on the PTQ dataset,
 #     and dumps activation_stats.json / moe_expert_stats.json / kv_cache_*
-#     into the directory given by ``output_dir`` in CALIB_CONFIG.
+#     into the directory given by ``output_dir`` in PTQ_CONFIG.
 #
 # Stage 2: tools/fp8_quant_with_vllm_activation.py
 #   * Reads activation_stats.json (+ moe_expert_stats.json if any) plus the
 #     original bf16 weights, applies per-tensor FP8 quantization with
 #     calibrated input scales, and writes the FP8 HF model into the directory
-#     given by ``output_fp8_hf_path`` in QUANT_CONFIG.
+#     given by ``output_fp8_hf_path`` in PTQ_CONFIG.
 #
-# IMPORTANT: ``input_vllm_ac_json_path`` in QUANT_CONFIG must equal
-# ``output_dir`` in CALIB_CONFIG, otherwise stage 2 cannot find the stats.
+# Both stages share a SINGLE unified YAML (PTQ_CONFIG); stage 2 reuses stage
+# 1's ``model_path`` as ``input_bf16_hf_path`` and ``output_dir`` as
+# ``input_vllm_ac_json_path``, so paths only need to be set once.
 #
 # Usage:
 #   bash run_vllm_quant_for_Hy3.sh
@@ -41,7 +42,7 @@ for arg in "$@"; do
         --skip-calibrate) do_calibrate=0 ;;
         --skip-quantize)  do_quantize=0  ;;
         -h|--help)
-            sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+            sed -n '2,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *)
@@ -66,10 +67,10 @@ export VLLM_ENABLE_PREFIX_CACHING=1
 export PRECISIONMODE=HF
 
 # ----------------------------------------------------------------------------
-# YAML configs (one per stage)
+# Unified YAML config (drives BOTH stages; each stage's argparse picks up
+# only the keys it knows about, and unknown keys are warned-and-ignored).
 # ----------------------------------------------------------------------------
-CALIB_CONFIG=configs/Hy3/ptq/Hy3_vllm_calibrate.yaml
-QUANT_CONFIG=configs/Hy3/ptq/Hy3_vllm_quant_fp8_per_tensor.yaml
+PTQ_CONFIG=configs/Hy3/ptq/fp8/Hy3_vllm_ptq_per_tensor.yaml
 
 mkdir -p logs
 
@@ -78,10 +79,10 @@ mkdir -p logs
 # ============================================================================
 if [[ "${do_calibrate}" -eq 1 ]]; then
     echo "[pipeline] === Stage 1/2: activation calibration ==="
-    echo "[pipeline] CALIB_CONFIG=${CALIB_CONFIG}"
+    echo "[pipeline] PTQ_CONFIG=${PTQ_CONFIG}"
 
     python3 tools/run_vllm_calibrate.py \
-        -c "${CALIB_CONFIG}" \
+        -c "${PTQ_CONFIG}" \
         2>&1 | tee "logs/run_vllm_quant_Hy3-calibrate.log"
 
     echo "[pipeline] Stage 1 finished."
@@ -94,10 +95,10 @@ fi
 # ============================================================================
 if [[ "${do_quantize}" -eq 1 ]]; then
     echo "[pipeline] === Stage 2/2: FP8 quantization ==="
-    echo "[pipeline] QUANT_CONFIG=${QUANT_CONFIG}"
+    echo "[pipeline] PTQ_CONFIG=${PTQ_CONFIG}"
 
     python3 tools/fp8_quant_with_vllm_activation.py \
-        -c "${QUANT_CONFIG}" \
+        -c "${PTQ_CONFIG}" \
         2>&1 | tee "logs/run_vllm_quant_Hy3-quantize.log"
 
     echo "[pipeline] Stage 2 finished."

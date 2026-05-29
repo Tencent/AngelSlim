@@ -22,7 +22,7 @@ export ASYNC_SCHEDULING=1
 export VLLM_ENABLE_PREFIX_CACHING=1
 export PRECISIONMODE=HF
 
-CONFIG=configs/Hy3/ptq/Hy3_vllm_calibrate.yaml
+CONFIG=configs/Hy3/ptq/fp8/Hy3_vllm_ptq_per_tensor.yaml
 
 mkdir -p logs
 

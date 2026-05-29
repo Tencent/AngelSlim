@@ -1,0 +1,70 @@
+# Unified YAML config for the Hy3 PTQ pipeline.
+# Consumed by BOTH stages of scripts/ptq/run_vllm_quant_for_Hy3.sh:
+#   - tools/run_vllm_calibrate.py            (stage 1: activation calibration)
+#   - tools/fp8_quant_with_vllm_activation.py (stage 2: FP8 quantization)
+#
+# Each stage's argparse picks up only the keys it knows about; unrelated
+# keys are ignored with a single "[yaml-config] WARNING: unknown keys" log.
+# Keys here use underscore form (matching argparse `dest`). Explicit CLI
+# flags still take final precedence over YAML values.
+
+# ============================================================================
+# Shared paths (model_path / output_dir are defined for stage 1; stage 2
+# reuses them via fallbacks: input_bf16_hf_path defaults to model_path,
+# input_vllm_ac_json_path defaults to output_dir).
+# ============================================================================
+model_path: /path/to/model              # stage1: bf16 model dir; stage2 reuses as input_bf16_hf_path
+ptq_data_path: /path/to/dataset         # stage1 only
+output_dir: /path/to/statistics         # stage1: where stats are written; stage2 reuses as input_vllm_ac_json_path
+output_fp8_hf_path: /path/to/output/fp8_model  # stage2 only
+
+# ============================================================================
+# Stage 1 — vLLM activation calibration (tools/run_vllm_calibrate.py)
+# ============================================================================
+
+# -------- Model loading / runtime --------
+tp_size: 16
+batch_size: 4
+num_samples: 512
+max_length: 16384
+distributed_executor_backend: ray       # ray | mp
+skip_weight_loading: false              # true => dummy weights (debug only)
+
+# -------- MTP (Multi-Token Prediction) --------
+enable_mtp: false
+num_speculative_tokens: 1
+
+# -------- Debug --------
+verbose: false
+
+# -------- KV-cache calibration granularity --------
+# Used by stage 1 to decide how KV stats are *collected*. Calibration always
+# runs regardless of the stage-2 scheme; this only controls the granularity
+# of the collected scale (none | per-tensor | per-head).
+kv_granularity: per-tensor
+
+# -------- KV-cache scale search (stage 1) --------
+search_kv_scale: true
+search_kv_num_samples: 64
+search_kv_min_multiplier: 0.8
+search_kv_max_multiplier: 16.0
+search_kv_num_steps: 50
+
+# ============================================================================
+# Stage 2 — FP8 quantization (tools/fp8_quant_with_vllm_activation.py)
+# ============================================================================
+
+# Optional: leave at defaults unless you know what you are doing
+block_size: [-1, -1]
+num_workers: 16
+
+# KV-cache scheme & granularity at *quantization* time.
+#   scheme = dynamic => no static scale is saved; granularity is forced to
+#                       per_token_per_head in config.json.
+#   scheme = static  => calibrated scale is written to kv_cache_scales.safetensors,
+#                       at the granularity selected below
+#                       (none | per-tensor | per-head).
+k_scheme: static                        # dynamic | static
+v_scheme: static                        # dynamic | static
+quant_k_granularity: per-tensor           # only used when k_scheme=static
+quant_v_granularity: per-tensor           # only used when v_scheme=static

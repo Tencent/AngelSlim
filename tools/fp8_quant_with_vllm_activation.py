@@ -1,3 +1,4 @@
+import argparse
 import json
 import math
 import multiprocessing as mp
@@ -253,8 +254,8 @@ def main(bf16_path, fp8_path, block_size, ac_json_data):
     # Resolve scheme & granularity from CLI/YAML args
     k_scheme = getattr(args, "k_scheme", "static")
     v_scheme = getattr(args, "v_scheme", "static")
-    k_granularity_cfg = getattr(args, "k_granularity", "per-head").replace("-", "_")
-    v_granularity_cfg = getattr(args, "v_granularity", "per-head").replace("-", "_")
+    k_granularity_cfg = getattr(args, "quant_k_granularity", "per-head").replace("-", "_")
+    v_granularity_cfg = getattr(args, "quant_v_granularity", "per-head").replace("-", "_")
 
     # If scheme is dynamic, granularity is forced to per_token_per_head
     if k_scheme == "dynamic":
@@ -557,19 +558,27 @@ if __name__ == "__main__":
         "granularity forced to per_token_per_head) or 'static' (use calibrated scale).",
     )
     parser.add_argument(
-        "--k-granularity",
+        "--quant-k-granularity",
         type=str,
         default="per-head",
         choices=["none", "per-tensor", "per-head"],
-        help="K-cache granularity when k_scheme=static (ignored if k_scheme=dynamic).",
+        help="K-cache granularity used at *quantization* time when k_scheme=static "
+        "(ignored if k_scheme=dynamic). Distinct from the calibration-time "
+        "granularity controlled by stage-1's --kv-granularity.",
     )
     parser.add_argument(
-        "--v-granularity",
+        "--quant-v-granularity",
         type=str,
         default="per-head",
         choices=["none", "per-tensor", "per-head"],
-        help="V-cache granularity when v_scheme=static (ignored if v_scheme=dynamic).",
+        help="V-cache granularity used at *quantization* time when v_scheme=static "
+        "(ignored if v_scheme=dynamic). Distinct from the calibration-time "
+        "granularity controlled by stage-1's --kv-granularity.",
     )
+    # Stage-1 path keys (model_path / output_dir) are accepted as fallbacks
+    # so that one unified YAML can drive both stages.
+    parser.add_argument("--model-path", type=str, default="", help=argparse.SUPPRESS)
+    parser.add_argument("--output-dir", type=str, default="", help=argparse.SUPPRESS)
     args = parser.parse_args()
 
     # Lazy-import _yaml_args (sibling module in tools/). Done here instead of
@@ -583,6 +592,22 @@ if __name__ == "__main__":
     from _yaml_args import apply_yaml_config
 
     apply_yaml_config(parser, args)
+
+    # Path fallbacks: when running with the unified Hy3 YAML, stage 2 reuses
+    # stage 1's `model_path` as the bf16 input dir, and `output_dir` (where
+    # stage 1 wrote stats) as the activation-json dir.
+    if not getattr(args, "input_bf16_hf_path", "") and getattr(args, "model_path", ""):
+        args.input_bf16_hf_path = args.model_path
+        print(
+            f"[yaml-config] input_bf16_hf_path not set; falling back to "
+            f"model_path={args.input_bf16_hf_path!r}"
+        )
+    if not getattr(args, "input_vllm_ac_json_path", "") and getattr(args, "output_dir", ""):
+        args.input_vllm_ac_json_path = args.output_dir
+        print(
+            f"[yaml-config] input_vllm_ac_json_path not set; falling back to "
+            f"output_dir={args.input_vllm_ac_json_path!r}"
+        )
 
     # Validate required paths (may come from CLI or YAML).
     missing = [
