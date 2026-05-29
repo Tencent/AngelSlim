@@ -17,10 +17,10 @@ export ASYNC_SCHEDULING=1
 export VLLM_ENABLE_PREFIX_CACHING=1
 export PRECISIONMODE=HF
 
-CONFIG=configs/hy3/ptq/hy3_kvcache_calibrate.yaml
+CONFIG=configs/Hy3/ptq/Hy3_kvcache_calibrate.yaml
 
 mkdir -p logs
 
 python3 tools/kvcache/run_kvcache_calibrate.py \
     -c $CONFIG \
-    2>&1 | tee logs/run_kvcache_calibrate_hy3.log
+    2>&1 | tee logs/run_kvcache_calibrate_Hy3.log

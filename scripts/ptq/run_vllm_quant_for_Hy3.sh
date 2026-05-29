@@ -18,13 +18,13 @@
 # ``output_dir`` in CALIB_CONFIG, otherwise stage 2 cannot find the stats.
 #
 # Usage:
-#   bash run_vllm_quant_for_hy3.sh
+#   bash run_vllm_quant_for_Hy3.sh
 #       (run both stages back-to-back)
 #
-#   bash run_vllm_quant_for_hy3.sh --skip-calibrate
+#   bash run_vllm_quant_for_Hy3.sh --skip-calibrate
 #       (skip stage 1, only quantize using existing stats dir)
 #
-#   bash run_vllm_quant_for_hy3.sh --skip-quantize
+#   bash run_vllm_quant_for_Hy3.sh --skip-quantize
 #       (only run stage 1, do not produce the FP8 model)
 # =============================================================================
 
@@ -68,8 +68,8 @@ export PRECISIONMODE=HF
 # ----------------------------------------------------------------------------
 # YAML configs (one per stage)
 # ----------------------------------------------------------------------------
-CALIB_CONFIG=configs/hy3/ptq/hy3_vllm_calibrate.yaml
-QUANT_CONFIG=configs/hy3/ptq/hy3_vllm_quant_fp8_per_tensor.yaml
+CALIB_CONFIG=configs/Hy3/ptq/Hy3_vllm_calibrate.yaml
+QUANT_CONFIG=configs/Hy3/ptq/Hy3_vllm_quant_fp8_per_tensor.yaml
 
 mkdir -p logs
 
@@ -82,7 +82,7 @@ if [[ "${do_calibrate}" -eq 1 ]]; then
 
     python3 tools/run_vllm_calibrate.py \
         -c "${CALIB_CONFIG}" \
-        2>&1 | tee "logs/run_vllm_quant_hy3-calibrate.log"
+        2>&1 | tee "logs/run_vllm_quant_Hy3-calibrate.log"
 
     echo "[pipeline] Stage 1 finished."
 else
@@ -98,7 +98,7 @@ if [[ "${do_quantize}" -eq 1 ]]; then
 
     python3 tools/fp8_quant_with_vllm_activation.py \
         -c "${QUANT_CONFIG}" \
-        2>&1 | tee "logs/run_vllm_quant_hy3-quantize.log"
+        2>&1 | tee "logs/run_vllm_quant_Hy3-quantize.log"
 
     echo "[pipeline] Stage 2 finished."
 else
