@@ -137,6 +137,12 @@
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
           <li>
+            <strong>稀疏注意力</strong>
+            <ul style="padding-left: 1.5rem">
+              <li><a href="https://github.com/anminliu/VecAttention">VecAttention</a></li>
+            </ul>
+          </li>
+          <li>
             <strong>Token剪枝</strong>
             <ul style="padding-left: 1.5rem">
               <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/token_compressor/index.html">IDPruner</a></li>

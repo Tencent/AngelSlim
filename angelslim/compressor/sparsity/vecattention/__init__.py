@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .stem import StemInference  # noqa: F401
 from .vecattention import VecAttentionInference  # noqa: F401
 
-__all__ = ["StemInference", "VecAttentionInference"]
+__all__ = ["VecAttentionInference"]

@@ -136,6 +136,12 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
           <li>
+            <strong>Sparse Attention</strong>
+            <ul style="padding-left: 1.5rem">
+              <li><a href="https://github.com/anminliu/VecAttention">VecAttention</a></li>
+            </ul>
+          </li>
+          <li>
             <strong>Token Pruning</strong>
             <ul style="padding-left: 1.5rem">
               <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/token_compressor/index.html">IDPruner</a></li>
