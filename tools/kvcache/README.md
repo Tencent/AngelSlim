@@ -60,8 +60,8 @@ python3 tools/kvcache/run_kvcache_calibrate.py \
     --search-kv-num-steps      50
 ```
 
-A ready-to-run wrapper for HY3 lives at
-[`scripts/ptq/run_kvcache_calibrate_for_HY3.sh`](../../scripts/ptq/run_kvcache_calibrate_for_HY3.sh).
+A ready-to-run wrapper for Hy3 lives at
+[`scripts/ptq/run_kvcache_calibrate_for_Hy3.sh`](../../scripts/ptq/run_kvcache_calibrate_for_Hy3.sh).
 
 > ⚠️  Requires the AngelSlim vLLM patch
 > ([`tools/vllm_patch/`](../vllm_patch/)) to be installed in the active

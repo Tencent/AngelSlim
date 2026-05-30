@@ -8,7 +8,7 @@
 
 ## 一、环境准备（运行校准脚本前必须完成）
 
-> 📌 **硬性要求**（当前 HY3 校准脚本经过验证的配置）：
+> 📌 **硬性要求**（当前 Hy3 校准脚本经过验证的配置）：
 > - **算力**：**16 卡**（两个节点 × 每节点 8 卡），用于 TP/PP 跨节点切分
 > - **vLLM 版本**：**v0.20.0**（补丁文件按此版本对齐，其它版本需要重新生成补丁）
 > - **Python 环境**：所有节点保持一致（建议使用同一个 conda / venv）
@@ -21,7 +21,7 @@
 
 ### 1. 准备 Ray 集群（2 节点 × 8 卡 = 16 卡）
 
-HY3 等大模型需要跨节点 TP/PP，校准脚本默认走 vLLM 的 Ray distributed executor，必须先在 **两台 8 卡节点** 上分别拉起 Ray，组成一个 16 卡集群。
+Hy3 等大模型需要跨节点 TP/PP，校准脚本默认走 vLLM 的 Ray distributed executor，必须先在 **两台 8 卡节点** 上分别拉起 Ray，组成一个 16 卡集群。
 
 下面给出的环境变量按 **RDMA / 多网卡** 集群的常见配置示例，请按实际网络拓扑调整（特别是 `*_SOCKET_IFNAME`、`NCCL_IB_GID_INDEX`）。
 
@@ -113,19 +113,19 @@ bash tools/vllm_patch/install.sh --help      # 查看完整用法
 
 ---
 
-## 二、HY3.0 系列脚本（Hunyuan-A20B 等 HY3 模型）
+## 二、Hy3.0 系列脚本（Hunyuan-A20B 等 Hy3 模型）
 
 下面 3 个脚本共享同一套 vLLM 运行时环境（chunked prefill / FlashInfer attention / mp distributed executor / fused MoE 等），区别在于产出物不同。
 
 | 脚本 | 用途 | 入口 |
 | --- | --- | --- |
-| [`run_vllm_quant_for_HY3.sh`](./run_vllm_quant_for_HY3.sh) | ★ 推荐的"一键流水线"：校准 + 量化 | `tools/run_vllm_calibrate.py` + `tools/fp8_quant_with_vllm_activation.py` |
-| [`run_vllm_calibrate_for_HY3.sh`](./run_vllm_calibrate_for_HY3.sh) | 仅 W8A8C8 联合校准 | `tools/run_vllm_calibrate.py` |
-| [`run_kvcache_calibrate_for_HY3.sh`](./run_kvcache_calibrate_for_HY3.sh) | 仅 KV-cache 校准（轻量） | `tools/kvcache/run_kvcache_calibrate.py` |
+| [`run_vllm_quant_for_Hy3.sh`](./run_vllm_quant_for_Hy3.sh) | ★ 推荐的"一键流水线"：校准 + 量化 | `tools/run_vllm_calibrate.py` + `tools/fp8_quant_with_vllm_activation.py` |
+| [`run_vllm_calibrate_for_Hy3.sh`](./run_vllm_calibrate_for_Hy3.sh) | 仅 W8A8C8 联合校准 | `tools/run_vllm_calibrate.py` |
+| [`run_kvcache_calibrate_for_Hy3.sh`](./run_kvcache_calibrate_for_Hy3.sh) | 仅 KV-cache 校准（轻量） | `tools/kvcache/run_kvcache_calibrate.py` |
 
 ---
 
-### 1. `run_vllm_quant_for_HY3.sh` ★推荐的"一键流水线"
+### 1. `run_vllm_quant_for_Hy3.sh` ★推荐的"一键流水线"
 
 **功能**：bf16 模型 → vLLM 激活校准 → FP8 HF safetensors，全流程一次完成。
 
@@ -141,22 +141,31 @@ bash tools/vllm_patch/install.sh --help      # 查看完整用法
 #### 阶段 2：调用 `tools/fp8_quant_with_vllm_activation.py`
 
 - 读取 `${stats_dir}` 下的 `activation_stats.json` / `moe_expert_stats.json`，结合原 bf16 权重，做 per-tensor FP8 量化（含 weight + input scale），写出到 `${fp8_path}`。
-- 当存在 per-head KV 统计时，会同时输出 `kv_cache_scales.safetensors`。
+- 校准（stage-1）与量化（stage-2）共享 **同一份 YAML**：[`configs/Hy3/ptq/fp8/Hy3_vllm_ptq_per_tensor.yaml`](../../configs/Hy3/ptq/fp8/Hy3_vllm_ptq_per_tensor.yaml)。
+  - 路径只配一次：stage-2 的 `input_bf16_hf_path` 默认回退到 stage-1 的 `model_path`，`input_vllm_ac_json_path` 默认回退到 stage-1 的 `output_dir`。
+  - 每个阶段只读取自己关心的字段，不认识的字段会打一行 `[yaml-config] WARNING: unknown keys` 然后忽略，属于正常现象。
+- KV-cache 的"校准粒度"与"量化粒度"分开控制：
+  - 校准阶段（stage-1）由 `kv_granularity`（`none` | `per-tensor` | `per-head`）决定 KV scale 的收集粒度。
+  - 量化阶段（stage-2）由 `k_scheme` / `v_scheme`（`dynamic` | `static`）决定是否把 scale 写进 safetensor；当 scheme=`static` 时，再由 `quant_k_granularity` / `quant_v_granularity`（`none` | `per-tensor` | `per-head`）决定写入粒度。
+- KV-cache scale 的写入行为由量化阶段的 `k_scheme` / `v_scheme` 控制：
+  - `static`：将校准得到的 scale 写入 `kv_cache_scales.safetensors`，粒度由 `quant_k_granularity` / `quant_v_granularity` 决定（`none` | `per-tensor` | `per-head`）。
+  - `dynamic`：不写入对应的 scale（`model.safetensors.index.json` 中也不包含对应 key），`config.json` 中标记为 `"scheme": "dynamic", "granularity": "per_token_per_head"`（与 `q_quant` 一致）。
+- 产出的 `config.json` 中 `attn_quant_config.kv_cache_quant` 的 `k_quant` 和 `v_quant` 独立配置，支持 K/V 使用不同的 scheme。
 
 #### CLI 开关
 
 ```bash
-bash run_vllm_quant_for_HY3.sh                    # 两阶段都跑
-bash run_vllm_quant_for_HY3.sh --skip-calibrate   # 仅量化（复用已有 stats_dir）
-bash run_vllm_quant_for_HY3.sh --skip-quantize    # 仅校准
-bash run_vllm_quant_for_HY3.sh --help             # 打印用法
+bash run_vllm_quant_for_Hy3.sh                    # 两阶段都跑
+bash run_vllm_quant_for_Hy3.sh --skip-calibrate   # 仅量化（复用已有 stats_dir）
+bash run_vllm_quant_for_Hy3.sh --skip-quantize    # 仅校准
+bash run_vllm_quant_for_Hy3.sh --help             # 打印用法
 ```
 
 > 脚本开启 `set -euo pipefail`，任一阶段失败将立即中断。
 
 ---
 
-### 2. `run_vllm_calibrate_for_HY3.sh` — 一键脚本里的"阶段 1"独立版
+### 2. `run_vllm_calibrate_for_Hy3.sh` — 一键脚本里的"阶段 1"独立版
 
 **功能**：只跑 W8A8C8 联合校准，不做量化。
 
@@ -168,6 +177,7 @@ bash run_vllm_quant_for_HY3.sh --help             # 打印用法
   VLLM_MOE_COLLECT_STATS_VERBOSE=0
   ```
 - **默认配置**：`--kv-granularity per-head`，并开启 `--search-kv-scale`。
+- **注意**：校准阶段无论后续 scheme 是 dynamic 还是 static，都会正常收集 KV 统计数据。scheme 的判断仅在阶段 2（量化）时生效。
 - **产物**（写入 `${output_dir}`）：
   - `activation_stats.json`
   - `moe_expert_stats.json`
@@ -177,20 +187,20 @@ bash run_vllm_quant_for_HY3.sh --help             # 打印用法
 #### 适用场景
 
 - 想自己接后续量化工具，不走 `fp8_quant_with_vllm_activation.py`。
-- 想单独调校 PTQ 数据集 / `num_samples` / `max_length`，再用 `run_vllm_quant_for_HY3.sh --skip-calibrate` 复用结果。
+- 想单独调校 PTQ 数据集 / `num_samples` / `max_length`，再用 `run_vllm_quant_for_Hy3.sh --skip-calibrate` 复用结果。
 - Debug 用 `--skip-weight-loading` 跑 dummy 权重，快速验证 hook 注册流程。
 
 ---
 
-### 3. `run_kvcache_calibrate_for_HY3.sh` — 仅校准 KV-cache（轻量）
+### 3. `run_kvcache_calibrate_for_Hy3.sh` — 仅校准 KV-cache（轻量）
 
 **功能**：只校准 KV-cache（K/V min/max），不做 weight / activation / MoE 统计。
 
 - **入口**：`tools/kvcache/run_kvcache_calibrate.py`
 
-#### 关键差异（与 `run_vllm_calibrate_for_HY3.sh` 对比）
+#### 关键差异（与 `run_vllm_calibrate_for_Hy3.sh` 对比）
 
-| 维度 | `run_kvcache_calibrate_for_HY3.sh` | `run_vllm_calibrate_for_HY3.sh` |
+| 维度 | `run_kvcache_calibrate_for_Hy3.sh` | `run_vllm_calibrate_for_Hy3.sh` |
 | --- | --- | --- |
 | MoE / Linear 钩子 | 故意 **NOT** 设置 `VLLM_MOE_COLLECT_STATS`，完全跳过，启动更快、CPU 内存占用更低 | 全开 |
 | KV 搜索范围 | `[0.4, 8.0]`，`num_steps=50`（更窄、更聚焦） | `[0.8, 16.0]` |

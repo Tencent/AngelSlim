@@ -1,6 +1,5 @@
-# vLLM activation calibration for HY3 (collects activation + MoE expert stats,
-# and optionally KV-cache stats / scale search).
-# Consumed by: tools/run_vllm_calibrate.py
+# KV-cache calibration + scale search for Hy3 (standalone, no weight/MoE hooks)
+# Consumed by: tools/kvcache/run_kvcache_calibrate.py
 #
 # Keys here match the script's argparse `dest` names. Values listed below
 # override argparse defaults; explicit command-line flags still take final
@@ -9,28 +8,21 @@
 # -------- Paths --------
 model_path: /path/to/model
 ptq_data_path: /path/to/dataset
-output_dir: /path/to/statistics
+output_dir: /path/to/output
 
 # -------- Model loading / runtime --------
 tp_size: 16
 batch_size: 4
 num_samples: 512
-max_length: 16384
+max_length: 32768
 distributed_executor_backend: ray       # ray | mp
 skip_weight_loading: false              # true => dummy weights (debug only)
 
-# -------- MTP (Multi-Token Prediction) --------
-enable_mtp: false
-num_speculative_tokens: 1
-
-# -------- Debug --------
-verbose: false
-
 # -------- KV-cache granularity --------
-kv_granularity: per-head                # none | per-tensor | per-head
+per_head: false                         # true => per-head scales; false => per-tensor
 
 # -------- KV-cache scale search --------
-search_kv_scale: true
+search_kv_scale: false
 search_kv_num_samples: 64
 search_kv_min_multiplier: 0.8
 search_kv_max_multiplier: 16.0

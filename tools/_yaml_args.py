@@ -14,7 +14,7 @@
 
 """Shared YAML-config loader for standalone tool scripts.
 
-The HY3 tool entry points (``tools/run_vllm_calibrate.py``,
+The Hy3 tool entry points (``tools/run_vllm_calibrate.py``,
 ``tools/kvcache/run_kvcache_calibrate.py`` and
 ``tools/fp8_quant_with_vllm_activation.py``) all use ``argparse``.  To match
 the style of ``scripts/ptq/run_vllm_quant_for_deepseek_v3.sh`` (shell only

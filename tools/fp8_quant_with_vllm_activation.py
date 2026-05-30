@@ -1,3 +1,4 @@
+import argparse
 import json
 import math
 import multiprocessing as mp
@@ -247,7 +248,50 @@ def main(bf16_path, fp8_path, block_size, ac_json_data):
         config["quantization_config"]["weight_block_size"] = block_size
 
     kv_state_dict = {}
-    kv_granularity = ""
+    k_kv_granularity = ""  # resolved granularity for k-cache
+    v_kv_granularity = ""  # resolved granularity for v-cache
+
+    # Resolve scheme & granularity from CLI/YAML args
+    k_scheme = getattr(args, "k_scheme", "static")
+    v_scheme = getattr(args, "v_scheme", "static")
+    k_granularity_cfg = getattr(args, "quant_k_granularity", "per-head").replace("-", "_")
+    v_granularity_cfg = getattr(args, "quant_v_granularity", "per-head").replace("-", "_")
+
+    # If scheme is dynamic, granularity is forced to per_token_per_head
+    if k_scheme == "dynamic":
+        k_kv_granularity = "per_token_per_head"
+    if v_scheme == "dynamic":
+        v_kv_granularity = "per_token_per_head"
+
+    print(f"[KV-config] k_scheme={k_scheme}, v_scheme={v_scheme}")
+    print(
+        f"[KV-config] k_granularity_cfg={k_granularity_cfg}, v_granularity_cfg={v_granularity_cfg}"
+    )
+
+    # ---- Load per-tensor tuned KV scales (from --search-kv-scale stage) ----
+    # The stage-1 search outputs ``kv_cache_tuned_scales.json`` whose keys
+    # already match the safetensor key naming (e.g.
+    # ``model.layers.X.self_attn.k_cache.scale``).  If the file exists, we
+    # prefer its values for the per-tensor branch instead of falling back
+    # to a recomputed base scale (and certainly not the legacy 1.0).
+    tuned_kv_scales = {}
+    tuned_scales_path = os.path.join(args.input_vllm_ac_json_path, "kv_cache_tuned_scales.json")
+    if os.path.isfile(tuned_scales_path):
+        try:
+            with open(tuned_scales_path, "r", encoding="utf8") as _tsf:
+                tuned_kv_scales = json.load(_tsf)
+            print(
+                f"[KV-scale] Loaded {len(tuned_kv_scales)} tuned per-tensor KV scales "
+                f"from {tuned_scales_path}"
+            )
+        except Exception as _e:
+            print(f"[WARN] failed to load {tuned_scales_path}: {_e}")
+            tuned_kv_scales = {}
+    else:
+        print(
+            f"[KV-scale] {tuned_scales_path} not found; "
+            f"will fall back to min/max-based per-tensor scale."
+        )
 
     # Auto-detect kv_head_repeat from the model's real num_key_value_heads
     # vs the per-head stats vector length collected by AngelSlim.
@@ -271,6 +315,18 @@ def main(bf16_path, fp8_path, block_size, ac_json_data):
     for scale_name, stats in ac_json_data.items():
         if "cache" not in scale_name:
             continue
+
+        # Determine whether this entry is for k-cache or v-cache
+        is_k_cache = "k_cache" in scale_name
+        is_v_cache = "v_cache" in scale_name
+        # Skip writing scale if the corresponding scheme is dynamic
+        if is_k_cache and k_scheme == "dynamic":
+            print(f"[KV-scale] SKIP (k_scheme=dynamic): {scale_name}")
+            continue
+        if is_v_cache and v_scheme == "dynamic":
+            print(f"[KV-scale] SKIP (v_scheme=dynamic): {scale_name}")
+            continue
+
         act_save_name = f"{scale_name.replace('attn.attn', 'attn')}.scale"
         min_val = stats["min"]
         max_val = stats["max"]
@@ -298,25 +354,75 @@ def main(bf16_path, fp8_path, block_size, ac_json_data):
                 )
                 per_head_scales = per_head_scales[::replication]
             tensor_input_scale = torch.tensor(per_head_scales, dtype=torch.float32)
-            kv_granularity = "per_head"
+            detected_granularity = "per_head"
         else:
             # per-tensor: single scalar scale
-            # input_scale = max(abs(min_val), abs(max_val)) / fp8_max
-            # tensor_input_scale = torch.tensor([input_scale], dtype=torch.float32)
-            tensor_input_scale = torch.tensor([1.0])
-            kv_granularity = "per_tensor"
-        print(f"{scale_name}  granularity={kv_granularity}  scale={tensor_input_scale}")
+            #
+            # Preference order:
+            #   1) Use tuned scale from kv_cache_tuned_scales.json if available
+            #      (the search-kv-scale stage already wrote one entry per
+            #       k_cache / v_cache layer using exactly the same key as
+            #       ``act_save_name`` below).
+            #   2) Otherwise, compute base scale from min/max as
+            #      max(|min|, |max|) / fp8_max  (this is the unsearched
+            #      baseline scale; previously this branch was hardcoded
+            #      to 1.0 which is wrong).
+            act_save_name_lookup = f"{scale_name.replace('attn.attn', 'attn')}.scale"
+            if act_save_name_lookup in tuned_kv_scales:
+                scalar_scale = float(tuned_kv_scales[act_save_name_lookup])
+                tensor_input_scale = torch.tensor([scalar_scale], dtype=torch.float32)
+                scale_source = "tuned"
+            else:
+                base_scale = max(abs(min_val), abs(max_val)) / fp8_max
+                tensor_input_scale = torch.tensor([base_scale], dtype=torch.float32)
+                scale_source = "min_max"
+            detected_granularity = "per_tensor"
+
+        # Update resolved granularity based on actual data
+        if is_k_cache and not k_kv_granularity:
+            k_kv_granularity = detected_granularity
+        if is_v_cache and not v_kv_granularity:
+            v_kv_granularity = detected_granularity
+
+        scale_source_tag = locals().get("scale_source", "per_head")
+        print(
+            f"{scale_name}  granularity={detected_granularity}  "
+            f"src={scale_source_tag}  scale={tensor_input_scale}"
+        )
         kv_state_dict[act_save_name] = tensor_input_scale
         index[act_save_name] = "kv_cache_scales.safetensors"
+
+    # Use config-specified granularity if scheme is static and we didn't detect from data
+    if k_scheme == "static" and not k_kv_granularity:
+        k_kv_granularity = k_granularity_cfg
+    if v_scheme == "static" and not v_kv_granularity:
+        v_kv_granularity = v_granularity_cfg
+
+    # Write kv_cache_scales.safetensors only if there are static scales to save
     if len(kv_state_dict) > 0:
         kv_safetensor_file = os.path.join(fp8_path, "kv_cache_scales.safetensors")
         save_file(kv_state_dict, kv_safetensor_file)
         config["quantization_config"]["kv_cache_scheme"] = "static"
+
+    # Build attn_quant_config: k_quant and v_quant depend on their respective schemes
+    k_quant_config = (
+        {"dtype": "fp8_e4m3", "scheme": "dynamic", "granularity": "per_token_per_head"}
+        if k_scheme == "dynamic"
+        else {"dtype": "fp8_e4m3", "scheme": "static", "granularity": k_kv_granularity}
+    )
+    v_quant_config = (
+        {"dtype": "fp8_e4m3", "scheme": "dynamic", "granularity": "per_token_per_head"}
+        if v_scheme == "dynamic"
+        else {"dtype": "fp8_e4m3", "scheme": "static", "granularity": v_kv_granularity}
+    )
+
+    # Only emit attn_quant_config if at least one of k/v has meaningful config
+    if len(kv_state_dict) > 0 or k_scheme == "dynamic" or v_scheme == "dynamic":
         config["attn_quant_config"] = {
             "kv_cache_quant": {
                 "dtype": "fp8_e4m3",
-                "k_quant": {"scheme": "static", "granularity": kv_granularity},
-                "v_quant": {"scheme": "static", "granularity": kv_granularity},
+                "k_quant": k_quant_config,
+                "v_quant": v_quant_config,
             },
             "q_quant": {
                 "dtype": "fp8_e4m3",
@@ -434,6 +540,45 @@ if __name__ == "__main__":
         type=str,
         default="",
     )
+    # KV-cache scheme & granularity
+    parser.add_argument(
+        "--k-scheme",
+        type=str,
+        default="static",
+        choices=["dynamic", "static"],
+        help="K-cache quantization scheme: 'dynamic' (no static scale saved, "
+        "granularity forced to per_token_per_head) or 'static' (use calibrated scale).",
+    )
+    parser.add_argument(
+        "--v-scheme",
+        type=str,
+        default="static",
+        choices=["dynamic", "static"],
+        help="V-cache quantization scheme: 'dynamic' (no static scale saved, "
+        "granularity forced to per_token_per_head) or 'static' (use calibrated scale).",
+    )
+    parser.add_argument(
+        "--quant-k-granularity",
+        type=str,
+        default="per-head",
+        choices=["none", "per-tensor", "per-head"],
+        help="K-cache granularity used at *quantization* time when k_scheme=static "
+        "(ignored if k_scheme=dynamic). Distinct from the calibration-time "
+        "granularity controlled by stage-1's --kv-granularity.",
+    )
+    parser.add_argument(
+        "--quant-v-granularity",
+        type=str,
+        default="per-head",
+        choices=["none", "per-tensor", "per-head"],
+        help="V-cache granularity used at *quantization* time when v_scheme=static "
+        "(ignored if v_scheme=dynamic). Distinct from the calibration-time "
+        "granularity controlled by stage-1's --kv-granularity.",
+    )
+    # Stage-1 path keys (model_path / output_dir) are accepted as fallbacks
+    # so that one unified YAML can drive both stages.
+    parser.add_argument("--model-path", type=str, default="", help=argparse.SUPPRESS)
+    parser.add_argument("--output-dir", type=str, default="", help=argparse.SUPPRESS)
     args = parser.parse_args()
 
     # Lazy-import _yaml_args (sibling module in tools/). Done here instead of
@@ -447,6 +592,22 @@ if __name__ == "__main__":
     from _yaml_args import apply_yaml_config
 
     apply_yaml_config(parser, args)
+
+    # Path fallbacks: when running with the unified Hy3 YAML, stage 2 reuses
+    # stage 1's `model_path` as the bf16 input dir, and `output_dir` (where
+    # stage 1 wrote stats) as the activation-json dir.
+    if not getattr(args, "input_bf16_hf_path", "") and getattr(args, "model_path", ""):
+        args.input_bf16_hf_path = args.model_path
+        print(
+            f"[yaml-config] input_bf16_hf_path not set; falling back to "
+            f"model_path={args.input_bf16_hf_path!r}"
+        )
+    if not getattr(args, "input_vllm_ac_json_path", "") and getattr(args, "output_dir", ""):
+        args.input_vllm_ac_json_path = args.output_dir
+        print(
+            f"[yaml-config] input_vllm_ac_json_path not set; falling back to "
+            f"output_dir={args.input_vllm_ac_json_path!r}"
+        )
 
     # Validate required paths (may come from CLI or YAML).
     missing = [
