@@ -13,10 +13,12 @@
 # limitations under the License.
 
 import os
+import time
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Tuple
 
 import torch
+import torch.utils.checkpoint
 from torch import nn
 from transformers import Trainer
 
@@ -44,6 +46,73 @@ class Eagle3Trainer(Trainer, ABC):
         """
         super().__init__(model=draft_model, **kwargs)
         self.length = length
+        self._train_start_time = None
+        self._train_pending_log: dict = {}
+        self._train_pending_log_count: int = 0
+        self._eval_pending_log: dict = {}
+        self._eval_pending_log_count: int = 0
+
+    def train(self, *args, **kwargs):
+        """Override train method to record training start time for estimating remaining time."""
+        self._train_start_time = time.time()
+        return super().train(*args, **kwargs)
+
+    def log(self, logs: dict, start_time: Optional[float] = None) -> None:
+        """
+        Merge acc/ploss accumulators with the base Trainer's loss log.
+        """
+        if "loss" in logs and self._train_pending_log:
+            train_count = max(self._train_pending_log_count, 1)
+            acc_ploss = {k: v / train_count for k, v in self._train_pending_log.items()}
+            merged = {}
+
+            # step
+            max_steps = 0
+            if self.state is not None:
+                global_step = self.state.global_step
+                max_steps = self.state.max_steps
+                merged["step"] = global_step
+
+            # epoch
+            if "epoch" in logs:
+                merged["epoch"] = logs["epoch"]
+            if "loss" in logs:
+                merged["loss"] = logs["loss"]
+            if "grad_norm" in logs:
+                merged["grad_norm"] = logs["grad_norm"]
+
+            if "learning_rate" in logs:
+                merged["lr"] = logs["learning_rate"]
+
+            # train acc/ploss
+            merged.update(acc_ploss)
+
+            # eval acc/ploss — merged when a training log fires
+            if self._eval_pending_log:
+                eval_count = max(self._eval_pending_log_count, 1)
+                merged.update({k: v / eval_count for k, v in self._eval_pending_log.items()})
+                self._eval_pending_log.clear()
+                self._eval_pending_log_count = 0
+
+            # remaining_time
+            if (
+                self.state is not None
+                and self._train_start_time is not None
+                and global_step > 0
+                and max_steps > 0
+            ):
+                elapsed = time.time() - self._train_start_time
+                time_per_step = elapsed / global_step
+                remaining_seconds = int(time_per_step * (max_steps - global_step))
+                hours, remainder = divmod(remaining_seconds, 3600)
+                minutes, seconds = divmod(remainder, 60)
+                merged["remaining_time"] = f"{hours:02d}h:{minutes:02d}m:{seconds:02d}s"
+
+            self._train_pending_log.clear()
+            self._train_pending_log_count = 0
+            super().log(merged, start_time)
+        else:
+            super().log(logs, start_time)
 
     @property
     def draft_model(self) -> nn.Module:
@@ -131,7 +200,11 @@ class Eagle3Trainer(Trainer, ABC):
             position_ids = torch.arange(0, seq_length, dtype=torch.long, device=device)
             position_ids = position_ids.unsqueeze(0).view(-1, seq_length)
         else:
-            position_ids = position_ids.view(-1, seq_length).long()
+            if position_ids.ndim == 3:
+                # MRoPE format: (3, batch, seq_len), keep as-is
+                position_ids = position_ids.long()
+            else:
+                position_ids = position_ids.view(-1, seq_length).long()
 
         if attention_mask is None:
             attention_mask = torch.ones((batch_size, seq_length), dtype=torch.bool, device=device)
@@ -161,19 +234,34 @@ class Eagle3Trainer(Trainer, ABC):
         # Step 7: Iterative speculative decoding training loop
         for idx in range(self.length):
             # Step 7.1: Get input embeddings with gradient tracking
-            inputs_embeds = self.draft_model.get_input_embeddings(input_ids)
+            inputs_embeds = self.draft_model.embed_input_ids(input_ids)
             if not inputs_embeds.requires_grad:
                 inputs_embeds.requires_grad = True
 
             # Step 7.2: Encode through draft model layers
-            hidden_states, cache_hidden = self.draft_model.encode_layers(
-                inputs_embeds=inputs_embeds,
-                hidden_states=hidden_states,
-                cache_hidden=cache_hidden,
-                attention_mask=attention_mask,
-                position_ids=position_ids,
-                use_cache=True,
-            )
+            if (
+                getattr(self.draft_model, "gradient_checkpointing", False)
+                and self.draft_model.training
+            ):
+                hidden_states, cache_hidden = torch.utils.checkpoint.checkpoint(
+                    self.draft_model.encode_layers,
+                    inputs_embeds,
+                    hidden_states,
+                    cache_hidden,
+                    attention_mask,
+                    position_ids,
+                    True,
+                    use_reentrant=False,
+                )
+            else:
+                hidden_states, cache_hidden = self.draft_model.encode_layers(
+                    inputs_embeds=inputs_embeds,
+                    hidden_states=hidden_states,
+                    cache_hidden=cache_hidden,
+                    attention_mask=attention_mask,
+                    position_ids=position_ids,
+                    use_cache=True,
+                )
 
             # Step 7.3: Compute logits from hidden states
             logits = self.draft_model.compute_logits(hidden_states)
@@ -210,15 +298,17 @@ class Eagle3Trainer(Trainer, ABC):
         ploss_weight = [0.8**i for i in range(len(plosses))]
         ploss = sum([ploss_weight[i] * plosses[i] for i in range(len(plosses))])
 
-        log = {f"{log_prefix}/acc_{i}": round(float(acces[i]), 3) for i in range(len(acces))}
-        log.update(
-            {
-                f"{log_prefix}/ploss_{i}": round(float(plosses[i].item()), 3)
-                for i in range(len(plosses))
-            }
-        )
-        self.log(log)
-
+        log = {f"{log_prefix}/acc_{i}": acces[i] for i in range(len(acces))}
+        log.update({f"{log_prefix}/ploss_{i}": plosses[i].item() for i in range(len(plosses))})
+        # Route into the appropriate accumulator.
+        if log_prefix == "eval":
+            for k, v in log.items():
+                self._eval_pending_log[k] = self._eval_pending_log.get(k, 0.0) + v
+            self._eval_pending_log_count += 1
+        else:
+            for k, v in log.items():
+                self._train_pending_log[k] = self._train_pending_log.get(k, 0.0) + v
+            self._train_pending_log_count += 1
         # Step 9: Return loss
         return ploss
 

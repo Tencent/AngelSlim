@@ -16,6 +16,7 @@ import datetime
 import importlib.metadata
 import json
 import os
+import random
 import subprocess
 from itertools import takewhile
 from pathlib import Path
@@ -23,6 +24,7 @@ from typing import Optional
 
 import torch
 import torch.distributed as dist
+from datasets import load_dataset
 from transformers.utils.hub import cached_file
 
 
@@ -47,10 +49,18 @@ def set_op_by_name(layer, name, new_module):
     if len(levels) > 1:
         mod_ = layer
         for l_idx in range(len(levels) - 1):
-            if levels[l_idx].isdigit():
-                mod_ = mod_[int(levels[l_idx])]
+            part = levels[l_idx]
+            if part.isdigit():
+                # Prefer integer indexing for nn.ModuleList / nn.Sequential;
+                # fall back to getattr for custom containers (e.g. our
+                # LinearizedMoeExperts that registers experts via
+                # ``setattr(self, str(idx), ...)``).
+                try:
+                    mod_ = mod_[int(part)]
+                except (TypeError, IndexError, KeyError):
+                    mod_ = getattr(mod_, part)
             else:
-                mod_ = getattr(mod_, levels[l_idx])
+                mod_ = getattr(mod_, part)
         setattr(mod_, levels[-1], new_module)
     else:
         setattr(layer, name, new_module)
@@ -283,3 +293,28 @@ def decide_device_for_distributed():
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
     return device
+
+
+def get_loaders(tokenizer, name, seed=0, seqlen=2048, cache_dir=None):
+    if "wikitext2" in name:
+        testdata = load_dataset("wikitext", "wikitext-2-raw-v1", split="test", cache_dir=cache_dir)
+        return tokenizer("\n\n".join(testdata["text"]), return_tensors="pt")
+    elif "c4" in name:
+        valdata = load_dataset(
+            "allenai/c4",
+            data_files={"validation": "en/c4-validation.00000-of-00008.json.gz"},
+            split="validation",
+            cache_dir=cache_dir,
+        )
+        random.seed(seed)
+        valenc = []
+        for _ in range(256):
+            while True:
+                i = random.randint(0, len(valdata) - 1)
+                tmp = tokenizer(valdata[i]["text"], return_tensors="pt")
+                if tmp.input_ids.shape[1] >= seqlen:
+                    break
+            i = random.randint(0, tmp.input_ids.shape[1] - seqlen - 1)
+            valenc.append(tmp.input_ids[:, i : i + seqlen])
+        return torch.hstack(valenc)
+    raise NotImplementedError(f"Unsupported PPL dataset: {name}")

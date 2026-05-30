@@ -1,0 +1,36 @@
+# Copyright 2026 Tencent Inc. All Rights Reserved.
+
+# 1. Model Mapping: Optimized 4-class architecture
+model_mapping:
+  - name: "vl_model"
+    path: "model"
+    wrapper_module: ".models.llava"
+    wrapper_class: "Prunable_LlavaModel"
+  - name: "vision_attn"
+    path: "model.vision_tower.vision_model.encoder.layers[n].self_attn"
+    wrapper_module: ".models.llava"
+    wrapper_class: "Prunable_CLIPAttention"
+  - name: "text_model"
+    path: "model.language_model"
+    wrapper_module: ".models.llava"
+    wrapper_class: "Prunable_LlamaModel"
+  - name: "llm_attn"
+    path: "model.language_model.layers[n].self_attn"
+    wrapper_module: ".models.llava"
+    wrapper_class: "Prunable_LlamaAttention"
+
+# 2. Compressor Configuration
+compressor:
+  requirements:
+    vit_q_layers: [-2]       # Resolve to layer 22 for importance
+    vit_k_layers: [-2]
+    feature_map: true        # Required for similarity calculation
+    image_grid_thw: true     # Required for sequence handling
+  
+  strategies:
+    global:
+      strategy: "visionzip"
+      params:
+        ratio: 0.75
+        zip_ratio: 0.15625
+        layer_idx: -2        # Points to the last captured layer (index 22)

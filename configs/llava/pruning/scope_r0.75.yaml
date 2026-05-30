@@ -1,0 +1,31 @@
+# Copyright 2026 Tencent Inc. All Rights Reserved.
+model_mapping:
+  - name: "vl_model"
+    path: "model"
+    wrapper_module: ".models.llava"
+    wrapper_class: "Prunable_LlavaModel"
+  - name: "vision_attn"
+    path: "model.vision_tower.vision_model.encoder.layers[n].self_attn"
+    wrapper_module: ".models.llava"
+    wrapper_class: "Prunable_CLIPAttention"
+  - name: "text_model"
+    path: "model.language_model"
+    wrapper_module: ".models.llava"
+    wrapper_class: "Prunable_LlamaModel"
+  - name: "llm_attn"
+    path: "model.language_model.layers[n].self_attn"
+    wrapper_module: ".models.llava"
+    wrapper_class: "Prunable_LlamaAttention"
+
+compressor:
+  requirements:
+    vit_q_layers: [-2]
+    vit_k_layers: [-2]
+    feature_map: true
+  strategies:
+    global:
+      strategy: "scope"
+      params:
+        ratio: 0.75
+        layer_idx: -2
+        alpha: 1.0

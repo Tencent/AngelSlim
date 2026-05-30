@@ -27,6 +27,8 @@ from tqdm import tqdm
 from transformers import (
     AutoConfig,
     AutoModelForCausalLM,
+    Qwen3_5ForConditionalGeneration,
+    Qwen3_5MoeForConditionalGeneration,
     Qwen3VLForConditionalGeneration,
     Qwen3VLMoeForConditionalGeneration,
 )
@@ -50,6 +52,18 @@ SUFFIX_TO_QUANT = [
     ".o_proj.weight",
     ".experts.gate_up_proj",
     ".experts.down_proj",
+]
+
+# Qwen3.5-specific extra suffixes not covered by the generic SUFFIX_TO_QUANT.
+# linear_attn projections: in_proj_qkv, in_proj_z, out_proj are quantized
+# (consistent with Qwen/Qwen3.5-35B-A3B-FP8 on HuggingFace).
+# in_proj_a, in_proj_b, conv1d, A_log, dt_bias, norm are NOT quantized.
+# mtp.fc.weight is also NOT quantized (matches the official checkpoint).
+# Router gates (mlp.gate / shared_expert_gate) are NOT quantized.
+QWEN35_EXTRA_SUFFIX_TO_QUANT = [
+    ".linear_attn.in_proj_qkv.weight",
+    ".linear_attn.in_proj_z.weight",
+    ".linear_attn.out_proj.weight",
 ]
 
 
@@ -124,7 +138,7 @@ def create_quantized_param(param, weight_block_size=(128, 128)):
     quantized_param = quantized_param.permute(0, 1, 3, 2, 4)
     quantized_param = quantized_param.reshape(param_value_shape)[..., :rows, :cols]
 
-    scale_inv = scale_inv.reshape(scale_orig_shape).squeeze().reciprocal()
+    scale_inv = scale_inv.reshape(scale_orig_shape).squeeze().reciprocal().to(torch.bfloat16)
 
     return quantized_param.contiguous(), scale_inv.contiguous()
 
@@ -176,6 +190,102 @@ def process_safetensor(rank, file_name, input_path, output_path, block_size=(128
     return index
 
 
+def _quant_and_record(weight_name, weight, rank, block_size, state_dict, index, file_name):
+    """Quantize a single weight tensor and store result + scale_inv into state_dict/index."""
+    weight = weight.to(f"cuda:{rank}")
+    quant_weight, scale = create_quantized_param(weight, block_size)
+    state_dict[weight_name] = quant_weight.cpu()
+    index[weight_name] = file_name
+    if block_size[0] == -1 and block_size[1] == -1:
+        state_dict[f"{weight_name}_scale"] = scale.cpu()
+        index[f"{weight_name}_scale"] = file_name
+    else:
+        state_dict[f"{weight_name}_scale_inv"] = scale.cpu()
+        index[f"{weight_name}_scale_inv"] = file_name
+    del weight, quant_weight, scale
+    torch.cuda.empty_cache()
+
+
+def process_safetensor_qwen35(rank, file_name, input_path, output_path, block_size=(128, 128)):
+    """
+    Variant of process_safetensor for Qwen3.5 (model_type=qwen3_5_moe).
+
+    Differences from the generic version:
+    1. Main-model experts are stored as batched tensors
+       `experts.gate_up_proj` [N, 2*I, H] and `experts.down_proj` [N, H, I].
+       These are split into per-expert keys before quantization:
+         experts.{i}.gate_proj.weight, experts.{i}.up_proj.weight
+             (split along dim-0 of gate_up_proj)
+         experts.{i}.down_proj.weight
+             (slice along dim-0 of down_proj)
+    2. mtp.* experts are already per-expert in the checkpoint, handled by normal SUFFIX_TO_QUANT.
+    3. mtp.fc.weight is a plain linear that is not covered by SUFFIX_TO_QUANT; it is
+       added via QWEN35_EXTRA_SUFFIX_TO_QUANT.
+    4. Router gates (mlp.gate, shared_expert_gate) are NOT quantized.
+    """
+    suffix_to_quant = SUFFIX_TO_QUANT + QWEN35_EXTRA_SUFFIX_TO_QUANT
+    state_dict = {}
+    index = {}
+
+    with safe_open(os.path.join(input_path, file_name), framework="pt", device="cpu") as f:
+        print(f"Processing (qwen35) {file_name} with {len(f.keys())} weights")
+        for weight_name in f.keys():
+            weight = f.get_tensor(weight_name)
+
+            # ------------------------------------------------------------------
+            # Batched expert tensors: split and quantize per expert
+            # ------------------------------------------------------------------
+            if weight_name.endswith(".experts.gate_up_proj"):
+                # weight shape: [num_experts, 2*intermediate, hidden]
+                num_experts = weight.shape[0]
+                # gate_up_proj is stored as [num_experts, 2*intermediate, hidden]
+                # split into gate (first half) and up (second half) along dim=1
+                gate_w, up_w = weight.chunk(2, dim=1)
+                prefix = weight_name[: -len(".experts.gate_up_proj")]
+                for i in range(num_experts):
+                    gate_name = f"{prefix}.experts.{i}.gate_proj.weight"
+                    up_name = f"{prefix}.experts.{i}.up_proj.weight"
+                    _quant_and_record(
+                        gate_name, gate_w[i], rank, block_size, state_dict, index, file_name
+                    )
+                    _quant_and_record(
+                        up_name, up_w[i], rank, block_size, state_dict, index, file_name
+                    )
+                del weight, gate_w, up_w
+                torch.cuda.empty_cache()
+                continue
+
+            if weight_name.endswith(".experts.down_proj"):
+                # weight shape: [num_experts, hidden, intermediate]
+                num_experts = weight.shape[0]
+                prefix = weight_name[: -len(".experts.down_proj")]
+                for i in range(num_experts):
+                    down_name = f"{prefix}.experts.{i}.down_proj.weight"
+                    _quant_and_record(
+                        down_name, weight[i], rank, block_size, state_dict, index, file_name
+                    )
+                del weight
+                torch.cuda.empty_cache()
+                continue
+
+            # ------------------------------------------------------------------
+            # Regular tensors: quantize if suffix matches, else copy verbatim
+            # ------------------------------------------------------------------
+            if any(weight_name.endswith(suffix) for suffix in suffix_to_quant):
+                _quant_and_record(
+                    weight_name, weight, rank, block_size, state_dict, index, file_name
+                )
+            else:
+                state_dict[weight_name] = weight
+                index[weight_name] = file_name
+
+    new_safetensor_file = os.path.join(output_path, file_name)
+    save_file(state_dict, new_safetensor_file)
+    del state_dict
+    torch.cuda.empty_cache()
+    return index
+
+
 def worker(i, file_names, input_path, output_path, block_size, return_dict):
     world_size = torch.cuda.device_count()
     for file_name in tqdm(file_names, desc=f"Worker {i}"):
@@ -183,7 +293,16 @@ def worker(i, file_names, input_path, output_path, block_size, return_dict):
         return_dict[file_name] = index
 
 
-def main(input_path, output_path, block_size):
+def worker_qwen35(i, file_names, input_path, output_path, block_size, return_dict):
+    world_size = torch.cuda.device_count()
+    for file_name in tqdm(file_names, desc=f"Worker(qwen35) {i}"):
+        index = process_safetensor_qwen35(
+            i % world_size, file_name, input_path, output_path, block_size
+        )
+        return_dict[file_name] = index
+
+
+def main(input_path, output_path, block_size, num_workers=8):
     os.makedirs(output_path, exist_ok=True)
 
     # Check if model.safetensors.index.json exists, otherwise use model.safetensors
@@ -204,7 +323,11 @@ def main(input_path, output_path, block_size):
     config = AutoConfig.from_pretrained(input_path)
     model_type = config.model_type
     with accelerate.init_empty_weights():
-        if model_type == "qwen3_vl_moe":
+        if model_type == "qwen3_5_moe":
+            model = Qwen3_5MoeForConditionalGeneration._from_config(config)
+        elif model_type == "qwen3_5":
+            model = Qwen3_5ForConditionalGeneration._from_config(config)
+        elif model_type == "qwen3_vl_moe":
             model = Qwen3VLMoeForConditionalGeneration._from_config(config)
         elif model_type == "qwen3_vl":
             model = Qwen3VLForConditionalGeneration._from_config(config)
@@ -215,24 +338,59 @@ def main(input_path, output_path, block_size):
     else:
         layers = find_layers(model, [nn.Linear])
     print(f"Found {len(layers)} linear layers")
-    ignored_layers = []
-    for name, _ in layers.items():
-        if not name.endswith("mlp.experts"):
+
+    is_qwen35 = (model_type == "qwen3_5_moe") or (model_type == "qwen3_5")
+    active_suffix = SUFFIX_TO_QUANT + (QWEN35_EXTRA_SUFFIX_TO_QUANT if is_qwen35 else [])
+
+    if is_qwen35:
+        # For Qwen3.5, scan ALL named modules with a weight parameter (not just
+        # nn.Linear) so that Conv1d, Embedding, Router and visual modules are
+        # also captured in modules_to_not_convert, matching the official checkpoint.
+        # Only 2-D weights are counted (1-D LayerNorm/RMSNorm weights are excluded),
+        # which exactly matches the official Qwen/Qwen3.5-35B-A3B-FP8 list.
+        # Batched expert tensors (.experts.gate_up_proj / .experts.down_proj) are
+        # handled inside process_safetensor_qwen35 and must NOT appear here.
+        BATCHED_EXPERT_SUFFIXES = (".experts.gate_up_proj", ".experts.down_proj")
+        ignored_layers = []
+        for name, module in model.named_modules():
+            if not hasattr(module, "weight") or module.weight is None:
+                continue
+            if module.weight.ndim < 2:  # skip 1-D norm weights
+                continue
             weight_name = f"{name}.weight"
-            if not any(weight_name.endswith(suffix) for suffix in SUFFIX_TO_QUANT):
+            is_quantized = any(weight_name.endswith(s) for s in active_suffix) or any(
+                weight_name.endswith(s) for s in BATCHED_EXPERT_SUFFIXES
+            )
+            if not is_quantized:
                 ignored_layers.append(name)
+        # mtp layers are not in the transformers model graph; add them manually.
+        num_mtp_layers = getattr(config.text_config, "mtp_num_hidden_layers", 0)
+        for i in range(num_mtp_layers):
+            ignored_layers.append("mtp.fc")
+            ignored_layers.append(f"mtp.layers.{i}.mlp.gate")
+            ignored_layers.append(f"mtp.layers.{i}.mlp.shared_expert_gate")
+    else:
+        ignored_layers = []
+        for name, _ in layers.items():
+            if not name.endswith("mlp.experts"):
+                weight_name = f"{name}.weight"
+                if not any(weight_name.endswith(suffix) for suffix in active_suffix):
+                    ignored_layers.append(name)
+
     print(f"Ignored layers: {ignored_layers}")
     del model
 
-    args.num_workers = min(args.num_workers, len(safetensor_files))
-    file_subsets = [safetensor_files[i :: args.num_workers] for i in range(args.num_workers)]
+    target_worker = worker_qwen35 if is_qwen35 else worker
+
+    num_workers = min(num_workers, len(safetensor_files))
+    file_subsets = [safetensor_files[i::num_workers] for i in range(num_workers)]
     mp.set_start_method("spawn", force=True)
     manager = mp.Manager()
     return_dict = manager.dict()
     processes = []
-    for i in range(args.num_workers):
+    for i in range(num_workers):
         p = mp.Process(
-            target=worker,
+            target=target_worker,
             args=(i, file_subsets[i], input_path, output_path, block_size, return_dict),
         )
         p.start()
@@ -265,14 +423,29 @@ def main(input_path, output_path, block_size):
     # Quantization config
     with open(os.path.join(output_path, "config.json"), "r") as f:
         config = json.load(f)
-    config["quantization_config"] = {
-        "activation_scheme": "dynamic",
-        "fmt": "e4m3",
-        "quant_method": "fp8",
-        "modules_to_not_convert": ignored_layers,
-    }
-    if block_size[0] != -1 and block_size[1] != -1:
-        config["quantization_config"]["weight_block_size"] = block_size
+
+    if is_qwen35:
+        # Align with the official Qwen/Qwen3.5-35B-A3B-FP8 quantization_config format
+        quant_config = {
+            "quant_method": "fp8",
+            "activation_scheme": "dynamic",
+            "weight_per_tensor": False,
+            "act_per_tensor": False,
+            "modules_to_not_convert": ignored_layers,
+        }
+        if block_size[0] != -1 and block_size[1] != -1:
+            quant_config["weight_block_size"] = list(block_size)
+    else:
+        quant_config = {
+            "activation_scheme": "dynamic",
+            "fmt": "e4m3",
+            "quant_method": "fp8",
+            "modules_to_not_convert": ignored_layers,
+        }
+        if block_size[0] != -1 and block_size[1] != -1:
+            quant_config["weight_block_size"] = list(block_size)
+
+    config["quantization_config"] = quant_config
     print(f"quant config: {config['quantization_config']}")
     with open(os.path.join(output_path, "config.json"), "w") as f:
         json.dump(config, f, indent=4)
@@ -281,7 +454,7 @@ def main(input_path, output_path, block_size):
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--block_size", type=int, nargs=2, default=(128, 128))
-    parser.add_argument("--num_workers", type=int, default=32)
+    parser.add_argument("--num_workers", type=int, default=8)
     parser.add_argument("--input_path", type=str, default="")
     parser.add_argument("--output_path", type=str, default="")
     args = parser.parse_args()
@@ -292,4 +465,4 @@ if __name__ == "__main__":
     if "quantization_config" in json_data.keys():
         raise AssertionError("NOT SUPPORT FP8 DS")
 
-    main(args.input_path, args.output_path, args.block_size)
+    main(args.input_path, args.output_path, args.block_size, args.num_workers)

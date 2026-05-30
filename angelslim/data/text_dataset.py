@@ -13,10 +13,12 @@
 # limitations under the License.
 
 import json
+import os
 from typing import Dict, List
 
 import pyarrow.parquet as pq
 import torch
+from datasets import load_dataset
 from transformers import ProcessorMixin
 
 from .base_dataset import BaseDataset
@@ -32,15 +34,52 @@ class TextDataset(BaseDataset):
         device: str = "cpu",
         max_length: int = 4096,
         num_samples: int = -1,
+        is_sft_data: bool = False,
     ):
         super().__init__(processor, device, max_length)
+        self.is_sft_data = is_sft_data
         self._load_data(data_path, num_samples)
 
     def _load_data(self, data_path: str, num_samples: int):
+        if not os.path.isfile(data_path):
+            self._load_hf_dataset(data_path, num_samples)
+            return
+
         if ".parquet" in data_path.lower():
             self._load_parquet_data(data_path, num_samples)
         else:
             self._load_jsonl_data(data_path, num_samples)
+
+    def _load_hf_dataset(self, data_path: str, num_samples: int, block_size: int = 2048):
+        parts = data_path.split(",")
+        dataset = load_dataset(*parts)["train"]
+        total_samples = (
+            min(num_samples, len(dataset["text"])) if num_samples > 0 else len(dataset["text"])
+        )
+
+        concatenated = {}
+        for sample in dataset:
+            tokenized = self.processor(sample["text"])
+            for key in tokenized.keys():
+                if key not in concatenated:
+                    concatenated[key] = []
+                concatenated[key].extend(tokenized[key])
+
+        total = len(concatenated["input_ids"])
+        if total >= block_size:
+            total = (total // block_size) * block_size
+        result = {
+            k: [t[i : i + block_size] for i in range(0, total, block_size)]
+            for k, t in concatenated.items()
+        }
+        for i in range(total_samples):
+            inputs = {
+                "input_ids": torch.tensor(result["input_ids"][i]).unsqueeze(0).to(self.device)
+            }
+            # HF CausalLM models shift labels internally; feed labels == input_ids.
+            inputs["labels"] = inputs["input_ids"].clone()
+            inputs["attention_mask"] = torch.tensor(result["attention_mask"][i]).to(self.device)
+            self.data.append(inputs)
 
     def _load_parquet_data(self, data_path: str, num_samples: int):
         table = pq.read_table(data_path)
@@ -63,8 +102,8 @@ class TextDataset(BaseDataset):
             if "labels" in df.columns:
                 labels = torch.tensor(df["labels"].iloc[i]).unsqueeze(0)
             else:
-                labels = model_inputs["input_ids"].roll(shifts=-1, dims=-1)
-                labels[:, -1] = -100
+                # HF CausalLM models shift labels internally; feed labels == input_ids.
+                labels = model_inputs["input_ids"].clone()
 
             data_item = {
                 "input_ids": model_inputs["input_ids"].to(self.device),
@@ -84,48 +123,126 @@ class TextDataset(BaseDataset):
 
                 # Validate format
                 assert (
-                    "messages" in data or "input" in data or "conversations" in data
+                    "messages" in data
+                    or "input" in data
+                    or "conversations" in data
+                    or "applied_message" in data
                 ), "JSON format error"
+
+                # Fast path for data that has already been chat-templated.
+                # `applied_message` is a single string that the producer
+                # generated via `apply_chat_template(...)` ahead of time;
+                # we just tokenize it as-is and skip all message / chat-
+                # template / thinking-mode logic below.
+                if "applied_message" in data:
+                    text = data["applied_message"]
+                    model_inputs = self.processor(
+                        text=[text],
+                        return_tensors="pt",
+                        max_length=self.max_length,
+                        truncation=True,
+                        padding="max_length",
+                    )
+                    input_ids = model_inputs["input_ids"]
+                    attention_mask = model_inputs["attention_mask"]
+                    labels = input_ids.clone()
+                    # Mask padding tokens; HF CausalLM shifts labels itself.
+                    labels[attention_mask == 0] = -100
+                    self.data.append(
+                        {
+                            "input_ids": input_ids.to(self.device),
+                            "attention_mask": attention_mask.to(self.device),
+                            "labels": labels.to(self.device),
+                        }
+                    )
+                    line_count += 1
+                    continue
 
                 # Prepare messages
                 messages = self._prepare_messages(data)
 
-                # Apply chat template
-                text = self.processor.apply_chat_template(
-                    messages, tokenize=False, add_generation_prompt=True
+                # Find the LAST assistant turn — loss is computed ONLY on
+                # this reply. Everything before it (system + user(s) +
+                # earlier assistant(s)) serves as prompt context.
+                last_assistant_idx = None
+                for idx, item in enumerate(messages):
+                    if item["role"] == "assistant":
+                        last_assistant_idx = idx
+                if last_assistant_idx is None:
+                    # No assistant turn -> nothing to supervise; skip.
+                    continue
+                prompt_messages = messages[:last_assistant_idx]
+                assistant_msg = messages[last_assistant_idx]
+
+                # Tokenize the prompt (up to the generation marker) and the
+                # full conversation separately so we know exactly where the
+                # assistant reply starts.
+                prompt_text = self.processor.apply_chat_template(
+                    prompt_messages, tokenize=False, add_generation_prompt=True
+                )
+                full_messages = prompt_messages + [assistant_msg]
+                full_text = self.processor.apply_chat_template(
+                    full_messages, tokenize=False, add_generation_prompt=False
                 )
 
-                thinking_data = False
-                for dic in messages:
-                    if dic["role"] == "assistant":
-                        if "<think>" and "</think>" in dic["content"]:
-                            thinking_data = True
-                            break
+                # Legacy branch: thinking-style data without a chat template.
+                thinking_data = any(
+                    m["role"] == "assistant"
+                    and "<think>" in m.get("content", "")
+                    and "</think>" in m.get("content", "")
+                    for m in messages
+                )
                 if thinking_data:
-                    text = self.processor.bos_token if self.processor.bos_token is not None else ""
-                    for dic in messages:
-                        if dic["role"] == "system":
-                            text += dic["content"]
-                        elif dic["role"] == "user":
-                            text = text + "<｜User｜>" + dic["content"] + "<｜Assistant｜>"
-                        elif dic["role"] == "assistant":
-                            text = text + dic["content"] + self.processor.eos_token
+                    bos = self.processor.bos_token or ""
+                    prompt_text = bos
+                    for m in prompt_messages:
+                        if m["role"] == "system":
+                            prompt_text += m["content"]
+                        elif m["role"] == "user":
+                            prompt_text += "<｜User｜>" + m["content"] + "<｜Assistant｜>"
+                        elif m["role"] == "assistant":
+                            prompt_text += m["content"] + self.processor.eos_token
+                    full_text = prompt_text + assistant_msg["content"] + self.processor.eos_token
+
+                # Token-level prompt length: count tokens in ``prompt_text``
+                # without special-token insertion so it aligns with the
+                # prefix of the tokenization of ``full_text``.
+                prompt_ids = self.processor(
+                    prompt_text,
+                    add_special_tokens=False,
+                    return_tensors=None,
+                )["input_ids"]
+                prompt_len = len(prompt_ids)
 
                 model_inputs = self.processor(
-                    [text],
+                    text=[full_text],
                     return_tensors="pt",
                     max_length=self.max_length,
                     truncation=True,
                     padding="max_length",
                 )
 
-                labels = model_inputs["input_ids"].roll(shifts=-1, dims=-1)
-                labels[:, -1] = -100
+                # Build labels: HF CausalLM shifts labels internally, so
+                # the label at position ``t`` supervises the prediction of
+                # ``input_ids[t+1]``. Positions before (and at) the end of
+                # the prompt are set to -100 so they contribute no loss.
+                input_ids = model_inputs["input_ids"]
+                attention_mask = model_inputs["attention_mask"]
+                labels = input_ids.clone()
+                if self.is_sft_data:
+                    labels[:, :prompt_len] = -100
+                # Also mask padding tokens.
+                labels[attention_mask == 0] = -100
+                if (labels != -100).sum().item() == 0:
+                    # Fully truncated prompt / empty assistant targets make
+                    # HF CE unstable (mean over no labels) and add no KD
+                    # signal. Skip such samples instead of emitting NaNs.
+                    continue
 
                 self.data.append(
                     {
-                        "input_ids": model_inputs["input_ids"].to(self.device),
-                        "attention_mask": model_inputs["attention_mask"].to(self.device),
+                        "input_ids": input_ids.to(self.device),
+                        "attention_mask": attention_mask.to(self.device),
                         "labels": labels.to(self.device),
                     }
                 )

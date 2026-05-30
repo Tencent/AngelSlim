@@ -1,0 +1,25 @@
+# Global configuration
+global:
+  save_path: ./output
+  deploy_backend: vllm
+
+# Model configuration
+model:
+  name: Qwen3_5
+  model_path: Qwen/Qwen3.5-35B-A3B
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+
+# Compression configuration
+compression:
+  name: PTQWeightOnly
+  quantization:
+    name: fp8_blockwise
+    save_name: fp8_blockwise
+    bits: 8
+    quant_method:
+      block_size: [128, 128]
+      num_workers: 8

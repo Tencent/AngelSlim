@@ -22,6 +22,7 @@ from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import Qwen3VLMoeTex
 
 from ...utils import find_parent_layer_and_sub_name, print_info
 from ..compressor_factory import CompressorFactory
+from ..transform import TransformFactory
 from .core import PTQHook
 from .modules import AWQ, FP8, GPTQ, INT8, NVFP4, W4A8INT8, LeptoFP8, SmoothQuant
 
@@ -36,6 +37,7 @@ class PTQ:
             model(nn.Moudle, required): the model to be quant.
             slim_config(dict, required): the configuration for quantization.
                 - compress_config: the configuration for compression.
+                - transform_config: the configuration for transform.
                 - global_config: the global configuration for the model.
         """
         self.quant_model = model
@@ -43,7 +45,16 @@ class PTQ:
         self.quant_model.init_ptq(slim_config)
         self.absolute_model_path = slim_config["global_config"].absolute_model_path
         self.quant_algo = self.quant_model.quant_config.quant_algo
+
+        # init transform
+        # TODO(gavinlee) will be deprecated, and move to transform, now only for smoothquant
         self.quant_helpers = self.quant_model.quant_config.quant_helpers
+
+        # create transform, for example, smoothquant
+        self.transform_runner = TransformFactory.create(self.quant_model, slim_config)
+        # trasform first, then run quantization
+        self.transform_runner.run()
+
         if "fp8" in self.quant_algo or "int8" in self.quant_algo or "nvfp4" in self.quant_algo:
             # Add ptq observer hook
             self.ptq_hook = PTQHook(self.quant_model)
@@ -151,12 +162,16 @@ class PTQ:
             if "smooth" in self.quant_helpers:
                 self.smooth.convert()
             self._convert()
+
+        self.transform_runner.convert()
         print_info("convert model done.")
 
     def save(self, save_path: str):
         """
         Save PTQ scales or ckpt.
         """
+        self.transform_runner.save()
+
         if (
             hasattr(self.quant_model.quant_config, "quant_analyse")
             and self.quant_model.quant_config.quant_analyse
@@ -190,7 +205,58 @@ class PTQ:
             save_func = self.quant_model.get_save_func()(self.quant_model)
             save_func.save(save_path)
 
+    def get_meta_weights_info(self, model):
+        """Get detailed information of all meta weights."""
+        meta_params = []
+
+        for name, param in model.named_parameters():
+            if param.device.type == "meta":
+                meta_params.append(
+                    {
+                        "name": name,
+                    }
+                )
+        return meta_params
+
+    def set_meta_weights_info(self, model):
+        """Replace all meta weights with the real ones loaded from disk."""
+        orign_w_dict = {}
+        for name, param in model.named_parameters():
+            if param.device.type == "meta":
+                with open(
+                    os.path.join(self.absolute_model_path, "model.safetensors.index.json"),
+                    "r",
+                ) as f:
+                    model_index = json.load(f)
+                orign_w_file = os.path.join(
+                    self.absolute_model_path,
+                    model_index["weight_map"][name],
+                )
+                if orign_w_file in orign_w_dict.keys():
+                    orign_w = orign_w_dict[orign_w_file]
+                else:
+                    orign_w = load_file(orign_w_file, device="cpu")
+                    orign_w_dict[orign_w_file] = orign_w
+
+                empty_tensor = torch.empty(param.data.shape, dtype=param.data.dtype, device="cpu")
+                new_param = torch.nn.Parameter(empty_tensor)
+                new_param.data = orign_w[name]
+                parts = name.split(".")
+                current_module = model
+
+                # Navigate to the module that owns the parameter
+                for part in parts[:-1]:
+                    current_module = getattr(current_module, part)
+
+                # Set the new parameter on the target module
+                setattr(current_module, parts[-1], new_param)
+
+        del orign_w_dict
+
     def _convert(self):
+        self.set_meta_weights_info(self.quant_model.model)
+        print_info(f"Meta weight:{self.get_meta_weights_info(self.quant_model.model)}")
+
         # 1. get act, weight and kv-cache scale
         for name, sub_layer in self.ptq_hook.quant_layers_dict.items():
             if (

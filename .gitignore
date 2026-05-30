@@ -3,6 +3,7 @@
 build/
 ./dist/
 *.pyc
+*.pyc.*
 dist/
 *.data
 *.log

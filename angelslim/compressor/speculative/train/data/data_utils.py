@@ -18,6 +18,8 @@ from typing import Any, Dict, List
 import torch
 from transformers.image_utils import load_image
 
+from angelslim.utils import rank0_print
+
 __all__ = [
     "process_token_dict_to_mappings",
     "convert_sharegpt_data",
@@ -27,7 +29,44 @@ __all__ = [
     "VLMHunyuanDataCollatorWithPadding",
     "AudioDataCollatorWithPadding",
     "CosyVoice3DataCollatorWithPadding",
+    "build_image_processor_kwargs",
 ]
+
+
+def build_image_processor_kwargs(image_processor, max_pixels=None, min_pixels=None):
+    """
+    convert max_pixels/min_pixels to the format required by the specific image_processor.
+      - Qwen2.5-VL: directly use max_pixels / min_pixels
+      - Qwen3-VL:   convert to size={"longest_edge": max_pixels, "shortest_edge": min_pixels}
+
+    Args:
+        image_processor: model's image_processor instance
+        max_pixels: maximum pixels (total area), None means no limit
+        min_pixels: minimum pixels (total area), None means no limit
+
+    Returns:
+        dict: can be directly passed to image_processor(...)
+    """
+    if max_pixels is None and min_pixels is None:
+        return {}
+
+    processor_class = type(image_processor).__name__
+    # Qwen3-VL uses size={"longest_edge": ..., "shortest_edge": ...}
+    if "Qwen3" in processor_class:
+        size = {}
+        if max_pixels is not None:
+            size["longest_edge"] = max_pixels
+        if min_pixels is not None:
+            size["shortest_edge"] = min_pixels
+        return {"size": size}
+    else:
+        # Qwen2.5-VL's accept max_pixels and min_pixels
+        kwargs = {}
+        if max_pixels is not None:
+            kwargs["max_pixels"] = max_pixels
+        if min_pixels is not None:
+            kwargs["min_pixels"] = min_pixels
+        return kwargs
 
 
 def convert_sharegpt_data(row, dataset_column="conversations"):
@@ -77,26 +116,37 @@ def process_token_dict_to_mappings(
             token_dict[token] = 0
             if len(token_dict) >= draft_vocab_size:
                 break
-    print(f"Added missing tokens to reach draft vocab size: {draft_vocab_size}")
-    print(f"Total tokens after addition: {len(token_dict)}")
+    rank0_print(f"Added missing tokens to reach draft vocab size: {draft_vocab_size}")
+    rank0_print(f"Total tokens after addition: {len(token_dict)}")
     total_frequency = sum(token_dict.values())
     top_N = token_dict.most_common(draft_vocab_size)
     top_N_frequency_sum = sum(freq for key, freq in top_N)
 
     if total_frequency == 0:
-        print("Warning: Total token frequency is zero. All tokens will have zero ratio.")
+        rank0_print("Warning: Total token frequency is zero. All tokens will have zero ratio.")
         top_N_ratio = 0.0
     else:
         top_N_ratio = top_N_frequency_sum / total_frequency
 
-    print(f"top {draft_vocab_size} token frequency ratio: {top_N_ratio:.2%}")
+    rank0_print(f"top {draft_vocab_size} token frequency ratio: {top_N_ratio:.2%}")
     used_tokens = [key for key, freq in top_N]
     used_tokens.sort()
 
-    d2t = [used_tokens[i] - i for i in range(len(used_tokens))]
-    t2d = [i in used_tokens for i in range(target_vocab_size)]
-    d2t = torch.tensor(d2t)
-    t2d = torch.tensor(t2d)
+    used_set = set(used_tokens)
+    d2t = torch.tensor(
+        [used_tokens[i] - i for i in range(len(used_tokens))],
+        dtype=torch.int64,  # must match register_buffer dtype in Eagle3LlamaForCausalLM
+    )
+    t2d = torch.tensor(
+        [i in used_set for i in range(target_vocab_size)],
+        dtype=torch.bool,  # must match register_buffer dtype in Eagle3LlamaForCausalLM
+    )
+
+    assert d2t.shape == (draft_vocab_size,), f"d2t shape {d2t.shape} != ({draft_vocab_size},)"
+    assert t2d.shape == (target_vocab_size,), f"t2d shape {t2d.shape} != ({target_vocab_size},)"
+    assert (
+        t2d.sum().item() == draft_vocab_size
+    ), f"t2d has {t2d.sum().item()} True entries, expected {draft_vocab_size}"
 
     return d2t, t2d
 
@@ -198,14 +248,31 @@ class DataCollatorWithPadding:
 
 class VLMDataCollatorWithPadding:
 
-    def __init__(self, processor=None):
+    def __init__(self, processor=None, image_processor_kwargs=None):
         """
         Args:
             processor: VLM processor (e.g. AutoProcessor for qwen3_vl).
                        When provided, image_paths in features will be decoded
                        on-the-fly to pixel_values (used in online training).
+            image_processor_kwargs: Additional kwargs passed to image_processor,
+                       e.g. {"max_pixels": 1003520, "min_pixels": 200704}.
         """
         self.processor = processor
+        if image_processor_kwargs is None:
+            image_processor_kwargs = {}
+        max_pixels = image_processor_kwargs.get("max_pixels", None)
+        min_pixels = image_processor_kwargs.get("min_pixels", "1024")
+        if (
+            processor is not None
+            and (max_pixels is not None or min_pixels is not None)
+            and hasattr(processor, "image_processor")
+        ):
+            self._resolved_image_processor_kwargs = build_image_processor_kwargs(
+                processor.image_processor, max_pixels, min_pixels
+            )
+        else:
+            self._resolved_image_processor_kwargs = {}
+        rank0_print(f"_resolved_image_processor_kwargs: {self._resolved_image_processor_kwargs}")
 
     def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, Any]:
         max_length = max(item["input_ids"].shape[1] for item in features)
@@ -232,25 +299,36 @@ class VLMDataCollatorWithPadding:
         # Online training: decode image_paths -> pixel_values on-the-fly
         if self.processor is not None and "image_paths" in features[0]:
             all_pixel_values, all_image_grid_thw = [], []
-            all_video_pixel_values, all_video_grid_thw = [], []
+            all_pixel_values_videos, all_video_grid_thw = [], []
             for item in features:
                 image_paths = json.loads(item["image_paths"])
                 if image_paths:
                     images = [load_image(p) for p in image_paths]
-                    vision_enc = self.processor.image_processor(images=images, return_tensors="pt")
+                    if hasattr(self.processor, "image_processor"):
+                        vision_enc = self.processor.image_processor(
+                            images=images,
+                            return_tensors="pt",
+                            **self._resolved_image_processor_kwargs,
+                        )
+                    else:
+                        vision_enc = self.processor(
+                            images=images,
+                            return_tensors="pt",
+                            **self._resolved_image_processor_kwargs,
+                        )
                     all_pixel_values.append(vision_enc["pixel_values"])
                     if "image_grid_thw" in vision_enc:
                         all_image_grid_thw.append(vision_enc["image_grid_thw"])
-                    if "video_pixel_values" in vision_enc:
-                        all_video_pixel_values.append(vision_enc["video_pixel_values"])
+                    if "pixel_values_videos" in vision_enc:
+                        all_pixel_values_videos.append(vision_enc["pixel_values_videos"])
                     if "video_grid_thw" in vision_enc:
                         all_video_grid_thw.append(vision_enc["video_grid_thw"])
             if all_pixel_values:
                 batch["pixel_values"] = paddingtensor3D_BHW(all_pixel_values)
             if all_image_grid_thw:
                 batch["image_grid_thw"] = torch.cat(all_image_grid_thw, dim=0)
-            if all_video_pixel_values:
-                batch["video_pixel_values"] = paddingtensor3D_BHW(all_video_pixel_values)
+            if all_pixel_values_videos:
+                batch["pixel_values_videos"] = paddingtensor3D_BHW(all_pixel_values_videos)
             if all_video_grid_thw:
                 batch["video_grid_thw"] = torch.cat(all_video_grid_thw, dim=0)
         else:
@@ -258,9 +336,9 @@ class VLMDataCollatorWithPadding:
                 batch["pixel_values"] = paddingtensor3D_BHW(
                     [item["pixel_values"] for item in features]
                 )
-            if "video_pixel_values" in features[0]:
-                batch["video_pixel_values"] = paddingtensor3D_BHW(
-                    [item["video_pixel_values"] for item in features]
+            if "pixel_values_videos" in features[0]:
+                batch["pixel_values_videos"] = paddingtensor3D_BHW(
+                    [item["pixel_values_videos"] for item in features]
                 )
             if all(
                 "image_grid_thw" in item and item["image_grid_thw"] is not None
@@ -299,14 +377,31 @@ class VLMDataCollatorWithPadding:
 
 class VLMHunyuanDataCollatorWithPadding:
 
-    def __init__(self, processor=None):
+    def __init__(self, processor=None, image_processor_kwargs=None):
         """
         Args:
             processor: VLM processor (e.g. AutoProcessor for hunyuan_vl).
                        When provided, image_paths in features will be decoded
                        on-the-fly to pixel_values (used in online training).
+            image_processor_kwargs: Additional kwargs passed to image_processor,
+                       e.g. {"max_pixels": 1003520, "min_pixels": 200704}.
         """
         self.processor = processor
+        if image_processor_kwargs is None:
+            image_processor_kwargs = {}
+        max_pixels = image_processor_kwargs.get("max_pixels", None)
+        min_pixels = image_processor_kwargs.get("min_pixels", "1024")
+        if (
+            processor is not None
+            and (max_pixels is not None or min_pixels is not None)
+            and hasattr(processor, "image_processor")
+        ):
+            self._resolved_image_processor_kwargs = build_image_processor_kwargs(
+                processor.image_processor, max_pixels, min_pixels
+            )
+        else:
+            self._resolved_image_processor_kwargs = {}
+        rank0_print(f"_resolved_image_processor_kwargs: {self._resolved_image_processor_kwargs}")
 
     def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, Any]:
         max_length = max(item["input_ids"].shape[1] for item in features)
@@ -337,7 +432,18 @@ class VLMHunyuanDataCollatorWithPadding:
                 image_paths = json.loads(item["image_paths"])
                 if image_paths:
                     images = [load_image(p) for p in image_paths]
-                    vision_enc = self.processor(images=images, return_tensors="pt")
+                    if hasattr(self.processor, "image_processor"):
+                        vision_enc = self.processor.image_processor(
+                            images=images,
+                            return_tensors="pt",
+                            **self._resolved_image_processor_kwargs,
+                        )
+                    else:
+                        vision_enc = self.processor(
+                            images=images,
+                            return_tensors="pt",
+                            **self._resolved_image_processor_kwargs,
+                        )
                     all_pixel_values.append(vision_enc["pixel_values"])
                     if "image_grid_thw" in vision_enc:
                         all_image_grid_thw.append(vision_enc["image_grid_thw"])

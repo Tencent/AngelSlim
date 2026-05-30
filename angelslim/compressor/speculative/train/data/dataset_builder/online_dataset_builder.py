@@ -27,6 +27,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 from tqdm import tqdm
 from transformers import AutoProcessor, AutoTokenizer
+from transformers.image_utils import load_image
 from transformers.pipelines.audio_utils import ffmpeg_read
 
 from angelslim.utils import rank0_print
@@ -41,6 +42,7 @@ from ..data_utils import (
     DataCollatorWithPadding,
     VLMDataCollatorWithPadding,
     VLMHunyuanDataCollatorWithPadding,
+    build_image_processor_kwargs,
 )
 from .base_dataset_builder import OnlineDatasetBuilder
 from .dataset_builder_factory import DatasetBuilderFactory
@@ -68,7 +70,27 @@ class OnlineLLMDatasetBuilder(OnlineDatasetBuilder):
     def get_data_collator(self) -> Any:
         return DataCollatorWithPadding()
 
+    def _process_single_conversation(self, conversation_data):
+        """
+        compatible with two format:
+        {"id": "0", "conversations": [
+            {"role": "user", "content": "xxx"},
+            {"role": "assistant", "content": "xxx"}
+        ]}
+        {"id": "0", "conversations": [
+            {"role": "user", "content": [{"type": "text", "text": "xxx"}]},
+            {"role": "assistant", "content": [{"type": "text", "text": "xxx"}]}
+        ]}
+        """
+        if conversation_data:
+            for message in conversation_data:
+                content = message.get("content")
+                if isinstance(content, list):
+                    message["content"] = self._normalize_content(content)
+        return super()._process_single_conversation(conversation_data)
 
+
+@DatasetBuilderFactory.register("online", "VLM", "qwen2_5_vl")
 @DatasetBuilderFactory.register("online", "VLM", "qwen3_vl")
 class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
     def __init__(
@@ -87,6 +109,11 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
             chat_template_type,
             display,
         )
+        _max_pixels = os.environ.get("MAX_PIXELS")
+        _min_pixels = os.environ.get("MIN_PIXELS", "1024")
+        self.max_pixels = int(_max_pixels) if _max_pixels is not None else None
+        self.min_pixels = int(_min_pixels) if _min_pixels is not None else None
+        rank0_print(f"max_pixels: {self.max_pixels}, min_pixels: {self.min_pixels}")
 
     def build_dataset(
         self,
@@ -168,7 +195,15 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
 
     def get_data_collator(self) -> Any:
         # for online vlm training: dynamically compute pixel_values during collate stage
-        return VLMDataCollatorWithPadding(processor=self.tokenizer)
+        image_processor_kwargs = {}
+        if self.max_pixels is not None:
+            image_processor_kwargs["max_pixels"] = self.max_pixels
+        if self.min_pixels is not None:
+            image_processor_kwargs["min_pixels"] = self.min_pixels
+        return VLMDataCollatorWithPadding(
+            processor=self.tokenizer,
+            image_processor_kwargs=image_processor_kwargs or None,
+        )
 
     def _preprocess_function(self, examples: Dict[str, List]) -> Dict[str, List]:
         new_examples = {
@@ -223,6 +258,37 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
             offsets = offsets[0]
         return super()._create_loss_mask_from_offsets(conversation, offsets)
 
+    def _get_image_size(self, image_source: str) -> tuple:
+        """
+        Get image (width, height), compatible with local file paths, URLs, base64, etc.
+
+        For local file paths, uses PIL.Image.open() to quickly read the file header
+        for dimensions (without decoding pixels), and manually handles EXIF orientation
+        to match the exif_transpose behavior of load_image().
+        For URLs/base64 and other non-local sources, uses
+        transformers.image_utils.load_image to fully load the image
+        (which internally calls exif_transpose + convert("RGB")), then reads dimensions.
+        """
+        if os.path.isfile(image_source):
+            # Local file: quickly read file header for dimensions without decoding pixels
+            with Image.open(image_source) as img:
+                width, height = img.size
+                # Check EXIF orientation; swap width/height if 90°/270° rotation is needed
+                # Mimics the exif_transpose behavior in load_image()
+                try:
+                    exif = img.getexif()
+                    orientation = exif.get(0x0112)  # EXIF Orientation tag
+                    # orientation 5,6,7,8 involve 90°/270° rotation, need to swap width/height
+                    if orientation is not None and orientation >= 5:
+                        width, height = height, width
+                except Exception:
+                    pass
+            return width, height
+        else:
+            # URL/base64/other formats: use load_image to fully load the image
+            img = load_image(image_source)
+            return img.size
+
     def _process_single_conversation(self, conversation_data: List[Dict]) -> Optional[Dict]:
         if not conversation_data or not isinstance(conversation_data, list):
             return None
@@ -258,22 +324,73 @@ class OnlineVLMDatasetBuilder(OnlineDatasetBuilder):
                 del message["content"]
                 message["content"] = new_content
 
-            encoding = self.tokenizer.apply_chat_template(
+            # ====================================================================
+            # Performance optimization: avoid loading full images during preprocessing
+            #
+            # The original apply_chat_template(tokenize=True) internally calls
+            # image_processor to fully load and process each image (resize, compute
+            # pixel_values, etc.), which is very time-consuming.
+            # However, the preprocessing stage only needs input_ids/loss_mask, not
+            # pixel_values (which are computed in VLMDataCollatorWithPadding's
+            # collate stage).
+            #
+            # Optimization approach:
+            #  1. apply_chat_template(tokenize=False) renders the Jinja template,no image loading
+            #  2. PIL.Image.open().size to quickly get image dimensions
+            #  3. _get_num_multimodal_tokens to compute token count per image based on dimensions
+            #  4. Manually expand <|image_pad|> placeholders to the correct count in the text
+            #  5. Use tokenizer for tokenization (bypassing processor's image loading pipeline)
+            # ====================================================================
+
+            # Step 1: Get formatted text (no tokenization, no image loading)
+            text = self.tokenizer.apply_chat_template(
                 messages,
-                tokenize=True,
+                tokenize=False,
                 add_generation_prompt=False,
-                return_dict=True,
+            )
+
+            # Step 2 & 3: If images exist, get dimensions and compute token count per image
+            image_token = getattr(self.tokenizer, "image_token", "<|image_pad|>")
+            if image_paths and hasattr(self.tokenizer, "image_processor"):
+                image_processor = self.tokenizer.image_processor
+                merge_size = getattr(image_processor, "merge_size", 2)
+
+                # Build kwargs required by get_number_of_image_patches
+                # Note: get_number_of_image_patches expects "min_pixels"/"max_pixels" keys,
+                # cannot use build_image_processor_kwargs (Qwen3-VL returns "size" format)
+                patches_kwargs = {}
+                if self.max_pixels is not None:
+                    patches_kwargs["max_pixels"] = self.max_pixels
+                if self.min_pixels is not None:
+                    patches_kwargs["min_pixels"] = self.min_pixels
+
+                # Step 4: Replace image_pad placeholder with the correct number of tokens per image
+                for img_path in image_paths:
+                    # Get image dimensions, compatible with local files/URLs/base64 etc.
+                    width, height = self._get_image_size(img_path)
+                    num_patches = image_processor.get_number_of_image_patches(
+                        height, width, patches_kwargs
+                    )
+                    num_tokens = num_patches // (merge_size**2)
+                    # Replace a single <|image_pad|> with num_tokens <|image_pad|> tokens
+                    text = text.replace(image_token, "<|placeholder|>" * num_tokens, 1)
+                text = text.replace("<|placeholder|>", image_token)
+
+            # Step 5: Tokenize with tokenizer (bypassing processor's image loading pipeline)
+            encoding = self.tokenizer.tokenizer(
+                text,
                 return_tensors="pt",
                 return_offsets_mapping=True,
                 max_length=self.max_length,
                 truncation=True,
                 padding=False,
+                add_special_tokens=False,
             )
 
             input_ids = encoding["input_ids"]
             offsets = encoding["offset_mapping"]
 
-            conversation = self.tokenizer.decode(input_ids[0], skip_special_tokens=False)
+            conversation = self.tokenizer.tokenizer.decode(input_ids[0], skip_special_tokens=False)
 
             # Create loss mask for assistant responses
             try:
@@ -326,6 +443,11 @@ class OnlineVLMHunyuanVLDatasetBuilder(OnlineDatasetBuilder):
             chat_template_type,
             display,
         )
+        _max_pixels = os.environ.get("MAX_PIXELS")
+        _min_pixels = os.environ.get("MIN_PIXELS", "1024")
+        self.max_pixels = int(_max_pixels) if _max_pixels is not None else None
+        self.min_pixels = int(_min_pixels) if _min_pixels is not None else None
+        rank0_print(f"max_pixels: {self.max_pixels}, min_pixels: {self.min_pixels}")
 
     def build_dataset(
         self,
@@ -404,7 +526,15 @@ class OnlineVLMHunyuanVLDatasetBuilder(OnlineDatasetBuilder):
 
     def get_data_collator(self) -> Any:
         # for online training, we need to use VLMHunyuanDataCollatorWithPadding
-        return VLMHunyuanDataCollatorWithPadding(processor=self.tokenizer)
+        image_processor_kwargs = {}
+        if self.max_pixels is not None:
+            image_processor_kwargs["max_pixels"] = self.max_pixels
+        if self.min_pixels is not None:
+            image_processor_kwargs["min_pixels"] = self.min_pixels
+        return VLMHunyuanDataCollatorWithPadding(
+            processor=self.tokenizer,
+            image_processor_kwargs=image_processor_kwargs or None,
+        )
 
     def _preprocess_function(self, examples: Dict[str, List]) -> Dict[str, List]:
         new_examples = {
@@ -482,6 +612,11 @@ class OnlineVLMHunyuanVLDatasetBuilder(OnlineDatasetBuilder):
             )
             image_inputs, _ = self._extract_vision_info(messages)
 
+            image_kwargs = {}
+            if image_inputs and hasattr(self.tokenizer, "image_processor"):
+                image_kwargs = build_image_processor_kwargs(
+                    self.tokenizer.image_processor, self.max_pixels, self.min_pixels
+                )
             encoding = self.tokenizer(
                 text=[text],
                 images=image_inputs,
@@ -490,6 +625,7 @@ class OnlineVLMHunyuanVLDatasetBuilder(OnlineDatasetBuilder):
                 max_length=self.max_length,
                 truncation=True,
                 padding=False,
+                **image_kwargs,
             )
             input_ids = encoding["input_ids"]
             offsets = encoding["offset_mapping"]

@@ -27,6 +27,8 @@ from ..model_utils import expand_mask, make_causal_mask
 
 
 class Eagle3BaseDraftModel(PreTrainedModel, ABC):
+    supports_gradient_checkpointing = True
+
     @abstractmethod
     def compute_logits(self, input_ids, attention_mask):
         pass
@@ -40,8 +42,11 @@ class Eagle3BaseDraftModel(PreTrainedModel, ABC):
         pass
 
     @abstractmethod
-    def get_input_embeddings(self, input_ids):
+    def embed_input_ids(self, input_ids):
         pass
+
+    def get_input_embeddings(self):
+        return self.embed_tokens
 
     def freeze_embed_weights(self):
         for param in self.embed_tokens.parameters():
@@ -203,5 +208,18 @@ class Eagle3BaseDraftModel(PreTrainedModel, ABC):
             d2t = cache["d2t"]
             t2d = cache["t2d"]
 
+        self.t2d.copy_(t2d)
+        self.d2t.copy_(d2t)
+
+    def load_vocab_mapping(self, vocab_mapping_path):
+        """
+        Load pre-computed vocab mapping directly from disk.
+
+        Args:
+            vocab_mapping_path: Path to the vocab_mapping.pt file saved by generate_hidden
+        """
+        cache = torch.load(vocab_mapping_path)
+        d2t = cache["d2t"]
+        t2d = cache["t2d"]
         self.t2d.copy_(t2d)
         self.d2t.copy_(d2t)

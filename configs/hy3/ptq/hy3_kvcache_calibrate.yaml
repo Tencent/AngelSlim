@@ -1,0 +1,29 @@
+# KV-cache calibration + scale search for HY3 (standalone, no weight/MoE hooks)
+# Consumed by: tools/kvcache/run_kvcache_calibrate.py
+#
+# Keys here match the script's argparse `dest` names. Values listed below
+# override argparse defaults; explicit command-line flags still take final
+# precedence (e.g. `python3 ... -c this.yaml --tp-size 8` will use 8).
+
+# -------- Paths --------
+model_path: /path/to/model
+ptq_data_path: /path/to/dataset
+output_dir: /path/to/output
+
+# -------- Model loading / runtime --------
+tp_size: 16
+batch_size: 4
+num_samples: 512
+max_length: 32768
+distributed_executor_backend: ray       # ray | mp
+skip_weight_loading: false              # true => dummy weights (debug only)
+
+# -------- KV-cache granularity --------
+per_head: true                          # true => per-head scales; false => per-tensor
+
+# -------- KV-cache scale search --------
+search_kv_scale: true
+search_kv_num_samples: 32
+search_kv_min_multiplier: 0.4
+search_kv_max_multiplier: 8.0
+search_kv_num_steps: 50

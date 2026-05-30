@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from .awq.awq import AWQ  # noqa: F401
+from .daq.daq import DAQ  # noqa: F401
 from .fp8.fp8 import FP8  # noqa: F401
 from .fp8.lepto_fp8 import LeptoFP8  # noqa: F401
 from .gptq.gptaq_module import GPTAQModule  # noqa: F401

@@ -1,0 +1,1588 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>D-Cut: Adaptive Verification Depth Pruning</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>MathJax={tex:{inlineMath:[['$','$']],displayMath:[['$$','$$']]}}</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+SC:wght@300;400;500;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy: #0a0f1e;
+  --navy-light: #131b36;
+  --accent: #3b82f6;
+  --accent-bright: #60a5fa;
+  --accent-glow: rgba(59, 130, 246, 0.15);
+  --surface: #f8fafd;
+  --surface-alt: #f1f5f9;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --text-light: #94a3b8;
+  --border: #e2e8f0;
+  --border-light: #f1f5f9;
+  --green: #10b981;
+  --green-soft: rgba(16, 185, 129, 0.12);
+  --amber: #f59e0b;
+  --amber-soft: rgba(245, 158, 11, 0.12);
+  --red-soft: rgba(239, 68, 68, 0.08);
+  --gradient-hero: linear-gradient(135deg, #0a0f1e 0%, #1a1f4e 40%, #1e3a5f 100%);
+  --gradient-accent: linear-gradient(135deg, #2563eb, #7c3aed);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -2px rgba(0,0,0,0.05);
+  --shadow-lg: 0 10px 25px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.05);
+  --shadow-xl: 0 20px 40px -8px rgba(0,0,0,0.12);
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: "Inter", "Noto Sans SC", -apple-system, sans-serif;
+  background: #ffffff;
+  color: var(--text);
+  line-height: 1.8;
+  font-size: 15.5px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== Hero ===== */
+.hero {
+  background: #ffffff;
+  padding: 80px 24px 48px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+.hero-inner {
+  max-width: 700px;
+  margin: 0 auto;
+}
+.hero h1 {
+  font-family: "DM Serif Display", "Noto Sans SC", serif;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  font-weight: 400;
+  color: var(--navy);
+  line-height: 1.3;
+  margin-bottom: 16px;
+  letter-spacing: -0.01em;
+}
+.hero h1 span {
+  color: var(--accent);
+}
+.hero-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  font-weight: 400;
+}
+
+/* ===== Article ===== */
+.article {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+.section {
+  padding: 56px 0;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.section.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Section numbering & headers */
+.section-header {
+  margin-bottom: 24px;
+}
+.section-num {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+}
+h2 {
+  font-family: "DM Serif Display", "Noto Sans SC", serif;
+  font-size: 1.7rem;
+  font-weight: 400;
+  color: var(--navy);
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 32px 0 12px;
+}
+p { margin-bottom: 16px; }
+strong { color: var(--navy); font-weight: 600; }
+
+/* ===== Divider ===== */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--border), transparent);
+  margin: 0;
+}
+
+/* ===== Callout / Note ===== */
+.callout {
+  background: var(--accent-glow);
+  border: 1px solid rgba(59,130,246,0.15);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin: 24px 0;
+  position: relative;
+}
+.callout::before {
+  content: '💡';
+  position: absolute;
+  top: -12px;
+  left: 20px;
+  background: white;
+  padding: 0 6px;
+  font-size: 1rem;
+}
+.callout p { margin-bottom: 8px; font-size: 0.92rem; line-height: 1.75; }
+.callout p:last-child { margin-bottom: 0; }
+
+/* ===== Tables ===== */
+.table-container {
+  margin: 20px 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+th {
+  padding: 12px 14px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+td {
+  padding: 11px 14px;
+  text-align: center;
+  border-bottom: 1px solid var(--border-light);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.82rem;
+}
+td:first-child, th:first-child {
+  text-align: left;
+  font-family: "Inter", "Noto Sans SC", sans-serif;
+  font-weight: 500;
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(59,130,246,0.03); }
+.cell-best {
+  color: var(--accent);
+  font-weight: 700;
+}
+.cell-heat-high {
+  background: rgba(59, 130, 246, 0.1);
+}
+.cell-heat-mid {
+  background: rgba(59, 130, 246, 0.05);
+}
+.cell-dim {
+  color: var(--text-light);
+}
+.table-caption {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-top: 8px;
+  font-style: italic;
+}
+
+/* ===== Charts ===== */
+.chart-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 24px 0;
+}
+.chart-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin: 24px 0;
+}
+.chart-card {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.3s ease, transform 0.2s ease;
+}
+.chart-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+.chart-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chart-title .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+canvas { max-height: 220px; }
+
+/* ===== Animated Diagrams ===== */
+.anim-diagram {
+  margin: 24px 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.anim-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.anim-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.anim-replay {
+  font-size: 0.72rem;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: white;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all .2s;
+}
+.anim-replay:hover { border-color: var(--accent); color: var(--accent); }
+.anim-stage {
+  padding: 20px 18px;
+  min-height: 120px;
+}
+.anim-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.anim-row:last-child { margin-bottom: 0; }
+.anim-label {
+  width: 50px;
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: right;
+}
+.anim-tokens {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 32px;
+  flex-wrap: wrap;
+}
+.anim-stat {
+  font-size: 0.7rem;
+  color: var(--text-light);
+  margin-left: auto;
+  font-family: "JetBrains Mono", monospace;
+}
+.anim-legend {
+  display: flex;
+  gap: 14px;
+  padding: 8px 18px 12px;
+  font-size: 0.68rem;
+  color: var(--text-light);
+}
+.legend-item { display: flex; align-items: center; gap: 4px; }
+.legend-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+/* Token styles for animation */
+.tok {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  font-family: "JetBrains Mono", monospace;
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity .3s, transform .3s, background .3s, border-color .3s, color .3s;
+}
+.tok.show { opacity: 1; transform: scale(1); }
+.tok.ar { background: var(--border); color: var(--text-secondary); border: 1px solid transparent; }
+.tok.draft { background: rgba(124,58,237,0.1); color: #7c3aed; border: 1px solid rgba(124,58,237,0.25); }
+.tok.accepted { background: rgba(16,185,129,0.12); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
+.tok.rejected { background: rgba(239,68,68,0.08); color: #ef4444; border: 1px solid rgba(239,68,68,0.2); }
+.tok.bonus { background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+.tok.output { background: rgba(59,130,246,0.1); color: var(--accent); border: 1px solid rgba(59,130,246,0.3); }
+.tok.noise { background: rgba(124,58,237,0.05); color: #a78bfa; border: 1px dashed rgba(124,58,237,0.2); }
+
+/* D-Cut diagram extras */
+.dcut-phase-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 10px;
+  transition: opacity .3s;
+}
+.dcut-separator {
+  height: 1px;
+  background: linear-gradient(to right, var(--border), transparent);
+  margin: 10px 0;
+  position: relative;
+}
+.dcut-separator::after {
+  content: '▼ target verify';
+  position: absolute;
+  left: 50px;
+  top: -8px;
+  font-size: 0.6rem;
+  color: var(--text-light);
+  background: var(--surface);
+  padding: 0 6px;
+  opacity: 0;
+  transition: opacity .4s;
+}
+.dcut-separator.active::after { opacity: 1; }
+
+/* ===== Speedup Label ===== */
+.speedup-label {
+  display: inline-block;
+  font-weight: 600;
+  margin-top: 18px;
+  margin-bottom: 6px;
+  font-size: 0.88rem;
+  color: var(--text);
+  padding: 4px 10px;
+  background: var(--surface);
+  border-radius: 4px;
+  border-left: 3px solid var(--accent);
+}
+/* ===== Tabs ===== */
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  margin: 18px 0 0;
+  border-bottom: 1px solid var(--border);
+}
+.tab {
+  padding: 8px 16px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color .2s, border-color .2s;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ===== Summary Card ===== */
+.summary-section {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 36px;
+  margin: 48px 0 0;
+  border: 1px solid var(--border);
+}
+.summary-section h2 { margin-bottom: 16px; }
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 24px;
+}
+.summary-item {
+  text-align: center;
+  padding: 20px 12px;
+  background: white;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+}
+.summary-item-value {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+.summary-item-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* ===== Footer ===== */
+.footer {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-light);
+  font-size: 0.75rem;
+}
+.footer-left { display: flex; align-items: center; gap: 16px; }
+.footer-dot {
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .hero { padding: 48px 20px 32px; }
+  .chart-grid-3 { grid-template-columns: 1fr; }
+  .chart-grid-2 { grid-template-columns: 1fr; }
+  .summary-grid { grid-template-columns: 1fr; }
+}
+
+/* ===== Language Toggle ===== */
+.lang-toggle {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  font-size: 0.75rem;
+}
+.lang-btn {
+  padding: 5px 12px;
+  border: none;
+  background: white;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-weight: 500;
+  transition: all .2s;
+}
+.lang-btn.active {
+  background: var(--accent);
+  color: white;
+}
+body.lang-en .zh { display: none; }
+body.lang-en .en { display: inline; }
+body.lang-zh .en { display: none; }
+body.lang-zh .zh { display: inline; }
+body .en { display: none; }
+body .zh { display: inline; }
+.section:nth-child(2) { transition-delay: 0.05s; }
+.section:nth-child(3) { transition-delay: 0.1s; }
+</style>
+</head>
+<body class="lang-zh">
+
+<!-- ===== HERO ===== -->
+<div class="hero" style="position:relative">
+  <div class="lang-toggle">
+    <button class="lang-btn active" onclick="setLang('zh')">中文</button>
+    <button class="lang-btn" onclick="setLang('en')">EN</button>
+  </div>
+  <div class="hero-inner">
+    <h1><span>D-Cut</span>: Adaptive Verification Depth Pruning for Speculative Decoding</h1>
+    <p class="hero-subtitle" style="margin-top:16px;font-size:0.88rem;color:var(--text-secondary)"><strong style="color:var(--text)">TL;DR:</strong> <span class="zh">D-Cut 是一种针对 DFlash 的动态剪枝优化算法。通过建立硬件驱动的 cost model，跨请求进行剪枝，减少不必要的验证开销，实现全方面加速。</span><span class="en">D-Cut is a dynamic pruning optimization for DFlash. By building a hardware-driven cost model and pruning across requests, it eliminates unnecessary verification overhead for end-to-end speedup.</span></p>
+  </div>
+</div>
+
+<!-- ===== CONTENT ===== -->
+<div class="article">
+
+<!-- Section 0: Speculative Decoding 背景 -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">Background</div>
+    <h2>Speculative Decoding</h2>
+  </div>
+  <p><span class="zh">LLM 推理的瓶颈在于自回归——每步只产一个 token，GPU 大部分时间在等显存。Speculative decoding<sup><a href="#ref1" style="color:var(--accent);text-decoration:none">[1]</a></sup> 的思路是"先猜后验"：用小模型快速猜多个 token，再让大模型一次验证。</span><span class="en">The bottleneck of LLM inference is autoregressive decoding — one token per step, with GPU mostly waiting on memory. Speculative decoding<sup><a href="#ref1" style="color:var(--accent);text-decoration:none">[1]</a></sup> breaks this by "draft then verify": a small model quickly drafts multiple tokens, then the large model verifies them in one pass.</span></p>
+
+  <div class="anim-diagram" id="animSpec">
+    <div class="anim-header">
+      <span class="anim-title">Autoregressive vs Speculative Decoding</span>
+      <button class="anim-replay" onclick="replayAnim('animSpec')">↻ Replay</button>
+    </div>
+    <div class="anim-stage">
+      <!-- AR row -->
+      <div class="anim-row">
+        <div class="anim-label">AR</div>
+        <div class="anim-tokens" id="arTokens"></div>
+        <div class="anim-stat"><span id="arSteps">0</span> steps</div>
+      </div>
+      <!-- Spec row -->
+      <div class="anim-row">
+        <div class="anim-label">Spec</div>
+        <div class="anim-tokens" id="specTokens"></div>
+        <div class="anim-stat"><span id="specSteps">0</span> steps</div>
+      </div>
+    </div>
+    <div class="anim-legend">
+      <span class="legend-item"><span class="legend-dot" style="background:#10b981"></span>accepted</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#ef4444"></span>rejected</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#7c3aed"></span>draft</span>
+    </div>
+  </div>
+
+  <p><span class="zh">加速效果取决于两件事：<strong>猜得准不准</strong>（接受率）和<strong>验证贵不贵</strong>（step time）。</span><span class="en">Speedup depends on two things: <strong>draft accuracy</strong> (acceptance rate) and <strong>verification cost</strong> (step time).</span></p>
+</div>
+
+<div class="section-divider"></div>
+
+<!-- Section 1: DFlash 简介 -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">Section 01</div>
+    <h2>DFlash</h2>
+  </div>
+  <p><span class="zh">DFlash<sup><a href="#ref2" style="color:var(--accent);text-decoration:none">[2]</a></sup> 用 diffusion model 做 draft——跳过逐 token 生成，一次并行出 15 个候选。</span><span class="en">DFlash<sup><a href="#ref2" style="color:var(--accent);text-decoration:none">[2]</a></sup> uses a diffusion model as the drafter, producing 15 candidates in parallel in one shot.</span></p>
+
+  <div class="anim-diagram" id="animDFlash">
+    <div class="anim-header">
+      <span class="anim-title">DFlash: Diffusion-based Speculative Decoding</span>
+      <button class="anim-replay" onclick="replayAnim('animDFlash')">↻ Replay</button>
+    </div>
+    <div class="anim-stage" id="dflashStage">
+      <!-- Phase 1: Draft -->
+      <div class="anim-row">
+        <div class="anim-label">Draft</div>
+        <div class="anim-tokens" id="dflashDraft"></div>
+      </div>
+      <!-- Phase 2: Verify -->
+      <div class="anim-row">
+        <div class="anim-label">Verify</div>
+        <div class="anim-tokens" id="dflashVerify"></div>
+      </div>
+      <!-- Phase 3: Output -->
+      <div class="anim-row">
+        <div class="anim-label">Output</div>
+        <div class="anim-tokens" id="dflashOutput"></div>
+      </div>
+    </div>
+    <div class="anim-legend">
+      <span class="legend-item"><span class="legend-dot" style="background:#7c3aed"></span>diffusion draft</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#10b981"></span>accepted</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#ef4444"></span>rejected</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span>bonus</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#3b82f6"></span>output</span>
+    </div>
+  </div>
+
+  <p><span class="zh">每步：① Diffusion 并行生成 15 token + 1 bonus（$D=16$）；② Target 一次 forward 验证；③ 取最长接受前缀。低并发下很高效，但 batch size 上去后问题出现了。</span><span class="en">Each step: ① Diffusion drafts 15 tokens + 1 bonus ($D=16$) in parallel; ② Target verifies in one forward; ③ Accept the longest correct prefix. Works great at low concurrency, but breaks down at high batch sizes.</span></p>
+</div>
+
+<div class="section-divider"></div>
+
+<!-- Section 2: 问题 -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">Section 02</div>
+    <h2><span class="zh">Verification Cost 在高并发下膨胀</span><span class="en">Verification Cost Explodes at High Concurrency</span></h2>
+  </div>
+
+  <p><span class="zh">Target 每步要验证 $N = \text{bs} \times D$ 个 token。但平均只有 $\mathbb{E}[L] \approx 6.3$ 个会被接受——<strong>约 60% 的计算是浪费的</strong>。高 bs 时浪费更严重：</span><span class="en">Target verifies $N = \text{bs} \times D$ tokens per step. But only $\mathbb{E}[L] \approx 6.3$ get accepted — <strong>~60% of computation is wasted</strong>. At high bs it gets worse:</span></p>
+
+  <div class="table-container">
+  <table>
+  <tr><th style="text-align:left">bs</th><th>R=25%</th><th>R=50%</th><th>R=75%</th><th>R=100%</th><th>100%/25%</th></tr>
+  <tr><td>4</td><td>8.2 ms</td><td>8.7 ms</td><td>9.7 ms</td><td>10.9 ms</td><td class="cell-dim">1.33×</td></tr>
+  <tr><td>8</td><td>10.6 ms</td><td>12.8 ms</td><td>16.3 ms</td><td>19.6 ms</td><td>1.85×</td></tr>
+  <tr><td>16</td><td>16.0 ms</td><td>22.7 ms</td><td>29.8 ms</td><td>35.8 ms</td><td>2.24×</td></tr>
+  <tr><td>32</td><td>29.8 ms</td><td>43.1 ms</td><td>56.6 ms</td><td>70.1 ms</td><td>2.35×</td></tr>
+  <tr><td>64</td><td class="cell-heat-mid">55.2 ms</td><td>82.2 ms</td><td>107.9 ms</td><td class="cell-heat-high">133.9 ms</td><td class="cell-best">2.42×</td></tr>
+  </table>
+  </div>
+  <p class="table-caption"><span class="zh">Qwen3-8B, H20 GPU, TP1.</span><span class="en">Qwen3-8B, H20 GPU, TP1.</span></p>
+
+  <p><span class="zh">bs=64 时 full verify 比只保留 25% 慢了 2.42 倍。多出来的时间花在了"注定被拒绝"的位置上。</span><span class="en">At bs=64, full verify is 2.42× slower than keeping only 25%. The extra time is spent on positions that will be rejected anyway.</span></p>
+
+  <h3><span class="zh">直接后果：投机解码在高 bs 下退化</span><span class="en">Consequence: Speculative Decoding Degrades at High bs</span></h3>
+
+  <div class="chart-grid-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot"></span>Qwen3-8B (Dense)</div>
+      <canvas id="chartMotiv8B"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot"></span>Qwen3.5-27B (Dense)</div>
+      <canvas id="chartMotiv27B"></canvas>
+    </div>
+  </div>
+
+  <p><span class="zh">Qwen3-8B 上，DFlash-B16 从 bs=16 开始就比 AR 更慢。bs=64 时仅有 AR 吞吐的 42%。</span><span class="en">On Qwen3-8B, DFlash-B16 becomes slower than AR starting at bs=16. At bs=64 it only achieves 42% of AR throughput.</span></p>
+</div>
+
+<div class="section-divider"></div>
+
+<!-- Section 3: 洞察 1 -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">Section 03</div>
+    <h2><span class="zh">洞察 ①：Draft Confidence 是有效的筛选信号</span><span class="en">Insight ①: Draft Confidence Is an Effective Pruning Signal</span></h2>
+  </div>
+
+  <p><span class="zh">Draft model 给每个 token 一个 confidence 分数。已有工作<sup><a href="#ref3" style="color:var(--accent);text-decoration:none">[3]</a></sup>表明，auto-regressive draft model 的 draft confidence 和最终的接受率呈明显正相关。我们发现，这个性质对于 diffusion-based draft model 也成立。定义 prefix product score：</span><span class="en">The draft model assigns a confidence score to each token. Prior work<sup><a href="#ref3" style="color:var(--accent);text-decoration:none">[3]</a></sup> has shown that draft confidence of auto-regressive draft models is strongly correlated with final acceptance rate. We find this property also holds for diffusion-based draft models. Define prefix product score:</span></p>
+  $$s_{i,k} = \prod_{t=1}^{k-1} c_{i,t}$$
+  <p><span class="zh">$s_{i,k}$ 估计的是"前 $k$ 个位置全部被接受"的概率。以此为依据，在 batch 内跨请求做全局 top-$K$ 分配：</span><span class="en">$s_{i,k}$ estimates the probability that all first $k$ positions are accepted. Based on this, we allocate verify budget globally across requests via top-$K$:</span></p>
+
+  <div class="table-container">
+  <table>
+  <tr><th style="text-align:left"><span class="zh">策略</span><span class="en">Strategy</span></th><th>Verify tokens</th><th>Accepted tokens</th><th>Accepted / Verify</th></tr>
+  <tr><td><span class="zh">每请求固定保留 4 个</span><span class="en">Fixed 4 per request</span></td><td>128</td><td>101.4</td><td>79.2%</td></tr>
+  <tr><td class="cell-best">Confidence top-25%</td><td>128</td><td class="cell-best">124.6</td><td class="cell-best">97.3%</td></tr>
+  <tr><td><span class="zh">每请求固定保留 8 个</span><span class="en">Fixed 8 per request</span></td><td>256</td><td>152.9</td><td>59.7%</td></tr>
+  <tr><td class="cell-best">Confidence top-50%</td><td>256</td><td class="cell-best">190.8</td><td class="cell-best">74.6%</td></tr>
+  <tr><td><span class="zh">每请求固定保留 12 个</span><span class="en">Fixed 12 per request</span></td><td>384</td><td>183.0</td><td>47.7%</td></tr>
+  <tr><td class="cell-best">Confidence top-75%</td><td>384</td><td class="cell-best">200.9</td><td class="cell-best">52.3%</td></tr>
+  <tr><td><span class="zh">Full verify（不裁剪）</span><span class="en">Full verify (no pruning)</span></td><td>512</td><td>201.2</td><td>39.3%</td></tr>
+  </table>
+  </div>
+
+  <div class="callout">
+  <p><span class="zh">相同预算下，全局 confidence top-K 比 per-request 均匀截断多接受 20-25% 的 token。只 verify 一半就能保留 full verify 95% 的收益。</span><span class="en">At the same budget, global confidence top-K accepts 20-25% more tokens than per-request uniform truncation. Verifying only half retains 95% of full-verify acceptance.</span></p>
+  <p><span class="zh">关键在于 <strong>batch 内跨请求的全局预算分配</strong>，而非逐请求独立截断。</span><span class="en">The key is <strong>global budget allocation across the batch</strong>, not per-request independent truncation.</span></p>
+  </div>
+</div>
+
+<div class="section-divider"></div>
+
+<!-- Section 4: 洞察 2 -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">Section 04</div>
+    <h2><span class="zh">洞察 ②：硬件特性决定最优裁剪比例</span><span class="en">Insight ②: Hardware Characteristics Determine Optimal Pruning Ratio</span></h2>
+  </div>
+
+  <p><span class="zh">不同模型的 verify cost 对 token 数量的敏感度差异巨大：</span><span class="en">Different models have vastly different sensitivity of verify cost to token count:</span></p>
+
+  <div class="table-container">
+  <table>
+  <tr><th style="text-align:left">bs</th><th>R=25%</th><th>R=50%</th><th>R=75%</th><th>R=100%</th><th>100%/25%</th></tr>
+  <tr><td colspan="6" style="font-weight:600;background:rgba(59,130,246,0.05);font-family:'Inter','Noto Sans SC',sans-serif"><span class="zh">Qwen3-8B (Dense, H20 TP1) — cost 随 token 近似线性增长</span><span class="en">Qwen3-8B (Dense, H20 TP1) — cost scales near-linearly with tokens</span></td></tr>
+  <tr><td>64</td><td>55.2 ms</td><td>82.2 ms</td><td>107.9 ms</td><td>133.9 ms</td><td class="cell-best">2.42×</td></tr>
+  <tr><td colspan="6" style="font-weight:600;background:rgba(16,185,129,0.05);font-family:'Inter','Noto Sans SC',sans-serif"><span class="zh">Qwen3.5-35B-A3B (MoE, H20 TP2) — cost 增长极其平缓</span><span class="en">Qwen3.5-35B-A3B (MoE, H20 TP2) — cost barely increases with tokens</span></td></tr>
+  <tr><td>64</td><td>79.9 ms</td><td>85.4 ms</td><td>86.1 ms</td><td>90.6 ms</td><td class="cell-best">1.13×</td></tr>
+  </table>
+  </div>
+
+  <p><span class="zh">Dense 模型的 cost 接近 $O(N)$，裁剪收益大；MoE 的 cost 额外跟激活 expert 数量挂钩，相对变化没有那么激烈，更偏 memory-bound。所以 <strong>最优裁剪比例必须根据实际硬件 cost curve 来定</strong>。D-Cut 在 server 启动时实测 cost table，用数据而非假设做决策。</span><span class="en">Dense models have $O(N)$ cost — pruning helps a lot. MoE cost is additionally tied to the number of activated experts, making the relative change less dramatic and more memory-bound. So <strong>optimal pruning ratio must be determined by the actual hardware cost curve</strong>. D-Cut profiles the cost table at server startup, making decisions from measurements, not assumptions.</span></p>
+</div>
+
+<div class="section-divider"></div>
+
+<!-- Section 5: 方法 -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">Section 05</div>
+    <h2><span class="zh">D-Cut 方法</span><span class="en">D-Cut Method</span></h2>
+  </div>
+
+  <h3><span class="zh">形式化</span><span class="en">Formulation</span></h3>
+  <p><span class="zh">Batch 中 $bs$ 个请求，每个有 $D$ 个候选位置。请求 $i$ 的有效产出为 $A_i = \min(L_i, n_i)$（$L_i$ 为真实接受长度，$n_i$ 为保留深度）。展开期望：</span><span class="en">$bs$ requests in a batch, each with $D$ candidate positions. Effective output of request $i$: $A_i = \min(L_i, n_i)$ ($L_i$ = true accept length, $n_i$ = keep depth). Expanding the expectation:</span></p>
+  $$\mathbb{E}[\min(L_i, n_i)] = \sum_{k=1}^{n_i} P(L_i \ge k)$$
+  <p><span class="zh">保留第 $k$ 个位置的边际收益就是 $P(L_i \ge k)$。</span><span class="en">The marginal benefit of keeping position $k$ is $P(L_i \ge k)$.</span></p>
+
+  <h3>Product score</h3>
+  <p><span class="zh">用 draft confidence 的前缀乘积估计这个概率：</span><span class="en">Estimate this probability using the prefix product of draft confidences:</span></p>
+  $$s_{i,k} = \prod_{t=1}^{k-1} c_{i,t}$$
+  <p><span class="zh">性质：同一请求内单调递减，所以全局 top-K 自动满足前缀约束。</span><span class="en">Property: monotonically decreasing within each request, so global top-K automatically satisfies prefix constraints.</span></p>
+
+  <h3><span class="zh">优化目标</span><span class="en">Objective</span></h3>
+  <p><span class="zh">最大化吞吐 = 单位时间有效产出：</span><span class="en">Maximize throughput = effective output per unit time:</span></p>
+  $$U_q = \frac{\sum_{r=1}^{K_q} s_{(r)}}{C_{\text{graph}}(bs, \rho_q)}$$
+  <p><span class="zh">其中 $K_q = \lceil \rho_q \cdot bs \cdot (D-1) \rceil$。选 $U_q$ 最大的 bucket。</span><span class="en">where $K_q = \lceil \rho_q \cdot bs \cdot (D-1) \rceil$. Pick the bucket with highest $U_q$.</span></p>
+
+  <h3><span class="zh">执行流程</span><span class="en">Execution Flow</span></h3>
+
+  <div class="anim-diagram" id="animDCut">
+    <div class="anim-header">
+      <span class="anim-title">D-Cut: Online Adaptive Pruning (bs=4, D=15)</span>
+      <button class="anim-replay" onclick="replayAnim('animDCut')">↻ Replay</button>
+    </div>
+    <div class="anim-stage" id="dcutStage">
+      <div class="dcut-phase-label" id="dcutPhaseLabel">① Draft</div>
+      <div class="anim-row">
+        <div class="anim-label" style="width:44px">Req 1</div>
+        <div class="anim-tokens" id="dcutReq1"></div>
+      </div>
+      <div class="anim-row">
+        <div class="anim-label" style="width:44px">Req 2</div>
+        <div class="anim-tokens" id="dcutReq2"></div>
+      </div>
+      <div class="anim-row">
+        <div class="anim-label" style="width:44px">Req 3</div>
+        <div class="anim-tokens" id="dcutReq3"></div>
+      </div>
+      <div class="anim-row">
+        <div class="anim-label" style="width:44px">Req 4</div>
+        <div class="anim-tokens" id="dcutReq4"></div>
+      </div>
+      <div class="dcut-separator"></div>
+      <div class="anim-row">
+        <div class="anim-label" style="width:44px;font-size:0.65rem">Target</div>
+        <div class="anim-tokens" id="dcutTarget" style="flex-wrap:wrap;gap:2px"></div>
+      </div>
+    </div>
+    <div class="anim-legend">
+      <span class="legend-item"><span class="legend-dot" style="background:#7c3aed"></span>draft</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#10b981"></span>keep</span>
+      <span class="legend-item"><span class="legend-dot" style="background:rgba(239,68,68,0.4)"></span>pruned</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#3b82f6"></span>accepted</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#ef4444"></span>target rejected</span>
+    </div>
+  </div>
+
+  <p><span class="zh"><strong>离线</strong>（启动时 ~30s）：profiling cost table $C_{\text{graph}}(bs, \rho)$，$\rho \in \{0.25, 0.50, 0.75, 1.00\}$。</span><span class="en"><strong>Offline</strong> (~30s at startup): profile cost table $C_{\text{graph}}(bs, \rho)$, $\rho \in \{0.25, 0.50, 0.75, 1.00\}$.</span></p>
+  <p><span class="zh"><strong>在线</strong>（每步）：① Draft 生成 → ② 算 score → ③ 全局排序选 bucket → ④ 按 keep depth 送 target verify。</span><span class="en"><strong>Online</strong> (each step): ① Draft → ② Compute scores → ③ Global rank & select bucket → ④ Send kept positions to target verify.</span></p>
+
+  <h3><span class="zh">CUDA Graph Bucket</span><span class="en">CUDA Graph Bucket</span></h3>
+  <p><span class="zh">verify 深度离散化为 4 个 ratio bucket，每个对应一个预 capture 的 CUDA graph shape，避免 graph miss。<sup>*</sup></span><span class="en">Verify depth is discretized into 4 ratio buckets, each corresponding to a pre-captured CUDA graph shape, avoiding graph misses.<sup>*</sup></span></p>
+  <p style="font-size:0.8rem;color:var(--text-secondary)"><sup>*</sup> <span class="zh">当前 D-Cut 实现采用 piecewise CUDA graph，实际上由于大部分 bs 的不同 ratio 存在 overlap，几乎不增加额外 capture 的 CUDA graph。</span><span class="en">The current D-Cut implementation uses piecewise CUDA graphs. In practice, since different ratios overlap for most batch sizes, this barely increases the number of additionally captured CUDA graphs.</span></p>
+
+</div>
+
+<div class="section-divider"></div>
+
+<!-- Section 6: 实验结果 -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">Section 06</div>
+    <h2><span class="zh">实验结果</span><span class="en">Experiments</span></h2>
+  </div>
+  <p class="table-caption" style="font-style:normal;color:var(--text-secondary);margin-bottom:24px"><span class="zh">Profiled on H20, vLLM=0.20.2, temperature=0, 仅 report 稳态吞吐 (active_bs ≥ 85%).</span><span class="en">Profiled on H20, vLLM=0.20.2, temperature=0, only reporting steady-state throughput (active_bs ≥ 85%).</span></p>
+
+  <h3><span class="zh">吞吐对比</span><span class="en">Throughput Comparison</span></h3>
+  <div class="chart-grid-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot"></span>Qwen3-8B (Dense, TP1)</div>
+      <canvas id="chartTp8B"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot"></span>Qwen3.5-27B (Dense, TP4)</div>
+      <canvas id="chartTp27B"></canvas>
+    </div>
+  </div>
+  <div class="chart-grid-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot"></span>Qwen3.5-35B-A3B (MoE, TP2)</div>
+      <canvas id="chartTp35B"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot"></span>Qwen3.5-122B-A10B (MoE, TP8)</div>
+      <canvas id="chartTp122B"></canvas>
+    </div>
+  </div>
+
+  <h3><span class="zh">加速比 (vs AR)</span><span class="en">Speedup (vs AR)</span></h3>
+
+  <div class="tab-bar" id="speedupTabs">
+    <button class="tab active" data-target="spd-8b">Qwen3-8B</button>
+    <button class="tab" data-target="spd-27b">Qwen3.5-27B</button>
+    <button class="tab" data-target="spd-35b">Qwen3.5-35B-A3B</button>
+    <button class="tab" data-target="spd-122b">Qwen3.5-122B-A10B</button>
+  </div>
+  <div class="tab-panel active" id="spd-8b">
+  <div class="table-container"><table id="tbl-8b">
+  <tr><th style="text-align:left">Method</th><th>bs=4</th><th>bs=8</th><th>bs=16</th><th>bs=32</th><th>bs=64</th><th>Geo Mean</th></tr>
+  <tr><td>DFlash-B16</td><td>2.04×</td><td>1.28×</td><td class="cell-dim">0.80×</td><td class="cell-dim">0.52×</td><td class="cell-dim">0.42×</td><td>0.85×</td></tr>
+  <tr><td>D-Cut-B16</td><td class="cell-best">2.42×</td><td>1.93×</td><td>1.41×</td><td class="cell-dim">0.99×</td><td class="cell-dim">0.81×</td><td>1.39×</td></tr>
+  <tr><td>D-Cut-B8</td><td>2.34×</td><td class="cell-best">2.05×</td><td class="cell-best">1.59×</td><td class="cell-best">1.13×</td><td class="cell-best">0.92×</td><td class="cell-best">1.51×</td></tr>
+  <tr><td>EAGLE-3</td><td>1.70×</td><td>1.64×</td><td>1.37×</td><td>1.01×</td><td>0.84×</td><td>1.26×</td></tr>
+  </table></div>
+  </div>
+  <div class="tab-panel" id="spd-27b">
+  <div class="table-container"><table id="tbl-27b">
+  <tr><th style="text-align:left">Method</th><th>bs=4</th><th>bs=8</th><th>bs=16</th><th>bs=32</th><th>bs=64</th><th>Geo Mean</th></tr>
+  <tr><td>DFlash-B16</td><td class="cell-best">2.85×</td><td>2.23×</td><td>1.54×</td><td>1.14×</td><td class="cell-dim">0.91×</td><td>1.59×</td></tr>
+  <tr><td>D-Cut-B16</td><td>2.83×</td><td class="cell-best">2.55×</td><td>1.94×</td><td>1.59×</td><td>1.41×</td><td class="cell-best">1.99×</td></tr>
+  <tr><td>D-Cut-B8</td><td>2.17×</td><td>2.33×</td><td>1.79×</td><td>1.52×</td><td>1.37×</td><td>1.80×</td></tr>
+  <tr><td>MTP</td><td>2.45×</td><td>2.30×</td><td class="cell-best">2.01×</td><td class="cell-best">1.66×</td><td class="cell-best">1.44×</td><td>1.93×</td></tr>
+  </table></div>
+  </div>
+  <div class="tab-panel" id="spd-35b">
+  <div class="table-container"><table id="tbl-35b">
+  <tr><th style="text-align:left">Method</th><th>bs=4</th><th>bs=8</th><th>bs=16</th><th>bs=32</th><th>bs=64</th><th>Geo Mean</th></tr>
+  <tr><td>DFlash-B16</td><td>1.99×</td><td>2.30×</td><td>2.75×</td><td>3.20×</td><td>3.08×</td><td>2.62×</td></tr>
+  <tr><td>D-Cut-B16</td><td class="cell-best">2.36×</td><td class="cell-best">2.47×</td><td class="cell-best">2.86×</td><td class="cell-best">3.34×</td><td class="cell-best">3.26×</td><td class="cell-best">2.83×</td></tr>
+  <tr><td>D-Cut-B8</td><td>2.06×</td><td>2.12×</td><td>2.46×</td><td>2.91×</td><td>3.08×</td><td>2.50×</td></tr>
+  <tr><td>MTP</td><td>1.67×</td><td>1.77×</td><td>1.98×</td><td>2.24×</td><td>2.47×</td><td>2.00×</td></tr>
+  </table></div>
+  </div>
+  <div class="tab-panel" id="spd-122b">
+  <div class="table-container"><table id="tbl-122b">
+  <tr><th style="text-align:left">Method</th><th>bs=4</th><th>bs=8</th><th>bs=16</th><th>bs=32</th><th>bs=64</th><th>Geo Mean</th></tr>
+  <tr><td>DFlash-B16</td><td>1.14×</td><td>1.46×</td><td>1.74×</td><td>2.01×</td><td>2.06×</td><td>1.64×</td></tr>
+  <tr><td>D-Cut-B16</td><td class="cell-best">1.33×</td><td class="cell-best">1.55×</td><td class="cell-best">1.85×</td><td class="cell-best">2.08×</td><td class="cell-best">2.56×</td><td class="cell-best">1.83×</td></tr>
+  <tr><td>MTP</td><td>1.45×</td><td>1.59×</td><td>1.77×</td><td>2.08×</td><td>2.30×</td><td>1.81×</td></tr>
+  </table></div>
+  </div>
+
+  <h3><span class="zh">Selector 行为</span><span class="en">Selector Behavior</span></h3>
+
+  <div class="chart-grid-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot"></span><span class="zh">实际 keep ratio (D-Cut-B16)</span><span class="en">Actual keep ratio (D-Cut-B16)</span></div>
+      <canvas id="chartKeepRatio"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot"></span><span class="zh">Ablation: 固定比例 vs Auto</span><span class="en">Ablation: Fixed ratio vs Auto</span></div>
+      <canvas id="chartAblation"></canvas>
+    </div>
+  </div>
+
+  <h3>vs EAGLE-3 / MTP</h3>
+
+  <div class="chart-grid-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot"></span>8B: Best D-Cut / EAGLE-3</div>
+      <canvas id="chartVsEagle"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot"></span>Qwen3.5-35B-A3B: D-Cut / MTP</div>
+      <canvas id="chartVsMtp"></canvas>
+    </div>
+  </div>
+
+  <p><span class="zh">D-Cut 在 MoE 上全面超越 MTP，在 dense 8B 上全面超越 EAGLE-3。且无需修改 target model、无需额外训练。</span><span class="en">D-Cut outperforms MTP on MoE models and EAGLE-3 on dense 8B across all batch sizes. No target model modification needed, no extra training.</span></p>
+</div>
+
+</div><!-- .article -->
+
+<!-- References -->
+<div class="article">
+<div class="section" style="padding-top:24px">
+  <div class="section-divider" style="margin-bottom:32px"></div>
+  <h3>References</h3>
+  <p style="font-size:0.82rem;line-height:1.9;color:var(--text-secondary)" id="ref1">[1] Leviathan, Y., Kalman, M., & Matias, Y. (2023). Fast inference from transformers via speculative decoding. <em>ICML 2023</em>.</p>
+  <p style="font-size:0.82rem;line-height:1.9;color:var(--text-secondary)" id="ref2">[2] Chen, J., Liang, Y., & Liu, Z. (2026). DFlash: Block Diffusion for Flash Speculative Decoding. <em>arXiv:2602.06036</em>.</p>
+  <p style="font-size:0.82rem;line-height:1.9;color:var(--text-secondary)" id="ref3">[3] Li, Y., Wei, F., Zhang, C., & Zhang, H. (2024). EAGLE-2: Faster Inference of Language Models with Dynamic Draft Trees. <em>EMNLP 2024</em>.</p>
+</div>
+</div>
+
+
+<script>
+// ===== DATA =====
+const DATA = {"Qwen3-8B": {"AR": {"4": {"steady_throughput": 525.7714285714286}, "8": {"steady_throughput": 958.6653846153846}, "16": {"steady_throughput": 1691.262962962963}, "32": {"steady_throughput": 2700.2}, "64": {"steady_throughput": 3594.3888888888887}}, "DFlash-B16": {"4": {"steady_throughput": 1070.9615384615386, "keep_ratio": null}, "8": {"steady_throughput": 1229.9125, "keep_ratio": null}, "16": {"steady_throughput": 1350.5297297297298, "keep_ratio": null}, "32": {"steady_throughput": 1415.7058823529412, "keep_ratio": null}, "64": {"steady_throughput": 1498.4645161290323, "keep_ratio": null}}, "D-Cut-B16": {"4": {"steady_throughput": 1272.5272727272727, "keep_ratio": 0.455}, "8": {"steady_throughput": 1853.0576923076924, "keep_ratio": 0.339}, "16": {"steady_throughput": 2376.7, "keep_ratio": 0.256}, "32": {"steady_throughput": 2666.144444444444, "keep_ratio": 0.251}, "64": {"steady_throughput": 2910.225, "keep_ratio": 0.255}}, "D-Cut-B8": {"4": {"steady_throughput": 1231.0222222222224, "keep_ratio": 0.762}, "8": {"steady_throughput": 1961.4, "keep_ratio": 0.646}, "16": {"steady_throughput": 2685.972222222222, "keep_ratio": 0.533}, "32": {"steady_throughput": 3048.8875, "keep_ratio": 0.5}, "64": {"steady_throughput": 3321.4384615384615, "keep_ratio": 0.5}}, "D-Cut-Fixed-R75": {"4": {"steady_throughput": 1194.257142857143}, "8": {"steady_throughput": 1432.1257142857144}, "16": {"steady_throughput": 1585.890322580645}, "32": {"steady_throughput": 1725.4464285714287}, "64": {"steady_throughput": 1816.964}}, "D-Cut-Fixed-R50": {"4": {"steady_throughput": 1287.8}, "8": {"steady_throughput": 1784.667857142857}, "16": {"steady_throughput": 2027.6875}, "32": {"steady_throughput": 2222.8136363636363}, "64": {"steady_throughput": 2318.721052631579}}, "EAGLE-3": {"4": {"steady_throughput": 895.3}, "8": {"steady_throughput": 1575.390322580645}, "16": {"steady_throughput": 2320.9238095238097}, "32": {"steady_throughput": 2721.8888888888887}, "64": {"steady_throughput": 3006.786666666667}}}, "Qwen3.5-27B-TP4": {"AR": {"4": {"steady_throughput": 432.522641509434}, "8": {"steady_throughput": 804.3614035087719}, "16": {"steady_throughput": 1429.4773195876287}, "32": {"steady_throughput": 2173.622950819672}, "64": {"steady_throughput": 2972.395}}, "DFlash-B16": {"4": {"steady_throughput": 1230.6000000000001, "keep_ratio": null}, "8": {"steady_throughput": 1791.738775510204, "keep_ratio": null}, "16": {"steady_throughput": 2202.7873015873015, "keep_ratio": null}, "32": {"steady_throughput": 2476.5301886792454, "keep_ratio": null}, "64": {"steady_throughput": 2712.3488888888887, "keep_ratio": null}}, "D-Cut-B16": {"4": {"steady_throughput": 1225.0083333333334, "keep_ratio": 0.785}, "8": {"steady_throughput": 2053.019444444444, "keep_ratio": 0.594}, "16": {"steady_throughput": 2772.0148936170212, "keep_ratio": 0.500}, "32": {"steady_throughput": 3448.9605263157896, "keep_ratio": 0.485}, "64": {"steady_throughput": 4194.377777777778, "keep_ratio": 0.536}}, "D-Cut-B8": {"4": {"steady_throughput": 937.7538461538461, "keep_ratio": 0.973}, "8": {"steady_throughput": 1874.3760000000002, "keep_ratio": 0.991}, "16": {"steady_throughput": 2562.9574074074076, "keep_ratio": 0.971}, "32": {"steady_throughput": 3314.3357142857144, "keep_ratio": 0.963}, "64": {"steady_throughput": 4074.4666666666667, "keep_ratio": 0.981}}, "D-Cut-Fixed-R75": {"4": {"steady_throughput": 1227.7227272727273}, "8": {"steady_throughput": 1921.5602739726028}, "16": {"steady_throughput": 2558.2754716981135}, "32": {"steady_throughput": 2975.5666666666666}, "64": {"steady_throughput": 3320.74054054054}}, "D-Cut-Fixed-R50": {"4": {"steady_throughput": 979.6642857142857}, "8": {"steady_throughput": 1878.9973333333332}, "16": {"steady_throughput": 2763.9854166666664}, "32": {"steady_throughput": 3457.1552631578948}, "64": {"steady_throughput": 3950.6032258064515}}, "MTP": {"4": {"steady_throughput": 1058.6878787878786}, "8": {"steady_throughput": 1850.5450980392156}, "16": {"steady_throughput": 2869.25625}, "32": {"steady_throughput": 3602.95}, "64": {"steady_throughput": 4270.086206896552}}}, "Qwen3.5-35B-A3B": {"AR": {"4": {"steady_throughput": 262.64430379746835}, "8": {"steady_throughput": 349.5696721311475}, "16": {"steady_throughput": 473.87692307692305}, "32": {"steady_throughput": 664.9418994413409}, "64": {"steady_throughput": 1013.2571428571429}}, "DFlash-B16": {"4": {"steady_throughput": 522.836, "keep_ratio": null}, "8": {"steady_throughput": 803.6179487179487, "keep_ratio": null}, "16": {"steady_throughput": 1303.7842105263157, "keep_ratio": null}, "32": {"steady_throughput": 2124.8982142857144, "keep_ratio": null}, "64": {"steady_throughput": 3118.2542857142857, "keep_ratio": null}}, "D-Cut-B16": {"4": {"steady_throughput": 620.0500000000001, "keep_ratio": 0.521}, "8": {"steady_throughput": 862.8230263157895, "keep_ratio": 0.508}, "16": {"steady_throughput": 1353.9340909090909, "keep_ratio": 0.542}, "32": {"steady_throughput": 2218.1358490566035, "keep_ratio": 0.545}, "64": {"steady_throughput": 3305.2212121212124, "keep_ratio": 0.530}}, "D-Cut-B8": {"4": {"steady_throughput": 541.5884615384615, "keep_ratio": 1.0}, "8": {"steady_throughput": 742.304705882353, "keep_ratio": 0.777}, "16": {"steady_throughput": 1167.7528301886794, "keep_ratio": 0.833}, "32": {"steady_throughput": 1937.2649999999999, "keep_ratio": 0.758}, "64": {"steady_throughput": 3118.062857142857, "keep_ratio": 0.649}}, "D-Cut-Fixed-R75": {"4": {"steady_throughput": 557.3057142857143}, "8": {"steady_throughput": 846.3481481481482}, "16": {"steady_throughput": 1397.0837209302326}, "32": {"steady_throughput": 2179.516981132075}, "64": {"steady_throughput": 3289.051515151515}}, "D-Cut-Fixed-R50": {"4": {"steady_throughput": 547.5783783783784}, "8": {"steady_throughput": 857.3949152542374}, "16": {"steady_throughput": 1334.4604395604395}, "32": {"steady_throughput": 2166.3535714285713}, "64": {"steady_throughput": 3369.134375}}, "MTP": {"4": {"steady_throughput": 439.2075}, "8": {"steady_throughput": 617.2436893203883}, "16": {"steady_throughput": 940.6044776119403}, "32": {"steady_throughput": 1487.9316455696203}, "64": {"steady_throughput": 2501.8199999999997}}}, "Qwen3.5-122B-A10B": {"AR": {"4": {"steady_throughput": 257.651}, "8": {"steady_throughput": 334.405}, "16": {"steady_throughput": 445.147}, "32": {"steady_throughput": 620.917}, "64": {"steady_throughput": 950.074}}, "DFlash-B16": {"4": {"steady_throughput": 292.559, "keep_ratio": null}, "8": {"steady_throughput": 488.087, "keep_ratio": null}, "16": {"steady_throughput": 776.192, "keep_ratio": null}, "32": {"steady_throughput": 1246.120, "keep_ratio": null}, "64": {"steady_throughput": 1959.261, "keep_ratio": null}}, "D-Cut-B16": {"4": {"steady_throughput": 341.855, "keep_ratio": 0.609}, "8": {"steady_throughput": 517.951, "keep_ratio": 0.575}, "16": {"steady_throughput": 825.038, "keep_ratio": 0.504}, "32": {"steady_throughput": 1294.552, "keep_ratio": 0.497}, "64": {"steady_throughput": 2428.920, "keep_ratio": 0.408}}, "MTP": {"4": {"steady_throughput": 372.601}, "8": {"steady_throughput": 530.151}, "16": {"steady_throughput": 786.503}, "32": {"steady_throughput": 1289.247}, "64": {"steady_throughput": 2185.583}}}};
+
+const BS = [4, 8, 16, 32, 64];
+const LABELS = BS.map(b => 'bs=' + b);
+
+// ===== Chart defaults =====
+Chart.defaults.font.family = "'Inter', 'Noto Sans SC', sans-serif";
+Chart.defaults.font.size = 10.5;
+Chart.defaults.color = '#64748b';
+Chart.defaults.plugins.legend.labels.boxWidth = 10;
+Chart.defaults.plugins.legend.labels.padding = 8;
+Chart.defaults.plugins.legend.labels.font = {size: 9.5};
+Chart.defaults.elements.line.tension = 0.35;
+Chart.defaults.elements.point.radius = 3;
+Chart.defaults.elements.point.hoverRadius = 5;
+
+// ===== Helpers =====
+function tp(model, method) {
+  const d = DATA[model]?.[method] || {};
+  return BS.map(bs => d[bs]?.steady_throughput || null);
+}
+function kr(model, method) {
+  const d = DATA[model]?.[method] || {};
+  return BS.map(bs => d[bs]?.keep_ratio || null);
+}
+function spd(model, method) {
+  const ar = DATA[model]?.['AR'] || {};
+  const m = DATA[model]?.[method] || {};
+  return BS.map(bs => {
+    const a = ar[bs]?.steady_throughput, v = m[bs]?.steady_throughput;
+    return (a && v) ? v / a : null;
+  });
+}
+
+function makeGradient(ctx, color, alpha1 = 0.25, alpha2 = 0.02) {
+  const g = ctx.createLinearGradient(0, 0, 0, 220);
+  g.addColorStop(0, color.replace(')', `,${alpha1})`).replace('rgb', 'rgba'));
+  g.addColorStop(1, color.replace(')', `,${alpha2})`).replace('rgb', 'rgba'));
+  return g;
+}
+
+// Colors
+const C = {
+  accent: 'rgb(59, 130, 246)',
+  accentLight: 'rgb(96, 165, 250)',
+  gray: 'rgb(148, 163, 184)',
+  green: 'rgb(16, 185, 129)',
+  purple: 'rgb(124, 58, 237)',
+  orange: 'rgb(249, 115, 22)',
+  orangeLight: 'rgb(253, 186, 116)'
+};
+const methodColors = {
+  'AR': C.gray,
+  'DFlash-B16': C.gray,
+  'D-Cut-B16': C.accent,
+  'D-Cut-B8': C.accentLight,
+  'EAGLE-3': C.green,
+  'MTP': C.green
+};
+
+// ===== Motivation Charts =====
+const motivConfigs = [
+  ['chartMotiv8B', 'Qwen3-8B', C.accent],
+  ['chartMotiv27B', 'Qwen3.5-27B-TP4', C.purple]
+];
+motivConfigs.forEach(([id, model, color]) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const ctx = el.getContext('2d');
+  new Chart(el, {
+    type: 'line',
+    data: {
+      labels: LABELS,
+      datasets: [
+        {
+          label: 'DFlash-B16',
+          data: spd(model, 'DFlash-B16'),
+          borderColor: color,
+          backgroundColor: makeGradient(ctx, color),
+          borderWidth: 2.5,
+          pointRadius: 4,
+          pointBackgroundColor: '#fff',
+          pointBorderColor: color,
+          pointBorderWidth: 2,
+          fill: true
+        },
+        {
+          label: '1× (AR baseline)',
+          data: BS.map(() => 1),
+          borderColor: '#e2e8f0',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          borderDash: [5, 4],
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom' } },
+      scales: {
+        y: { ticks: { callback: v => v.toFixed(1) + '×' }, grid: { color: '#f1f5f9' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+});
+
+// ===== Throughput Charts =====
+const tpConfigs = [
+  ['chartTp8B', 'Qwen3-8B', ['DFlash-B16', 'D-Cut-B16', 'D-Cut-B8', 'EAGLE-3']],
+  ['chartTp27B', 'Qwen3.5-27B-TP4', ['DFlash-B16', 'D-Cut-B16', 'D-Cut-B8', 'MTP']],
+  ['chartTp35B', 'Qwen3.5-35B-A3B', ['DFlash-B16', 'D-Cut-B16', 'D-Cut-B8', 'MTP']],
+  ['chartTp122B', 'Qwen3.5-122B-A10B', ['DFlash-B16', 'D-Cut-B16', 'MTP']]
+];
+tpConfigs.forEach(([id, model, methods]) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const ctx = el.getContext('2d');
+  new Chart(el, {
+    type: 'line',
+    data: {
+      labels: LABELS,
+      datasets: methods.map((m, i) => ({
+        label: m,
+        data: tp(model, m),
+        borderColor: methodColors[m],
+        backgroundColor: m === 'D-Cut-B16' ? makeGradient(ctx, C.accent, 0.12, 0.01) : 'transparent',
+        borderWidth: m === 'D-Cut-B16' ? 3 : 2,
+        pointRadius: m === 'D-Cut-B16' ? 4 : 3,
+        pointBackgroundColor: m === 'D-Cut-B16' ? '#fff' : methodColors[m],
+        pointBorderColor: methodColors[m],
+        pointBorderWidth: m === 'D-Cut-B16' ? 2 : 0,
+        borderDash: m.includes('DFlash') || m === 'AR' ? [5, 3] : [],
+        fill: m === 'D-Cut-B16'
+      }))
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom' } },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'tok/s', font: { size: 10 } }, grid: { color: '#f1f5f9' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+});
+
+// ===== Keep Ratio =====
+(function() {
+  const el = document.getElementById('chartKeepRatio');
+  if (!el) return;
+  const models = ['Qwen3-8B', 'Qwen3.5-27B-TP4', 'Qwen3.5-35B-A3B', 'Qwen3.5-122B-A10B'];
+  const colors = [C.accent, C.purple, C.green, C.orange];
+  const names = ['8B', '27B', '35B', '122B'];
+  new Chart(el, {
+    type: 'line',
+    data: {
+      labels: LABELS,
+      datasets: models.map((m, i) => ({
+        label: names[i],
+        data: kr(m, 'D-Cut-B16'),
+        borderColor: colors[i],
+        borderWidth: 2.5,
+        pointRadius: 5,
+        pointBackgroundColor: '#fff',
+        pointBorderColor: colors[i],
+        pointBorderWidth: 2,
+        tension: 0.3
+      }))
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'bottom' } },
+      scales: {
+        y: { min: 0, max: 1, ticks: { callback: v => (v * 100) + '%' }, grid: { color: '#f1f5f9' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+})();
+
+// ===== Ablation =====
+(function() {
+  const el = document.getElementById('chartAblation');
+  if (!el) return;
+  const ctx = el.getContext('2d');
+  const cfgs = [
+    ['AR', 'AR', C.gray, [3, 3], false],
+    ['DFlash-B16', '100% (no cut)', C.gray, [6, 3], false],
+    ['D-Cut-Fixed-R75', 'Fixed 75%', C.orange, [], false],
+    ['D-Cut-Fixed-R50', 'Fixed 50%', C.orangeLight, [], false],
+    ['D-Cut-B16', 'Auto (D-Cut)', C.accent, [], true]
+  ];
+  new Chart(el, {
+    type: 'line',
+    data: {
+      labels: LABELS,
+      datasets: cfgs.map(([m, l, c, d, hero]) => ({
+        label: l,
+        data: tp('Qwen3-8B', m),
+        borderColor: c,
+        backgroundColor: hero ? makeGradient(ctx, c, 0.1, 0.01) : 'transparent',
+        borderWidth: hero ? 3 : 2,
+        pointRadius: hero ? 4 : 3,
+        pointBackgroundColor: hero ? '#fff' : c,
+        pointBorderColor: c,
+        pointBorderWidth: hero ? 2 : 0,
+        borderDash: d,
+        fill: hero
+      }))
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom' } },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'tok/s', font: { size: 10 } }, grid: { color: '#f1f5f9' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+})();
+
+// ===== vs EAGLE-3 =====
+(function() {
+  const el = document.getElementById('chartVsEagle');
+  if (!el) return;
+  const eagle = tp('Qwen3-8B', 'EAGLE-3');
+  const b16 = tp('Qwen3-8B', 'D-Cut-B16');
+  const b8 = tp('Qwen3-8B', 'D-Cut-B8');
+  const ratio = BS.map((_, i) => eagle[i] ? Math.max(b16[i] || 0, b8[i] || 0) / eagle[i] : null);
+  new Chart(el, {
+    type: 'bar',
+    data: {
+      labels: LABELS,
+      datasets: [{
+        data: ratio,
+        backgroundColor: ratio.map(v => v >= 1 ? 'rgba(59,130,246,0.2)' : 'rgba(148,163,184,0.15)'),
+        borderColor: ratio.map(v => v >= 1 ? C.accent : C.gray),
+        borderWidth: 2,
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { min: 0.8, max: 1.6, ticks: { callback: v => v.toFixed(1) + '×' }, grid: { color: '#f1f5f9' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+})();
+
+// ===== vs MTP =====
+(function() {
+  const el = document.getElementById('chartVsMtp');
+  if (!el) return;
+  const mtp = tp('Qwen3.5-35B-A3B', 'MTP');
+  const b16 = tp('Qwen3.5-35B-A3B', 'D-Cut-B16');
+  const b8 = tp('Qwen3.5-35B-A3B', 'D-Cut-B8');
+  const ratio = BS.map((_, i) => mtp[i] ? Math.max(b16[i] || 0, b8[i] || 0) / mtp[i] : null);
+  new Chart(el, {
+    type: 'bar',
+    data: {
+      labels: LABELS,
+      datasets: [{
+        data: ratio,
+        backgroundColor: ratio.map(v => v >= 1 ? 'rgba(59,130,246,0.2)' : 'rgba(148,163,184,0.15)'),
+        borderColor: ratio.map(v => v >= 1 ? C.accent : C.gray),
+        borderWidth: 2,
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { min: 0.8, max: 1.6, ticks: { callback: v => v.toFixed(1) + '×' }, grid: { color: '#f1f5f9' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+})();
+
+// ===== vs MTP 122B =====
+(function() {
+  const el = document.getElementById('chartVsMtp122B');
+  if (!el) return;
+  const mtp = tp('Qwen3.5-122B-A10B', 'MTP');
+  const b16 = tp('Qwen3.5-122B-A10B', 'D-Cut-B16');
+  const ratio = BS.map((_, i) => mtp[i] ? b16[i] / mtp[i] : null);
+  new Chart(el, {
+    type: 'bar',
+    data: {
+      labels: LABELS,
+      datasets: [{
+        data: ratio,
+        backgroundColor: ratio.map(v => v >= 1 ? 'rgba(59,130,246,0.2)' : 'rgba(148,163,184,0.15)'),
+        borderColor: ratio.map(v => v >= 1 ? C.accent : C.gray),
+        borderWidth: 2,
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { min: 0.8, max: 1.3, ticks: { callback: v => v.toFixed(1) + '×' }, grid: { color: '#f1f5f9' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+})();
+
+// ===== Language Toggle =====
+function setLang(lang) {
+  document.body.className = 'lang-' + lang;
+  document.querySelectorAll('.lang-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.trim() === (lang === 'zh' ? '中文' : 'EN'));
+  });
+}
+
+// ===== Animated Diagrams =====
+function makeTok(label, cls) {
+  const el = document.createElement('span');
+  el.className = 'tok ' + cls;
+  el.textContent = label;
+  return el;
+}
+
+function runSpecAnim() {
+  const arRow = document.getElementById('arTokens');
+  const specRow = document.getElementById('specTokens');
+  const arSteps = document.getElementById('arSteps');
+  const specSteps = document.getElementById('specSteps');
+  if (!arRow) return;
+  arRow.innerHTML = ''; specRow.innerHTML = '';
+  arSteps.textContent = '0'; specSteps.textContent = '0';
+
+  const arLabels = ['The','cat','sat','on','the','mat','and','looked'];
+  const specDraft = ['The','cat','sat','on','the','mat','and','looked'];
+  const acceptLen = 5; // first 5 accepted
+
+  let step = 0;
+  // AR: one token per step, slow
+  const arInterval = setInterval(() => {
+    if (step >= arLabels.length) { clearInterval(arInterval); return; }
+    const t = makeTok(arLabels[step], 'ar');
+    arRow.appendChild(t);
+    setTimeout(() => t.classList.add('show'), 20);
+    step++;
+    arSteps.textContent = step;
+  }, 400);
+
+  // Spec: draft all at once after 300ms, then verify after 1.5s
+  setTimeout(() => {
+    specDraft.forEach((label, i) => {
+      const t = makeTok(label, 'draft');
+      specRow.appendChild(t);
+      setTimeout(() => t.classList.add('show'), i * 40);
+    });
+    specSteps.textContent = '1';
+  }, 300);
+
+  setTimeout(() => {
+    const tokens = specRow.querySelectorAll('.tok');
+    tokens.forEach((t, i) => {
+      setTimeout(() => {
+        t.classList.remove('draft');
+        if (i < acceptLen) {
+          t.classList.add('accepted');
+        } else {
+          t.classList.add('rejected');
+          t.style.opacity = '0.5';
+          t.style.transform = 'scale(0.85)';
+        }
+      }, i * 80);
+    });
+    specSteps.textContent = '2';
+  }, 1600);
+}
+
+function runDFlashAnim() {
+  const draftRow = document.getElementById('dflashDraft');
+  const verifyRow = document.getElementById('dflashVerify');
+  const outputRow = document.getElementById('dflashOutput');
+  if (!draftRow) return;
+  draftRow.innerHTML = ''; verifyRow.innerHTML = ''; outputRow.innerHTML = '';
+
+  const D = 15;
+  const acceptLen = 9;
+
+  // Phase 1: Diffusion draft - noise → tokens (appears as group)
+  const noiseT = makeTok('noise → denoise → tokens', 'noise');
+  noiseT.style.minWidth = '180px';
+  draftRow.appendChild(noiseT);
+  setTimeout(() => noiseT.classList.add('show'), 100);
+
+  // After 800ms, replace with actual draft tokens
+  setTimeout(() => {
+    draftRow.innerHTML = '';
+    for (let i = 0; i < D; i++) {
+      const t = makeTok('d'+(i+1), 'draft');
+      draftRow.appendChild(t);
+      setTimeout(() => t.classList.add('show'), i * 30);
+    }
+  }, 900);
+
+  // Phase 2: Verify - tokens appear and get colored
+  setTimeout(() => {
+    for (let i = 0; i < D; i++) {
+      const t = makeTok('d'+(i+1), 'draft');
+      t.classList.add('show');
+      verifyRow.appendChild(t);
+      setTimeout(() => {
+        t.classList.remove('draft');
+        if (i < acceptLen) {
+          t.classList.add('accepted');
+          t.textContent = '✓';
+        } else {
+          t.classList.add('rejected');
+          t.textContent = '✗';
+        }
+      }, 300 + i * 60);
+    }
+  }, 1800);
+
+  // Phase 3: Output - accepted slide in
+  setTimeout(() => {
+    for (let i = 0; i < acceptLen; i++) {
+      const t = makeTok('t'+(i+1), 'output');
+      outputRow.appendChild(t);
+      setTimeout(() => t.classList.add('show'), i * 50);
+    }
+    // bonus token
+    setTimeout(() => {
+      const b = makeTok('+1', 'bonus');
+      outputRow.appendChild(b);
+      setTimeout(() => b.classList.add('show'), 30);
+    }, acceptLen * 50 + 100);
+  }, 3200);
+}
+
+function runDCutAnim() {
+  const rows = [
+    document.getElementById('dcutReq1'),
+    document.getElementById('dcutReq2'),
+    document.getElementById('dcutReq3'),
+    document.getElementById('dcutReq4'),
+  ];
+  const target = document.getElementById('dcutTarget');
+  const phaseLabel = document.getElementById('dcutPhaseLabel');
+  const separator = document.querySelector('.dcut-separator');
+  if (!rows[0]) return;
+  rows.forEach(r => r.innerHTML = '');
+  target.innerHTML = '';
+  phaseLabel.textContent = '① Draft generates full block';
+  phaseLabel.style.color = '';
+  separator.classList.remove('active');
+
+  const D = 15;
+  const confs = [
+    [.95,.92,.88,.85,.80,.74,.65,.55,.40,.30,.20,.12,.08,.04,.02],
+    [.70,.55,.40,.30,.20,.12,.08,.05,.03,.02,.01,.01,.01,.01,.01],
+    [.98,.96,.94,.91,.87,.82,.76,.70,.62,.53,.42,.30,.18,.09,.03],
+    [.80,.65,.50,.35,.22,.14,.08,.04,.02,.01,.01,.01,.01,.01,.01],
+  ];
+  const keepDepths = [10, 3, 13, 5];
+  const acceptLens = [8, 3, 11, 4];
+
+  // Flatten all positions with their scores for global ranking
+  const allPositions = [];
+  confs.forEach((reqConf, ri) => {
+    let prod = 1.0;
+    for (let i = 0; i < D; i++) {
+      prod *= reqConf[i];
+      allPositions.push({ ri, pos: i, score: prod });
+    }
+  });
+  // Sort descending by score (global ranking)
+  allPositions.sort((a, b) => b.score - a.score);
+  // Budget = total kept positions = sum(keepDepths) = 31
+  const budget = keepDepths.reduce((a, b) => a + b, 0);
+  // Mark top-K globally
+  const kept = new Set();
+  for (let i = 0; i < budget; i++) {
+    const p = allPositions[i];
+    kept.add(p.ri + '-' + p.pos);
+  }
+  // Compute rank for each position (for staggered highlight)
+  const rankMap = {};
+  allPositions.forEach((p, idx) => { rankMap[p.ri + '-' + p.pos] = idx; });
+
+  // Phase 1: Draft tokens appear with confidence coloring + score label
+  rows.forEach((row, ri) => {
+    for (let i = 0; i < D; i++) {
+      const t = makeTok('', 'draft');
+      t.style.width = '16px'; t.style.minWidth = '16px'; t.style.height = '20px';
+      const c = confs[ri][i];
+      t.style.background = `rgba(124,58,237,${0.06 + c * 0.3})`;
+      t.style.borderColor = `rgba(124,58,237,${0.1 + c * 0.45})`;
+      t.dataset.ri = ri;
+      t.dataset.pos = i;
+      row.appendChild(t);
+      setTimeout(() => t.classList.add('show'), 75 + ri * 150 + i * 52);
+    }
+  });
+
+  // Phase 2: Global ranking visualization - highlight positions by rank order
+  setTimeout(() => {
+    phaseLabel.textContent = '② Global score ranking (cross-request)';
+    // Animate: sweep through top-K positions in rank order, coloring them green
+    for (let rank = 0; rank < budget; rank++) {
+      const p = allPositions[rank];
+      setTimeout(() => {
+        const row = rows[p.ri];
+        const tok = row.querySelectorAll('.tok')[p.pos];
+        if (tok) {
+          tok.style.background = 'rgba(16,185,129,0.2)';
+          tok.style.borderColor = 'rgba(16,185,129,0.5)';
+          tok.style.boxShadow = '0 0 4px rgba(16,185,129,0.3)';
+          // Brief flash then settle
+          setTimeout(() => { tok.style.boxShadow = 'none'; }, 500);
+        }
+      }, rank * 105);
+    }
+    // After all top-K highlighted, dim the rest
+    setTimeout(() => {
+      rows.forEach((row, ri) => {
+        const tokens = row.querySelectorAll('.tok');
+        tokens.forEach((t, i) => {
+          const key = ri + '-' + i;
+          if (!kept.has(key)) {
+            t.style.background = 'rgba(239,68,68,0.06)';
+            t.style.borderColor = 'rgba(239,68,68,0.12)';
+            t.style.opacity = '0.3';
+            t.style.transform = 'scale(0.75)';
+          }
+        });
+      });
+      phaseLabel.textContent = '② Keep top-31 positions across all requests → prune rest';
+    }, budget * 105 + 600);
+  }, 3300);
+
+  // Phase 3: Send kept tokens to target
+  const phase3Start = 3300 + budget * 105 + 1800;
+  setTimeout(() => {
+    phaseLabel.textContent = '③ Send kept tokens to target verify';
+    separator.classList.add('active');
+    let delay = 0;
+    rows.forEach((row, ri) => {
+      for (let i = 0; i < D; i++) {
+        if (kept.has(ri + '-' + i)) {
+          const t = makeTok('', 'draft');
+          t.style.width = '14px'; t.style.minWidth = '14px'; t.style.height = '16px';
+          t.style.background = 'rgba(16,185,129,0.12)';
+          t.style.borderColor = 'rgba(16,185,129,0.3)';
+          t.dataset.req = ri;
+          t.dataset.pos = i;
+          target.appendChild(t);
+          setTimeout(() => t.classList.add('show'), delay);
+          delay += 38;
+        }
+      }
+      if (ri < 3) {
+        const gap = document.createElement('span');
+        gap.style.width = '4px';
+        gap.style.display = 'inline-block';
+        target.appendChild(gap);
+      }
+    });
+  }, phase3Start);
+
+  // Phase 4: Target verifies
+  setTimeout(() => {
+    phaseLabel.textContent = '④ Target verify → accepted output';
+    const targetToks = target.querySelectorAll('.tok');
+    let idx = 0;
+    rows.forEach((row, ri) => {
+      let posCount = 0;
+      for (let i = 0; i < D; i++) {
+        if (kept.has(ri + '-' + i)) {
+          const t = targetToks[idx];
+          const isAccepted = posCount < acceptLens[ri];
+          if (t) {
+            const delay = idx * 52;
+            setTimeout(() => {
+              if (isAccepted) {
+                t.style.background = 'rgba(59,130,246,0.18)';
+                t.style.borderColor = 'rgba(59,130,246,0.5)';
+              } else {
+                t.style.background = 'rgba(239,68,68,0.18)';
+                t.style.borderColor = 'rgba(239,68,68,0.5)';
+                t.style.opacity = '1';
+              }
+            }, delay);
+          }
+          posCount++;
+          idx++;
+        }
+      }
+    });
+    // Update source rows
+    setTimeout(() => {
+      rows.forEach((row, ri) => {
+        const tokens = row.querySelectorAll('.tok');
+        tokens.forEach((t, i) => {
+          const key = ri + '-' + i;
+          if (kept.has(key)) {
+            if (i < acceptLens[ri]) {
+              t.style.background = 'rgba(59,130,246,0.15)';
+              t.style.borderColor = 'rgba(59,130,246,0.4)';
+            } else {
+              t.style.background = 'rgba(239,68,68,0.18)';
+              t.style.borderColor = 'rgba(239,68,68,0.5)';
+              t.style.opacity = '0.7';
+              t.style.transform = 'scale(0.85)';
+            }
+          }
+        });
+      });
+      phaseLabel.textContent = '✓ 26 accepted / 31 verified / 60 full → saved 48% verify';
+      phaseLabel.style.color = '#10b981';
+      setTimeout(() => phaseLabel.style.color = '', 2500);
+    }, 1500);
+  }, phase3Start + 2700);
+}
+
+// Update replayAnim
+const _origReplay = window.replayAnim;
+function replayAnim(id) {
+  if (id === 'animSpec') runSpecAnim();
+  else if (id === 'animDFlash') runDFlashAnim();
+  else if (id === 'animDCut') runDCutAnim();
+}
+
+// Auto-play when visible
+const animObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const id = entry.target.id;
+      if (id === 'animSpec') runSpecAnim();
+      else if (id === 'animDFlash') runDFlashAnim();
+      else if (id === 'animDCut') runDCutAnim();
+      animObserver.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.5 });
+const specEl = document.getElementById('animSpec');
+const dflashEl = document.getElementById('animDFlash');
+const dcutEl = document.getElementById('animDCut');
+if (specEl) animObserver.observe(specEl);
+if (dflashEl) animObserver.observe(dflashEl);
+if (dcutEl) animObserver.observe(dcutEl);
+
+// ===== Tab switching =====
+document.querySelectorAll('.tab-bar').forEach(bar=>{
+  bar.querySelectorAll('.tab').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      bar.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      const panels=bar.parentElement.querySelectorAll('.tab-panel');
+      panels.forEach(p=>p.classList.remove('active'));
+      document.getElementById(btn.dataset.target).classList.add('active');
+    });
+  });
+});
+
+// ===== Scroll Reveal =====
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+document.querySelectorAll('.section').forEach(s => observer.observe(s));
+</script>
+</body>
+</html>

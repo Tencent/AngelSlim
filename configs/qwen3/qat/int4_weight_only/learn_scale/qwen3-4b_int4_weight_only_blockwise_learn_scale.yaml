@@ -1,0 +1,50 @@
+global:
+  save_path: ./output
+
+model:
+  name: Qwen
+  model_path: Qwen/Qwen3-4B
+  trust_remote_code: true
+  torch_dtype: auto
+  device_map: auto
+  low_cpu_mem_usage: true
+  use_cache: false
+
+compression:
+  name: QAT
+  quantization:
+    ignore_layers: ["lm_head", "embed_tokens"] # Skip quantization for these layers
+  QAT:
+    hf_dataset: Salesforce/wikitext,wikitext-2-raw-v1 # hf dataset name, will overwrite dataset.data_path
+    # hf_cache_dir: Specify your cache path, or not set(default)
+    training_mode: blockwise
+    save_format: fake # Set "fake" or "real", or not set(skip save)
+    do_train: true
+    # resume_ckpt_dir: '' # resume for fake checkpoint, when save_format=='fake'. Default is None
+    block_wise_config:
+      epochs: 10
+      batch_size: 2
+      train_size: 4096
+      training_seqlen: 2048
+      quant_lr: 1e-4 # lr for quant params
+      weight_lr: 1e-4 # lr for weight
+      min_lr_factor: 20 # min lr factor for scheduler
+      wd: 0 # weight decay
+    plugin_config:
+      enable_scale: true
+      quant_config:
+        use_weight_quant: true
+        use_activation_quant: false
+        weight: # can overwrite compression.quantization
+          qtype: int4
+          granularity: per-group
+          group_size: 128
+          is_sym: true
+
+dataset:
+  name: TextDataset
+  data_path: ./dataset/sharegpt_gpt4_qwen/sharegpt_gpt4-qwen3_a22B_output.jsonl
+  max_seq_length: 2048
+  num_samples: 256
+  batch_size: 1
+

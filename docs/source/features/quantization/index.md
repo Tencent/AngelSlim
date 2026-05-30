@@ -12,4 +12,7 @@ int8
 awq
 gptq
 fp8_lepto
+qat
+qat_zero3
+daq
 :::

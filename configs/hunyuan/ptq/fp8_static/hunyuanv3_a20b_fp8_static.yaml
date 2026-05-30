@@ -1,0 +1,38 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output_ptq_hy3
+
+# Simplified Configuration for LLM compression
+model:
+  name: HYV3MoE
+  model_path: tencent/Hy3-preview
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    name: fp8_static
+    bits: 8
+    quant_method:
+      weight: "per-tensor"
+      activation: "per-tensor"
+      kv_cache: "per-tensor"
+    ignore_layers:
+      - "lm_head"
+      - "model.embed_tokens"
+      - "gate.weight"
+    cpu_convert: true
+    save_name: "fp8"
+
+# Dataset for calibration
+dataset:
+  name: TextDataset
+  data_path: ./dataset/sharegpt_gpt4/sharegpt_gpt4_256.jsonl
+  max_seq_length: 2048
+  num_samples: 512
+  batch_size: 1

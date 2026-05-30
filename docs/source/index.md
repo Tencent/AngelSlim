@@ -63,9 +63,10 @@ AngelSlim是腾讯自研的，致力于打造更易用、更全面和更高效�
        - Tequila
      - - Eagle3
        - SpecExit
-     - - **稀疏注意力**
+    - - **稀疏注意力**
 
-         - Minference(建设中)
+        - Stem
+        - Minference(建设中)
    * - **图/视频生文(VLM)**
      - - Hunyuan-VL
        - HunyuanOCR
@@ -95,7 +96,7 @@ AngelSlim是腾讯自研的，致力于打造更易用、更全面和更高效�
          - TeaCache
        - **稀疏注意力**
 
-         - 建设中
+         - Stem
    * - **语音(TTS/ASR)**
      - - Qwen3-Omni
        - Qwen2-Audio
@@ -105,7 +106,7 @@ AngelSlim是腾讯自研的，致力于打造更易用、更全面和更高效�
      - - Eagle3
      - - **Token剪枝**
 
-         - 建设中
+         - IDPruner
 
 ```
 
@@ -129,7 +130,11 @@ getting_started/quickstrat
 
 features/quantization/index
 features/speculative_decoding/index
+features/sparse_attention/index
+features/token_compressor/index
 features/diffusion/index
+features/distill/index
+features/qad/index
 :::
 
 % Additional capabilities
@@ -144,6 +149,7 @@ models/deepseek/deepseek_quant
 models/qwen/qwen_quant
 models/qwenvl/qwenvl_quant
 models/qwen3_omni/qwen3_omni_quant
+models/Hy-MT1.5/hy-mt1.5
 :::
 
 

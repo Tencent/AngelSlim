@@ -1,0 +1,3 @@
+[submodule "angelslim/compressor/sparsity/vecattention/ops/vllm-flash-attention"]
+	path = angelslim/compressor/sparsity/vecattention/ops/vllm-flash-attention
+	url = git@github.com:anminliu/vllm-flash-attention.git

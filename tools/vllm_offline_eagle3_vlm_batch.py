@@ -14,7 +14,7 @@
 
 """
 usage:
-for task in "Lin-Chen/MMStar" "HuggingFaceH4/MATH-500" "MMMU/MMMU"; do
+for task in "Lin-Chen/MMStar" "HuggingFaceH4/MATH-500" "MMMU/MMMU" "/path/to/local.jsonl"; do
     python3 ./tools/vllm_offline_eagle3_vlm_batch.py \
         --target_model "$MODEL_DIR" \
         --draft_model "$EAGLE_DIR" \
@@ -37,6 +37,7 @@ import time
 from io import BytesIO
 
 from datasets import load_dataset
+from transformers.image_utils import load_image
 from vllm import LLM, SamplingParams
 
 
@@ -53,7 +54,12 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--target_model", type=str, default="Qwen/Qwen3-VL-4B-Instruct")
     parser.add_argument("--draft_model", type=str, default=None, help="Path to draft model")
-    parser.add_argument("--dataset", type=str, default="lmms-lab/textvqa", help="Dataset to use")
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="lmms-lab/textvqa",
+        help="Dataset to use: HuggingFace dataset name or local JSONL file path",
+    )
     parser.add_argument(
         "--use_eagle",
         action="store_true",
@@ -76,6 +82,24 @@ def parse_args():
     parser.add_argument("--temp", type=float, default=0, help="Number of speculative tokens")
     parser.add_argument("--tp", type=int, default=1)
     parser.add_argument("--output_len", type=int, default=1024)
+    parser.add_argument(
+        "--limit_mm_per_prompt_image",
+        type=int,
+        default=1,
+        help="Maximum number of images per prompt",
+    )
+    parser.add_argument(
+        "--max_pixels",
+        type=int,
+        default=None,
+        help="Maximum pixels for image processing (e.g. 602112)",
+    )
+    parser.add_argument(
+        "--min_pixels",
+        type=int,
+        default=1024,
+        help="Minimum pixels for image processing (e.g. 1024)",
+    )
     return parser.parse_args()
 
 
@@ -83,22 +107,54 @@ def main():
     args = parse_args()
 
     # Load dataset
-    print(f"Loading {args.dataset} dataset...")
-    if args.dataset == "MMMU/MMMU":
-        ds = load_dataset(args.dataset, "History", split="test", trust_remote_code=True)
-    elif args.dataset == "Lin-Chen/MMStar":
-        ds = load_dataset(args.dataset, split="val", trust_remote_code=True)
-    elif args.dataset == "opendatalab/OmniDocBench":
-        ds = load_dataset(args.dataset, split="train", trust_remote_code=True)
+    is_local_dataset = os.path.exists(args.dataset)
+    if is_local_dataset:
+        print(f"Loading dataset from local path: {args.dataset}")
+        ds = load_dataset(
+            path="json", data_files=args.dataset, split="train", trust_remote_code=True
+        )
     else:
-        ds = load_dataset(args.dataset, split="test", trust_remote_code=True)
+        print(f"Loading {args.dataset} dataset...")
+        if args.dataset == "MMMU/MMMU":
+            ds = load_dataset(args.dataset, "History", split="test", trust_remote_code=True)
+        elif args.dataset == "Lin-Chen/MMStar":
+            ds = load_dataset(args.dataset, split="val", trust_remote_code=True)
+        elif args.dataset == "opendatalab/OmniDocBench":
+            ds = load_dataset(args.dataset, split="train", trust_remote_code=True)
+        else:
+            ds = load_dataset(args.dataset, split="test", trust_remote_code=True)
     if args.num_prompts is not None:
         ds = ds.select(range(min(args.num_prompts, len(ds))))
+    if len(ds) == 0:
+        raise ValueError(f"Dataset {args.dataset} is empty")
 
     print(f"Loaded {len(ds)} samples.")
 
     prompts = []
-    if args.dataset == "lmms-lab/textvqa":
+    if is_local_dataset:
+        for item in ds:
+            user_messages = [msg for msg in item["conversations"] if msg.get("role") == "user"]
+            if user_messages:
+                user_content = user_messages[0].get("content", [])
+
+                prompt_content = []
+                for content_item in user_content:
+                    if content_item.get("type") == "text":
+                        prompt_content.append(
+                            {"type": "text", "text": content_item.get("text", "")}
+                        )
+                    elif content_item.get("type") == "image":
+                        image_path = content_item.get("image", "")
+                        img = load_image(image_path)
+                        image_url = pil_to_base64(img)
+                        prompt_content.append(
+                            {"type": "image_url", "image_url": {"url": image_url}}
+                        )
+
+                if prompt_content:
+                    prompts.append([{"role": "user", "content": prompt_content}])
+
+    elif args.dataset == "lmms-lab/textvqa":
         for item in ds:
             # Convert PIL image to base64
             image_url = pil_to_base64(item["image"])
@@ -184,6 +240,27 @@ def main():
         f"speculative_config={speculative_config}"
     )
 
+    # Build mm_processor_kwargs based on model type (Qwen3-VL vs others)
+    mm_processor_kwargs = None
+    if args.max_pixels is not None:
+        model_name_lower = args.target_model.lower()
+        if "qwen3" in model_name_lower:
+            # Qwen3-VL requires both max_pixels and size with shortest_edge/longest_edge
+            mm_processor_kwargs = {
+                "max_pixels": args.max_pixels,
+                "size": {
+                    "shortest_edge": (
+                        args.min_pixels if args.min_pixels is not None else args.max_pixels
+                    ),
+                    "longest_edge": args.max_pixels,
+                },
+            }
+        else:
+            mm_processor_kwargs = {"max_pixels": args.max_pixels}
+        if args.min_pixels is not None and "min_pixels" not in (mm_processor_kwargs or {}):
+            mm_processor_kwargs["min_pixels"] = args.min_pixels
+        print(f"mm_processor_kwargs: {mm_processor_kwargs}")
+
     llm = LLM(
         model=args.target_model,
         trust_remote_code=True,
@@ -194,7 +271,8 @@ def main():
         enforce_eager=True,
         disable_log_stats=False,
         max_model_len=args.max_model_len,
-        limit_mm_per_prompt={"image": 1},
+        limit_mm_per_prompt={"image": args.limit_mm_per_prompt_image},
+        mm_processor_kwargs=mm_processor_kwargs,
         disable_chunked_mm_input=False,
     )
 
@@ -211,7 +289,15 @@ def main():
     results_data = []
     for i, output in enumerate(outputs):
         generated_text = output.outputs[0].text
-        if args.dataset == "lmms-lab/textvqa":
+        if is_local_dataset:
+            results_data.append(
+                {
+                    "index": i,
+                    "input_data": ds[i] if i < len(ds) else {},
+                    "generated_text": generated_text,
+                }
+            )
+        elif args.dataset == "lmms-lab/textvqa":
             results_data.append(
                 {
                     "question_id": ds[i]["question_id"],
@@ -256,13 +342,21 @@ def main():
             )
 
     total_num_output_tokens = sum(len(output.outputs[0].token_ids) for output in outputs)
+    total_num_input_tokens = sum(len(output.prompt_token_ids) for output in outputs)
 
+    num_prompts = len(prompts)
     output_throughput = total_num_output_tokens / total_time
+    request_throughput = num_prompts / total_time
+    avg_input_tokens = total_num_input_tokens / num_prompts if num_prompts > 0 else 0
+    avg_output_tokens = total_num_output_tokens / num_prompts if num_prompts > 0 else 0
     metrics_info = {
         "total_time": total_time,
-        "avg_time_per_sample": total_time / len(prompts) if prompts else 0,
+        "avg_time_per_sample": total_time / num_prompts if num_prompts > 0 else 0,
         "use_eagle": args.use_eagle,
         "output_throughput": output_throughput,
+        "request_throughput": request_throughput,
+        "avg_input_tokens": avg_input_tokens,
+        "avg_output_tokens": avg_output_tokens,
     }
 
     if args.use_eagle and speculative_config:
@@ -295,6 +389,9 @@ def main():
 
             print(f"Mean acceptance length: {acceptance_length:.2f}")
             print(f"output_throughput: {output_throughput:.2f} tokens/s")
+            print(f"request_throughput: {request_throughput:.2f} requests/s")
+            print(f"avg_input_tokens: {avg_input_tokens:.1f}")
+            print(f"avg_output_tokens: {avg_output_tokens:.1f}")
             print(f"acceptance rates: {acceptance_rates}")
         except Exception as e:
             print(f"Error getting metrics: {e}")
@@ -302,7 +399,9 @@ def main():
     # Save to file
     os.makedirs(os.path.dirname(args.output_file), exist_ok=True)
     with open(args.output_file, "w") as f:
-        json.dump({"metrics": metrics_info, "results": results_data}, f, indent=2)
+        json.dump(
+            {"metrics": metrics_info, "results": results_data}, f, indent=4, ensure_ascii=False
+        )
 
     print(f"Results saved to {args.output_file}")
 

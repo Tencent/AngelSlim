@@ -15,7 +15,7 @@ from typing import Callable, Optional, Tuple, Union
 import torch
 from torch import nn
 from transformers.activations import ACT2FN
-from transformers.cache_utils import Cache, SlidingWindowCache, StaticCache
+from transformers.cache_utils import Cache, StaticCache
 from transformers.generation import GenerationMixin
 from transformers.modeling_attn_mask_utils import AttentionMaskConverter
 from transformers.modeling_flash_attention_utils import FlashAttentionKwargs
@@ -639,7 +639,7 @@ class Qwen2Model(Qwen2PreTrainedModel):
         )
 
         using_static_cache = isinstance(past_key_values, StaticCache)
-        using_sliding_window_cache = isinstance(past_key_values, SlidingWindowCache)
+        using_sliding_window_cache = isinstance(past_key_values, StaticCache)
 
         # When output attentions is True, sdpa implementation's forward method calls the eager implementation's forward
         if (
@@ -659,7 +659,7 @@ class Qwen2Model(Qwen2PreTrainedModel):
         dtype, device = input_tensor.dtype, input_tensor.device
         min_dtype = torch.finfo(dtype).min
         sequence_length = input_tensor.shape[1]
-        # SlidingWindowCache or StaticCache
+        # StaticCache
         if using_sliding_window_cache or using_static_cache:
             target_length = past_key_values.get_max_cache_shape()
         # DynamicCache or no cache
@@ -752,7 +752,7 @@ class Qwen2Model(Qwen2PreTrainedModel):
                     # if we have sliding window, we should not attend to tokens beyond sliding window length, so we mask them out also
                     # the check is needed to verify is current checkpoint was trained with sliding window or not
                     if (
-                        not isinstance(past_key_values, SlidingWindowCache)
+                        not isinstance(past_key_values, StaticCache)
                         or sequence_length > target_length
                     ):
                         sliding_attend_mask = torch.arange(target_length, device=device) <= (

@@ -31,7 +31,10 @@ WEIGHT_OBSERVERS_CLASS = {
     "per-group": AbsMaxGroupWiseWeightObserver,
 }
 
-KVCACHE_OBSERVERS_CLASS = {"per-channel": AbsmaxPerchannelObserver}
+KVCACHE_OBSERVERS_CLASS = {
+    "per-channel": AbsmaxPerchannelObserver,
+    "per-tensor": AbsmaxPertensorObserver,
+}
 
 
 class QuantConfig:
@@ -60,8 +63,10 @@ class QuantConfig:
         self.quant_helpers = quantization_args.quant_helpers
         act_quant_method = quantization_args.quant_method.get("activation", None)
         weight_quant_method = quantization_args.quant_method["weight"]
+        kv_cache_quant_method = quantization_args.quant_method.get("kv_cache", None)
         self.cpu_convert = quantization_args.cpu_convert
         self.save_name = quantization_args.save_name
+        self.quant_talker = getattr(quantization_args, "quant_talker", False)
 
         if global_config:
             self.max_seq_length = global_config.max_seq_length
@@ -77,7 +82,11 @@ class QuantConfig:
                 ACT_OBSERVERS_CLASS[act_quant_method] if "static" in is_dynamic else None
             )
             self.weight_observer = WEIGHT_OBSERVERS_CLASS[weight_quant_method]
-            self.kv_cache_observer = None
+            self.kv_cache_observer = (
+                KVCACHE_OBSERVERS_CLASS[kv_cache_quant_method]
+                if kv_cache_quant_method is not None
+                else None
+            )
 
             if "w4a8" in self.quant_algo:
                 group_size = (
@@ -98,6 +107,8 @@ class QuantConfig:
 
             if act_quant_method is not None:
                 self.quant_algo_info["a"] = f"fp8_{act_quant_method}-{is_dynamic}"
+            if kv_cache_quant_method is not None:
+                self.quant_algo_info["c"] = f"fp8_{kv_cache_quant_method}"
             self.low_memory = config.quantization.low_memory
             self.quant_analyse = config.quantization.quant_analyse
             self.quant_vit = config.quantization.quant_vit
@@ -117,13 +128,19 @@ class QuantConfig:
                 ACT_OBSERVERS_CLASS[act_quant_method] if "static" in is_dynamic else None
             )
             self.weight_observer = WEIGHT_OBSERVERS_CLASS[weight_quant_method]
-            self.kv_cache_observer = None
+            self.kv_cache_observer = (
+                KVCACHE_OBSERVERS_CLASS[kv_cache_quant_method]
+                if kv_cache_quant_method is not None
+                else None
+            )
             self.quant_algo_info = {
                 "w": f"int8_{weight_quant_method}",
                 "ignore_layers": quantization_args.ignore_layers,
             }
             if act_quant_method is not None:
                 self.quant_algo_info["a"] = f"int8_{act_quant_method}-{is_dynamic}"
+            if kv_cache_quant_method is not None:
+                self.quant_algo_info["c"] = f"int8_{kv_cache_quant_method}"
             self.low_memory = config.quantization.low_memory
             self.quant_analyse = config.quantization.quant_analyse
         elif "int4_awq" in self.quant_algo:
@@ -176,6 +193,12 @@ class QuantConfig:
 
             if act_quant_method is not None:
                 self.quant_algo_info["a"] = f"nvfp4_{act_quant_method}-{is_dynamic}"
+        elif "daq" in self.quant_algo:
+            self.quant_algo_info = {
+                "ignore_layers": quantization_args.ignore_layers,
+            }
+            self.low_memory = False
+            self._quantization_config = quantization_args
 
         if "smooth" in self.quant_helpers:
             self.smooth_alpha = quantization_args.smooth_alpha

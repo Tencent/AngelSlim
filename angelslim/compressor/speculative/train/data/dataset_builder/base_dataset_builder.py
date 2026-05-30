@@ -325,6 +325,24 @@ class OnlineDatasetBuilder(DatasetBuilder):
 
         return loss_mask
 
+    @staticmethod
+    def _normalize_content(content):
+        """Normalize content to string format.
+
+        If content is a list (multimodal format like [{"type": "text", "text": "..."}]),
+        extract and concatenate all text items into a single string.
+        This ensures LLM mode can handle data in multimodal format.
+        """
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            text_parts = []
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "text" and item.get("text"):
+                    text_parts.append(item["text"])
+            return "".join(text_parts) if text_parts else ""
+        return content
+
     def _build_messages(self, source: List[Dict]) -> List[Dict]:
         # System message
         if source[0]["role"] != "system":

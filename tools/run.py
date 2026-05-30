@@ -30,6 +30,9 @@ def get_args():
     parser.add_argument("--model-path", type=str, default=None)
     parser.add_argument("--save-path", type=str, default=None)
     parser.add_argument("--multi-nodes", action="store_true")
+    parser.add_argument("--lm-eval", action="store_true")
+    parser.add_argument("--lm-eval-task", nargs="+", default=["ceval-valid"])
+    parser.add_argument("--ppl-eval", action="store_true")
     args = parser.parse_args()
     return args
 
@@ -76,6 +79,7 @@ def multi_nodes_run(config):
     dataset_config = config.dataset_config
     compress_config = config.compression_config
     global_config = config.global_config
+    transform_config = config.transform_config
 
     # Step 3: Execute complete pipeline
     slim_engine = Engine()
@@ -108,6 +112,8 @@ def multi_nodes_run(config):
             shuffle=dataset_config.shuffle,
             inference_settings=dataset_config.inference_settings,
             use_audio_in_video=model_config.use_audio_in_video,
+            is_sft_data=dataset_config.is_sft_data,
+            dtype=slim_engine.slim_model.model.dtype,
         )
 
     # Step 6: Initialize compressor
@@ -115,6 +121,7 @@ def multi_nodes_run(config):
         compress_name=compress_config.name,
         compress_config=compress_config,
         global_config=global_config,
+        transform_config=transform_config,
     )
 
     # Step 7: Compress model
@@ -203,6 +210,97 @@ def vllm_calibrate_run(config):
     )
 
 
+def weight_only_run(config):
+    """
+    Dispatch weight-only quantization based on compression.quantization.name.
+
+    Weight-only quantization operates directly on safetensors files without
+    loading the model into GPU memory.  New algorithms can be added here by
+    checking quantization.name and calling the appropriate implementation.
+
+    Currently supported quantization names:
+      - "fp8_blockwise": FP8 block-wise quantization (128x128 tiles)
+
+    The YAML config must contain:
+      - model.model_path: input model directory
+      - global.save_path: output directory
+      - compression.quantization.quant_method.block_size: [128, 128] (optional)
+      - compression.quantization.quant_method.num_workers: int (optional, default 8)
+    """
+    import sys
+
+    quant_name = ""
+    if config.compression_config and config.compression_config.quantization:
+        quant_name = config.compression_config.quantization.name
+
+    if quant_name == "fp8_blockwise":
+        # fp8_quant_blockwise.py lives alongside run.py in tools/
+        tools_dir = os.path.dirname(os.path.abspath(__file__))
+        if tools_dir not in sys.path:
+            sys.path.insert(0, tools_dir)
+        from fp8_quant_blockwise import main as fp8_main
+
+        input_path = config.model_config.model_path
+        output_path = config.global_config.save_path
+
+        quant_method = {}
+        qm = config.compression_config.quantization.quant_method
+        if isinstance(qm, dict):
+            quant_method = qm
+
+        block_size = tuple(quant_method.get("block_size", [128, 128]))
+        num_workers = int(quant_method.get("num_workers", 8))
+
+        print_info(f"FP8 block-wise quantization: {input_path} -> {output_path}")
+        print_info(f"  block_size={block_size}, num_workers={num_workers}")
+
+        fp8_main(input_path, output_path, block_size, num_workers)
+
+        print_info(f"FP8 block-wise quantized model saved to: {output_path}")
+    elif quant_name == "daq":
+        from angelslim.compressor.quant.modules.daq import DAQ
+
+        daq = DAQ(config.compression_config.quantization, config.model_config.model_path)
+        daq.run(config.global_config.save_path)
+    else:
+        raise ValueError(
+            f"Unsupported PTQWeightOnly quantization method: '{quant_name}'. "
+            "Supported methods: ['fp8_blockwise']"
+        )
+
+
+def _prewarm_hf_deepspeed_config(config):
+    """Pre-construct ``Seq2SeqTrainingArguments`` so HF's
+    ``HfTrainerDeepSpeedConfig`` weak-ref is registered BEFORE
+    ``from_pretrained`` runs. That is what flips
+    ``is_deepspeed_zero3_enabled()`` to True and makes our
+    ``BaseLLMModel.from_pretrained`` take the ZeRO-3 path.
+
+    Returns the constructed TrainingArguments (kept alive via the caller's
+    local variable) or None if not applicable.
+    """
+    compress_cfg = getattr(config, "compression_config", None)
+    qat_cfg = getattr(compress_cfg, "QAT", None) if compress_cfg is not None else None
+    qad_cfg = getattr(compress_cfg, "QAD", None) if compress_cfg is not None else None
+    distill_cfg = getattr(compress_cfg, "Distill", None) if compress_cfg is not None else None
+    hf_args = getattr(qat_cfg, "hf_args", None) if qat_cfg is not None else None
+    if not hf_args:
+        hf_args = getattr(qad_cfg, "hf_args", None) if qad_cfg is not None else None
+    if not hf_args:
+        hf_args = getattr(distill_cfg, "hf_args", None) if distill_cfg is not None else None
+    if not hf_args or not hf_args.get("deepspeed"):
+        return None
+
+    from transformers import Seq2SeqTrainingArguments
+
+    trainer_args = Seq2SeqTrainingArguments(
+        output_dir=config.global_config.save_path,
+        **hf_args,
+    )
+    print_info("[DeepSpeed pre-warm] HfTrainerDeepSpeedConfig registered before model load.")
+    return trainer_args
+
+
 def run(config):
     """
     Run the LLM compression process based on the provided configuration.
@@ -216,6 +314,7 @@ def run(config):
     dataset_config = config.dataset_config
     compress_config = config.compression_config
     global_config = config.global_config
+    transform_config = config.transform_config
 
     # Dispatch to vLLM calibration if calibrate config specifies vllm backend
     if (
@@ -224,6 +323,17 @@ def run(config):
     ):
         vllm_calibrate_run(config)
         return
+
+    # Dispatch to weight-only quantization (no model loading required)
+    if "PTQWeightOnly" in config.compression_config.name:
+        weight_only_run(config)
+        return
+
+    # Trainer + DeepSpeed: register HfTrainerDeepSpeedConfig BEFORE loading the
+    # model so ``from_pretrained`` takes the ZeRO-3 path. No-op otherwise.
+    # The returned object must stay alive until after the model is built
+    # because HF's weak-ref mechanism drops the config otherwise.
+    _hf_ds_args = _prewarm_hf_deepspeed_config(config)
 
     # Step 2: Execute complete pipeline
     slim_engine = Engine()
@@ -242,6 +352,9 @@ def run(config):
         attn_implementation=model_config.attn_implementation,
         deploy_backend=global_config.deploy_backend,
     )
+    # Safe to release now: the model is built and any deepspeed.zero.Init
+    # effects have already happened on all parameters.
+    del _hf_ds_args
 
     # Step 4: Prepare data (optional custom dataloader)
     if compress_config.need_dataset:
@@ -257,6 +370,8 @@ def run(config):
             use_audio_in_video=model_config.use_audio_in_video,
             model_name=model_config.name,
             quantization_config=compress_config.quantization,
+            is_sft_data=dataset_config.is_sft_data,
+            dtype=slim_engine.slim_model.model.dtype,
         )
 
     # Step 5: Initialize compressor
@@ -264,12 +379,27 @@ def run(config):
         compress_name=compress_config.name,
         compress_config=compress_config,
         global_config=global_config,
+        transform_config=transform_config,
     )
 
     # Step 6: Compress model
     slim_engine.run()
 
-    # Step 7: Save compressed model
+    # Step 7: Convert model
+    slim_engine.convert()
+
+    # Step 8: Eval
+    if args.ppl_eval:
+        slim_engine.ppl_eval(tasks="wikitext2,c4", seqlen=dataset_config.max_seq_length)
+
+    if args.lm_eval:
+        slim_engine.lm_eval(
+            tasks="piqa,arc_easy,arc_challenge,hellaswag,winogrande",
+            batch_size=32,
+            num_fewshot=0,
+        )
+
+    # Step 9: Save compressed model
     slim_engine.save(global_config.save_path, config)
 
 
