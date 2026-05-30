@@ -320,11 +320,11 @@ class _FP32StateAdamW(torch.optim.Optimizer):
                 exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
                 exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
 
-                bias_correction1 = 1 - beta1 ** step_t
-                bias_correction2 = 1 - beta2 ** step_t
+                bias_correction1 = 1 - beta1**step_t
+                bias_correction2 = 1 - beta2**step_t
 
                 step_size = lr / bias_correction1
-                denom = (exp_avg_sq.sqrt() / (bias_correction2 ** 0.5)).add_(eps)
+                denom = (exp_avg_sq.sqrt() / (bias_correction2**0.5)).add_(eps)
 
                 master_param.addcdiv_(exp_avg, denom, value=-step_size)
 
@@ -365,8 +365,7 @@ class _FP32MasterWeightOptimizer(torch.optim.Optimizer):
 
         # Build fp32 master copies and replace the optimizer's param groups.
         self._fp32_params: List[torch.Tensor] = [
-            p.detach().clone().to(torch.float32).requires_grad_(True)
-            for p in bf16_params
+            p.detach().clone().to(torch.float32).requires_grad_(True) for p in bf16_params
         ]
         assert len(inner_optimizer.param_groups) == 1, (
             "_FP32MasterWeightOptimizer expects a single param group; "
@@ -500,9 +499,7 @@ class OnlineDFlashTrainer(Eagle3Trainer):
         self._gamma_init = self.loss_decay_gamma
         self.gamma_warmup = getattr(draft_model_config, "gamma_warmup", False)
         self._gamma_step = getattr(draft_model_config, "gamma_warmup_step", 0.5)
-        self.attention_backend = getattr(
-            draft_model_config, "attention_backend", "flex_attention"
-        )
+        self.attention_backend = getattr(draft_model_config, "attention_backend", "flex_attention")
         self.mask_token_id = dflash_config.get(
             "mask_token_id",
             getattr(draft_model_config, "mask_token_id", None),
@@ -567,9 +564,7 @@ class OnlineDFlashTrainer(Eagle3Trainer):
 
         if self.is_fsdp_enabled:
             args = self.args
-            param_groups = [
-                {"params": [p for p in self.model.parameters() if p.requires_grad]}
-            ]
+            param_groups = [{"params": [p for p in self.model.parameters() if p.requires_grad]}]
             optimizer = _FP32StateAdamW(
                 param_groups,
                 lr=args.learning_rate,
@@ -584,9 +579,7 @@ class OnlineDFlashTrainer(Eagle3Trainer):
             self.optimizer = optimizer
             return self.optimizer
 
-        bf16_params: List[torch.Tensor] = [
-            p for p in self.model.parameters() if p.requires_grad
-        ]
+        bf16_params: List[torch.Tensor] = [p for p in self.model.parameters() if p.requires_grad]
         if not bf16_params:
             return super().create_optimizer(model)
 
@@ -711,9 +704,7 @@ class OnlineDFlashTrainer(Eagle3Trainer):
         if not self.gamma_warmup or self._gamma_init is None:
             return
         current_epoch = int(self.state.epoch) if hasattr(self.state, "epoch") else 0
-        self.loss_decay_gamma = self._gamma_init + self._gamma_step * float(
-            current_epoch
-        )
+        self.loss_decay_gamma = self._gamma_init + self._gamma_step * float(current_epoch)
 
     def prepare_data_for_draft_model(self, inputs):
         """Prepare data for DFlash training.

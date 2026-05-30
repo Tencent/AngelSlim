@@ -185,9 +185,7 @@ class TransformersBackend(BaseBackend):
 
         # Verify attention implementation actually used
         _actual_attn = getattr(self.model.config, "_attn_implementation", "unknown")
-        print_with_rank(
-            f"Target model loaded. Actual attn_implementation: {_actual_attn}"
-        )
+        print_with_rank(f"Target model loaded. Actual attn_implementation: {_actual_attn}")
 
         # Load tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, trust_remote_code=True)
@@ -263,7 +261,7 @@ class TransformersBackend(BaseBackend):
                 actual_len = seq_len
 
             # Extract the unpadded portion
-            single_ids = input_ids[i:i + 1, :actual_len]
+            single_ids = input_ids[i : i + 1, :actual_len]
 
             with torch.no_grad():
                 outputs = self.model(
@@ -274,18 +272,14 @@ class TransformersBackend(BaseBackend):
 
             # Extract auxiliary hidden states for this sample
             # h shape: [1, actual_len, D*num_layers]
-            h = self._extract_auxiliary_hidden_states(
-                outputs.hidden_states, aux_layer_ids
-            )
+            h = self._extract_auxiliary_hidden_states(outputs.hidden_states, aux_layer_ids)
 
             # Pad back to seq_len to maintain batch shape
             if actual_len < seq_len:
                 pad_size = seq_len - actual_len
                 # Pad seq dim only (last-but-one dim); hidden dim is untouched
                 h = torch.nn.functional.pad(h, (0, 0, 0, pad_size))
-                logits_padded = torch.nn.functional.pad(
-                    outputs.logits, (0, 0, 0, pad_size)
-                )
+                logits_padded = torch.nn.functional.pad(outputs.logits, (0, 0, 0, pad_size))
             else:
                 logits_padded = outputs.logits
 

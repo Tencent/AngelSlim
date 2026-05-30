@@ -176,7 +176,7 @@ def parse_args():
         type=str,
         default="",
         help="FSDP configuration string passed to TrainingArguments "
-             "(e.g. 'shard_grad_op auto_wrap'). Empty disables FSDP.",
+        "(e.g. 'shard_grad_op auto_wrap'). Empty disables FSDP.",
     )
     t.add_argument(
         "--fsdp_config",

@@ -72,9 +72,7 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids=None, unsqueeze_dim=1):
     return q_embed, k_embed
 
 
-def build_target_layer_ids(
-    num_target_layers: int, num_draft_layers: int
-) -> List[int]:
+def build_target_layer_ids(num_target_layers: int, num_draft_layers: int) -> List[int]:
     """Compute target layer IDs to capture from the target model."""
     if num_draft_layers == 1:
         return [(num_target_layers // 2)]
@@ -82,8 +80,7 @@ def build_target_layer_ids(
     end = num_target_layers - 3
     span = end - start
     target_layer_ids = [
-        int(round(start + (i * span) / (num_draft_layers - 1)))
-        for i in range(num_draft_layers)
+        int(round(start + (i * span) / (num_draft_layers - 1))) for i in range(num_draft_layers)
     ]
     return target_layer_ids
 
@@ -116,9 +113,7 @@ class Qwen3DFlareAttention(nn.Module):
         self.head_dim = getattr(
             config, "head_dim", config.hidden_size // config.num_attention_heads
         )
-        self.num_key_value_groups = (
-            config.num_attention_heads // config.num_key_value_heads
-        )
+        self.num_key_value_groups = config.num_attention_heads // config.num_key_value_heads
         self.scaling = self.head_dim**-0.5
         self.attention_dropout = config.attention_dropout
         self.is_causal = False
@@ -155,9 +150,7 @@ class Qwen3DFlareAttention(nn.Module):
         self.q_norm = Qwen3RMSNorm(self.head_dim, eps=config.rms_norm_eps)
         self.k_norm = Qwen3RMSNorm(self.head_dim, eps=config.rms_norm_eps)
         self.sliding_window = (
-            config.sliding_window
-            if config.layer_types[layer_idx] == "sliding_attention"
-            else None
+            config.sliding_window if config.layer_types[layer_idx] == "sliding_attention" else None
         )
 
     def forward(
@@ -179,12 +172,8 @@ class Qwen3DFlareAttention(nn.Module):
         k_noise = self.k_proj(hidden_states)
         v_ctx = self.v_proj_target(target_hidden)
         v_noise = self.v_proj(hidden_states)
-        k = torch.cat([k_ctx, k_noise], dim=1).view(
-            bsz, ctx_len + q_len, -1, self.head_dim
-        )
-        v = torch.cat([v_ctx, v_noise], dim=1).view(
-            bsz, ctx_len + q_len, -1, self.head_dim
-        )
+        k = torch.cat([k_ctx, k_noise], dim=1).view(bsz, ctx_len + q_len, -1, self.head_dim)
+        v = torch.cat([v_ctx, v_noise], dim=1).view(bsz, ctx_len + q_len, -1, self.head_dim)
         k = self.k_norm(k).transpose(1, 2)
         v = v.transpose(1, 2)
         cos, sin = position_embeddings
@@ -220,9 +209,7 @@ class Qwen3DFlareDecoderLayer(GradientCheckpointingLayer):
         self.self_attn = Qwen3DFlareAttention(config=config, layer_idx=layer_idx)
         self.mlp = Qwen3MLP(config)
         self.input_layernorm = Qwen3RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_attention_layernorm = Qwen3RMSNorm(
-            config.hidden_size, eps=config.rms_norm_eps
-        )
+        self.post_attention_layernorm = Qwen3RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
     def forward(
         self,
@@ -234,9 +221,7 @@ class Qwen3DFlareDecoderLayer(GradientCheckpointingLayer):
         output_attentions: Optional[bool] = False,
         use_cache: Optional[bool] = False,
         cache_position: Optional[torch.LongTensor] = None,
-        position_embeddings: Optional[
-            Tuple[torch.Tensor, torch.Tensor]
-        ] = None,
+        position_embeddings: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
         **kwargs: Unpack[FlashAttentionKwargs],
     ) -> torch.FloatTensor:
         residual = hidden_states
@@ -332,9 +317,7 @@ class QwenDFlareDraftModel(Qwen3PreTrainedModel):
         )
         fusion_probs = torch.softmax(self.layer_fusion_weights, dim=1)
         # bsth (target) x dt (per-draft-layer fusion) -> bsdh (per-draft-layer)
-        fused_hidden = torch.einsum(
-            "bsth,dt->bsdh", target_hidden_reshaped, fusion_probs
-        )
+        fused_hidden = torch.einsum("bsth,dt->bsdh", target_hidden_reshaped, fusion_probs)
         fused_hidden = self.hidden_norm(fused_hidden)
         position_embeddings = self.rotary_emb(hidden_states, position_ids)
         for i, layer in enumerate(self.layers):
@@ -372,9 +355,7 @@ class QwenDFlareDraftModel(Qwen3PreTrainedModel):
             dtype=torch.long,
             device=target.device,
         )
-        position_ids = torch.arange(
-            output_ids.shape[1], device=target.device
-        ).unsqueeze(0)
+        position_ids = torch.arange(output_ids.shape[1], device=target.device).unsqueeze(0)
 
         past_key_values_target = DynamicCache()
         past_key_values_draft = DynamicCache()
@@ -390,12 +371,8 @@ class QwenDFlareDraftModel(Qwen3PreTrainedModel):
         )
 
         output_ids[:, :num_input_tokens] = input_ids
-        output_ids[:, num_input_tokens : num_input_tokens + 1] = sample(
-            output.logits, temperature
-        )
-        target_hidden = extract_context_feature(
-            output.hidden_states, self.target_layer_ids
-        )
+        output_ids[:, num_input_tokens : num_input_tokens + 1] = sample(output.logits, temperature)
+        target_hidden = extract_context_feature(output.hidden_states, self.target_layer_ids)
 
         # Decode stage
         acceptance_lengths = []
@@ -429,22 +406,17 @@ class QwenDFlareDraftModel(Qwen3PreTrainedModel):
 
             posterior = sample(output.logits, temperature)
             acceptance_length = (
-                (block_output_ids[:, 1:] == posterior[:, :-1])
-                .cumprod(dim=1)
-                .sum(dim=1)[0]
-                .item()
+                (block_output_ids[:, 1:] == posterior[:, :-1]).cumprod(dim=1).sum(dim=1)[0].item()
             )
             output_ids[:, start : start + acceptance_length + 1] = block_output_ids[
                 :, : acceptance_length + 1
             ]
-            output_ids[:, start + acceptance_length + 1] = posterior[
-                :, acceptance_length
-            ]
+            output_ids[:, start + acceptance_length + 1] = posterior[:, acceptance_length]
             start += acceptance_length + 1
             past_key_values_target.crop(start)
-            target_hidden = extract_context_feature(
-                output.hidden_states, self.target_layer_ids
-            )[:, : acceptance_length + 1, :]
+            target_hidden = extract_context_feature(output.hidden_states, self.target_layer_ids)[
+                :, : acceptance_length + 1, :
+            ]
             acceptance_lengths.append(acceptance_length + 1)
             if stop_token_ids is not None and any(
                 stop_token_id in output_ids[:, num_input_tokens:]
@@ -459,8 +431,6 @@ class QwenDFlareDraftModel(Qwen3PreTrainedModel):
                 output_ids[0][num_input_tokens:], stop_token_ids
             ).nonzero(as_tuple=True)[0]
             if stop_token_indices.numel() > 0:
-                output_ids = output_ids[
-                    :, : num_input_tokens + stop_token_indices[0] + 1
-                ]
+                output_ids = output_ids[:, : num_input_tokens + stop_token_indices[0] + 1]
 
         return output_ids
