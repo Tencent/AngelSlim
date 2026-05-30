@@ -12,11 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""DFlash Draft Model for Qwen3 architecture.
+"""DFlare Draft Model for Qwen3 architecture.
 
-AngelSlim DFlash draft model using cross-attention between draft blocks and
-context hidden states from the target model — fundamentally different from
-Eagle3's concat + self-attention approach.
+AngelSlim DFlare is an enhanced DFlash variant with two structural changes
+compared to ``QwenDFlashDraftModel``:
+
+1. Cross-attention uses **separate** k/v projections for context (target hidden
+   states) vs. noise (draft tokens): ``k_proj_target/v_proj_target`` for
+   context, ``k_proj/v_proj`` for noise.
+2. Multi-layer target hidden states are fused via a learnable
+   ``layer_fusion_weights[D, T]`` matrix (softmax-normalised, einsum'd) instead
+   of a single ``Linear(T*H -> H)`` projection. Each draft layer learns its own
+   weighted combination of the T captured target layers.
+
+Training-side logic (anchor sampling, BlockMask, weighted CE loss, accuracy)
+is **identical** to DFlash, so this model is consumed by the same
+``OnlineDFlashTrainer``.
 """
 
 from typing import Callable, List, Optional, Tuple
@@ -61,7 +72,9 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids=None, unsqueeze_dim=1):
     return q_embed, k_embed
 
 
-def build_target_layer_ids(num_target_layers: int, num_draft_layers: int) -> List[int]:
+def build_target_layer_ids(
+    num_target_layers: int, num_draft_layers: int
+) -> List[int]:
     """Compute target layer IDs to capture from the target model."""
     if num_draft_layers == 1:
         return [(num_target_layers // 2)]
@@ -69,7 +82,8 @@ def build_target_layer_ids(num_target_layers: int, num_draft_layers: int) -> Lis
     end = num_target_layers - 3
     span = end - start
     target_layer_ids = [
-        int(round(start + (i * span) / (num_draft_layers - 1))) for i in range(num_draft_layers)
+        int(round(start + (i * span) / (num_draft_layers - 1)))
+        for i in range(num_draft_layers)
     ]
     return target_layer_ids
 
@@ -87,11 +101,12 @@ def extract_context_feature(
     return target_hidden
 
 
-class Qwen3DFlashAttention(nn.Module):
-    """Multi-headed cross-attention for DFlash.
+class Qwen3DFlareAttention(nn.Module):
+    """Multi-headed cross-attention for DFlare.
 
-    Q comes from draft hidden states, KV comes from concatenation of
-    context (target) hidden states and draft hidden states.
+    Q comes from draft hidden states. KV is the concatenation of context
+    (target hidden) and noise (draft) projections, but unlike DFlash the
+    context uses dedicated ``k_proj_target / v_proj_target`` parameters.
     """
 
     def __init__(self, config: Qwen3Config, layer_idx: int):
@@ -101,7 +116,9 @@ class Qwen3DFlashAttention(nn.Module):
         self.head_dim = getattr(
             config, "head_dim", config.hidden_size // config.num_attention_heads
         )
-        self.num_key_value_groups = config.num_attention_heads // config.num_key_value_heads
+        self.num_key_value_groups = (
+            config.num_attention_heads // config.num_key_value_heads
+        )
         self.scaling = self.head_dim**-0.5
         self.attention_dropout = config.attention_dropout
         self.is_causal = False
@@ -115,7 +132,17 @@ class Qwen3DFlashAttention(nn.Module):
             config.num_key_value_heads * self.head_dim,
             bias=config.attention_bias,
         )
+        self.k_proj_target = nn.Linear(
+            config.hidden_size,
+            config.num_key_value_heads * self.head_dim,
+            bias=config.attention_bias,
+        )
         self.v_proj = nn.Linear(
+            config.hidden_size,
+            config.num_key_value_heads * self.head_dim,
+            bias=config.attention_bias,
+        )
+        self.v_proj_target = nn.Linear(
             config.hidden_size,
             config.num_key_value_heads * self.head_dim,
             bias=config.attention_bias,
@@ -128,7 +155,9 @@ class Qwen3DFlashAttention(nn.Module):
         self.q_norm = Qwen3RMSNorm(self.head_dim, eps=config.rms_norm_eps)
         self.k_norm = Qwen3RMSNorm(self.head_dim, eps=config.rms_norm_eps)
         self.sliding_window = (
-            config.sliding_window if config.layer_types[layer_idx] == "sliding_attention" else None
+            config.sliding_window
+            if config.layer_types[layer_idx] == "sliding_attention"
+            else None
         )
 
     def forward(
@@ -146,12 +175,16 @@ class Qwen3DFlashAttention(nn.Module):
         q = self.q_proj(hidden_states)
         q = q.view(bsz, q_len, -1, self.head_dim)
         q = self.q_norm(q).transpose(1, 2)
-        k_ctx = self.k_proj(target_hidden)
+        k_ctx = self.k_proj_target(target_hidden)
         k_noise = self.k_proj(hidden_states)
-        v_ctx = self.v_proj(target_hidden)
+        v_ctx = self.v_proj_target(target_hidden)
         v_noise = self.v_proj(hidden_states)
-        k = torch.cat([k_ctx, k_noise], dim=1).view(bsz, ctx_len + q_len, -1, self.head_dim)
-        v = torch.cat([v_ctx, v_noise], dim=1).view(bsz, ctx_len + q_len, -1, self.head_dim)
+        k = torch.cat([k_ctx, k_noise], dim=1).view(
+            bsz, ctx_len + q_len, -1, self.head_dim
+        )
+        v = torch.cat([v_ctx, v_noise], dim=1).view(
+            bsz, ctx_len + q_len, -1, self.head_dim
+        )
         k = self.k_norm(k).transpose(1, 2)
         v = v.transpose(1, 2)
         cos, sin = position_embeddings
@@ -178,16 +211,18 @@ class Qwen3DFlashAttention(nn.Module):
         return attn_output, attn_weights
 
 
-class Qwen3DFlashDecoderLayer(GradientCheckpointingLayer):
-    """DFlash decoder layer with cross-attention to context."""
+class Qwen3DFlareDecoderLayer(GradientCheckpointingLayer):
+    """DFlare decoder layer with cross-attention to context."""
 
     def __init__(self, config: Qwen3Config, layer_idx: int):
         super().__init__()
         self.hidden_size = config.hidden_size
-        self.self_attn = Qwen3DFlashAttention(config=config, layer_idx=layer_idx)
+        self.self_attn = Qwen3DFlareAttention(config=config, layer_idx=layer_idx)
         self.mlp = Qwen3MLP(config)
         self.input_layernorm = Qwen3RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_attention_layernorm = Qwen3RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.post_attention_layernorm = Qwen3RMSNorm(
+            config.hidden_size, eps=config.rms_norm_eps
+        )
 
     def forward(
         self,
@@ -199,7 +234,9 @@ class Qwen3DFlashDecoderLayer(GradientCheckpointingLayer):
         output_attentions: Optional[bool] = False,
         use_cache: Optional[bool] = False,
         cache_position: Optional[torch.LongTensor] = None,
-        position_embeddings: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+        position_embeddings: Optional[
+            Tuple[torch.Tensor, torch.Tensor]
+        ] = None,
         **kwargs: Unpack[FlashAttentionKwargs],
     ) -> torch.FloatTensor:
         residual = hidden_states
@@ -225,41 +262,56 @@ class Qwen3DFlashDecoderLayer(GradientCheckpointingLayer):
 
 
 @DraftModelFactory.register
-class QwenDFlashDraftModel(Qwen3PreTrainedModel):
-    """DFlash Draft Model for Qwen3 architecture.
+class QwenDFlareDraftModel(Qwen3PreTrainedModel):
+    """DFlare Draft Model for Qwen3 architecture.
 
-    Uses block-parallel cross-attention between noise-masked draft blocks
-    and context hidden states from the target model.
+    Same input/output contract as ``QwenDFlashDraftModel`` (consumed by the
+    same ``OnlineDFlashTrainer``), with two structural improvements:
+      * separate context/noise k,v projections inside cross-attention;
+      * learnable per-draft-layer fusion weights over target layers.
     """
 
     config_class = Qwen3Config
-    _no_split_modules = ["Qwen3DFlashDecoderLayer"]
+    _no_split_modules = ["Qwen3DFlareDecoderLayer"]
 
     def __init__(self, config) -> None:
         super().__init__(config)
         self.config = config
         self.layers = nn.ModuleList(
             [
-                Qwen3DFlashDecoderLayer(config, layer_idx)
+                Qwen3DFlareDecoderLayer(config, layer_idx)
                 for layer_idx in range(config.num_hidden_layers)
             ]
         )
+        self.num_draft_layers = config.num_hidden_layers
+        # We intentionally read from ``dflash_config`` to remain compatible with
+        # the existing trainer, which extracts ``mask_token_id`` etc. from the
+        # same key.
         dflash_config = getattr(config, "dflash_config", {}) or {}
         self.target_layer_ids = dflash_config.get(
             "target_layer_ids",
             build_target_layer_ids(config.num_target_layers, config.num_hidden_layers),
         )
+        self.num_target_layers = len(self.target_layer_ids)
         self.norm = Qwen3RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.rotary_emb = Qwen3RotaryEmbedding(config)
-        self.fc = nn.Linear(
-            len(self.target_layer_ids) * config.hidden_size,
-            config.hidden_size,
-            bias=False,
+        self.layer_fusion_weights = nn.Parameter(
+            torch.empty(self.num_draft_layers, self.num_target_layers)
         )
+        self._init_fusion_weights()
         self.hidden_norm = Qwen3RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.block_size = config.block_size
         self.mask_token_id = dflash_config.get("mask_token_id", None)
         self.post_init()
+
+    def _init_fusion_weights(self) -> None:
+        nn.init.constant_(self.layer_fusion_weights, 0.0)
+        for d_idx in range(self.num_draft_layers):
+            t_idx = min(
+                self.num_target_layers - 1,
+                int((d_idx / self.num_draft_layers) * self.num_target_layers),
+            )
+            self.layer_fusion_weights.data[d_idx, t_idx] = 2.0
 
     def forward(
         self,
@@ -272,12 +324,24 @@ class QwenDFlashDraftModel(Qwen3PreTrainedModel):
         **kwargs,
     ) -> torch.Tensor:
         hidden_states = noise_embedding
-        target_hidden = self.hidden_norm(self.fc(target_hidden))
+        bsz, seq_len, _ = target_hidden.shape
+        # target_hidden arrives as concatenation along feature dim of T target
+        # layers' hidden states: [B, S, T*H]. Reshape to per-layer tensor.
+        target_hidden_reshaped = target_hidden.view(
+            bsz, seq_len, self.num_target_layers, self.config.hidden_size
+        )
+        fusion_probs = torch.softmax(self.layer_fusion_weights, dim=1)
+        # bsth (target) x dt (per-draft-layer fusion) -> bsdh (per-draft-layer)
+        fused_hidden = torch.einsum(
+            "bsth,dt->bsdh", target_hidden_reshaped, fusion_probs
+        )
+        fused_hidden = self.hidden_norm(fused_hidden)
         position_embeddings = self.rotary_emb(hidden_states, position_ids)
-        for layer in self.layers:
+        for i, layer in enumerate(self.layers):
+            layer_target_hidden = fused_hidden[:, :, i, :]
             hidden_states = layer(
                 hidden_states=hidden_states,
-                target_hidden=target_hidden,
+                target_hidden=layer_target_hidden,
                 attention_mask=attention_mask,
                 position_ids=position_ids,
                 past_key_value=past_key_values,
@@ -296,7 +360,7 @@ class QwenDFlashDraftModel(Qwen3PreTrainedModel):
         stop_token_ids: List[int],
         temperature: float,
     ):
-        """Speculative generation with DFlash draft model."""
+        """Speculative generation with DFlare draft model."""
         self.eval()
         num_input_tokens = input_ids.shape[1]
         max_length = num_input_tokens + max_new_tokens
@@ -308,7 +372,9 @@ class QwenDFlashDraftModel(Qwen3PreTrainedModel):
             dtype=torch.long,
             device=target.device,
         )
-        position_ids = torch.arange(output_ids.shape[1], device=target.device).unsqueeze(0)
+        position_ids = torch.arange(
+            output_ids.shape[1], device=target.device
+        ).unsqueeze(0)
 
         past_key_values_target = DynamicCache()
         past_key_values_draft = DynamicCache()
@@ -324,8 +390,12 @@ class QwenDFlashDraftModel(Qwen3PreTrainedModel):
         )
 
         output_ids[:, :num_input_tokens] = input_ids
-        output_ids[:, num_input_tokens : num_input_tokens + 1] = sample(output.logits, temperature)
-        target_hidden = extract_context_feature(output.hidden_states, self.target_layer_ids)
+        output_ids[:, num_input_tokens : num_input_tokens + 1] = sample(
+            output.logits, temperature
+        )
+        target_hidden = extract_context_feature(
+            output.hidden_states, self.target_layer_ids
+        )
 
         # Decode stage
         acceptance_lengths = []
@@ -359,17 +429,22 @@ class QwenDFlashDraftModel(Qwen3PreTrainedModel):
 
             posterior = sample(output.logits, temperature)
             acceptance_length = (
-                (block_output_ids[:, 1:] == posterior[:, :-1]).cumprod(dim=1).sum(dim=1)[0].item()
+                (block_output_ids[:, 1:] == posterior[:, :-1])
+                .cumprod(dim=1)
+                .sum(dim=1)[0]
+                .item()
             )
             output_ids[:, start : start + acceptance_length + 1] = block_output_ids[
                 :, : acceptance_length + 1
             ]
-            output_ids[:, start + acceptance_length + 1] = posterior[:, acceptance_length]
+            output_ids[:, start + acceptance_length + 1] = posterior[
+                :, acceptance_length
+            ]
             start += acceptance_length + 1
             past_key_values_target.crop(start)
-            target_hidden = extract_context_feature(output.hidden_states, self.target_layer_ids)[
-                :, : acceptance_length + 1, :
-            ]
+            target_hidden = extract_context_feature(
+                output.hidden_states, self.target_layer_ids
+            )[:, : acceptance_length + 1, :]
             acceptance_lengths.append(acceptance_length + 1)
             if stop_token_ids is not None and any(
                 stop_token_id in output_ids[:, num_input_tokens:]
@@ -384,6 +459,8 @@ class QwenDFlashDraftModel(Qwen3PreTrainedModel):
                 output_ids[0][num_input_tokens:], stop_token_ids
             ).nonzero(as_tuple=True)[0]
             if stop_token_indices.numel() > 0:
-                output_ids = output_ids[:, : num_input_tokens + stop_token_indices[0] + 1]
+                output_ids = output_ids[
+                    :, : num_input_tokens + stop_token_indices[0] + 1
+                ]
 
         return output_ids

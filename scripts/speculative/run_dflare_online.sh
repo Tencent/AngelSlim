@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# DFlash Online Training Script for Qwen3
-# Usage: bash scripts/speculative/run_qwen3_dflash_online.sh [NUM_GPUS] [ATTENTION_BACKEND]
+# DFlare Online Training Script for Qwen3
+# Usage: bash scripts/speculative/run_dflare_online.sh [NUM_GPUS] [ATTENTION_BACKEND]
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 ROOT_DIR=$(dirname $(dirname $SCRIPT_DIR))
@@ -20,15 +20,16 @@ OUTPUT_DIR="${ROOT_DIR}/outputs/"
 export CONFIG_DIR=${ROOT_DIR}/angelslim/compressor/speculative/train/configs
 
 # WandB configuration
-export WANDB_PROJECT=${WANDB_PROJECT:-"angelslim-qwen3-4b-dflash"}
-WANDB_RUN_NAME=${WANDB_RUN_NAME:-"qwen3-4b-dflash"}
+export WANDB_PROJECT=${WANDB_PROJECT:-"angelslim-qwen3-4b-dflare"}
+WANDB_RUN_NAME=${WANDB_RUN_NAME:-"qwen3-4b-dflare"}
 
 torchrun \
     --standalone \
     --nproc_per_node $NUM_GPUS \
     $ROOT_DIR/tools/train_dflash_online.py \
     --target_model_name_or_path $TARGET_MODEL_PATH \
-    --draft_model_config_path $ROOT_DIR/configs/qwen3_dflash.json \
+    --draft_model_config_path $ROOT_DIR/configs/qwen3_dflare.json \
+    --draft_arch dflare \
     --train_data_path $TRAIN_DATA_PATH \
     --output_dir $OUTPUT_DIR \
     --modal_type DFlash \
