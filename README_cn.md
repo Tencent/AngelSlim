@@ -22,6 +22,7 @@
 </p>
 
 ## 📣最新进展
+- [26/06/01] 我们发布了 **DFlare**，一种基于 layer-wise fusion 的块扩散投机解码框架，端到端加速比可达 **5.52×**。[[文档]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/dflare.html)
 - [26/05/27] 我们发布了 **D-Cut**，一种用于投机解码的自适应验证深度裁剪技术。[[文档]](https://angelslim.readthedocs.io/zh-cn/latest/dcut.html)
 - [26/05/20]  我们支持了模型蒸馏功能，适用于huggingface 全精度或者**QAT量化**模型，详细步骤可以参考[文档](https://angelslim.readthedocs.io/zh-cn/latest/features/distill/index.html).🔥🔥🔥
 - [26/05/08] 我们发布了用于 1.25-bit 模型的 STQ1_0 内核，并向 llama.cpp 提交了 [PR #22836](https://github.com/ggml-org/llama.cpp/pull/22836)！如果您对 STQ_0 有任何疑问或建议，欢迎在该 PR 下留言！🔥🔥🔥
@@ -93,6 +94,7 @@
         <ul style="padding-left: 0; list-style-position: inside;">
           <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html">Eagle3</a></li>
           <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html">SpecExit</a></li>
+          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/dflare.html">DFlare</a></li>
         </ul>
       </td>
       <td>
