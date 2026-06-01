@@ -56,7 +56,10 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, DynamicCache
 # ---------------------------------------------------------------------------
 def _dist_init() -> None:
     if "RANK" not in os.environ:
-        warnings.warn("Environment variable `RANK` is not set; running single-process.")
+        warnings.warn(
+            "Environment variable `RANK` is not set; running single-process.",
+            stacklevel=2,
+        )
         return
     torch_dist.init_process_group(backend="nccl", init_method="env://")
 
@@ -100,22 +103,30 @@ def _dist_gather(obj: Any, dst: int = 0) -> Optional[List[Any]]:
 def load_and_process_dataset(data_name: str):
     if data_name == "gsm8k":
         ds = load_dataset("openai/gsm8k", "main", split="test")
-        fmt = "{question}\nPlease reason step by step, and put your final answer within \\boxed{{}}."
+        fmt = (
+            "{question}\nPlease reason step by step, and put your final answer within \\boxed{{}}."
+        )
         return ds.map(lambda x: {"turns": [fmt.format(**x)]})
 
     if data_name == "math500":
         ds = load_dataset("HuggingFaceH4/MATH-500", split="test")
-        fmt = "{problem}\nPlease reason step by step, and put your final answer within \\boxed{{}}."
+        fmt = (
+            "{problem}\nPlease reason step by step, and put your final answer within \\boxed{{}}."
+        )
         return ds.map(lambda x: {"turns": [fmt.format(**x)]})
 
     if data_name == "aime24":
         ds = load_dataset("HuggingFaceH4/aime_2024", split="train")
-        fmt = "{problem}\nPlease reason step by step, and put your final answer within \\boxed{{}}."
+        fmt = (
+            "{problem}\nPlease reason step by step, and put your final answer within \\boxed{{}}."
+        )
         return ds.map(lambda x: {"turns": [fmt.format(**x)]})
 
     if data_name == "aime25":
         ds = load_dataset("MathArena/aime_2025", split="train")
-        fmt = "{problem}\nPlease reason step by step, and put your final answer within \\boxed{{}}."
+        fmt = (
+            "{problem}\nPlease reason step by step, and put your final answer within \\boxed{{}}."
+        )
         return ds.map(lambda x: {"turns": [fmt.format(**x)]})
 
     if data_name == "alpaca":
@@ -123,7 +134,9 @@ def load_and_process_dataset(data_name: str):
         ds = ds.map(
             lambda x: {
                 "formatted_input": (
-                    f"{x['instruction']}\n\nInput:\n{x['input']}" if x["input"] else x["instruction"]
+                    f"{x['instruction']}\n\nInput:\n{x['input']}"
+                    if x["input"]
+                    else x["instruction"]
                 )
             }
         )
@@ -157,13 +170,21 @@ def load_and_process_dataset(data_name: str):
 
     if data_name == "livecodebench":
         base = "https://huggingface.co/datasets/livecodebench/code_generation_lite/resolve/main/"
-        files = ["test.jsonl", "test2.jsonl", "test3.jsonl", "test4.jsonl", "test5.jsonl", "test6.jsonl"]
+        files = [
+            "test.jsonl",
+            "test2.jsonl",
+            "test3.jsonl",
+            "test4.jsonl",
+            "test5.jsonl",
+            "test6.jsonl",
+        ]
         ds = load_dataset("json", data_files={"test": [base + fn for fn in files]})["test"]
 
         def _fmt(doc):
             sys = (
-                "You are an expert Python programmer. You will be given a question (problem specification) "
-                "and will generate a correct Python program that matches the specification and passes all tests. "
+                "You are an expert Python programmer. You will be given a question "
+                "(problem specification) and will generate a correct Python program "
+                "that matches the specification and passes all tests. "
                 "You will NOT return anything except for the program"
             )
             q = f"### Question:\n{doc['question_content']}"
@@ -198,6 +219,7 @@ def _resolve_draft_arch(arch: str):
             extract_context_feature,
             sample,
         )
+
         return QwenDFlashDraftModel, sample, extract_context_feature
     if arch == "dflare":
         from angelslim.compressor.speculative.train.models.draft.qwen_dflare import (
@@ -205,6 +227,7 @@ def _resolve_draft_arch(arch: str):
             extract_context_feature,
             sample,
         )
+
         return QwenDFlareDraftModel, sample, extract_context_feature
     raise ValueError(f"--draft-arch must be one of {{dflash, dflare}}, got: {arch}")
 
@@ -312,9 +335,9 @@ def dflash_generate(
         start += acceptance_length + 1
         past_key_values_target.crop(start)
         if block_size > 1:
-            target_hidden = extract_context_feature_fn(output.hidden_states, model.target_layer_ids)[
-                :, : acceptance_length + 1, :
-            ]
+            target_hidden = extract_context_feature_fn(
+                output.hidden_states, model.target_layer_ids
+            )[:, : acceptance_length + 1, :]
 
         if stop_token_ids is not None and any(
             stop_token_id in output_ids[:, num_input_tokens:] for stop_token_id in stop_token_ids
@@ -325,7 +348,9 @@ def dflash_generate(
     output_ids = output_ids[:, output_ids[0] != mask_token_id]
     if stop_token_ids is not None:
         stop_tensor = torch.tensor(stop_token_ids, device=output_ids.device)
-        stop_indices = torch.isin(output_ids[0][num_input_tokens:], stop_tensor).nonzero(as_tuple=True)[0]
+        stop_indices = torch.isin(output_ids[0][num_input_tokens:], stop_tensor).nonzero(
+            as_tuple=True
+        )[0]
         if stop_indices.numel() > 0:
             output_ids = output_ids[:, : num_input_tokens + stop_indices[0] + 1]
 
@@ -348,16 +373,34 @@ def dflash_generate(
 # ---------------------------------------------------------------------------
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-name-or-path", type=str, required=True,
-                        help="Path or HF id of the target model.")
-    parser.add_argument("--draft-name-or-path", type=str, required=True,
-                        help="Path of the trained DFlash/DFlare draft checkpoint.")
-    parser.add_argument("--draft-arch", type=str, choices=["dflash", "dflare"], required=True,
-                        help="Which AngelSlim draft architecture to load.")
-    parser.add_argument("--block-size", type=int, default=None,
-                        help="Speculative block size. Defaults to draft model's config value.")
-    parser.add_argument("--dataset", type=str, required=True,
-                        help="Dataset name; see load_and_process_dataset() for the supported list.")
+    parser.add_argument(
+        "--model-name-or-path", type=str, required=True, help="Path or HF id of the target model."
+    )
+    parser.add_argument(
+        "--draft-name-or-path",
+        type=str,
+        required=True,
+        help="Path of the trained DFlash/DFlare draft checkpoint.",
+    )
+    parser.add_argument(
+        "--draft-arch",
+        type=str,
+        choices=["dflash", "dflare"],
+        required=True,
+        help="Which AngelSlim draft architecture to load.",
+    )
+    parser.add_argument(
+        "--block-size",
+        type=int,
+        default=None,
+        help="Speculative block size. Defaults to draft model's config value.",
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        required=True,
+        help="Dataset name; see load_and_process_dataset() for the supported list.",
+    )
     parser.add_argument("--max-samples", type=int, default=None)
     parser.add_argument("--max-new-tokens", type=int, default=16384)
     parser.add_argument("--temperature", type=float, default=0.0)
@@ -379,6 +422,7 @@ def main() -> None:
     def has_flash_attn() -> bool:
         try:
             import flash_attn  # noqa: F401
+
             return True
         except ImportError:
             logger.warning(
@@ -469,7 +513,9 @@ def main() -> None:
     print(f"[draft_arch={args.draft_arch}] Average Acceptance length: {tau:.2f}")
 
     acceptance_lengths = list(chain(*[r[block_size].acceptance_lengths for r in responses]))
-    histogram = [acceptance_lengths.count(b) / len(acceptance_lengths) for b in range(block_size + 1)]
+    histogram = [
+        acceptance_lengths.count(b) / len(acceptance_lengths) for b in range(block_size + 1)
+    ]
     print(
         f"[draft_arch={args.draft_arch}] Acceptance length histogram: "
         f"{[f'{x * 100:.1f}%' for x in histogram]}"
