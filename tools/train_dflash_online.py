@@ -93,6 +93,17 @@ def parse_args():
         default="model.embed_tokens.weight",
         help="Key for embedding weights in model config",
     )
+    model_group.add_argument(
+        "--draft_arch",
+        type=str,
+        default=None,
+        choices=["dflash", "dflare"],
+        help=(
+            "Override draft model architecture. If unset, uses the "
+            "'architectures' field from the draft_model_config JSON. "
+            "'dflash' -> QwenDFlashDraftModel, 'dflare' -> QwenDFlareDraftModel."
+        ),
+    )
 
     # DFlash-specific arguments
     dflash_group = parser.add_argument_group("DFlash Arguments")
@@ -267,6 +278,45 @@ def parse_args():
     training_group.add_argument("--fp16", action="store_true", help="Whether to use fp16 training")
     training_group.add_argument("--bf16", action="store_true", help="Whether to use bf16 training")
     training_group.add_argument(
+        "--fsdp",
+        type=str,
+        default="",
+        help="FSDP configuration string passed to TrainingArguments "
+        "(e.g. 'shard_grad_op auto_wrap'). Empty disables FSDP.",
+    )
+    training_group.add_argument(
+        "--fsdp_config",
+        type=str,
+        default=None,
+        help="Path to FSDP config JSON file (consumed by TrainingArguments).",
+    )
+    training_group.add_argument(
+        "--dataloader_drop_last",
+        action="store_true",
+        default=False,
+        help=(
+            "Drop last incomplete batch. Note: when using DFlash trainer this "
+            "is forced True internally to match AngelSlim's drop_last=True "
+            "and avoid FSDP shape mismatches on the trailing batch."
+        ),
+    )
+    training_group.add_argument(
+        "--gamma_warmup",
+        action="store_true",
+        default=False,
+        help=(
+            "Enable gamma warmup. When set, loss_decay_gamma is increased per "
+            "epoch as: gamma = loss_decay_gamma + gamma_warmup_step * epoch "
+            "(AngelSlim gamma warmup formula)."
+        ),
+    )
+    training_group.add_argument(
+        "--gamma_warmup_step",
+        type=float,
+        default=0.5,
+        help="Per-epoch increment for gamma warmup. Default 0.5.",
+    )
+    training_group.add_argument(
         "--save_strategy", type=str, default="no", help="Save strategy for checkpoints"
     )
     training_group.add_argument(
@@ -286,7 +336,7 @@ def parse_args():
         help="The list of integrations to report the results and logs to (e.g. 'wandb')",
     )
 
-    # WandB arguments (mirrors SpecForge's --wandb-project / --wandb-name)
+    # WandB arguments
     wandb_group = parser.add_argument_group("WandB Arguments")
     wandb_group.add_argument(
         "--wandb_project",
@@ -307,7 +357,7 @@ def parse_args():
 def _setup_wandb(args) -> None:
     """Set up WandB environment variables and initialize wandb run on rank 0.
 
-    Mirrors the --wandb-project / --wandb-name pattern from SpecForge.
+    Sets up WandB project / run name from CLI or env vars.
     Priority: CLI args > env vars > defaults.
     """
     if args.report_to not in ("wandb", "all"):
@@ -355,6 +405,22 @@ def train():
     draft_model_config = DraftModelConfig.from_file(args.draft_model_config_path)
     target_model_type = getattr(draft_model_config, "target_model_type", None)
 
+    # Optionally override draft architecture from CLI. Both DFlash and DFlare
+    # share the same Qwen3Config schema (block_size, dflash_config, etc.), so
+    # swapping the architectures field is sufficient to route create_draft_model
+    # to the desired class via DraftModelFactory._get_model_class.
+    if args.draft_arch is not None:
+        arch_map = {
+            "dflash": "QwenDFlashDraftModel",
+            "dflare": "QwenDFlareDraftModel",
+        }
+        new_arch = arch_map[args.draft_arch]
+        rank0_print(
+            f"Overriding draft architecture: "
+            f"{getattr(draft_model_config, 'architectures', None)} -> [{new_arch}]"
+        )
+        draft_model_config.architectures = [new_arch]
+
     # Inject DFlash-specific config into the draft model config
     # so the trainer can access them
     draft_model_config.target_model_name_or_path = args.target_model_name_or_path
@@ -368,6 +434,10 @@ def train():
         draft_model_config.num_anchors = args.num_anchors
     if args.loss_decay_gamma is not None:
         draft_model_config.loss_decay_gamma = args.loss_decay_gamma
+    # Always propagate gamma_warmup flags to the draft model config so the
+    # trainer can pick them up regardless of CLI defaults.
+    draft_model_config.gamma_warmup = args.gamma_warmup
+    draft_model_config.gamma_warmup_step = args.gamma_warmup_step
     if args.attention_backend is not None:
         draft_model_config.attention_backend = args.attention_backend
     if args.mask_token_id is not None:
@@ -442,6 +512,10 @@ def train():
         "per_device_eval_batch_size": args.per_device_eval_batch_size,
         "gradient_accumulation_steps": args.gradient_accumulation_steps,
         "remove_unused_columns": False,
+        # Force drop_last=True (AngelSlim default) to avoid FSDP shape
+        # mismatches on the trailing batch. CLI --dataloader_drop_last is
+        # accepted for compatibility but currently overridden here.
+        "dataloader_drop_last": True,
     }
 
     optimizer_args = {
@@ -475,7 +549,10 @@ def train():
 
     distributed_args = {
         "deepspeed": args.deepspeed,
+        "fsdp": args.fsdp,
     }
+    if args.fsdp_config:
+        distributed_args["fsdp_config"] = args.fsdp_config
 
     training_args = transformers.TrainingArguments(
         **basic_args,

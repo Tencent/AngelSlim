@@ -1,11 +1,13 @@
 #!/bin/bash
 
 # ==========================================================================
-# AngelSlim DFlash Online Training — Fully Aligned Configuration
+# AngelSlim DFlare Online Training — Fully Aligned Configuration
 # ==========================================================================
 #
-# Recommended training entry for DFlash. Enables all AngelSlim DFlash
-# alignment features:
+# Recommended training entry for DFlare. DFlare is the enhanced DFlash
+# variant with separate context/noise k/v projections and learnable
+# per-layer fusion weights. Training-side logic is identical to DFlash, so
+# all alignment features below apply unchanged:
 #
 #   - loss_decay_gamma: 7 (fixed by default; pass --gamma_warmup to enable
 #     per-epoch increment via --gamma_warmup_step).
@@ -23,7 +25,7 @@
 #     NO_WRAP, use_orig_params=True).
 #
 # Usage:
-#   bash scripts/speculative/run_dflash_online.sh [NUM_GPUS] [ATTENTION_BACKEND]
+#   bash scripts/speculative/run_dflare_online.sh [NUM_GPUS] [ATTENTION_BACKEND]
 #
 # ==========================================================================
 
@@ -42,9 +44,9 @@ ATTENTION_BACKEND=${2:-flex_attention}
 # Paths — set these before running (left empty by default for portability)
 # ==========================================================================
 TARGET_MODEL_PATH=${TARGET_MODEL_PATH:-""}
-DRAFT_CONFIG_PATH=${DRAFT_CONFIG_PATH:-"${ROOT_DIR}/configs/qwen3_dflash.json"}
+DRAFT_CONFIG_PATH=${DRAFT_CONFIG_PATH:-"${ROOT_DIR}/configs/qwen3_dflare.json"}
 TRAIN_DATA_PATH=${TRAIN_DATA_PATH:-""}
-OUTPUT_DIR=${OUTPUT_DIR:-"${ROOT_DIR}/outputs/qwen3-4b-dflash-online"}
+OUTPUT_DIR=${OUTPUT_DIR:-"${ROOT_DIR}/outputs/qwen3-4b-dflare-aligned"}
 
 if [ -z "$TARGET_MODEL_PATH" ]; then
     echo "[ERROR] TARGET_MODEL_PATH is empty. Export it to your local Qwen3 (or other) HF model dir."
@@ -68,8 +70,8 @@ DATA_NUM_PROC=${DATA_NUM_PROC:-64}
 # ==========================================================================
 # WandB configuration
 # ==========================================================================
-export WANDB_PROJECT=${WANDB_PROJECT:-"angelslim-qwen3-4b-dflash"}
-WANDB_RUN_NAME=${WANDB_RUN_NAME:-"angelslim-qwen3-4b-dflash-online-fp32master"}
+export WANDB_PROJECT=${WANDB_PROJECT:-"angelslim-qwen3-4b-dflare"}
+WANDB_RUN_NAME=${WANDB_RUN_NAME:-"angelslim-qwen3-4b-dflare-fp32master-aligned"}
 
 # ==========================================================================
 # Multi-node configuration (optional)
@@ -113,6 +115,7 @@ echo "[INFO] Train data: $TRAIN_DATA_PATH"
 echo "[INFO] Output dir: $OUTPUT_DIR"
 echo "[INFO] Attention backend (draft): $ATTENTION_BACKEND"
 echo "[INFO] Target model attn: flash_attention_2 (set in target_model_wrapper.py)"
+echo "[INFO] Draft architecture: dflare (--draft_arch dflare)"
 echo "[INFO] WandB project: $WANDB_PROJECT, run: $WANDB_RUN_NAME"
 echo ""
 
@@ -123,6 +126,7 @@ torchrun $DISTRIBUTED_ARGS \
     $ROOT_DIR/tools/train_dflash_online.py \
     --target_model_name_or_path $TARGET_MODEL_PATH \
     --draft_model_config_path $DRAFT_CONFIG_PATH \
+    --draft_arch dflare \
     --train_data_path $TRAIN_DATA_PATH \
     --output_dir $OUTPUT_DIR \
     --modal_type DFlash \

@@ -206,6 +206,256 @@ class TargetEmbeddingsAndHead(nn.Module):
                     self.lm_head.weight.data.copy_(tensor)
 
 
+class _FP32StateAdamW(torch.optim.Optimizer):
+    """AdamW with fp32 master weights (AngelSlim DFlash optimizer).
+
+    Maintains fp32 master copies of all parameters (in optimizer state).
+    On each step:
+      1. Cast bf16 gradients to fp32.
+      2. Clip fp32 grad norm.
+      3. Adam update on fp32 master weights.
+      4. Copy fp32 master -> bf16 model params.
+
+    Key properties:
+      * Accumulation in fp32 (no precision loss from bf16 quantization).
+      * Grad clipping on fp32 gradients.
+      * Only the final copy-back introduces bf16 quantization.
+
+    Compatible with FSDP + accelerate + HF Trainer (operates on the SAME
+    parameter objects required for FSDP state_dict).
+    """
+
+    def __init__(
+        self,
+        params,
+        lr=1e-3,
+        betas=(0.9, 0.999),
+        eps=1e-8,
+        weight_decay=0.0,
+        max_grad_norm=1.0,
+    ):
+        defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
+        self.max_grad_norm = max_grad_norm
+        super().__init__(params, defaults)
+
+        # Eagerly initialize all master parameters at construction so all
+        # ranks start from synchronized bf16 params before any training step.
+        with torch.no_grad():
+            for group in self.param_groups:
+                for p in group["params"]:
+                    state = self.state[p]
+                    state["step"] = torch.tensor(0.0)
+                    state["exp_avg"] = torch.zeros_like(p, dtype=torch.float32)
+                    state["exp_avg_sq"] = torch.zeros_like(p, dtype=torch.float32)
+                    state["master_param"] = p.data.detach().clone().to(torch.float32)
+
+    @torch.no_grad()
+    def step(self, closure=None):
+        """Full fp32 master-weight update step (AngelSlim DFlash optimizer)."""
+        loss = None
+        if closure is not None:
+            with torch.enable_grad():
+                loss = closure()
+
+        # Phase 1: Cast all bf16 grads to fp32 (kept temporarily in state).
+        all_fp32_grads = []
+        for group in self.param_groups:
+            for p in group["params"]:
+                if p.grad is None:
+                    continue
+
+                state = self.state[p]
+
+                # Ensure states are fp32 (handles resume from checkpoint).
+                if state["exp_avg"].dtype != torch.float32:
+                    state["exp_avg"] = state["exp_avg"].to(torch.float32)
+                if state["exp_avg_sq"].dtype != torch.float32:
+                    state["exp_avg_sq"] = state["exp_avg_sq"].to(torch.float32)
+                if state["master_param"].dtype != torch.float32:
+                    state["master_param"] = state["master_param"].to(torch.float32)
+
+                fp32_grad = p.grad.detach().to(torch.float32)
+                state["_fp32_grad"] = fp32_grad
+                all_fp32_grads.append(fp32_grad)
+
+        # Phase 2: Clip fp32 grad norm.
+        # Manual clipping because all_fp32_grads holds plain tensors (not Parameters).
+        # In FSDP SHARD_GRAD_OP + use_orig_params=True, p.grad is the full
+        # all-reduced gradient (same on all ranks), so per-rank clipping is correct.
+        if self.max_grad_norm > 0 and all_fp32_grads:
+            total_norm_sq = sum(g.norm().pow(2) for g in all_fp32_grads)
+            total_norm = total_norm_sq.sqrt()
+            clip_coef = self.max_grad_norm / (total_norm + 1e-6)
+            clip_coef_clamped = min(clip_coef.item(), 1.0)
+            if clip_coef_clamped < 1.0:
+                for g in all_fp32_grads:
+                    g.mul_(clip_coef_clamped)
+
+        # Phase 3: Adam update on fp32 master weights, then copy back to bf16.
+        for group in self.param_groups:
+            lr = group["lr"]
+            beta1, beta2 = group["betas"]
+            eps = group["eps"]
+            weight_decay = group["weight_decay"]
+
+            for p in group["params"]:
+                if p.grad is None:
+                    continue
+
+                state = self.state[p]
+                grad = state.pop("_fp32_grad")
+
+                exp_avg = state["exp_avg"]
+                exp_avg_sq = state["exp_avg_sq"]
+                master_param = state["master_param"]
+
+                state["step"] += 1
+                step_t = state["step"].item()
+
+                # Decoupled weight decay on fp32 master (AdamW style).
+                if weight_decay != 0:
+                    master_param.mul_(1.0 - lr * weight_decay)
+
+                # Adam update in fp32.
+                exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
+                exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
+
+                bias_correction1 = 1 - beta1**step_t
+                bias_correction2 = 1 - beta2**step_t
+
+                step_size = lr / bias_correction1
+                denom = (exp_avg_sq.sqrt() / (bias_correction2**0.5)).add_(eps)
+
+                master_param.addcdiv_(exp_avg, denom, value=-step_size)
+
+                # Copy fp32 master -> bf16 model param (only quantization point).
+                p.data.copy_(master_param.to(p.dtype))
+                p.grad = None
+
+        return loss
+
+
+class _FP32MasterWeightOptimizer(torch.optim.Optimizer):
+    """Thin wrapper around any torch optimizer that maintains fp32 master weights.
+
+    AngelSlim DFlash fp32 master-weight pattern:
+      1. At construction, clone bf16 model params -> fp32 master copies.
+      2. On every step():
+         a. Copy bf16 grads -> fp32 master grads (cast up), clear bf16 grads.
+         b. Clip fp32 grad norm.
+         c. Run inner optimizer step on fp32 params.
+         d. Copy updated fp32 values -> bf16 model params (cast down).
+
+    Used as ``self.optimizer`` inside HF Trainer for the DDP code path.
+    HF Trainer calls ``self.optimizer.step()`` / ``self.optimizer.zero_grad()``
+    directly, so placing the sync logic inside the optimizer is the only
+    reliable way to ensure it actually runs.
+
+    Inherits from torch.optim.Optimizer so isinstance checks in HF Trainer's
+    lr_scheduler creation (LambdaLR.__init__) pass correctly.
+    """
+
+    def __init__(
+        self,
+        bf16_params: List[torch.Tensor],
+        inner_optimizer: torch.optim.Optimizer,
+        max_grad_norm: float = 1.0,
+    ):
+        self._bf16_params = bf16_params
+
+        # Build fp32 master copies and replace the optimizer's param groups.
+        self._fp32_params: List[torch.Tensor] = [
+            p.detach().clone().to(torch.float32).requires_grad_(True) for p in bf16_params
+        ]
+        assert len(inner_optimizer.param_groups) == 1, (
+            "_FP32MasterWeightOptimizer expects a single param group; "
+            "extend if/when multiple groups (e.g. LoRA, lr split) are needed."
+        )
+        inner_optimizer.param_groups[0]["params"] = self._fp32_params
+        # Re-initialise state dict for the new param objects.
+        from collections import defaultdict
+
+        inner_optimizer.state = defaultdict(dict)
+
+        self._inner = inner_optimizer
+        self.max_grad_norm = max_grad_norm
+
+        # Call torch.optim.Optimizer.__init__ so that isinstance(self, Optimizer)
+        # returns True. The _initializing flag prevents add_param_group from
+        # delegating to self._inner during super().__init__ (which would
+        # create a duplicate param group in the inner optimizer).
+        self._initializing = True
+        super().__init__(self._fp32_params, inner_optimizer.defaults)
+        self._initializing = False
+
+        # Redirect param_groups and state to inner optimizer's versions so
+        # lr_scheduler / lr logging always see the correct param groups.
+        self.param_groups = self._inner.param_groups
+        self.state = self._inner.state
+
+    # ------------------------------------------------------------------ #
+    # Core step / zero_grad — called directly by HF Trainer               #
+    # ------------------------------------------------------------------ #
+
+    def step(self, closure=None):
+        """Full fp32 master-weight update step."""
+        with torch.no_grad():
+            # (a) Copy bf16 grads -> fp32 master grads.
+            for bf16_p, fp32_p in zip(self._bf16_params, self._fp32_params):
+                if bf16_p.grad is not None:
+                    fp32_p.grad = bf16_p.grad.detach().to(torch.float32)
+                    bf16_p.grad = None
+                else:
+                    fp32_p.grad = None
+
+            # (b) Clip fp32 grad norm.
+            if self.max_grad_norm > 0:
+                torch.nn.utils.clip_grad_norm_(self._fp32_params, self.max_grad_norm)
+
+        # (c) Optimizer step on fp32 params.
+        loss = self._inner.step(closure)
+
+        # (d) Copy fp32 -> bf16 model params.
+        with torch.no_grad():
+            for bf16_p, fp32_p in zip(self._bf16_params, self._fp32_params):
+                bf16_p.data.copy_(fp32_p.data.to(bf16_p.dtype))
+
+        return loss
+
+    def zero_grad(self, set_to_none: bool = True):
+        """Zero gradients on both bf16 model params and fp32 master params."""
+        for bf16_p in self._bf16_params:
+            if set_to_none:
+                bf16_p.grad = None
+            elif bf16_p.grad is not None:
+                bf16_p.grad.zero_()
+        for fp32_p in self._fp32_params:
+            if set_to_none:
+                fp32_p.grad = None
+            elif fp32_p.grad is not None:
+                fp32_p.grad.zero_()
+
+    # ------------------------------------------------------------------ #
+    # Delegate everything else to the inner optimizer                      #
+    # ------------------------------------------------------------------ #
+
+    def state_dict(self):
+        return self._inner.state_dict()
+
+    def load_state_dict(self, state_dict):
+        return self._inner.load_state_dict(state_dict)
+
+    def add_param_group(self, param_group):
+        # During super().__init__ the inner optimizer is not yet assigned,
+        # so fall back to the default Optimizer behaviour.
+        if getattr(self, "_initializing", True):
+            return super().add_param_group(param_group)
+        return self._inner.add_param_group(param_group)
+
+    def __repr__(self):
+        return f"_FP32MasterWeightOptimizer({self._inner})"
+
+
 @Eagle3TrainerFactory.register("online", "DFlash")
 class OnlineDFlashTrainer(Eagle3Trainer):
     """Online DFlash Trainer for speculative decoding training.
@@ -244,11 +494,29 @@ class OnlineDFlashTrainer(Eagle3Trainer):
         self.block_size = getattr(draft_model_config, "block_size", 16)
         self.num_anchors = getattr(draft_model_config, "num_anchors", 512)
         self.loss_decay_gamma = getattr(draft_model_config, "loss_decay_gamma", None)
+        # Gamma warmup: gradually increase loss_decay_gamma per epoch
+        # (AngelSlim DFlash gamma-warmup schedule).
+        self._gamma_init = self.loss_decay_gamma
+        self.gamma_warmup = getattr(draft_model_config, "gamma_warmup", False)
+        self._gamma_step = getattr(draft_model_config, "gamma_warmup_step", 0.5)
         self.attention_backend = getattr(draft_model_config, "attention_backend", "flex_attention")
         self.mask_token_id = dflash_config.get(
             "mask_token_id",
             getattr(draft_model_config, "mask_token_id", None),
         )
+
+        # Sync _attn_implementation on the draft model so its attention layers
+        # dispatch to the correct backend (eager vs flex_attention vs sdpa).
+        if self.attention_backend == "eager":
+            draft_model.config._attn_implementation = "eager"
+        elif self.attention_backend == "flex_attention":
+            draft_model.config._attn_implementation = "flex_attention"
+        else:
+            draft_model.config._attn_implementation = self.attention_backend
+
+        # fp32 master weights optimizer — set by create_optimizer() (DDP path).
+        # FSDP path uses _FP32StateAdamW directly as self.optimizer instead.
+        self._fp32_optimizer: Optional["_FP32MasterWeightOptimizer"] = None
 
         # Load target model's lm_head and embed_tokens
         # In offline mode target_model may be None; fall back to config path.
@@ -278,6 +546,165 @@ class OnlineDFlashTrainer(Eagle3Trainer):
                 "target_model_name_or_path must be set in draft_model_config "
                 "or target_model.model_path for DFlash training."
             )
+
+    def create_optimizer(self, model=None):
+        """Create optimizer for DFlash training.
+
+        Three branches:
+          * DeepSpeed: defer to HF Trainer's default optimizer creation.
+          * FSDP: AdamW with fp32 optimizer states (``_FP32StateAdamW``),
+            using the AngelSlim DFlash fp32-master pattern. Critical because
+            bf16 momentum and variance only have 7-bit mantissa, which causes
+            training quality degradation after a few thousand steps.
+          * DDP / single GPU: ``_FP32MasterWeightOptimizer`` wrapping AdamW for
+            fp32 master weight updates.
+        """
+        if self.is_deepspeed_enabled:
+            return super().create_optimizer(model)
+
+        if self.is_fsdp_enabled:
+            args = self.args
+            param_groups = [{"params": [p for p in self.model.parameters() if p.requires_grad]}]
+            optimizer = _FP32StateAdamW(
+                param_groups,
+                lr=args.learning_rate,
+                betas=(
+                    getattr(args, "adam_beta1", 0.9),
+                    getattr(args, "adam_beta2", 0.999),
+                ),
+                eps=getattr(args, "adam_epsilon", 1e-8),
+                weight_decay=args.weight_decay,
+                max_grad_norm=args.max_grad_norm,
+            )
+            self.optimizer = optimizer
+            return self.optimizer
+
+        bf16_params: List[torch.Tensor] = [p for p in self.model.parameters() if p.requires_grad]
+        if not bf16_params:
+            return super().create_optimizer(model)
+
+        from torch.optim import AdamW
+
+        args = self.args
+        inner_optimizer = AdamW(
+            # Placeholder — _FP32MasterWeightOptimizer will replace param_groups
+            # with fp32 copies immediately after construction.
+            bf16_params,
+            lr=args.learning_rate,
+            betas=(
+                getattr(args, "adam_beta1", 0.9),
+                getattr(args, "adam_beta2", 0.999),
+            ),
+            eps=getattr(args, "adam_epsilon", 1e-8),
+            weight_decay=args.weight_decay,
+        )
+
+        fp32_opt = _FP32MasterWeightOptimizer(
+            bf16_params=bf16_params,
+            inner_optimizer=inner_optimizer,
+            max_grad_norm=args.max_grad_norm,
+        )
+        self._fp32_optimizer = fp32_opt
+        self.optimizer = fp32_opt
+        return self.optimizer
+
+    def create_scheduler(self, num_training_steps: int, optimizer=None):
+        """Create LR scheduler: AngelSlim DFlash CosineAnnealingWarmupLR.
+
+        AngelSlim warmup formula:  lr = base_lr * (step + 1) / warmup_steps
+        HF Trainer warmup formula: lr = base_lr * step / warmup_steps
+
+        The +1 offset means step 0 yields lr = base_lr / warmup_steps instead
+        of 0. After warmup, both use identical cosine annealing.
+        """
+        import math
+
+        from torch.optim.lr_scheduler import LambdaLR
+
+        if optimizer is None:
+            optimizer = self.optimizer
+
+        warmup_steps = self.args.get_warmup_steps(num_training_steps)
+
+        def angelslim_cosine_schedule(current_step: int) -> float:
+            """LR multiplier for AngelSlim DFlash CosineAnnealingWarmupLR."""
+            if current_step < warmup_steps:
+                # AngelSlim: (last_epoch + 1) / warmup_epochs * base_lr
+                # After N step() calls last_epoch = N, so first lr = 1/warmup_steps.
+                return float(current_step + 1) / float(max(1, warmup_steps))
+            # Cosine decay phase — identical to HF.
+            progress = float(current_step - warmup_steps) / float(
+                max(1, num_training_steps - warmup_steps)
+            )
+            return max(0.0, 0.5 * (1.0 + math.cos(math.pi * progress)))
+
+        self.lr_scheduler = LambdaLR(optimizer, angelslim_cosine_schedule)
+        return self.lr_scheduler
+
+    def _clip_grad_norm(self, *args, **kwargs):
+        """Skip HF Trainer's built-in grad clipping when running our fp32 optimizers.
+
+        Both ``_FP32MasterWeightOptimizer`` (DDP) and ``_FP32StateAdamW`` (FSDP)
+        clip gradients internally on fp32 grads (AngelSlim DFlash fp32-master
+        clipping). HF Trainer's Accelerator-based clip_grad_norm_ would
+        otherwise run on bf16 grads (incorrect precision for clipping), causing
+        DOUBLE CLIPPING that significantly slows down training.
+        """
+        if self._fp32_optimizer is not None:
+            # DDP path — clipped inside _FP32MasterWeightOptimizer.step()
+            return torch.tensor(0.0)
+
+        # FSDP path: _FP32StateAdamW clips internally on fp32 grads.
+        # self.optimizer may be wrapped by AcceleratedOptimizer, so unwrap once.
+        optimizer = self.optimizer
+        if hasattr(optimizer, "optimizer"):
+            optimizer = optimizer.optimizer
+        if isinstance(optimizer, _FP32StateAdamW):
+            return torch.tensor(0.0)
+
+        return super()._clip_grad_norm(*args, **kwargs)
+
+    def save_optimizer_and_scheduler(self, output_dir, **kwargs):
+        """Override to handle fp32 master weight optimizer with FSDP.
+
+        FSDP's built-in optim_state_dict() cannot handle our custom fp32
+        master-weight optimizers because their fp32 params are not registered
+        in the FSDP module's parameter graph. Save optimizer/scheduler state
+        directly instead.
+        """
+        self._save_optimizer_and_scheduler(output_dir)
+
+    def _save_optimizer_and_scheduler(self, output_dir):
+        """Bypass FSDP's optim_state_dict for our custom fp32 optimizers."""
+        optimizer = self.optimizer
+        if hasattr(optimizer, "optimizer"):
+            # Unwrap AcceleratedOptimizer
+            optimizer = optimizer.optimizer
+
+        if isinstance(optimizer, (_FP32StateAdamW, _FP32MasterWeightOptimizer)):
+            if self.args.should_save:
+                torch.save(
+                    optimizer.state_dict(),
+                    os.path.join(output_dir, "optimizer.pt"),
+                )
+                if self.lr_scheduler is not None:
+                    torch.save(
+                        self.lr_scheduler.state_dict(),
+                        os.path.join(output_dir, "scheduler.pt"),
+                    )
+        else:
+            super()._save_optimizer_and_scheduler(output_dir)
+
+    def _update_gamma_warmup(self):
+        """Update loss_decay_gamma: gamma = gamma_init + step * epoch.
+
+        AngelSlim DFlash gamma-warmup schedule:
+            current_gamma = loss_decay_gamma + step * float(epoch)
+        """
+        if not self.gamma_warmup or self._gamma_init is None:
+            return
+        current_epoch = int(self.state.epoch) if hasattr(self.state, "epoch") else 0
+        self.loss_decay_gamma = self._gamma_init + self._gamma_step * float(current_epoch)
 
     def prepare_data_for_draft_model(self, inputs):
         """Prepare data for DFlash training.
@@ -501,6 +928,9 @@ class OnlineDFlashTrainer(Eagle3Trainer):
         Unlike Eagle3's iterative multi-step loss, DFlash computes a single
         block-parallel cross-entropy loss over all sampled anchor positions.
         """
+        # Update gamma if warmup is enabled (no-op when gamma_warmup=False)
+        self._update_gamma_warmup()
+
         data = self.prepare_data_for_draft_model(inputs)
 
         loss, accuracy = self._compute_dflash_loss_and_accuracy(

@@ -14,6 +14,7 @@
 
 from .draft_model_factory import DraftModelConfig, create_draft_model
 from .llama_eagle3 import CosyVoice3Eagle3LlamaForCausalLM, Eagle3LlamaForCausalLM
+from .qwen_dflare import QwenDFlareDraftModel
 from .qwen_dflash import QwenDFlashDraftModel
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "Eagle3LlamaForCausalLM",
     "CosyVoice3Eagle3LlamaForCausalLM",
     "QwenDFlashDraftModel",
+    "QwenDFlareDraftModel",
 ]

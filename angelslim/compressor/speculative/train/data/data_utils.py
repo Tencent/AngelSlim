@@ -91,7 +91,6 @@ def convert_ultrachat_data(row, dataset_column="messages"):
     return {"conversations": converted_messages, "id": row["prompt_id"]}
 
 
-# Copied from https://github.com/sgl-project/SpecForge/blob/main/specforge/data/preprocessing.py # noqa: E501
 def process_token_dict_to_mappings(
     token_dict,
     draft_vocab_size: int,

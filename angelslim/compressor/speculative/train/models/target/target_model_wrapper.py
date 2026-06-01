@@ -647,11 +647,19 @@ class TransformersBackend(BaseBackend):
 
         # Prepare model loading configuration
         model_kwargs = self._prepare_model_kwargs(device)
+        print_with_rank(
+            f"Target model attn_implementation: "
+            f"{model_kwargs.get('attn_implementation', 'NOT SET (will use HF default)')}"
+        )
 
         # Load and configure model
         self.model = AutoModelForCausalLM.from_pretrained(self.model_path, **model_kwargs)
         self._freeze_model_parameters()
         self.model.eval()
+
+        # Verify attention implementation actually used
+        _actual_attn = getattr(self.model.config, "_attn_implementation", "unknown")
+        print_with_rank(f"Target model loaded. Actual attn_implementation: {_actual_attn}")
 
         # Load tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, trust_remote_code=True)
@@ -670,8 +678,15 @@ class TransformersBackend(BaseBackend):
             "torch_dtype": torch.bfloat16,
             "device_map": device,
             "trust_remote_code": True,
+            # AngelSlim DFlash uses flash_attention_2 by default to match
+            # the inference kernel and avoid train/test mismatch.
+            "attn_implementation": "flash_attention_2",
         }
-        default_kwargs.update(self.kwargs)
+        # Only pass through kwargs that are valid for from_pretrained;
+        # filter out non-model kwargs like modal_type, target_model_type, etc.
+        _non_model_keys = {"modal_type", "target_model_type"}
+        filtered = {k: v for k, v in self.kwargs.items() if k not in _non_model_keys}
+        default_kwargs.update(filtered)
         return default_kwargs
 
     def _freeze_model_parameters(self) -> None:
@@ -688,29 +703,68 @@ class TransformersBackend(BaseBackend):
         """
         Extract hidden states and logits using Transformers backend.
 
+        Processes each sample INDIVIDUALLY (without padding). Batch processing
+        with padding causes numerical differences in hidden states even with
+        flash_attention_2, because padding tokens still participate in
+        attention and leak into other positions' representations.
+
         Args:
-            input_ids: Input token IDs
-            attention_mask: Attention mask
+            input_ids: Input token IDs [batch_size, seq_len]
+            attention_mask: Attention mask [batch_size, seq_len]
             **kwargs: May contain 'aux_hidden_states_layer_ids' to specify custom layers
 
         Returns:
-            Tuple of (concatenated_hidden_states, logits)
+            Tuple of (concatenated_hidden_states, logits) padded back to
+            [batch_size, seq_len, ...] so downstream collator/trainer code is
+            unchanged. Padding positions in the returned tensors are zero;
+            they are masked out by ``loss_mask`` later.
         """
-        with torch.no_grad():
-            outputs = self.model(
-                input_ids,
-                attention_mask=attention_mask,
-                output_hidden_states=True,
-                output_logits=True,
-                use_cache=False,  # match SpecForge: no KV-cache during training
-            )
-
-        # Extract auxiliary hidden states
         aux_layer_ids = kwargs.get("aux_hidden_states_layer_ids", None)
-        hidden_states = self._extract_auxiliary_hidden_states(outputs.hidden_states, aux_layer_ids)
+        bsz, seq_len = input_ids.shape
 
-        # Return hidden states and logits on the same device as input
-        return hidden_states, outputs.logits.to(input_ids.device)
+        # Process each sample individually to avoid padding-induced hidden
+        # state corruption (AngelSlim DFlash per-sample processing).
+        hidden_list = []
+        logits_list = []
+
+        for i in range(bsz):
+            # Determine actual (non-padded) length for this sample
+            if attention_mask is not None:
+                actual_len = int(attention_mask[i].sum().item())
+            else:
+                actual_len = seq_len
+
+            # Extract the unpadded portion
+            single_ids = input_ids[i : i + 1, :actual_len]
+
+            with torch.no_grad():
+                outputs = self.model(
+                    single_ids,
+                    output_hidden_states=True,
+                    use_cache=False,  # AngelSlim DFlash: no KV-cache during training
+                )
+
+            # Extract auxiliary hidden states for this sample
+            # h shape: [1, actual_len, D*num_layers]
+            h = self._extract_auxiliary_hidden_states(outputs.hidden_states, aux_layer_ids)
+
+            # Pad back to seq_len to maintain batch shape
+            if actual_len < seq_len:
+                pad_size = seq_len - actual_len
+                # Pad seq dim only (last-but-one dim); hidden dim is untouched
+                h = torch.nn.functional.pad(h, (0, 0, 0, pad_size))
+                logits_padded = torch.nn.functional.pad(outputs.logits, (0, 0, 0, pad_size))
+            else:
+                logits_padded = outputs.logits
+
+            hidden_list.append(h)
+            logits_list.append(logits_padded)
+
+        # Stack back to batch
+        hidden_states = torch.cat(hidden_list, dim=0)  # [B, seq_len, D*num_layers]
+        logits = torch.cat(logits_list, dim=0)  # [B, seq_len, vocab]
+
+        return hidden_states, logits.to(input_ids.device)
 
     def get_aux_and_target_hiddens(
         self,
