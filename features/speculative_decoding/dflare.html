@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>SpecExit &#8212; AngelSlim</title>
+    <title>DFlare &#8212; AngelSlim</title>
   
   
   
@@ -53,13 +53,13 @@
     <script src="../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'features/speculative_decoding/spec_exit';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'features/speculative_decoding/dflare';</script>
     <script src="../../_static/custom.js"></script>
     <link rel="icon" href="../../_static/angelslim_icon.png"/>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="D-Cut" href="dcut.html" />
-    <link rel="prev" title="语音合成模型EAGLE3" href="eagle/audio_tts_eagle.html" />
+    <link rel="next" title="稀疏注意力" href="../sparse_attention/index.html" />
+    <link rel="prev" title="D-Cut" href="dcut.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -179,9 +179,9 @@
 <li class="toctree-l1"><a class="reference internal" href="../quantization/index.html">量化</a></li>
 <li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">投机采样</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="eagle/index.html">EAGLE</a></li>
-<li class="toctree-l2 current active"><a class="current reference internal" href="#">SpecExit</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spec_exit.html">SpecExit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="dcut.html">D-Cut</a></li>
-<li class="toctree-l2"><a class="reference internal" href="dflare.html">DFlare</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">DFlare</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../sparse_attention/index.html">稀疏注意力</a></li>
@@ -283,7 +283,7 @@
       
       
       
-      <li><a href="https://github.com/Tencent/AngelSlim/edit/main/docs/source/features/speculative_decoding/spec_exit.md" target="_blank"
+      <li><a href="https://github.com/Tencent/AngelSlim/edit/main/docs/source/features/speculative_decoding/dflare.md" target="_blank"
    class="btn btn-sm btn-source-edit-button dropdown-item"
    title="Suggest edit"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -313,7 +313,7 @@
       
       
       
-      <li><a href="../../_sources/features/speculative_decoding/spec_exit.md" target="_blank"
+      <li><a href="../../_sources/features/speculative_decoding/dflare.md" target="_blank"
    class="btn btn-sm btn-download-source-button dropdown-item"
    title="Download source file"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -397,7 +397,7 @@ document.write(`
               
 
 <div id="jb-print-docs-body" class="onlyprint">
-    <h1>SpecExit</h1>
+    <h1>DFlare</h1>
     <!-- Table of contents -->
     <div id="print-main-content">
         <div id="jb-print-toc">
@@ -410,6 +410,7 @@ document.write(`
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#abstract">🚀 Abstract</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#key-highlights">✨ Key Highlights</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start">⚡ Quick Start</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#training">Training</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inference-and-evaluation">Inference and Evaluation</a></li>
 </ul>
 </li>
@@ -426,53 +427,98 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="specexit">
-<h1>SpecExit<a class="headerlink" href="#specexit" title="Link to this heading">#</a></h1>
-<p><strong>SpecExit</strong> is a novel framework that accelerates large reasoning models (LRMs) by integrating an efficient early-exit mechanism with speculative decoding. It addresses the “overthinking” problem in LRMs, where models produce unnecessarily long outputs, leading to high inference latency.</p>
-<p>Our method trains a lightweight draft model to predict not only future tokens but also an early-exit signal directly from its hidden states. This unique design eliminates the probing overhead found in other early-exit methods, achieving significant speedups without compromising task accuracy.</p>
-<p>This repository contains the official implementation and resources for the paper: <strong>SpecExit: Accelerating Large Reasoning Model via Speculative Exit</strong>.</p>
-<img alt="An overview of the SpecExit framework." src="../../_images/method_overall.png" />
+  <section id="dflare">
+<h1>DFlare<a class="headerlink" href="#dflare" title="Link to this heading">#</a></h1>
+<p><strong>DFlare</strong> is a block-diffusion speculative decoding framework that accelerates large language model inference by predicting an entire block of tokens in one shot for the target model to verify in parallel. It removes the narrow conditioning bottleneck of the prior state-of-the-art DFlash through a lightweight <strong>layer-wise fusion</strong> mechanism: each draft layer attends to its own learnable combination of a broad set of target layers at negligible overhead, simultaneously injecting richer target knowledge and giving every draft layer a distinct input. Combined with training-data scaling, this enhanced per-layer expressiveness allows the draft model to scale to deeper architectures with consistent gains, achieving up to <strong>5.52× end-to-end speedup</strong> without compromising output quality.</p>
+<p>This repository contains the official implementation and resources for the paper: <strong>DFLARE: Scaling Up Draft Capacity for Block Diffusion Speculative Decoding</strong>.</p>
+<img alt="An overview of the DFlare framework." src="../../_images/intro.png" />
 <hr class="docutils" />
 <section id="abstract">
 <h2>🚀 Abstract<a class="headerlink" href="#abstract" title="Link to this heading">#</a></h2>
-<p>Despite their strong performance on reasoning tasks, large reasoning models (LRMs) often suffer from overthinking, producing unnecessarily long outputs and incurring high end-to-end latency, a significant limitation to their real-world deployment. To address overthinking, early-exit mechanisms have been proposed to terminate reasoning before typical completion, showing that this approach can effectively shorten generation length with minimal impact on accuracy. However, their reliance on probing mechanisms introduces a detection overhead that limits their end-to-end latency gains and compromises their generalizability across diverse problems. Inspired by the use of hidden states in speculative decoding, we propose <strong>SpecExit</strong>, a novel framework that predicts both future tokens and an early-exit signal directly from a lightweight draft model without probing overhead. Our method offers significant improvements, reducing average generation length by 66% and achieving a 2.5x speedup in end-to-end latency compared to the speculative decoding baseline, without compromising accuracy. Our method leverages the inherent signals from hidden states to provide effective early-exit signals, suggesting broader use of hidden states for efficient reasoning.</p>
+<p>Block diffusion speculative decoding accelerates LLM inference by predicting all tokens within a block simultaneously for the target model to verify in parallel. Predicting an entire block at once requires a sufficiently capable draft model and effective utilization of the target model’s internal knowledge. However, the state-of-the-art method DFlash constrains all draft layers to share a single fused representation derived from only a few target layers, limiting per-layer expressiveness and hindering further scaling of draft capacity. We present <strong>DFLARE</strong>, which flares out the narrow conditioning bottleneck of DFlash through a lightweight layer-wise fusion mechanism: each draft layer attends to its own learnable combination of a broad set of target layers at negligible overhead, simultaneously injecting richer target knowledge and providing every draft layer with a distinct input. This enhanced per-layer expressiveness enables scaling the draft model to deeper architectures with consistent gains. We further scale training data from 800K to 2.4M samples to fully exploit the enlarged capacity. On six benchmarks spanning mathematical reasoning, code generation, and conversation, DFLARE attains average wall-clock speedups of <strong>5.52× on Qwen3-4B</strong>, <strong>5.46× on Qwen3-8B</strong>, and <strong>3.91× on GPT-OSS-20B</strong>, improving over DFlash by roughly 11%, 8%, and 5% respectively.</p>
 </section>
 <section id="key-highlights">
 <h2>✨ Key Highlights<a class="headerlink" href="#key-highlights" title="Link to this heading">#</a></h2>
 <ul class="simple">
-<li><p><strong>Signals Extracted for Early Exit</strong>: We derive early-exit signals from hidden features and integrate them into speculative decoding, enabling reliable early exit for efficient reasoning.</p></li>
-<li><p><strong>General and Practical Framework</strong>: We implement SpecExit, a reasoning-aware early-exit framework, in both PyTorch and vLLM, making it easy to deploy across diverse inference environments.</p></li>
-<li><p><strong>Substantial End-to-End Performance Gains</strong>: SpecExit reduces reasoning length by 66% and achieves up to 2.5$\times$ lower latency than speculative decoding while maintaining accuracy.</p></li>
+<li><p><strong>Layer-wise Fusion for Richer Conditioning</strong>: Replaces DFlash’s single fused representation with a lightweight mechanism in which each draft layer attends to its own learnable combination of a broad set of target layers, removing the conditioning bottleneck at negligible overhead.</p></li>
+<li><p><strong>Scalable Draft Capacity</strong>: The enriched per-layer expressiveness lets the draft model scale to deeper architectures with consistent gains, complemented by scaling training data from 800K to 2.4M samples to fully exploit the enlarged capacity.</p></li>
+<li><p><strong>Substantial End-to-End Speedups</strong>: Across six benchmarks covering mathematical reasoning, code generation, and conversation, DFlare delivers average wall-clock speedups of 5.52× on Qwen3-4B, 5.46× on Qwen3-8B, and 3.91× on GPT-OSS-20B — roughly 11%, 8%, and 5% over DFlash respectively.</p></li>
 </ul>
 </section>
 <section id="quick-start">
 <h2>⚡ Quick Start<a class="headerlink" href="#quick-start" title="Link to this heading">#</a></h2>
-<section id="inference-and-evaluation">
-<h3>Inference and Evaluation<a class="headerlink" href="#inference-and-evaluation" title="Link to this heading">#</a></h3>
-<p>To run inference with the trained <code class="docutils literal notranslate"><span class="pre">SpecExit</span></code> model and evaluate its performance on benchmarks like GSM8K, GPQA, etc., use the <code class="docutils literal notranslate"><span class="pre">spec_benchmark.py</span></code> script.</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/spec_benchmark.py<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--base-model-path<span class="w"> </span><span class="si">${</span><span class="nv">BASE_MODEL</span><span class="si">}</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--eagle-model-path<span class="w"> </span><span class="si">${</span><span class="nv">SpecExit_Model</span><span class="si">}</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--mode<span class="w"> </span>eagle<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--num-gpus-total<span class="w"> </span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--early-stop-method<span class="w"> </span>confidence_progress_remain
+<section id="training">
+<h3>Training<a class="headerlink" href="#training" title="Link to this heading">#</a></h3>
+<p>DFlare reuses the DFlash training pipeline and selects the layer-wise fusion architecture via <code class="docutils literal notranslate"><span class="pre">--draft_arch</span> <span class="pre">dflare</span></code>. Two entry points are provided:</p>
+<p><strong>Online training</strong> (recommended) — runs the target model on the fly to produce hidden states each step. No data pre-generation step needed.</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">TARGET_MODEL_PATH</span><span class="o">=</span>/path/to/Qwen3-4B
+<span class="nb">export</span><span class="w"> </span><span class="nv">TRAIN_DATA_PATH</span><span class="o">=</span>/path/to/train.jsonl
+<span class="nb">export</span><span class="w"> </span><span class="nv">OUTPUT_DIR</span><span class="o">=</span>/path/to/output
+
+bash<span class="w"> </span>scripts/speculative/run_dflare_online.sh<span class="w"> </span><span class="m">8</span><span class="w"> </span>flex_attention
 </pre></div>
 </div>
+<p><strong>Offline training</strong> — trains from pre-computed hidden-state <code class="docutils literal notranslate"><span class="pre">.ckpt</span></code> files. First generate the cache with <code class="docutils literal notranslate"><span class="pre">scripts/speculative/generate_dflash_data.sh</span></code> using a DFlare-compatible draft config, then:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">TARGET_MODEL_PATH</span><span class="o">=</span>/path/to/Qwen3-4B
+<span class="nb">export</span><span class="w"> </span><span class="nv">TRAIN_HIDDEN_PATH</span><span class="o">=</span>/path/to/hidden_cache
+<span class="nb">export</span><span class="w"> </span><span class="nv">OUTPUT_DIR</span><span class="o">=</span>/path/to/output
+
+bash<span class="w"> </span>scripts/speculative/run_dflare_offline.sh<span class="w"> </span><span class="m">8</span><span class="w"> </span>flex_attention
+</pre></div>
+</div>
+<p>Both entries use the same defaults: <code class="docutils literal notranslate"><span class="pre">block_size=16</span></code>, <code class="docutils literal notranslate"><span class="pre">num_anchors=512</span></code>, <code class="docutils literal notranslate"><span class="pre">lr=6e-4</span></code>, cosine schedule with 4% warmup, <code class="docutils literal notranslate"><span class="pre">max_length=3072</span></code>, FSDP <code class="docutils literal notranslate"><span class="pre">shard_grad_op</span></code> with FP32 master-weights optimizer, and <code class="docutils literal notranslate"><span class="pre">flash_attention_2</span></code> for the target model. The default draft model config is <code class="docutils literal notranslate"><span class="pre">configs/qwen3_dflare.json</span></code>.</p>
+</section>
+<section id="inference-and-evaluation">
+<h3>Inference and Evaluation<a class="headerlink" href="#inference-and-evaluation" title="Link to this heading">#</a></h3>
+<p>To benchmark a trained DFlare draft model on tasks such as GSM8K, MT-Bench, MATH-500, and HumanEval, use <code class="docutils literal notranslate"><span class="pre">tools/dflash_benchmark.py</span></code>. The script supports both DFlash and DFlare draft architectures via the <code class="docutils literal notranslate"><span class="pre">--draft-arch</span></code> flag — for DFlare set <code class="docutils literal notranslate"><span class="pre">--draft-arch</span> <span class="pre">dflare</span></code>. It loads the matching <code class="docutils literal notranslate"><span class="pre">QwenDFlareDraftModel</span></code> class, runs block-parallel speculative decoding (block-size proposal from the draft + parallel target verification + longest-prefix accept), and reports decoding speedup, average acceptance length, and the per-block acceptance-length histogram.</p>
+<p><strong>Single-GPU evaluation:</strong></p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/dflash_benchmark.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--model-name-or-path<span class="w"> </span>/path/to/Qwen3-4B<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--draft-name-or-path<span class="w"> </span>/path/to/dflare_checkpoint<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--draft-arch<span class="w"> </span>dflare<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--dataset<span class="w"> </span>gsm8k<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--max-samples<span class="w"> </span><span class="m">128</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--max-new-tokens<span class="w"> </span><span class="m">2048</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--temperature<span class="w"> </span><span class="m">0</span>.0<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--block-size<span class="w"> </span><span class="m">16</span>
+</pre></div>
+</div>
+<p><strong>Multi-GPU evaluation</strong> (workload is sharded across ranks; results are gathered to rank 0):</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>torchrun<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">8</span><span class="w"> </span>--master_port<span class="o">=</span><span class="m">29600</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>tools/dflash_benchmark.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--model-name-or-path<span class="w"> </span>/path/to/Qwen3-4B<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--draft-name-or-path<span class="w"> </span>/path/to/dflare_checkpoint<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--draft-arch<span class="w"> </span>dflare<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--dataset<span class="w"> </span>gsm8k<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--max-samples<span class="w"> </span><span class="m">128</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--max-new-tokens<span class="w"> </span><span class="m">2048</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--temperature<span class="w"> </span><span class="m">0</span>.0<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--block-size<span class="w"> </span><span class="m">16</span>
+</pre></div>
+</div>
+<p>Notes:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--block-size</span></code> is optional; if omitted, the script reads <code class="docutils literal notranslate"><span class="pre">block_size</span></code> directly from the loaded draft checkpoint’s config.</p></li>
+<li><p>The script runs each prompt twice — once with <code class="docutils literal notranslate"><span class="pre">block_size=1</span></code> (vanilla AR decoding) and once with the speculative <code class="docutils literal notranslate"><span class="pre">block_size</span></code> — so the reported <code class="docutils literal notranslate"><span class="pre">Decoding</span> <span class="pre">speedup</span></code> is a self-contained ratio. No external baseline run is required.</p></li>
+<li><p>Both target and draft are loaded in <code class="docutils literal notranslate"><span class="pre">bfloat16</span></code> with <code class="docutils literal notranslate"><span class="pre">flash_attention_2</span></code> when <code class="docutils literal notranslate"><span class="pre">flash-attn</span></code> is installed (otherwise it falls back to PyTorch SDPA, which reduces wall-clock speedup but does not affect acceptance length).</p></li>
+<li><p>Supported datasets out of the box: <code class="docutils literal notranslate"><span class="pre">gsm8k</span></code>, <code class="docutils literal notranslate"><span class="pre">math500</span></code>, <code class="docutils literal notranslate"><span class="pre">aime24</span></code>, <code class="docutils literal notranslate"><span class="pre">aime25</span></code>, <code class="docutils literal notranslate"><span class="pre">alpaca</span></code>, <code class="docutils literal notranslate"><span class="pre">mt-bench</span></code>, <code class="docutils literal notranslate"><span class="pre">humaneval</span></code>, <code class="docutils literal notranslate"><span class="pre">mbpp</span></code>, <code class="docutils literal notranslate"><span class="pre">lbpp</span></code>, <code class="docutils literal notranslate"><span class="pre">swe-bench</span></code>, <code class="docutils literal notranslate"><span class="pre">livecodebench</span></code>.</p></li>
+<li><p>To compare DFlash and DFlare on the same checkpoint format, switch <code class="docutils literal notranslate"><span class="pre">--draft-arch</span> <span class="pre">dflash</span></code> and point <code class="docutils literal notranslate"><span class="pre">--draft-name-or-path</span></code> to a DFlash checkpoint — the rest of the command stays identical.</p></li>
+</ul>
 </section>
 </section>
 <section id="results">
 <h2>📈 Results<a class="headerlink" href="#results" title="Link to this heading">#</a></h2>
-<p>Our experiments show that SpecExit significantly outperforms the speculative decoding baseline across multiple reasoning benchmarks. It provides a much better trade-off between accuracy and latency.</p>
-<img alt="Experiment main results." src="../../_images/main_result.png" />
+<p>We evaluate DFlare on six benchmarks spanning mathematical reasoning (GSM8K, MATH-500, AIME), code generation (HumanEval, MBPP, LiveCodeBench), and open-domain conversation (MT-Bench, Alpaca), against DFlash and EAGLE-3 baselines on Qwen3-4B, Qwen3-8B, and GPT-OSS-20B target models.</p>
+<img alt="DFlare end-to-end speedup vs DFlash and EAGLE-3 across six benchmarks." src="../../_images/speedup.png" />
 </section>
 <section id="citation">
 <h2>📜 Citation<a class="headerlink" href="#citation" title="Link to this heading">#</a></h2>
 <p>If you find our work useful in your research, please consider citing our paper:</p>
-<div class="highlight-bibtex notranslate"><div class="highlight"><pre><span></span><span class="nc">@article</span><span class="p">{</span><span class="nl">SpecExit2025</span><span class="p">,</span>
-<span class="w">  </span><span class="na">title</span><span class="p">=</span><span class="s">{SpecExit: Accelerating Large Reasoning Model via Speculative Exit}</span><span class="p">,</span>
-<span class="w">  </span><span class="na">author</span><span class="p">=</span><span class="s">{Rubing Yang and Huajun Bai and Song Liu and Guanghua Yu and Runzhi Fan and Yanbin Dang and Jiejing Zhang and Kai Liu and Jianchen Zhu and Peng Chen}</span><span class="p">,</span>
+<div class="highlight-bibtex notranslate"><div class="highlight"><pre><span></span><span class="nc">@article</span><span class="p">{</span><span class="nl">DFlare2026</span><span class="p">,</span>
+<span class="w">  </span><span class="na">title</span><span class="p">=</span><span class="s">{DFlare: Scaling Up Draft Capacity for Block Diffusion Speculative Decoding}</span><span class="p">,</span>
+<span class="w">  </span><span class="na">author</span><span class="p">=</span><span class="s">{Jiebin Zhang and Zhenghan Yu and Song Liu and Eugene J. Yu and Zheng Li and Dawei Zhu and Jiangshan Duo and Weimin Xiong and Yifan Song and Guanghua Yu and Jianchen Zhu and Sujian Li}</span><span class="p">,</span>
 <span class="w">  </span><span class="na">journal</span><span class="p">=</span><span class="s">{arXiv preprint arXiv}</span><span class="p">,</span>
-<span class="w">  </span><span class="na">year</span><span class="p">=</span><span class="s">{2025}</span>
+<span class="w">  </span><span class="na">year</span><span class="p">=</span><span class="s">{2026}</span>
 <span class="p">}</span>
 </pre></div>
 </div>
@@ -491,20 +537,20 @@ document.write(`
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="eagle/audio_tts_eagle.html"
+       href="dcut.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">语音合成模型EAGLE3</p>
+        <p class="prev-next-title">D-Cut</p>
       </div>
     </a>
     <a class="right-next"
-       href="dcut.html"
+       href="../sparse_attention/index.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">D-Cut</p>
+        <p class="prev-next-title">稀疏注意力</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -527,6 +573,7 @@ document.write(`
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#abstract">🚀 Abstract</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#key-highlights">✨ Key Highlights</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start">⚡ Quick Start</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#training">Training</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inference-and-evaluation">Inference and Evaluation</a></li>
 </ul>
 </li>
