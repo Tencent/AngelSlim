@@ -15,7 +15,10 @@ eval/
 *_ckpt*/
 output/
 outputs/
+output*/
+logs*/
 outs/
 wandb/
 tools/results/
 __pycache__/outputs/
+__pycache__/
