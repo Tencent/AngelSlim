@@ -52,6 +52,35 @@ except ImportError as _e:
         pass
 
 
+# Import smooth stats and alpha search collection functions.
+# These live in their own module (smooth_moe_inject) installed by the
+# vllm_patch installer at <vllm>/tools/smooth_moe_inject.py.  Keeping
+# them out of vllm_calibrate_utils means the smooth pipeline can ship
+# independently of the activation/KV calibration utilities.
+try:
+    from smooth_moe_inject import collect_fused_moe_smooth_stats  # noqa: E402
+
+    _angelslim_logger.info("[AngelSlim] Successfully imported collect_fused_moe_smooth_stats")
+except ImportError:
+
+    def collect_fused_moe_smooth_stats(*args, **kwargs):
+        """No-op fallback."""
+        pass
+
+
+try:
+    from smooth_moe_inject import collect_fused_moe_alpha_search_values  # noqa: E402
+
+    _angelslim_logger.info(
+        "[AngelSlim] Successfully imported collect_fused_moe_alpha_search_values"
+    )
+except ImportError:
+
+    def collect_fused_moe_alpha_search_values(*args, **kwargs):
+        """No-op fallback."""
+        pass
+
+
 # === /AngelSlim ===
 from vllm.model_executor.layers.fused_moe.activation import (
     MoEActivation,
@@ -2163,6 +2192,24 @@ class TritonExperts(LoRAExpertsMixin, mk.FusedMoEExpertsModular):
             global_num_experts=global_num_experts,
             layer_name=_layer_name,
             global_moe_activation_stats=_moe_activation_stats,
+        )
+        # Smooth stats collection (per-channel absmax/EMA for SmoothQuant).
+        collect_fused_moe_smooth_stats(
+            stage="down_proj",
+            hidden_states=intermediate_cache2,
+            topk_ids=topk_ids,
+            layer_name=getattr(w1, "_vllm_layer_name_smooth", None),
+            global_smooth_stats=getattr(w1, "_smooth_stats_of_model", None),
+            ema_momentum=getattr(w1, "_smooth_ema_momentum", 0.9),
+        )
+        # Alpha search raw activation collection.
+        collect_fused_moe_alpha_search_values(
+            stage="down_proj",
+            hidden_states=intermediate_cache2,
+            topk_ids=topk_ids,
+            layer_name=getattr(w1, "_vllm_layer_name_smooth", None),
+            alpha_search_values=getattr(w1, "_alpha_search_values_of_model", None),
+            max_tokens_per_expert=getattr(w1, "_alpha_search_max_tokens", 512),
         )
         # === /AngelSlim ===
 

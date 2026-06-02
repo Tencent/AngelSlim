@@ -13,6 +13,9 @@ The internal helpers ``_fp8_quantize_dequant`` / ``_search_best_multiplier``
 are kept module-private with the underscore prefix.
 """
 
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 import torch
 
 from ._common import _compute_perhead_layout, _find_layers, _get_dist_info, _get_kv_role
@@ -283,9 +286,6 @@ class KVScaleSearcher:
         self.num_steps = num_steps
 
     def __call__(self, model):
-        import os
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-
         fp8_max = torch.finfo(torch.float8_e4m3fn).max  # 448.0
 
         # Collect raw kv tensors stored by the value hook

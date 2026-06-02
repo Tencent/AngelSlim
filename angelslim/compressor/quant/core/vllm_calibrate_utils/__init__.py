@@ -13,9 +13,9 @@ focused sub-modules while keeping the public API 100% backward compatible:
 * :mod:`.search`   – KV-cache FP8 scale grid-search (per-tensor and
   per-head) with the value-capture hooks needed by the searchers.
 
-The vLLM ``fused_moe.py`` patch only imports
-``collect_fused_moe_internal_stats`` from this package, which is
-re-exported via :mod:`.hooks`.
+Smooth / Smooth-Alpha-Search APIs have been moved to
+:mod:`angelslim.compressor.transform.smooth.vllm` — import from there
+directly.
 """
 
 from .hooks import (

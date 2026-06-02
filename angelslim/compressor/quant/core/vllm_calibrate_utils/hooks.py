@@ -232,10 +232,6 @@ def setup_activation_hooks(model, kv_granularity="per-tensor"):
                 if hasattr(layer, "w13_weight") and layer.w13_weight is not None:
                     layer.w13_weight._vllm_layer_name = name
                     layer.w13_weight._moe_activation_stats_of_model = model._moe_activation_stats
-                    print(
-                        f"[DEBUG] Set w13_weight._vllm_layer_name = {name}, "
-                        f"type={type(layer.w13_weight)}"
-                    )
                 else:
                     print(
                         f"[DEBUG] Cannot set w13_weight._vllm_layer_name: "

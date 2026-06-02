@@ -115,13 +115,47 @@ bash tools/vllm_patch/install.sh --help      # 查看完整用法
 
 ## 二、Hy3.0 系列脚本（Hunyuan-A20B 等 Hy3 模型）
 
-下面 3 个脚本共享同一套 vLLM 运行时环境（chunked prefill / FlashInfer attention / mp distributed executor / fused MoE 等），区别在于产出物不同。
+下面 6 个脚本共享同一套 vLLM 运行时环境（chunked prefill / FlashInfer attention / mp distributed executor / fused MoE 等），区别在于产出物不同。
 
 | 脚本 | 用途 | 入口 |
 | --- | --- | --- |
-| [`run_vllm_quant_for_Hy3.sh`](./run_vllm_quant_for_Hy3.sh) | ★ 推荐的"一键流水线"：校准 + 量化 | `tools/run_vllm_calibrate.py` + `tools/fp8_quant_with_vllm_activation.py` |
-| [`run_vllm_calibrate_for_Hy3.sh`](./run_vllm_calibrate_for_Hy3.sh) | 仅 W8A8C8 联合校准 | `tools/run_vllm_calibrate.py` |
-| [`run_kvcache_calibrate_for_Hy3.sh`](./run_kvcache_calibrate_for_Hy3.sh) | 仅 KV-cache 校准（轻量） | `tools/kvcache/run_kvcache_calibrate.py` |
+| [`run_vllm_quant_for_HY3.sh`](./run_vllm_quant_for_HY3.sh) | ★ 推荐的"一键流水线"：校准 + 量化 | `tools/run_vllm_calibrate.py` + `tools/fp8_quant_with_vllm_activation.py` |
+| [`run_vllm_calibrate_for_HY3.sh`](./run_vllm_calibrate_for_HY3.sh) | 仅 W8A8C8 联合校准 | `tools/run_vllm_calibrate.py` |
+| [`run_kvcache_calibrate_for_HY3.sh`](./run_kvcache_calibrate_for_HY3.sh) | 仅 KV-cache 校准（轻量） | `tools/kvcache/run_kvcache_calibrate.py` |
+| [`run_smooth_for_HY3.sh`](./run_smooth_for_HY3.sh) | SmoothQuant 一键流水线：统计收集 + 权重变换 | `tools/smooth/run_vllm_smooth.py` + `tools/smooth/convert_smooth_weights.py` |
+| [`run_smooth_calibrate_for_HY3.sh`](./run_smooth_calibrate_for_HY3.sh) | 仅 Smooth 统计收集（+ 可选 Alpha 搜索） | `tools/smooth/run_vllm_smooth.py` |
+| [`run_smooth_convert_for_HY3.sh`](./run_smooth_convert_for_HY3.sh) | 仅 Smooth 离线权重变换 | `tools/smooth/convert_smooth_weights.py` |
+
+> 📖 SmoothQuant 完整文档（核心概念、配置详解、Alpha 搜索原理、故障排查）见 [tools/smooth/README.md](../../tools/smooth/README.md)。
+
+---
+
+### 0. `run_smooth_for_HY3.sh` — 可选的模型 Smooth 转换
+
+**功能**：Smooth 预处理（生成平滑后的模型），可作为后续 FP8 量化的前置步骤，提升低比特量化精度。
+
+```bash
+bash run_smooth_for_HY3.sh                    # 两阶段都跑
+bash run_smooth_for_HY3.sh --skip-calibrate   # 仅 Phase 2（复用已有统计）
+bash run_smooth_for_HY3.sh --skip-convert     # 仅 Phase 1
+```
+
+#### Phase 1：调用 `tools/smooth/run_vllm_smooth.py`
+
+- 用 vLLM 加载模型，在校准数据集上跑前向，收集 Attention / MLP / MoE 各层的 per-channel 激活统计（absmax + EMA）。
+- 可选执行 per-layer Alpha 网格搜索，自动寻找最优平滑参数。
+- 输出到 `${output_dir}`：
+  - `smooth_stats.json` — 各层 per-channel absmax / EMA 统计
+  - `smooth_alpha_search.json`（若 `enable_alpha_search: true`）— 每层最优 alpha 及对应的 smooth_weight
+
+#### Phase 2：调用 `tools/smooth/convert_smooth_weights.py`
+
+- 读取 Phase 1 产出的统计文件，对 QK / VO / Down 投影层权重做离线缩放变换。
+- 输出到 `${save_path}`：平滑后的 HuggingFace safetensors 模型（可直接用于后续量化或推理）。
+
+#### 配置
+
+默认读取 `configs/hy3/ptq/hy3_smooth.yaml`（Phase 1 和 Phase 2 共享同一份 YAML）。详见 [tools/smooth/README.md](../../tools/smooth/README.md)。
 
 ---
 

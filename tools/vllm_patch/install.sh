@@ -16,6 +16,9 @@
 #   * Copies tools/vllm_patch/{envs.py,fused_moe.py} into the vLLM package and
 #     places angelslim/.../vllm_calibrate_utils/ as a Python package at
 #     <vllm>/tools/vllm_calibrate_utils/.
+#   * Also places angelslim/compressor/transform/smooth/vllm/moe_inject.py
+#     at <vllm>/tools/smooth_moe_inject.py so the patched fused_moe.py can
+#     import collect_fused_moe_smooth_stats / _alpha_search_values.
 #   * Idempotent: re-running install simply refreshes the patched files.
 #   * Verifies the patch is active by grepping for known markers.
 #
@@ -34,6 +37,10 @@ PATCH_ENVS_SRC="${SCRIPT_DIR}/envs.py"
 PATCH_FUSED_MOE_SRC="${SCRIPT_DIR}/fused_moe.py"
 # vllm_calibrate_utils is now a *package* (directory) under angelslim/.
 CALIB_UTILS_SRC_DIR="${ANGELSLIM_ROOT}/angelslim/compressor/quant/core/vllm_calibrate_utils"
+# Smooth MoE kernel-injection module — installed standalone next to
+# vllm_calibrate_utils so the patched fused_moe.py can `from smooth_moe_inject
+# import collect_fused_moe_smooth_stats / collect_fused_moe_alpha_search_values`.
+SMOOTH_MOE_INJECT_SRC="${ANGELSLIM_ROOT}/angelslim/compressor/transform/smooth/vllm/moe_inject.py"
 
 # ---------- pretty logging ----------
 log()  { printf '\033[1;32m[install.sh]\033[0m %s\n' "$*"; }
@@ -41,7 +48,7 @@ warn() { printf '\033[1;33m[install.sh][WARN]\033[0m %s\n' "$*" >&2; }
 err()  { printf '\033[1;31m[install.sh][ERR]\033[0m %s\n' "$*" >&2; }
 
 usage() {
-    sed -n '2,21p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '2,28p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 detect_vllm_dir() {
@@ -57,9 +64,10 @@ do_install() {
     local fused_moe_dst="${vllm_dir}/model_executor/layers/fused_moe/fused_moe.py"
     local utils_dst_dir="${vllm_dir}/tools"
     local utils_dst="${utils_dst_dir}/vllm_calibrate_utils"
+    local smooth_moe_inject_dst="${utils_dst_dir}/smooth_moe_inject.py"
 
     # ---- sanity-check sources ----
-    for f in "${PATCH_ENVS_SRC}" "${PATCH_FUSED_MOE_SRC}"; do
+    for f in "${PATCH_ENVS_SRC}" "${PATCH_FUSED_MOE_SRC}" "${SMOOTH_MOE_INJECT_SRC}"; do
         [[ -f "${f}" ]] || { err "Missing source file: ${f}"; exit 1; }
     done
     [[ -d "${CALIB_UTILS_SRC_DIR}" ]] || {
@@ -105,6 +113,9 @@ do_install() {
     rm -rf "${utils_dst}/__pycache__"
     log "Installed ${utils_dst}/ (package)"
 
+    cp -p "${SMOOTH_MOE_INJECT_SRC}" "${smooth_moe_inject_dst}"
+    log "Installed ${smooth_moe_inject_dst}"
+
     # ---- self-check ----
     do_check "${vllm_dir}"
 }
@@ -118,6 +129,7 @@ do_uninstall() {
     # Legacy single-file install layout (pre-split).  Removed if it still
     # exists so the uninstall is exhaustive across both layouts.
     local utils_dst_legacy="${vllm_dir}/tools/vllm_calibrate_utils.py"
+    local smooth_moe_inject_dst="${vllm_dir}/tools/smooth_moe_inject.py"
 
     if [[ -f "${envs_dst}.bak" ]]; then
         mv -f "${envs_dst}.bak" "${envs_dst}"
@@ -141,6 +153,10 @@ do_uninstall() {
         rm -f "${utils_dst_legacy}"
         log "Removed legacy ${utils_dst_legacy}"
     fi
+    if [[ -f "${smooth_moe_inject_dst}" ]]; then
+        rm -f "${smooth_moe_inject_dst}"
+        log "Removed ${smooth_moe_inject_dst}"
+    fi
 
     log "Uninstall complete."
 }
@@ -151,6 +167,7 @@ do_check() {
     local envs_dst="${vllm_dir}/envs.py"
     local fused_moe_dst="${vllm_dir}/model_executor/layers/fused_moe/fused_moe.py"
     local utils_dst="${vllm_dir}/tools/vllm_calibrate_utils"
+    local smooth_moe_inject_dst="${vllm_dir}/tools/smooth_moe_inject.py"
 
     local ok=1
 
@@ -163,6 +180,20 @@ do_check() {
         ok=0
     fi
 
+    if grep -q "VLLM_MOE_COLLECT_SMOOTH_STATS" "${envs_dst}" 2>/dev/null; then
+        log "  [OK]   envs.py contains VLLM_MOE_COLLECT_SMOOTH_STATS"
+    else
+        err  "  [FAIL] envs.py does NOT contain VLLM_MOE_COLLECT_SMOOTH_STATS"
+        ok=0
+    fi
+
+    if grep -q "VLLM_MOE_COLLECT_ALPHA_SEARCH" "${envs_dst}" 2>/dev/null; then
+        log "  [OK]   envs.py contains VLLM_MOE_COLLECT_ALPHA_SEARCH"
+    else
+        err  "  [FAIL] envs.py does NOT contain VLLM_MOE_COLLECT_ALPHA_SEARCH"
+        ok=0
+    fi
+
     if grep -q "collect_fused_moe_internal_stats" "${fused_moe_dst}" 2>/dev/null; then
         log "  [OK]   fused_moe.py contains collect_fused_moe_internal_stats"
     else
@@ -170,10 +201,49 @@ do_check() {
         ok=0
     fi
 
+    if grep -q "collect_fused_moe_smooth_stats" "${fused_moe_dst}" 2>/dev/null; then
+        log "  [OK]   fused_moe.py contains collect_fused_moe_smooth_stats"
+    else
+        err  "  [FAIL] fused_moe.py does NOT contain collect_fused_moe_smooth_stats"
+        ok=0
+    fi
+
+    if grep -q "collect_fused_moe_alpha_search_values" "${fused_moe_dst}" 2>/dev/null; then
+        log "  [OK]   fused_moe.py contains collect_fused_moe_alpha_search_values"
+    else
+        err  "  [FAIL] fused_moe.py does NOT contain collect_fused_moe_alpha_search_values"
+        ok=0
+    fi
+
+    # Sanity: the new fused_moe.py should import from smooth_moe_inject.
+    # Catch the case where someone deployed an old patched fused_moe.py
+    # that still imports collect_fused_moe_smooth_stats from vllm_calibrate_utils.
+    if grep -q "from smooth_moe_inject import" "${fused_moe_dst}" 2>/dev/null; then
+        log "  [OK]   fused_moe.py imports from smooth_moe_inject"
+    else
+        err  "  [FAIL] fused_moe.py does NOT import from smooth_moe_inject "
+        err  "         (likely a stale patch that still uses vllm_calibrate_utils)"
+        ok=0
+    fi
+
     if [[ -f "${utils_dst}/__init__.py" && -f "${utils_dst}/hooks.py" ]]; then
         log "  [OK]   ${utils_dst}/ package is present"
     else
         err  "  [FAIL] ${utils_dst}/ package is missing or incomplete"
+        ok=0
+    fi
+
+    if [[ -f "${smooth_moe_inject_dst}" ]]; then
+        log "  [OK]   ${smooth_moe_inject_dst} is present"
+        if grep -q "^def collect_fused_moe_smooth_stats" "${smooth_moe_inject_dst}" 2>/dev/null \
+           && grep -q "^def collect_fused_moe_alpha_search_values" "${smooth_moe_inject_dst}" 2>/dev/null; then
+            log "  [OK]   smooth_moe_inject.py defines both required functions"
+        else
+            err  "  [FAIL] smooth_moe_inject.py is missing required function definitions"
+            ok=0
+        fi
+    else
+        err  "  [FAIL] ${smooth_moe_inject_dst} is missing"
         ok=0
     fi
 

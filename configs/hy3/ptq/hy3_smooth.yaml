@@ -1,0 +1,60 @@
+# HY3 SmoothQuant unified config (shared by Phase 1 and Phase 2)
+# Phase 1 entry: tools/run_vllm_smooth.py        -c configs/hy3/ptq/hy3_smooth.yaml
+# Phase 2 entry: tools/convert_smooth_weights.py -c configs/hy3/ptq/hy3_smooth.yaml
+#
+# Both scripts read from this single file, picking up only the fields they need.
+# Override priority: explicit CLI flag > YAML value > argparse default.
+
+# ========== Paths (shared by both phases) ==========
+model_path: /path/to/model
+ptq_data_path: /path/to/dataset.jsonl
+output_dir: /path/to/smooth_output        # Phase 1 writes here; Phase 2 reads from here
+save_path: /path/to/smoothed_model        # Phase 2 output
+
+# ========== Phase 1: model loading / runtime ==========
+tp_size: 16
+batch_size: 4
+num_samples: 16
+max_length: 16384
+distributed_executor_backend: ray
+skip_weight_loading: false
+verbose: false
+
+# ========== Phase 1: collection scope ==========
+collect_attn: true
+collect_down_proj: true
+collect_moe: true
+ema_momentum: 0.9
+
+# ========== Phase 2: smooth flavours & fixed alpha ==========
+smooth_qk: true
+smooth_vo: true
+smooth_down: true
+alpha_qk: 0.6
+alpha_vo: 0.5
+alpha_down: 0.6              # fallback alpha for keys not covered by alpha search
+use_ema: false
+device: cpu
+dtype: auto
+
+# ========== Alpha grid search (run in Phase 1, applied in Phase 2) ==========
+enable_alpha_search: true
+num_search_samples: 16
+search_max_length: 8192
+alpha_min: 0.3
+alpha_max: 1.0
+alpha_steps: 8
+alpha_act_quant_method: per_tensor
+alpha_act_quant_type: fp8
+alpha_weight_quant_method: per_tensor
+alpha_weight_quant_type: fp8
+alpha_weight_quant_bits: 8
+alpha_weight_group_size: 128
+alpha_max_tokens: 4096
+alpha_use_ema: false
+alpha_smooth_search_mode: default
+# per-tensor-act-first mode parameters (only effective when mode=per-tensor-act-first)
+# alpha_act_mul_min: 0.1
+# alpha_act_mul_max: 1.0
+# alpha_smooth_min: 1e-6
+# alpha_smooth_max: 1e6

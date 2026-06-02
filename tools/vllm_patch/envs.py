@@ -1641,6 +1641,14 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "VLLM_MOE_COLLECT_PER_EXPERT_STATS": lambda: bool(
         int(os.getenv("VLLM_MOE_COLLECT_PER_EXPERT_STATS", "0"))
     ),
+    # Enable MoE smooth stats collection (per-channel absmax/EMA).
+    "VLLM_MOE_COLLECT_SMOOTH_STATS": lambda: bool(
+        int(os.getenv("VLLM_MOE_COLLECT_SMOOTH_STATS", "0"))
+    ),
+    # Enable MoE alpha search raw activation collection.
+    "VLLM_MOE_COLLECT_ALPHA_SEARCH": lambda: bool(
+        int(os.getenv("VLLM_MOE_COLLECT_ALPHA_SEARCH", "0"))
+    ),
     # === /AngelSlim ===
 }
 
