@@ -1,6 +1,6 @@
 # HY3 SmoothQuant unified config (shared by Phase 1 and Phase 2)
-# Phase 1 entry: tools/run_vllm_smooth.py        -c configs/hy3/ptq/hy3_smooth.yaml
-# Phase 2 entry: tools/convert_smooth_weights.py -c configs/hy3/ptq/hy3_smooth.yaml
+# Phase 1 entry: tools/run_vllm_smooth.py        -c configs/Hy3/ptq/fp8/Hy3_smooth.yaml
+# Phase 2 entry: tools/convert_smooth_weights.py -c configs/Hy3/ptq/fp8/Hy3_smooth.yaml
 #
 # Both scripts read from this single file, picking up only the fields they need.
 # Override priority: explicit CLI flag > YAML value > argparse default.

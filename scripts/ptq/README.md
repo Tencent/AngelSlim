@@ -155,7 +155,7 @@ bash run_smooth_for_HY3.sh --skip-convert     # 仅 Phase 1
 
 #### 配置
 
-默认读取 `configs/hy3/ptq/hy3_smooth.yaml`（Phase 1 和 Phase 2 共享同一份 YAML）。详见 [tools/smooth/README.md](../../tools/smooth/README.md)。
+默认读取 `configs/Hy3/ptq/fp8/Hy3_smooth.yaml`（Phase 1 和 Phase 2 共享同一份 YAML）。详见 [tools/smooth/README.md](../../tools/smooth/README.md)。
 
 ---
 

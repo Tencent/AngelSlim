@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-CONFIG="configs/hy3/ptq/hy3_smooth.yaml"
+CONFIG="configs/Hy3/ptq/fp8/Hy3_smooth.yaml"
 
 SKIP_CALIBRATE=false
 SKIP_CONVERT=false

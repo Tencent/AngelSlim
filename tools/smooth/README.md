@@ -235,7 +235,7 @@ bash scripts/ptq/run_smooth_convert_for_HY3.sh
 所有 Smooth 脚本共享同一套 YAML 配置，默认为：
 
 ```
-configs/hy3/ptq/hy3_smooth.yaml
+configs/Hy3/ptq/fp8/Hy3_smooth.yaml
 ```
 
 ### 关键配置项
@@ -324,7 +324,7 @@ alpha_smooth_search_mode: default              # 搜索模式
 #### 典型 HY3 配置
 
 ```yaml
-# configs/hy3/ptq/hy3_smooth.yaml
+# configs/Hy3/ptq/fp8/Hy3_smooth.yaml
 model_path: /apdcephfs_zwfy14/share_300532381/gavinlee/share_model/one-agent/hunyuan/yonewu/.../ckpt/global_step_hf
 ptq_data_path: /cfs_cloud_code/gavinlee/work/code-RL/data/0521-oneagent/sampled_3000_for_quant_shuf.jsonl
 output_dir: /apdcephfs_zwfy14/share_300532381/.../ckpt/stat_debug
@@ -441,13 +441,13 @@ search_max_length: 4096     # 减少最大序列长度（从 8192 改为 4096）
 cd /path/to/AngelSlim
 
 # 编辑配置文件，指定模型、数据、输出路径
-vim configs/hy3/ptq/hy3_smooth.yaml
+vim configs/Hy3/ptq/fp8/Hy3_smooth.yaml
 
 # 一键执行 Phase 1 + Phase 2（约 4-6 小时）
 bash scripts/ptq/run_smooth_for_HY3.sh
 
 # 查看输出
-ls -la $(grep "save_path:" configs/hy3/ptq/hy3_smooth.yaml | cut -d' ' -f2)
+ls -la $(grep "save_path:" configs/Hy3/ptq/fp8/Hy3_smooth.yaml | cut -d' ' -f2)
 ```
 
 ### 示例 2：调试 Alpha 搜索
@@ -462,17 +462,17 @@ search_max_length: 4096
 YAML
 
 # 2. 运行 Phase 1（仅统计收集 + 搜索）
-cp configs/hy3/ptq/hy3_smooth.yaml configs/hy3/ptq/hy3_smooth_debug.yaml
-vim configs/hy3/ptq/hy3_smooth_debug.yaml  # 编辑搜索参数
+cp configs/Hy3/ptq/fp8/Hy3_smooth.yaml configs/Hy3/ptq/fp8/Hy3_smooth_debug.yaml
+vim configs/Hy3/ptq/fp8/Hy3_smooth_debug.yaml  # 编辑搜索参数
 
-python3 tools/smooth/run_vllm_smooth.py -c configs/hy3/ptq/hy3_smooth_debug.yaml
+python3 tools/smooth/run_vllm_smooth.py -c configs/Hy3/ptq/fp8/Hy3_smooth_debug.yaml
 
 # 3. 检查搜索结果
 cat output_dir/smooth_alpha_search.json | python3 -m json.tool | head -50
 
 # 4. 若满意，再用更精细参数重新搜索
-vim configs/hy3/ptq/hy3_smooth_debug.yaml
-python3 tools/smooth/run_vllm_smooth.py -c configs/hy3/ptq/hy3_smooth_debug.yaml
+vim configs/Hy3/ptq/fp8/Hy3_smooth_debug.yaml
+python3 tools/smooth/run_vllm_smooth.py -c configs/Hy3/ptq/fp8/Hy3_smooth_debug.yaml
 
 # 5. 查看最终搜索结果
 cat output_dir/smooth_alpha_search.json | python3 -m json.tool
@@ -485,8 +485,8 @@ cat output_dir/smooth_alpha_search.json | python3 -m json.tool
 
 # 方案 A：测试不同的 alpha_qk 值
 for alpha in 0.4 0.5 0.6 0.7; do
-    sed -i "s/alpha_qk: .*/alpha_qk: $alpha/" configs/hy3/ptq/hy3_smooth.yaml
-    sed -i "s|save_path: .*|save_path: /data/smooth_model_alpha_qk_${alpha}|" configs/hy3/ptq/hy3_smooth.yaml
+    sed -i "s/alpha_qk: .*/alpha_qk: $alpha/" configs/Hy3/ptq/fp8/Hy3_smooth.yaml
+    sed -i "s|save_path: .*|save_path: /data/smooth_model_alpha_qk_${alpha}|" configs/Hy3/ptq/fp8/Hy3_smooth.yaml
     bash scripts/ptq/run_smooth_convert_for_HY3.sh
 done
 
@@ -588,7 +588,7 @@ down_scaled = down_proj * smooth_weight
 1. **创建模型特定配置**：
 
 ```bash
-cp configs/hy3/ptq/hy3_smooth.yaml configs/my_model/ptq/my_model_smooth.yaml
+cp configs/Hy3/ptq/fp8/Hy3_smooth.yaml configs/my_model/ptq/my_model_smooth.yaml
 ```
 
 2. **编辑配置文件**：
@@ -740,7 +740,7 @@ wc -l /path/to/output_dir/smooth_stats.json
 python3 -c "import json; f=json.load(open('/path/to/smooth_stats.json')); print(list(f.keys())[:5])"
 
 # 3. 检查配置中的 output_dir 是否正确
-grep "output_dir:" configs/hy3/ptq/hy3_smooth.yaml
+grep "output_dir:" configs/Hy3/ptq/fp8/Hy3_smooth.yaml
 ```
 
 ### 问题 5：Alpha 搜索耗时过长
@@ -787,7 +787,7 @@ alpha_max: 0.8                     # 缩小搜索范围
 | `tools/smooth/convert_smooth_weights.py` | Phase 2 主程序（权重变换） |
 | `angelslim/compressor/quant/modules/smooth/smooth.py` | 核心 Smooth 算法实现 |
 | `angelslim/compressor/quant/core/vllm_calibrate_utils/` | 统计钩子 / Alpha 搜索实现 |
-| `configs/hy3/ptq/hy3_smooth.yaml` | HY3 默认配置 |
+| `configs/Hy3/ptq/fp8/Hy3_smooth.yaml` | HY3 默认配置 |
 
 ### 快速命令参考
 

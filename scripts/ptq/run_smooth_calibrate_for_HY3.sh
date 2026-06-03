@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-CONFIG="configs/hy3/ptq/hy3_smooth.yaml"
+CONFIG="configs/Hy3/ptq/fp8/Hy3_smooth.yaml"
 
 # -------- Environment Variables --------
 # Allow function serialization for apply_model in vLLM v1 engine
