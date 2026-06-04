@@ -552,9 +552,7 @@ def main():
                 lambda w: _apply_on_draft_model(w, get_kvcache_perhead_stats)
             )
             # Pick the first non-None result (rank-0 carries the gathered data).
-            mtp_ph_stats = next(
-                (r for r in (mtp_ph_stats_list or []) if r), None
-            )
+            mtp_ph_stats = next((r for r in (mtp_ph_stats_list or []) if r), None)
             if not mtp_ph_stats:
                 print(
                     "[MTP] WARNING: no per-head KV-cache stats collected from "
@@ -562,9 +560,7 @@ def main():
                     "scalars for k_cache/v_cache entries."
                 )
             else:
-                mtp_act_path = os.path.join(
-                    args.output_dir, "mtp_activation_stats.json"
-                )
+                mtp_act_path = os.path.join(args.output_dir, "mtp_activation_stats.json")
                 if os.path.exists(mtp_act_path):
                     with open(mtp_act_path, "r", encoding="utf8") as _f:
                         merged_mtp = json.load(_f)
