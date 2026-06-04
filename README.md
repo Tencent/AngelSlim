@@ -22,6 +22,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
 </p>
 
 ## 📣Latest News
+- [26/06/04] We have released **Stem**, a sparse attention algorithm that accelerates the **Prefill** stage of long-context LLMs by dynamically selecting top-k key blocks for block-sparse attention, significantly reducing latency while preserving generation quality. [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/stem.html)
 - [26/06/01] We have released **DFlare**, a block-diffusion speculative decoding framework with layer-wise fusion that achieves up to **5.52× end-to-end speedup**. [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/dflare.html)
 - [26/05/27] We have released **D-Cut**, an adaptive verification depth pruning technique for speculative decoding. [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/dcut.html)
 - [26/05/20] We support Distillation for full-precision HuggingFace models and **quantized QAT-style** models, as detailed in the [distillation documentation](https://angelslim.readthedocs.io/zh-cn/latest/features/distill/index.html). 
