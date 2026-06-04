@@ -412,16 +412,17 @@ document.write(`
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">3. 支持范围</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">4. 快速开始</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">4. 性能评测</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">5. 快速开始</a><ul class="visible nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dense-stem-patch">Dense 对照（无 Stem patch）</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#stem-hpc-bf16">Stem + HPC bf16</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#stem-hpc-fp8">Stem + HPC fp8</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#prompt">使用自定义 prompt</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">5. 参数说明</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">6. 代码结构</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#python-api">7. Python API</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">6. 参数说明</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">7. 代码结构</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#python-api">8. Python API</a></li>
 </ul>
             </nav>
         </div>
@@ -497,7 +498,12 @@ document.write(`
 </div>
 </section>
 <section id="id4">
-<h2>4. 快速开始<a class="headerlink" href="#id4" title="Link to this heading">#</a></h2>
+<h2>4. 性能评测<a class="headerlink" href="#id4" title="Link to this heading">#</a></h2>
+<p>我们在长上下文与 Agent 类任务上评测了 Stem 的精度保持能力。在 <strong>FP8-W8A8 + Stem</strong> 配置下，模型在 LongBench v2、CL-bench、CL-bench Life、SWE-bench Verified、Terminal-Bench 2.0、ClawEval 等多个 benchmark 上的得分与 BF16 基线基本持平，部分任务（如 ClawEval）甚至略有提升，验证了 Stem 稀疏注意力在大幅加速 Prefill 的同时几乎无损模型质量。</p>
+<img alt="Stem 在多个 benchmark 上的精度对比（BF16 vs FP8-W8A8+Stem）。" src="../../_images/benchmark.png" />
+</section>
+<section id="id5">
+<h2>5. 快速开始<a class="headerlink" href="#id5" title="Link to this heading">#</a></h2>
 <p>确保已安装 AngelSlim（<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">-e</span> <span class="pre">.</span></code> 或 <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">sync</span></code>），然后在项目根目录运行：</p>
 <section id="dense-stem-patch">
 <h3>Dense 对照（无 Stem patch）<a class="headerlink" href="#dense-stem-patch" title="Link to this heading">#</a></h3>
@@ -550,8 +556,8 @@ document.write(`
 </div>
 </section>
 </section>
-<section id="id5">
-<h2>5. 参数说明<a class="headerlink" href="#id5" title="Link to this heading">#</a></h2>
+<section id="id6">
+<h2>6. 参数说明<a class="headerlink" href="#id6" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>参数</p></th>
@@ -604,8 +610,8 @@ document.write(`
 </table>
 </div>
 </section>
-<section id="id6">
-<h2>6. 代码结构<a class="headerlink" href="#id6" title="Link to this heading">#</a></h2>
+<section id="id7">
+<h2>7. 代码结构<a class="headerlink" href="#id7" title="Link to this heading">#</a></h2>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>angelslim/compressor/sparsity/
 ├── __init__.py                          # re-export StemInference
 └── stem/
@@ -628,7 +634,7 @@ scripts/sparsity/run_stem.sh             # 启动脚本
 </div>
 </section>
 <section id="python-api">
-<h2>7. Python API<a class="headerlink" href="#python-api" title="Link to this heading">#</a></h2>
+<h2>8. Python API<a class="headerlink" href="#python-api" title="Link to this heading">#</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">angelslim.compressor.sparsity</span><span class="w"> </span><span class="kn">import</span> <span class="n">StemInference</span>
 
 <span class="n">stem</span> <span class="o">=</span> <span class="n">StemInference</span><span class="p">(</span><span class="n">attn_kwargs</span><span class="o">=</span><span class="p">{</span>
@@ -695,16 +701,17 @@ scripts/sparsity/run_stem.sh             # 启动脚本
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">3. 支持范围</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">4. 快速开始</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">4. 性能评测</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">5. 快速开始</a><ul class="visible nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dense-stem-patch">Dense 对照（无 Stem patch）</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#stem-hpc-bf16">Stem + HPC bf16</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#stem-hpc-fp8">Stem + HPC fp8</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#prompt">使用自定义 prompt</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">5. 参数说明</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">6. 代码结构</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#python-api">7. Python API</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">6. 参数说明</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">7. 代码结构</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#python-api">8. Python API</a></li>
 </ul>
   </nav></div>
 
