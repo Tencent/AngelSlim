@@ -3,6 +3,7 @@ import json
 import math
 import multiprocessing as mp
 import os
+import re
 import shutil
 from argparse import ArgumentParser
 from typing import Dict, List, Tuple
@@ -644,6 +645,56 @@ if __name__ == "__main__":
         print("no moe_expert_stats")
         raise AssertionError("moe_expert_stats file is required")
         # print(ac_json_data["model.layers.0.mlp.gate_up_proj"])
+
+    # ------------------------------------------------------------------
+    # MTP (Multi-Token Prediction) calibration stats merge
+    #
+    # When stage 1 was run with --enable-mtp, the MTP draft layer's
+    # activation / MoE expert statistics are written to a SEPARATE pair of
+    # files:
+    #   - mtp_activation_stats.json
+    #   - mtp_moe_expert_stats.json
+    # Their keys carry an extra ``.mtp_block.`` segment that reflects the
+    # vLLM hunyuan_mtp draft module structure, e.g.
+    #   model.layers.80.mtp_block.self_attn.qkv_proj
+    #   model.layers.80.mtp_block.mlp.experts.0.gate_up_proj
+    # However, the HF safetensors weight names for the same MTP layer do
+    # NOT contain ``mtp_block`` (e.g. ``model.layers.80.mlp.experts.0.
+    # gate_proj.weight``), so process_safetensor() derives lookup keys
+    # without that segment. To keep the two sides aligned, we strip the
+    # ``.mtp_block`` segment from MTP stat keys before merging.
+    # ------------------------------------------------------------------
+    _MTP_BLOCK_RE = re.compile(r"\.mtp_block\.")
+
+    def _strip_mtp_block_keys(d: Dict[str, dict]) -> Dict[str, dict]:
+        return {_MTP_BLOCK_RE.sub(".", k): v for k, v in d.items()}
+
+    mtp_act_path = os.path.join(args.input_vllm_ac_json_path, "mtp_activation_stats.json")
+    if os.path.isfile(mtp_act_path):
+        with open(mtp_act_path, "r", encoding="utf8") as fp:
+            mtp_act_stats = json.load(fp)
+        merged = _strip_mtp_block_keys(mtp_act_stats)
+        ac_json_data.update(merged)
+        print(
+            f"[mtp-stats] merged {len(merged)} MTP activation entries from "
+            f"{mtp_act_path} (keys with .mtp_block. stripped)"
+        )
+    else:
+        print(f"[mtp-stats] {mtp_act_path} not found; skipping MTP activation merge")
+
+    mtp_moe_path = os.path.join(args.input_vllm_ac_json_path, "mtp_moe_expert_stats.json")
+    if os.path.isfile(mtp_moe_path):
+        with open(mtp_moe_path, "r", encoding="utf8") as fp:
+            mtp_moe_stats = json.load(fp)
+        merged = _strip_mtp_block_keys(mtp_moe_stats)
+        ac_json_data.update(merged)
+        print(
+            f"[mtp-stats] merged {len(merged)} MTP MoE expert entries from "
+            f"{mtp_moe_path} (keys with .mtp_block. stripped)"
+        )
+    else:
+        print(f"[mtp-stats] {mtp_moe_path} not found; skipping MTP MoE merge")
+
     # ac_json_data = merge_vllm_act_moe_jsonl(ac_json_data)
     print(ac_json_data["model.layers.11.mlp.experts.1.gate_up_proj"])
     print(ac_json_data["model.layers.11.mlp.experts.22.gate_up_proj"])
