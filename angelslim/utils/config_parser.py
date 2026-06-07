@@ -755,6 +755,25 @@ def parse_json_compression_config_section(compress_config: dict) -> CompressionC
     return CompressionConfig(name=comp_names, quantization=quantization, cache=cache)
 
 
+def _require_json_section(config_data: dict, section_name: str) -> Any:
+    """
+    Fetch a required top-level section from a JSON configuration.
+
+    Raises a descriptive ValueError (instead of a bare KeyError) when the
+    section is missing, mirroring the validation style of the YAML parser.
+
+    Args:
+        config_data: The full parsed JSON configuration dictionary.
+        section_name: Name of the required top-level section.
+
+    Returns:
+        The section value associated with ``section_name``.
+    """
+    if section_name not in config_data:
+        raise ValueError(f"Missing required '{section_name}' section in JSON configuration.")
+    return config_data[section_name]
+
+
 def parse_json_full_config(json_file_path: str) -> FullConfig:
     """
     Parses a JSON configuration file into a FullConfig instance
@@ -769,10 +788,12 @@ def parse_json_full_config(json_file_path: str) -> FullConfig:
         config_data = json.load(f)
 
     # Parse model configuration section
-    model_config = ModelConfig(**config_data["model_config"])
+    model_config = ModelConfig(**_require_json_section(config_data, "model_config"))
 
     # Parse compression configuration section
-    comp_config = parse_json_compression_config_section(config_data["compression_config"])
+    comp_config = parse_json_compression_config_section(
+        _require_json_section(config_data, "compression_config")
+    )
 
     # Parse other configuration sections with default fallbacks
     dataset_config, global_config, infer_config = (
@@ -805,26 +826,9 @@ def parse_json_full_config(json_file_path: str) -> FullConfig:
         if spin_data is not None:
             transform_config.spin_config = SpinConfig(**spin_data)
 
-    # Parse calibration configuration section (nested under compression)
-    comp_data = config_data.get("compression_config", {})
-    calibrate_data = comp_data.get("calibrate", None)
-    if not calibrate_data and config_data.get("calibrate_config"):
-        # Backward compatibility: support top-level calibrate_config
-        calibrate_data = config_data["calibrate_config"]
-    if calibrate_data:
-        comp_config.calibrate = CalibrateConfig(**calibrate_data)
-
-    # Parse transform configuration section
-    transform_config = None
-    transform_data = config_data.get("transform_config", {})
-    if transform_data:
-        spin_data = transform_data.pop("spin_config", None)
-        transform_config = TransformConfig(**transform_data)
-        if spin_data is not None:
-            transform_config.spin_config = SpinConfig(**spin_data)
-
     return FullConfig(
         model_config=model_config,
+        compression_config=comp_config,
         dataset_config=dataset_config,
         global_config=global_config,
         infer_config=infer_config,
