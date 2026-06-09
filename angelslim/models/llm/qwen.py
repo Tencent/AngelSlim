@@ -46,7 +46,10 @@ class QwenMoeExpertsWithLinear(Qwen3MoeExperts):
             expert["gate_proj"].weight.data, expert["up_proj"].weight.data = self.gate_up_proj[
                 expert_idx
             ].chunk(2, dim=-2)
-            expert["down_proj"].weight.data = self.down_proj[expert_idx]
+            # Clone weights to avoid dangling references after del self.gate_up_proj
+            expert["gate_proj"].weight.data = expert["gate_proj"].weight.data.clone()
+            expert["up_proj"].weight.data = expert["up_proj"].weight.data.clone()
+            expert["down_proj"].weight.data = self.down_proj[expert_idx].clone()
             setattr(self, f"{expert_idx}", expert)
         del self.gate_up_proj
         del self.down_proj
