@@ -27,8 +27,8 @@ collect_moe: true
 ema_momentum: 0.9
 
 # ========== Phase 2: smooth flavours & fixed alpha ==========
-smooth_qk: true
-smooth_vo: true
+smooth_qk: false
+smooth_vo: false
 smooth_down: true
 alpha_qk: 0.6
 alpha_vo: 0.5
@@ -56,5 +56,5 @@ alpha_smooth_search_mode: default
 # per-tensor-act-first mode parameters (only effective when mode=per-tensor-act-first)
 # alpha_act_mul_min: 0.1
 # alpha_act_mul_max: 1.0
-# alpha_smooth_min: 1e-6
-# alpha_smooth_max: 1e6
+# alpha_smooth_min: 0.000001
+# alpha_smooth_max: 100000
