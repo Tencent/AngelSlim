@@ -56,5 +56,5 @@ alpha_smooth_search_mode: default
 # per-tensor-act-first mode parameters (only effective when mode=per-tensor-act-first)
 # alpha_act_mul_min: 0.1
 # alpha_act_mul_max: 1.0
-# alpha_smooth_min: 1e-6
-# alpha_smooth_max: 1e6
+# alpha_smooth_min: 0.000001
+# alpha_smooth_max: 100000
