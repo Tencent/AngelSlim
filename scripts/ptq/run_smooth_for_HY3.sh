@@ -54,7 +54,6 @@ export PRECISIONMODE=HF
 export VLLM_MOE_COLLECT_SMOOTH_STATS=1
 export VLLM_MOE_COLLECT_ALPHA_SEARCH=1
 
-export PYTHONPATH=/cfs_cloud_code/gavinlee/work/open_source_smooth/AngelSlim
 # -------- Phase 1: Collect Smooth Stats + Alpha Search --------
 if [ "$SKIP_CALIBRATE" = false ]; then
     echo "========================================"
