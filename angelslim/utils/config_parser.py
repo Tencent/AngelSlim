@@ -49,6 +49,7 @@ class QuantizationMethod(str, Enum):
     W4A8_FP8 = "w4a8_fp8"
     INT4_GPTAQ = "int4_gptaq"
     NVFP4 = "nvfp4"
+    NVFP4_WEIGHT_ONLY = "nvfp4_weight_only"
     W4A8_INT8 = "w4a8i8"
 
 
@@ -370,6 +371,9 @@ class CompressionConfig:
             if method in ["PTQ", "QAT"]:
                 # DAQ is data-free, no calibration dataset needed
                 if self.quantization and self.quantization.name == "daq":
+                    continue
+                # NVFP4 weight-only is data-free
+                if self.quantization and self.quantization.name == "nvfp4_weight_only":
                     continue
                 # Check if specific quantization helpers need dataset
                 if (

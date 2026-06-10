@@ -31,11 +31,16 @@ class NVFP4:
         super(NVFP4, self).__init__()
         self.model = model
         self.block_size = self.model.quant_config.quant_algo_info["block_size"]
+        self.weight_only = self.model.quant_config.quant_algo_info.get("weight_only", False)
 
     @torch.no_grad()
-    def run(self, dataloader):
-        print_info("Use NVFP4 fast forward")
-        self.model.model_forward(dataloader)
+    def run(self, dataloader=None):
+        if self.weight_only:
+            print_info("Use NVFP4 weight-only mode (no calibration needed)")
+            # No forward pass needed; scales are computed directly from weights in convert()
+        else:
+            print_info("Use NVFP4 fast forward")
+            self.model.model_forward(dataloader)
 
     def get_activation_scaling_factor(self, input_observer_amax):
         """Returns the activation scaling factor for export."""
@@ -86,9 +91,16 @@ class NVFP4:
         return q_per_block_scale
 
     def post_process(self, sub_layer, name):
-        # TODO:Fuse observer amax because TRT-LLM requires the qkv,
-        # gate and up to share the weight_scale2
-        weight_observer_amax, input_observer_amax = self.model.fuse_observer_amax(sub_layer, name)
+        if self.weight_only:
+            # Weight-only mode: compute scales directly from weight tensor
+            weight = sub_layer.weight.detach()
+            weight_observer_amax = weight.abs().max()
+        else:
+            # TODO:Fuse observer amax because TRT-LLM requires the qkv,
+            # gate and up to share the weight_scale2
+            weight_observer_amax, input_observer_amax = self.model.fuse_observer_amax(
+                sub_layer, name
+            )
 
         weight_scale_2 = self.get_weights_scaling_factor_2(weight_observer_amax)
         self.model.weight_scales_dict_2[name] = weight_scale_2
@@ -100,5 +112,6 @@ class NVFP4:
         )
         self.model.weight_scales_dict[name] = weight_scale
 
-        input_scale = self.get_activation_scaling_factor(input_observer_amax)
-        self.model.act_scales_dict[name] = input_scale
+        if not self.weight_only:
+            input_scale = self.get_activation_scaling_factor(input_observer_amax)
+            self.model.act_scales_dict[name] = input_scale
