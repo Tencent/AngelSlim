@@ -14,7 +14,7 @@ save_path: /path/to/smoothed_model        # Phase 2 output
 # ========== Phase 1: model loading / runtime ==========
 tp_size: 16
 batch_size: 4
-num_samples: 16
+num_samples: 512
 max_length: 16384
 distributed_executor_backend: ray
 skip_weight_loading: false
