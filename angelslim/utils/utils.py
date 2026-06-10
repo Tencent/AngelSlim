@@ -117,7 +117,7 @@ def get_best_device():
     if torch.backends.mps.is_available():
         return "mps"
     elif torch.cuda.is_available():
-        return "cuda:0"
+        return decide_device_for_distributed()
     elif torch.xpu.is_available():
         return "xpu:0"
     else:

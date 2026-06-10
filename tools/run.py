@@ -14,7 +14,12 @@
 
 import argparse
 import os
+import sys
 from datetime import timedelta
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 import torch
 import torch.distributed as dist
@@ -29,7 +34,7 @@ def get_args():
     parser.add_argument("-c", "--config", type=str, required=True)
     parser.add_argument("--model-path", type=str, default=None)
     parser.add_argument("--save-path", type=str, default=None)
-    parser.add_argument("--multi-nodes", action="store_true")
+    parser.add_argument("--multi-nodes", "--muti-nodes", dest="multi_nodes", action="store_true")
     parser.add_argument("--lm-eval", action="store_true")
     parser.add_argument("--lm-eval-task", nargs="+", default=["ceval-valid"])
     parser.add_argument("--ppl-eval", action="store_true")
@@ -97,7 +102,7 @@ def multi_nodes_run(config):
         use_audio_in_video=model_config.use_audio_in_video,
         attn_implementation=model_config.attn_implementation,
         deploy_backend=global_config.deploy_backend,
-        using_multi_nodes=True,
+        using_multi_nodes=model_config.enable_expert_parallel,
     )
 
     # Step 5: Prepare data (optional custom dataloader)
@@ -127,7 +132,10 @@ def multi_nodes_run(config):
     # Step 7: Compress model
     slim_engine.run()
 
-    # Step 8: Save compressed model
+    # Step 8: Convert model
+    slim_engine.convert()
+
+    # Step 9: Save compressed model
     slim_engine.save(global_config.save_path, config)
 
 
@@ -298,6 +306,46 @@ def _prewarm_hf_deepspeed_config(config):
     return trainer_args
 
 
+def _is_torchrun_launched():
+    return (
+        "LOCAL_RANK" in os.environ
+        or "RANK" in os.environ
+        or int(os.getenv("WORLD_SIZE", "1")) > 1
+    )
+
+
+def _get_available_gpu_count():
+    gpu_count = torch.cuda.device_count()
+    if gpu_count <= 0:
+        raise RuntimeError(
+            "enable_expert_parallel requires torchrun, but no available CUDA GPUs were detected."
+        )
+    return gpu_count
+
+
+def _auto_torchrun_for_expert_parallel(config, args):
+    if not config.model_config.enable_expert_parallel or _is_torchrun_launched():
+        return
+
+    nproc_per_node = _get_available_gpu_count()
+    cmd = [
+        sys.executable,
+        "-m",
+        "torch.distributed.run",
+        f"--nproc_per_node={nproc_per_node}",
+        os.path.abspath(__file__),
+        *sys.argv[1:],
+    ]
+    if not args.multi_nodes:
+        cmd.append("--multi-nodes")
+
+    print_info(
+        "enable_expert_parallel is enabled; relaunching with "
+        f"torchrun --nproc_per_node={nproc_per_node} --multi-nodes"
+    )
+    os.execv(sys.executable, cmd)
+
+
 def run(config):
     """
     Run the LLM compression process based on the provided configuration.
@@ -405,8 +453,9 @@ if __name__ == "__main__":
     parser = SlimConfigParser()
     config = parser.parse(args.config)
     merge_config(config, args)
+    _auto_torchrun_for_expert_parallel(config, args)
     print_config(config)
-    if args.multi_nodes:
+    if args.multi_nodes or config.model_config.enable_expert_parallel:
         multi_nodes_run(config)
     else:
         run(config)

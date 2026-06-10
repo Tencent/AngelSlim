@@ -63,7 +63,12 @@ class PTQ:
         if "gptq" in self.quant_algo or "gptaq" in self.quant_algo:
             max_seq_length = self.quant_model.quant_config.max_seq_length
             hidden_size = self.quant_model.quant_config.hidden_size
-            self.gptq = GPTQ(self.quant_model, seq_length=max_seq_length, hidden_size=hidden_size)
+            self.gptq = GPTQ(
+                self.quant_model,
+                seq_length=max_seq_length,
+                hidden_size=hidden_size,
+                actorder=self.quant_model.quant_config.quant_algo_info.get("actorder", True),
+            )
         elif "w4a8i8" in self.quant_algo:
             max_seq_length = self.quant_model.quant_config.max_seq_length
             hidden_size = self.quant_model.quant_config.hidden_size

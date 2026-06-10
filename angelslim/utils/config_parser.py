@@ -163,6 +163,7 @@ class ModelConfig:
     cache_dir: Optional[str] = field(default=None)
     use_audio_in_video: bool = field(default=False)
     attn_implementation: str = field(default="default")
+    enable_expert_parallel: bool = field(default=False)
 
 
 @dataclass

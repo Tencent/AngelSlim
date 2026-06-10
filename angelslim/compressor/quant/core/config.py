@@ -170,6 +170,9 @@ class QuantConfig:
             self.quant_algo_info = {
                 "group_size": group_size,
                 "ignore_layers": quantization_args.ignore_layers,
+                "checkpoint_format": "gptq",
+                "dequant_to_bf16": quantization_args.quant_method.get("dequant_to_bf16", False),
+                "actorder": quantization_args.quant_method.get("actorder", True),
             }
         elif "nvfp4" in self.quant_algo:
             is_dynamic = "dynamic" if "dynamic" in self.quant_algo else "static"
