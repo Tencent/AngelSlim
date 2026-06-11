@@ -257,68 +257,76 @@ class PTQ:
         self.set_meta_weights_info(self.quant_model.model)
         print_info(f"Meta weight:{self.get_meta_weights_info(self.quant_model.model)}")
 
-        # 1. get act, weight and kv-cache scale
-        for name, sub_layer in self.ptq_hook.quant_layers_dict.items():
-            if (
-                getattr(self.ptq_hook.observer_dict[sub_layer], "act_observer")  # noqa: B009
-                is not None
-            ):
-                try:
-                    self.quant_model.act_scales_dict[name] = self.ptq_hook.observer_dict[
+        # For nvfp4 weight-only, skip observer-based scale collection
+        # (scales are computed directly from weights in post_process)
+        is_nvfp4_weight_only = (
+            "nvfp4" in self.quant_algo
+            and self.quant_model.quant_config.quant_algo_info.get("weight_only", False)
+        )
+
+        if not is_nvfp4_weight_only:
+            # 1. get act, weight and kv-cache scale
+            for name, sub_layer in self.ptq_hook.quant_layers_dict.items():
+                if (
+                    getattr(self.ptq_hook.observer_dict[sub_layer], "act_observer")  # noqa: B009
+                    is not None
+                ):
+                    try:
+                        self.quant_model.act_scales_dict[name] = self.ptq_hook.observer_dict[
+                            sub_layer
+                        ].act_observer.scales()
+                    except ValueError:
+                        self.quant_model.act_scales_dict[name] = torch.tensor(
+                            1.0, device=torch.cuda.current_device()
+                        )
+                        warnings.warn(
+                            f"Not calibrated for {name}. Using default act scale 1.0.",
+                            RuntimeWarning,
+                            stacklevel=2,
+                        )
+                if (
+                    getattr(self.ptq_hook.observer_dict[sub_layer], "kv_cache_observer", None)
+                    is not None
+                ):
+                    self.quant_model.kv_cache_scales_dict[name] = self.ptq_hook.observer_dict[
                         sub_layer
-                    ].act_observer.scales()
-                except ValueError:
-                    self.quant_model.act_scales_dict[name] = torch.tensor(
-                        1.0, device=torch.cuda.current_device()
-                    )
-                    warnings.warn(
-                        f"Not calibrated for {name}. Using default act scale 1.0.",
-                        RuntimeWarning,
-                        stacklevel=2,
-                    )
-            if (
-                getattr(self.ptq_hook.observer_dict[sub_layer], "kv_cache_observer")  # noqa: B009
-                is not None
-            ):
-                self.quant_model.kv_cache_scales_dict[name] = self.ptq_hook.observer_dict[
-                    sub_layer
-                ].kv_cache_observer.scales()
-            if (
-                getattr(self.ptq_hook.observer_dict[sub_layer], "weight_observer")  # noqa: B009
-                is not None
-            ):
-                if sub_layer.weight.device.type == "meta":
-                    with open(
-                        os.path.join(self.absolute_model_path, "model.safetensors.index.json"),
-                        "r",
-                    ) as f:
-                        model_index = json.load(f)
-                    orign_w_file = os.path.join(
-                        self.absolute_model_path,
-                        model_index["weight_map"][name + ".weight"],
-                    )
-                    orign_w = load_file(orign_w_file, device="cpu")
-                    print_info(f"Load meta weight {name} from file {orign_w_file}")
-                    sub_layer.to_empty(device="cpu")
-                    sub_layer.weight.data = orign_w[name + ".weight"]
+                    ].kv_cache_observer.scales()
+                if (
+                    getattr(self.ptq_hook.observer_dict[sub_layer], "weight_observer", None)
+                    is not None
+                ):
+                    if sub_layer.weight.device.type == "meta":
+                        with open(
+                            os.path.join(self.absolute_model_path, "model.safetensors.index.json"),
+                            "r",
+                        ) as f:
+                            model_index = json.load(f)
+                        orign_w_file = os.path.join(
+                            self.absolute_model_path,
+                            model_index["weight_map"][name + ".weight"],
+                        )
+                        orign_w = load_file(orign_w_file, device="cpu")
+                        print_info(f"Load meta weight {name} from file {orign_w_file}")
+                        sub_layer.to_empty(device="cpu")
+                        sub_layer.weight.data = orign_w[name + ".weight"]
 
-                    if hasattr(sub_layer, "bias"):
-                        if (name + ".bias") in model_index["weight_map"]:
-                            orign_b_file = os.path.join(
-                                self.absolute_model_path,
-                                model_index["weight_map"][name + ".bias"],
-                            )
-                            orign_b = load_file(orign_b_file, device="cpu")
-                            print_info(f"Load meta bias {name} from file {orign_b_file}")
-                            sub_layer.bias.data = orign_b[name + ".bias"]
-                        else:
-                            print_info(f"{name + '.bias'} not found. Set bias to None.")
-                            sub_layer.bias = None
+                        if hasattr(sub_layer, "bias"):
+                            if (name + ".bias") in model_index["weight_map"]:
+                                orign_b_file = os.path.join(
+                                    self.absolute_model_path,
+                                    model_index["weight_map"][name + ".bias"],
+                                )
+                                orign_b = load_file(orign_b_file, device="cpu")
+                                print_info(f"Load meta bias {name} from file {orign_b_file}")
+                                sub_layer.bias.data = orign_b[name + ".bias"]
+                            else:
+                                print_info(f"{name + '.bias'} not found. Set bias to None.")
+                                sub_layer.bias = None
 
-                weight_scales = self.quant_model.get_weight_scales(
-                    sub_layer, self.ptq_hook.observer_dict[sub_layer].weight_observer
-                )
-                self.quant_model.weight_scales_dict[name] = weight_scales
+                    weight_scales = self.quant_model.get_weight_scales(
+                        sub_layer, self.ptq_hook.observer_dict[sub_layer].weight_observer
+                    )
+                    self.quant_model.weight_scales_dict[name] = weight_scales
 
         self.ptq_hook.remove_hook()
         torch.cuda.empty_cache()
@@ -326,7 +334,7 @@ class PTQ:
         self.ptq_hook.post_process()
 
         quant_convert_module = self.quant_model.get_quant_convert_module()
-        if "nvfp4" in self.quant_algo:
+        if "nvfp4" in self.quant_algo and not is_nvfp4_weight_only:
             self.quant_model.get_observer_values()
         # 2. insert qdq module
         for name, sub_layer in self.ptq_hook.quant_layers_dict.items():
@@ -334,7 +342,6 @@ class PTQ:
 
             if self.quant_model.quant_config.cpu_convert:
                 sub_layer = sub_layer.to("cpu")
-                print_info(f"Convert layer {name} on cpu")
             if "nvfp4" in self.quant_algo:
                 self.nvfp4.post_process(sub_layer, name)
                 qdq_module = self.quant_model.get_nvfp4_qdq_module(sub_layer, name)

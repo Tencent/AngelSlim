@@ -219,19 +219,28 @@ class HYV3MoE(BaseLLMModel):
         ]
 
         obs_layers = [nn.Linear]
-        observer_layers_dict = find_layers(self.model, layers=obs_layers)
+        layers_dict = find_layers(self.model, layers=obs_layers)
 
         compiled_patterns = [re.compile(pattern) for pattern in expert_pattern]
 
-        observer_layers_dict = {
-            k: v
-            for k, v in observer_layers_dict.items()
-            if k.startswith(self.block_name)
-            and (
+        ignore_patterns = self.skip_layer_names()
+        ignore_layers = []
+        observer_layers_dict = {}
+        for k, v in layers_dict.items():
+            if k.startswith(self.block_name) and (
                 any(name in k for name in names)
                 or any(pattern.search(k) for pattern in compiled_patterns)
-            )
-        }
+            ):
+                # Check if this layer should be ignored based on ignore_layers config
+                if any(pattern in k for pattern in ignore_patterns):
+                    ignore_layers.append(k)
+                else:
+                    observer_layers_dict[k] = v
+            else:
+                ignore_layers.append(k)
+
+        ignore_layers = sorted(list(set(ignore_layers)))
+        self.quant_config.quant_algo_info["ignore_layers"] = ignore_layers
 
         if self.quant_config.custom_observe_layers_names != "default":
             for custom_observe_name in self.quant_config.custom_observe_layers_names:

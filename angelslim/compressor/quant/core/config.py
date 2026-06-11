@@ -172,11 +172,17 @@ class QuantConfig:
                 "ignore_layers": quantization_args.ignore_layers,
             }
         elif "nvfp4" in self.quant_algo:
+            is_weight_only = "weight_only" in self.quant_algo
             is_dynamic = "dynamic" if "dynamic" in self.quant_algo else "static"
-            assert (
-                is_dynamic or act_quant_method is not None
-            ), "[Error] nvfp4 need act_quant_method"
-            self.act_observer = AbsmaxPertensorObserver if "static" in is_dynamic else None
+            if not is_weight_only:
+                assert (
+                    is_dynamic or act_quant_method is not None
+                ), "[Error] nvfp4 need act_quant_method"
+            self.act_observer = (
+                AbsmaxPertensorObserver
+                if (not is_weight_only and "static" in is_dynamic)
+                else None
+            )
             self.weight_observer = AbsmaxPertensorObserver
             self.kv_cache_observer = None
             block_size = (
@@ -189,9 +195,10 @@ class QuantConfig:
                 "w": f"nvfp4_{weight_quant_method}",
                 "ignore_layers": quantization_args.ignore_layers,
                 "block_size": block_size,
+                "weight_only": is_weight_only,
             }
 
-            if act_quant_method is not None:
+            if not is_weight_only and act_quant_method is not None:
                 self.quant_algo_info["a"] = f"nvfp4_{act_quant_method}-{is_dynamic}"
         elif "daq" in self.quant_algo:
             self.quant_algo_info = {
