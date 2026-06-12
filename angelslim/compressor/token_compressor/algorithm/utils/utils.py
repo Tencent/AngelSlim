@@ -32,6 +32,47 @@ def _get_config_attr(config: Any, attr_name: str, default: Any = None) -> Any:
     return getattr(config, attr_name, default)
 
 
+def resolve_num_tokens_to_keep(ratio: float, num_vision_tokens: int) -> int:
+    """Validate a pruning ``ratio`` and resolve how many vision tokens to keep.
+
+    Every pruning strategy turns a drop ``ratio`` into an absolute keep count via
+    ``round(num_vision_tokens * (1 - ratio))``. Centralizing it here guarantees a
+    single, consistent contract across all strategies:
+
+    * ``ratio`` must be a real number in the closed interval ``[0.0, 1.0]``.
+      Out-of-range values (e.g. a config typo such as ``ratio: 5``) used to flow
+      straight into the keep count: ``1 - ratio`` went negative, producing a
+      negative ``num_to_keep`` that crashed ``torch.empty`` / ``torch.topk`` or
+      silently corrupted the kept-token set. They now raise a descriptive error.
+    * At least one vision token is retained whenever ``ratio < 1.0`` and there is
+      a vision token available, so a benign rounding-to-zero never drops the whole
+      image. This makes the previously ad-hoc (and, in ``hiprune``, missing)
+      retain-one guard uniform.
+
+    Args:
+        ratio (float): Fraction of vision tokens to drop, in ``[0.0, 1.0]``.
+        num_vision_tokens (int): Number of vision tokens available to prune.
+
+    Returns:
+        int: The number of vision tokens to keep (always ``>= 0``).
+
+    Raises:
+        ValueError: If ``ratio`` is not a real number in ``[0.0, 1.0]``.
+    """
+    if isinstance(ratio, bool) or not isinstance(ratio, (int, float)):
+        raise ValueError(
+            "[TokenCompressor Error] 'ratio' must be a real number in [0.0, 1.0], "
+            f"got {ratio!r}."
+        )
+    if math.isnan(ratio) or not 0.0 <= ratio <= 1.0:
+        raise ValueError(f"[TokenCompressor Error] 'ratio' must be in [0.0, 1.0], got {ratio}.")
+
+    num_to_keep = int(round(num_vision_tokens * (1.0 - ratio)))
+    if ratio < 1.0 and num_to_keep == 0 and num_vision_tokens > 0:
+        num_to_keep = 1
+    return num_to_keep
+
+
 def identify_model_architecture(context: PruningContext) -> str:
     """
     Identifies the model architecture based on the context's model_config.
