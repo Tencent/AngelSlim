@@ -17,7 +17,10 @@ import math
 import torch
 
 from ..base.context import PruningContext
-from .utils.utils import _extract_and_validate_vision_token_info, resolve_num_tokens_to_keep
+from .utils.utils import (
+    _extract_and_validate_vision_token_info,
+    resolve_num_tokens_to_keep,
+)
 
 
 def special_token_based_attention_pruning(context: PruningContext, **kwargs) -> torch.Tensor:

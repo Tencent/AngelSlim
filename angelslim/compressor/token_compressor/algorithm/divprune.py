@@ -21,7 +21,10 @@ import torch
 import torch.nn.functional as F
 
 from ..base.context import PruningContext
-from .utils.utils import _extract_and_validate_vision_token_info, resolve_num_tokens_to_keep
+from .utils.utils import (
+    _extract_and_validate_vision_token_info,
+    resolve_num_tokens_to_keep,
+)
 
 
 def divprune(context: PruningContext, **kwargs) -> torch.Tensor:
