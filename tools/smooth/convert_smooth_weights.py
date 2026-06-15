@@ -627,8 +627,23 @@ def main():
         max_shard_size=f"{args.shard_size_gb}GB",
         safe_serialization=True,
     )
+
+    # copy config.json from source model_path to save_path
+    shutil.copy(
+        os.path.join(args.model_path, "config.json"), os.path.join(args.save_path, "config.json")
+    )
     print(f"  [Save] Model saved via save_pretrained to {args.save_path}")
 
+    #  check if generation_config.json exists in source model_path, if exists, copy it to save_path
+    if os.path.exists(os.path.join(args.model_path, "generation_config.json")):
+        shutil.copy(
+            os.path.join(args.model_path, "generation_config.json"),
+            os.path.join(args.save_path, "generation_config.json"),
+        )
+    else:
+        print(f"  [Save] generation_config.json not found in source model_path: {args.model_path}")
+        if os.path.exists(os.path.join(args.save_path, "generation_config.json")):
+            os.remove(os.path.join(args.save_path, "generation_config.json"))
     # ------------------------------------------------------------------
     # Step 4.1: Append keys present in the source but dropped on save
     # ------------------------------------------------------------------
