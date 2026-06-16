@@ -1,0 +1,6 @@
+{
+    "fsdp_sharding_strategy": "SHARD_GRAD_OP",
+    "fsdp_auto_wrap_policy": "NO_WRAP",
+    "fsdp_backward_prefetch": "backward_pre",
+    "fsdp_use_orig_params": true
+}

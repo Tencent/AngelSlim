@@ -327,7 +327,7 @@ class GPTQQuantLinear(nn.Module):
         zeros = zeros.t().contiguous()
         scale_zeros = zeros * scales
         self.scales = scales.clone().to(dtype=linear.weight.dtype)
-        if linear.bias is not None:
+        if getattr(linear, "bias", None) is not None:
             self.bias = linear.bias.clone().to(dtype=linear.weight.dtype)
 
         intweight = []

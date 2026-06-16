@@ -22,6 +22,9 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
 </p>
 
 ## 📣Latest News
+- [26/06/04] We have released **Stem**, a sparse attention algorithm that accelerates the **Prefill** stage of long-context LLMs by dynamically selecting top-k key blocks for block-sparse attention, significantly reducing latency while preserving generation quality. [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/stem.html)
+- [26/06/01] We have released **DFlare**, a block-diffusion speculative decoding framework with layer-wise fusion that achieves up to **5.52× end-to-end speedup**. [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/dflare.html)
+- [26/05/27] We have released **D-Cut**, an adaptive verification depth pruning technique for speculative decoding. [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/dcut.html)
 - [26/05/20] We support Distillation for full-precision HuggingFace models and **quantized QAT-style** models, as detailed in the [distillation documentation](https://angelslim.readthedocs.io/zh-cn/latest/features/distill/index.html). 
 - [26/05/08] We have released STQ1_0 kernel for 1.25-bit model and given a PR to llama.cpp [PR #22836](https://github.com/ggml-org/llama.cpp/pull/22836) ! If you have any questions or suggestions for STQ_0, welcome to comment under the PR !🔥🔥🔥
 - [26/04/29] We have released 2-bit and 1.25-bit versions of Tencent Hy-MT1.5-1.8B Translation Model: [Hy-MT1.5-1.8B-2bit](https://huggingface.co/AngelSlim/Hy-MT1.5-1.8B-2bit) and [Hy-MT1.5-1.8B-1.25bit](https://huggingface.co/AngelSlim/Hy-MT1.5-1.8B-1.25bit). Additionally, we have make an [offline translation demo](https://huggingface.co/AngelSlim/Hy-MT1.5-1.8B-1.25bit/blob/main/Hy-MT-demo.apk) for you to try out. We invite you to give it a spin! 🔥🔥🔥
@@ -91,6 +94,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
         <ul style="padding-left: 0; list-style-position: inside;">
           <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html">Eagle3</a></li>
           <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html">SpecExit</a></li>
+          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/dflare.html">DFlare</a></li>
         </ul>
       </td>
       <td>
@@ -134,6 +138,12 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
+          <li>
+            <strong>Sparse Attention</strong>
+            <ul style="padding-left: 1.5rem">
+              <li><a href="https://github.com/anminliu/VecAttention">VecAttention</a></li>
+            </ul>
+          </li>
           <li>
             <strong>Token Pruning</strong>
             <ul style="padding-left: 1.5rem">

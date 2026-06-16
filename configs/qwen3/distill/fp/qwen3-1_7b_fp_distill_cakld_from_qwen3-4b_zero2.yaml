@@ -1,6 +1,5 @@
 global:
   save_path: ./output_qwen3_1_7b_fp_distill_from_qwen3_4b_zero2
-
 model:
   name: Qwen
   model_path: Qwen/Qwen3-1.7B
@@ -9,7 +8,6 @@ model:
   device_map: None
   low_cpu_mem_usage: true
   use_cache: false
-
 compression:
   name: Distill
   Distill:
@@ -34,18 +32,17 @@ compression:
       logging_first_step: true
       per_device_train_batch_size: 1
       gradient_accumulation_steps: 1
-      learning_rate: 1.0e-5
+      learning_rate: 1.0e-05
       lr_scheduler_type: cosine
       num_train_epochs: 1
       max_steps: 5
-      save_strategy: "no"
+      save_strategy: 'no'
       warmup_ratio: 0.0
       max_grad_norm: 1.0
       gradient_checkpointing: true
       gradient_checkpointing_kwargs:
         use_reentrant: true
-      deepspeed: configs/qwen3/distill/w4a8_fp8/ds_config_zero2.json
-
+      deepspeed: configs/qwen3/distill/fp/ds_config_zero2.json
 dataset:
   name: TextDataset
   data_path: Salesforce/wikitext,wikitext-2-raw-v1

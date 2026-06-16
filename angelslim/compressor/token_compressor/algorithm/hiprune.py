@@ -25,6 +25,7 @@ from .utils.utils import (
     _extract_and_validate_vision_token_info,
     _recompute_attention_maps_for_all_images,
     identify_model_architecture,
+    resolve_num_tokens_to_keep,
 )
 
 
@@ -119,9 +120,7 @@ def hiprune_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
         deep_score = deep_score.squeeze(0)
         N = shallow_score.shape[0]
 
-        target_k = int(round(N * (1.0 - ratio)))
-        if ratio < 1.0 and target_k == 0 and N > 0:
-            target_k = 1
+        target_k = resolve_num_tokens_to_keep(ratio, N)
 
         if target_k >= N:
             all_kept_indices_global.append(global_idx_map)

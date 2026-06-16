@@ -49,7 +49,15 @@ $$\text{score}(Q_i, K_j) = \frac{Q_i \cdot K_j^T}{\sqrt{d} \cdot s \cdot n} + \l
 | **HPC 精度** | bf16（dense prefill）、fp8（block-sparse prefill，varlen / paged） |
 | **序列长度** | 无上限，建议 4K+ tokens 以体现加速效果 |
 
-## 4. 快速开始
+## 4. 性能评测
+
+我们在长上下文与 Agent 类任务上评测了 Stem 的精度保持能力。在 **FP8-W8A8 + Stem** 配置下，模型在 LongBench v2、CL-bench、CL-bench Life、SWE-bench Verified、Terminal-Bench 2.0、ClawEval 等多个 benchmark 上的得分与 BF16 基线基本持平，部分任务（如 ClawEval）甚至略有提升，验证了 Stem 稀疏注意力在大幅加速 Prefill 的同时几乎无损模型质量。
+
+:::{image} /assets/stem/benchmark.png
+:alt: Stem 在多个 benchmark 上的精度对比（BF16 vs FP8-W8A8+Stem）。
+:::
+
+## 5. 快速开始
 
 确保已安装 AngelSlim（`pip install -e .` 或 `uv sync`），然后在项目根目录运行：
 
@@ -105,7 +113,7 @@ python tools/run_stem.py \
 bash scripts/sparsity/run_stem.sh /path/to/Qwen3-8B prompt.txt stem
 ```
 
-## 5. 参数说明
+## 6. 参数说明
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
@@ -120,7 +128,7 @@ bash scripts/sparsity/run_stem.sh /path/to/Qwen3-8B prompt.txt stem
 | `initial_blocks` | `4` | 始终保留的头部 block 数量（sink tokens） |
 | `window_size` | `4` | sliding window 保留的尾部 block 数量 |
 
-## 6. 代码结构
+## 7. 代码结构
 
 ```
 angelslim/compressor/sparsity/
@@ -143,7 +151,7 @@ tools/run_stem.py                            # 推理入口
 scripts/sparsity/run_stem.sh             # 启动脚本
 ```
 
-## 7. Python API
+## 8. Python API
 
 ```python
 from angelslim.compressor.sparsity import StemInference

@@ -8,4 +8,6 @@
 
 eagle/index
 spec_exit
+dcut
+dflare
 :::

@@ -25,9 +25,56 @@ from .omni_dataset import OmniDataset
 from .text2image_dataset import Text2ImageDataset
 from .text_dataset import TextDataset
 
+# Canonical dataset identifiers accepted by ``create_data_loader``.
+SUPPORTED_DATA_TYPES = (
+    "TextDataset",
+    "MultiModalDataset",
+    "Text2ImageDataset",
+    "OmniDataset",
+    "AudioDataset",
+)
+
+# Friendly aliases (including the values produced by ``"auto"`` detection and
+# the short names documented in ``create_data_loader``) mapped to their
+# canonical dataset identifier.
+DATA_TYPE_ALIASES = {
+    "text": "TextDataset",
+    "multimodal": "MultiModalDataset",
+    "text2image": "Text2ImageDataset",
+    "omni": "OmniDataset",
+    "audio": "AudioDataset",
+}
+
 
 class DataLoaderFactory:
     """Factory for creating PyTorch DataLoaders from various data sources"""
+
+    @staticmethod
+    def _resolve_data_type(data_type: str, data_source: Union[str, Dict]) -> str:
+        """Resolve a user-supplied ``data_type`` to a canonical dataset id.
+
+        Handles ``"auto"`` detection and normalizes the documented short
+        aliases (``"text"``, ``"multimodal"``, ...) to the dataset class names
+        used by the dispatch in :meth:`create_data_loader`. Raises a clear
+        ``ValueError`` for anything unrecognized.
+        """
+        if data_type == "auto":
+            if isinstance(data_source, str) and (
+                ".parquet" in data_source.lower() or ".json" in data_source.lower()
+            ):
+                data_type = "text"
+            else:
+                data_type = "multimodal"
+
+        data_type = DATA_TYPE_ALIASES.get(data_type, data_type)
+
+        if data_type not in SUPPORTED_DATA_TYPES:
+            raise ValueError(
+                f"Unsupported data type: {data_type}. Expected one of "
+                f"{list(SUPPORTED_DATA_TYPES)}, an alias in "
+                f"{sorted(DATA_TYPE_ALIASES)}, or 'auto'."
+            )
+        return data_type
 
     @staticmethod
     def create_data_loader(
@@ -58,7 +105,11 @@ class DataLoaderFactory:
             shuffle: Whether to shuffle data
             num_samples: Limit number of samples (-1 for all)
             data_source: File path or HF dataset dict
-            data_type: "text", "multimodal" or "auto"
+            data_type: a canonical dataset id (one of
+                ``TextDataset``, ``MultiModalDataset``, ``Text2ImageDataset``,
+                ``OmniDataset``, ``AudioDataset``), a short alias
+                (``text``, ``multimodal``, ``text2image``, ``omni``, ``audio``)
+                or ``auto`` to infer from ``data_source``
             num_workers: Number of workers for DataLoader
             inference_settings: Settings for text-to-image inference
                 - height: Image height
@@ -70,14 +121,8 @@ class DataLoaderFactory:
         Returns:
             PyTorch DataLoader ready for use
         """
-        # Auto detect data type if not specified
-        if data_type == "auto":
-            if isinstance(data_source, str) and (
-                ".parquet" in data_source.lower() or ".json" in data_source
-            ):
-                data_type = "text"
-            else:
-                data_type = "multimodal"
+        # Resolve "auto" detection and documented aliases to a canonical id
+        data_type = DataLoaderFactory._resolve_data_type(data_type, data_source)
 
         # Create appropriate dataset
         if data_type == "TextDataset":

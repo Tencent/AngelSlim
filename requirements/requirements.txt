@@ -13,3 +13,4 @@ threadpoolctl
 shortuuid
 accelerate
 lm_eval
+ray

@@ -43,6 +43,7 @@ class GPTQModule:
         self.quant_bits = quant_bits
 
     def add_batch(self, inp, out):
+        # Handle 4D input (e.g., Conv2d or multi-head attention internals)
         if len(inp.shape) == 4:
             inp = inp[0, 0, :, :]
         if len(inp.shape) == 3 and inp.shape[0] == 1:
@@ -52,10 +53,12 @@ class GPTQModule:
         tmp = inp.shape[0]
         if len(inp.shape) == 3:
             inp = inp.reshape((-1, inp.shape[-1]))
+        inp = inp.float()
+        tmp = inp.shape[0]  # number of tokens
         inp = inp.t()
         self.h *= self.nsamples / (self.nsamples + tmp)
         self.nsamples += tmp
-        inp = math.sqrt(2 / self.nsamples) * inp.float()
+        inp = math.sqrt(2 / self.nsamples) * inp
         self.h += inp.matmul(inp.t())
 
     def compute_quant_params(self, x, bits, sym):

@@ -21,7 +21,10 @@ from typing import Callable, Union
 import torch
 
 from ..base.context import PruningContext
-from .utils.utils import _extract_and_validate_vision_token_info
+from .utils.utils import (
+    _extract_and_validate_vision_token_info,
+    resolve_num_tokens_to_keep,
+)
 from .utils.vision_selector_utils import get_universal_selector_scores
 
 
@@ -105,9 +108,7 @@ def idpruner(context: PruningContext, **kwargs) -> torch.Tensor:
         keep_mask_single = torch.ones_like(ids_single, dtype=torch.bool)
 
         if N > 0:
-            num_to_keep = int(round(N * (1.0 - ratio)))
-            if ratio < 1.0 and num_to_keep == 0:
-                num_to_keep = 1
+            num_to_keep = resolve_num_tokens_to_keep(ratio, N)
 
             if num_to_keep < N:
                 keep_mask_single = torch.zeros_like(ids_single, dtype=torch.bool)

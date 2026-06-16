@@ -14,9 +14,9 @@
 
 """DFlash Draft Model for Qwen3 architecture.
 
-Migrated from SpecForge's specforge/modeling/draft/dflash.py.
-Uses cross-attention between draft blocks and context hidden states,
-fundamentally different from Eagle3's concat + self-attention approach.
+AngelSlim DFlash draft model using cross-attention between draft blocks and
+context hidden states from the target model — fundamentally different from
+Eagle3's concat + self-attention approach.
 """
 
 from typing import Callable, List, Optional, Tuple

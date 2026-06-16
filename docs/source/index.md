@@ -134,6 +134,7 @@ features/sparse_attention/index
 features/token_compressor/index
 features/diffusion/index
 features/distill/index
+features/qad/index
 :::
 
 % Additional capabilities

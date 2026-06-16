@@ -127,14 +127,43 @@ class TextDataset(BaseDataset):
                     or "input" in data
                     or "conversations" in data
                     or "applied_message" in data
+                    "messages" in data
+                    or "input" in data
+                    or "conversations" in data
+                    or "applied_message" in data
                 ), "JSON format error"
 
-                prompt_len = 0
+                # Fast path for data that has already been chat-templated.
+                # `applied_message` is a single string that the producer
+                # generated via `apply_chat_template(...)` ahead of time;
+                # we just tokenize it as-is and skip all message / chat-
+                # template / thinking-mode logic below.
                 if "applied_message" in data:
-                    full_text = data["applied_message"]
-                else:
-                    # Prepare messages
-                    messages = self._prepare_messages(data)
+                    text = data["applied_message"]
+                    model_inputs = self.processor(
+                        text=[text],
+                        return_tensors="pt",
+                        max_length=self.max_length,
+                        truncation=True,
+                        padding="max_length",
+                    )
+                    input_ids = model_inputs["input_ids"]
+                    attention_mask = model_inputs["attention_mask"]
+                    labels = input_ids.clone()
+                    # Mask padding tokens; HF CausalLM shifts labels itself.
+                    labels[attention_mask == 0] = -100
+                    self.data.append(
+                        {
+                            "input_ids": input_ids.to(self.device),
+                            "attention_mask": attention_mask.to(self.device),
+                            "labels": labels.to(self.device),
+                        }
+                    )
+                    line_count += 1
+                    continue
+
+                # Prepare messages
+                messages = self._prepare_messages(data)
 
                     # Find the LAST assistant turn — loss is computed ONLY on
                     # this reply. Everything before it (system + user(s) +

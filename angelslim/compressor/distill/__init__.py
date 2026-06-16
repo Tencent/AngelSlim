@@ -13,5 +13,6 @@
 # limitations under the License.
 
 from .distill import Distill  # noqa: F401
+from .loss import DistillLoss  # noqa: F401
 
-__all__ = ["Distill"]
+__all__ = ["Distill", "DistillLoss"]

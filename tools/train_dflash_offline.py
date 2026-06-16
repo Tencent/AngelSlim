@@ -97,6 +97,17 @@ def parse_args():
     m.add_argument("--trust_remote_code", action="store_true", default=True)
     m.add_argument("--embed_weight_key", type=str, default="model.embed_tokens.weight")
     m.add_argument("--lm_head_key", type=str, default="lm_head.weight")
+    m.add_argument(
+        "--draft_arch",
+        type=str,
+        default=None,
+        choices=["dflash", "dflare"],
+        help=(
+            "Override draft model architecture. If unset, uses the "
+            "'architectures' field from the draft_model_config JSON. "
+            "'dflash' -> QwenDFlashDraftModel, 'dflare' -> QwenDFlareDraftModel."
+        ),
+    )
 
     # DFlash-specific (override values in config JSON)
     d = parser.add_argument_group("DFlash Arguments")
@@ -160,6 +171,44 @@ def parse_args():
     t.add_argument("--fp16", action="store_true")
     t.add_argument("--bf16", action="store_true")
     t.add_argument("--deepspeed", type=str, default=None)
+    t.add_argument(
+        "--fsdp",
+        type=str,
+        default="",
+        help="FSDP configuration string passed to TrainingArguments "
+        "(e.g. 'shard_grad_op auto_wrap'). Empty disables FSDP.",
+    )
+    t.add_argument(
+        "--fsdp_config",
+        type=str,
+        default=None,
+        help="Path to FSDP config JSON file (consumed by TrainingArguments).",
+    )
+    t.add_argument(
+        "--dataloader_drop_last",
+        action="store_true",
+        default=False,
+        help=(
+            "Drop last incomplete batch. Note: when using DFlash trainer this "
+            "is forced True internally to avoid FSDP shape mismatches on the "
+            "trailing batch."
+        ),
+    )
+    t.add_argument(
+        "--gamma_warmup",
+        action="store_true",
+        default=False,
+        help=(
+            "Enable gamma warmup. When set, loss_decay_gamma is increased "
+            "per epoch as: gamma = loss_decay_gamma + gamma_warmup_step * epoch."
+        ),
+    )
+    t.add_argument(
+        "--gamma_warmup_step",
+        type=float,
+        default=0.5,
+        help="Per-epoch increment for gamma warmup. Default 0.5.",
+    )
     t.add_argument("--report_to", type=str, default="none")
     t.add_argument("--run_name", type=str, default=None)
     t.add_argument("--training_time_test_length", type=int, default=7)
@@ -216,6 +265,22 @@ def train():
     draft_model_config.embed_weight_key = args.embed_weight_key
     draft_model_config.trust_remote_code = args.trust_remote_code
 
+    # Optionally override draft architecture from CLI. Both DFlash and DFlare
+    # share the same Qwen3Config schema (block_size, dflash_config, etc.), so
+    # swapping the architectures field is sufficient to route create_draft_model
+    # to the desired class.
+    if args.draft_arch is not None:
+        arch_map = {
+            "dflash": "QwenDFlashDraftModel",
+            "dflare": "QwenDFlareDraftModel",
+        }
+        new_arch = arch_map[args.draft_arch]
+        rank0_print(
+            f"Overriding draft architecture: "
+            f"{getattr(draft_model_config, 'architectures', None)} -> [{new_arch}]"
+        )
+        draft_model_config.architectures = [new_arch]
+
     # Override DFlash params from CLI if specified
     if args.block_size is not None:
         draft_model_config.block_size = args.block_size
@@ -223,6 +288,10 @@ def train():
         draft_model_config.num_anchors = args.num_anchors
     if args.loss_decay_gamma is not None:
         draft_model_config.loss_decay_gamma = args.loss_decay_gamma
+    # Always propagate gamma_warmup flags to the draft model config so the
+    # trainer can pick them up regardless of CLI defaults.
+    draft_model_config.gamma_warmup = args.gamma_warmup
+    draft_model_config.gamma_warmup_step = args.gamma_warmup_step
     if args.attention_backend is not None:
         draft_model_config.attention_backend = args.attention_backend
         draft_model_config._attn_implementation = args.attention_backend
@@ -264,7 +333,7 @@ def train():
     # ------------------------------------------------------------------
     # 4. TrainingArguments
     # ------------------------------------------------------------------
-    training_args = transformers.TrainingArguments(
+    ta_kwargs = dict(
         output_dir=args.output_dir,
         num_train_epochs=args.num_train_epochs,
         per_device_train_batch_size=args.per_device_train_batch_size,
@@ -288,8 +357,16 @@ def train():
         report_to=args.report_to,
         run_name=args.run_name,
         deepspeed=args.deepspeed,
+        fsdp=args.fsdp,
+        # Force drop_last=True (AngelSlim default) to avoid FSDP shape
+        # mismatches on the trailing batch.
+        dataloader_drop_last=True,
         remove_unused_columns=False,
     )
+    if args.fsdp_config:
+        ta_kwargs["fsdp_config"] = args.fsdp_config
+
+    training_args = transformers.TrainingArguments(**ta_kwargs)
 
     # ------------------------------------------------------------------
     # 5. Trainer -- use Eagle3TrainerFactory

@@ -17,7 +17,7 @@ from collections import defaultdict
 import torch
 from transformers import Seq2SeqTrainer
 
-from ..qat.plugins.distill_loss import DistillLoss
+from .loss import DistillLoss
 
 
 class DistillSeq2SeqTrainer(Seq2SeqTrainer):
