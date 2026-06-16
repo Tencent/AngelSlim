@@ -21,9 +21,13 @@ import platform
 from vllm import LLM, SamplingParams
 
 from angelslim.compressor.quant import (  # Per-head KV-cache pipeline
+    KVMSEProfileCollector,
+    KVPerHeadMSEProfileCollector,
     KVScaleSearcher,
     KVScaleSearcherPerHead,
     get_activation_stats,
+    get_kv_mse_profile_results,
+    get_kv_mse_profile_results_perhead,
     get_kv_scale_search_results,
     get_kv_scale_search_results_perhead,
     get_kvcache_perhead_stats,
@@ -45,6 +49,8 @@ from angelslim.compressor.quant import (  # Per-head KV-cache pipeline
     setup_mtp_activation_hooks,
 )
 from angelslim.engine import Engine
+from angelslim.utils import run_vllm_calibration_with_dp
+from angelslim.utils import validate_vllm_calibration_dp_args
 
 # =============================================================================
 # Helper functions to access draft (MTP) model via collective_rpc
@@ -95,6 +101,33 @@ def _patched_python_version():
 
 
 platform.python_version = _patched_python_version
+
+
+def shard_prompts(
+    prompts: list[str],
+    dp_rank: int,
+    dp_size: int,
+) -> list[str]:
+    if not prompts:
+        raise ValueError("No calibration prompts were prepared.")
+
+    if dp_size == 1:
+        return prompts
+
+    if len(prompts) < dp_size:
+        raise ValueError(
+            f"Number of prompts ({len(prompts)}) "
+            f"is smaller than dp_size ({dp_size})."
+        )
+
+    shard = prompts[dp_rank::dp_size]
+    if not shard:
+        raise RuntimeError(
+            f"DP rank {dp_rank} received an empty shard."
+        )
+
+    return shard
+
 
 
 def parse_args():
@@ -161,6 +194,52 @@ def parse_args():
         default="ray",
         choices=["ray", "mp"],
         help="Distributed executor backend (default: ray)",
+    )
+    parser.add_argument(
+        "--ray-address",
+        type=str,
+        default=None,
+        help="Ray cluster address used by the top-level DP launcher. Defaults to the "
+        "RAY_ADDRESS environment variable or 'auto'.",
+    )
+    parser.add_argument(
+        "--placement-strategy",
+        type=str,
+        default="STRICT_PACK",
+        choices=["STRICT_PACK", "PACK", "SPREAD", "STRICT_SPREAD"],
+        help="Ray placement-group strategy used by the top-level DP launcher when "
+        "placing one TP replica per vLLM instance.",
+    )
+
+    # Data-Parallel configuration
+
+    parser.add_argument(
+        "--dp-size",
+        type=int,
+        default=1,
+        help="Calibration data parallel size (default: 1). When > 1, Ray Data "
+        "creates one vLLM calibration actor per DP replica.",
+    )
+    parser.add_argument(
+        "--dp-timeout",
+        type=int,
+        default=7200,
+        help="Seconds to wait for Ray Data-managed DP workers before failing "
+        "(default: 7200).",
+    )
+    parser.add_argument(
+        "--dp-num-nodes",
+        type=int,
+        default=1,
+        help="Legacy compatibility knob. Ray Data-managed DP launches all replicas "
+        "from one driver process, so this must stay 1.",
+    )
+    parser.add_argument(
+        "--dp-node-rank",
+        type=int,
+        default=0,
+        help="Legacy compatibility knob. Ray Data-managed DP launches all replicas "
+        "from one driver process, so this must stay 0.",
     )
 
     # MTP (Multi-Token Prediction) configuration
@@ -259,7 +338,7 @@ def parse_args():
             + ", ".join("--" + n.replace("_", "-") for n in missing)
         )
 
-    return args
+    return validate_vllm_calibration_dp_args(parser, args)
 
 
 def save_stats_to_json(
@@ -295,10 +374,13 @@ def save_stats_to_json(
     print(f"\n{stats_type.capitalize()} saved to: {output_file}")
 
 
-def main():
-    """Main function to run calibration."""
-    args = parse_args()
+def run_one_calibration(args, llm=None, return_llm: bool = False):
+    """Run one calibration worker (single-process or one DP rank).
 
+    When ``llm`` is provided, reuse the existing vLLM instance instead of
+    loading the model again. ``return_llm`` is used by the DP actor to keep the
+    first-stage instance alive locally for the second-stage KV search.
+    """
     # Verify environment variables are set
     print(f"VLLM_MOE_COLLECT_STATS: {os.environ.get('VLLM_MOE_COLLECT_STATS')}")
     print("\nConfiguration:")
@@ -306,6 +388,8 @@ def main():
     print(f"  PTQ Data: {args.ptq_data_path}")
     print(f"  Output Dir: {args.output_dir}")
     print(f"  TP Size: {args.tp_size}")
+    print(f"  DP Size: {args.dp_size}")
+    print(f"  DP Rank: {getattr(args, 'dp_rank', 0)}")
     print(f"  Batch Size: {args.batch_size}")
     print(f"  Num Samples: {args.num_samples}")
     print(f"  Skip Weight Loading: {args.skip_weight_loading}")
@@ -322,29 +406,40 @@ def main():
     else:
         print("  MTP Enabled: False")
 
-    # Create LLM instance
-    llm = LLM(
-        model=args.model_path,
-        load_format="dummy" if args.skip_weight_loading else "auto",
-        disable_log_stats=False,
-        enforce_eager=True,
-        enable_chunked_prefill=True,
-        max_num_batched_tokens=16384,
-        gpu_memory_utilization=0.75,
-        tensor_parallel_size=args.tp_size,
-        distributed_executor_backend=args.distributed_executor_backend,
-        enable_expert_parallel=False,
-        max_num_seqs=args.batch_size,
-        max_model_len=args.max_length + 16,
-        speculative_config=speculative_config,
-        # Force the Triton MoE backend so the AngelSlim fused_moe.py patch
-        # (which inserts collect_fused_moe_internal_stats hooks inside
-        # fused_experts_impl) is actually exercised. Without this vLLM may
-        # auto-select FlashInfer CUTLASS / TRTLLM, which run the entire
-        # gate_up -> activation -> down_proj pipeline inside a single
-        # opaque C++ kernel and bypass our Python-level hooks.
-        moe_backend="triton",
-    )
+    # Environment variables should be set in the shell script for consistency
+    # For DP calibration, they are passed through Ray runtime_env
+    # For single DP (dp_size=1), they should be inherited from the shell environment
+    # Only set VLLM_ALLOW_INSECURE_SERIALIZATION if it's not already set
+    if "VLLM_ALLOW_INSECURE_SERIALIZATION" not in os.environ:
+        os.environ["VLLM_ALLOW_INSECURE_SERIALIZATION"] = "1"
+        print(f"  Set VLLM_ALLOW_INSECURE_SERIALIZATION=1 (not set in environment)")
+
+    if llm is None:
+        print("\nCreating vLLM instance...")
+        llm = LLM(
+            model=args.model_path,
+            load_format="dummy" if args.skip_weight_loading else "auto",
+            disable_log_stats=False,
+            enforce_eager=True,
+            enable_chunked_prefill=True,
+            max_num_batched_tokens=16384,
+            gpu_memory_utilization=0.75,
+            tensor_parallel_size=args.tp_size,
+            distributed_executor_backend=args.distributed_executor_backend,
+            enable_expert_parallel=False,
+            max_num_seqs=args.batch_size,
+            max_model_len=args.max_length + 16,
+            speculative_config=speculative_config,
+            # Force the Triton MoE backend so the AngelSlim fused_moe.py patch
+            # (which inserts collect_fused_moe_internal_stats hooks inside
+            # fused_experts_impl) is actually exercised. Without this vLLM may
+            # auto-select FlashInfer CUTLASS / TRTLLM, which run the entire
+            # gate_up -> activation -> down_proj pipeline inside a single
+            # opaque C++ kernel and bypass our Python-level hooks.
+            moe_backend="triton",
+        )
+    else:
+        print("\nReusing existing vLLM instance for this stage.")
 
     if args.skip_weight_loading:
         print("\n" + "!" * 80)
@@ -352,6 +447,116 @@ def main():
         print("Outputs will NOT make sense. This is for debugging only.")
         print("Use --skip-weight-loading flag to enable this mode.")
         print("!" * 80 + "\n")
+
+    if getattr(args, "kv_search_only", False):
+        print("\n" + "=" * 80)
+        print("Running KV-cache scale search profile collection only...")
+        print("=" * 80)
+
+        activation_stats_path = getattr(args, "kv_search_activation_stats_path", None)
+        if not activation_stats_path:
+            raise ValueError("kv_search_activation_stats_path is required in kv_search_only mode")
+        with open(activation_stats_path, "r", encoding="utf8") as f:
+            activation_stats = json.load(f)
+        print(f"Loaded merged activation stats from: {activation_stats_path}")
+
+        tokenizer = llm.get_tokenizer()
+        slim_engine = Engine()
+        slim_engine.series = "LLM"
+        from types import SimpleNamespace
+
+        slim_engine.slim_model = SimpleNamespace(
+            tokenizer=tokenizer,
+            model=SimpleNamespace(device="cpu"),
+        )
+        dataset = slim_engine.prepare_data(
+            data_path=args.ptq_data_path,
+            max_length=args.max_length,
+            num_samples=args.num_samples,
+            shuffle=False,
+            inference_settings=None,
+            use_audio_in_video=False,
+        )
+        all_prompts = [tokenizer.decode(data["input_ids"][0]) for data in dataset]
+        search_prompt_pool = all_prompts[: args.search_kv_num_samples]
+        search_prompts = shard_prompts(
+            search_prompt_pool,
+            dp_rank=getattr(args, "dp_rank", 0),
+            dp_size=args.dp_size,
+        )
+        print(
+            f"[DP {getattr(args, 'dp_rank', 0)}/{args.dp_size}] "
+            f"total_prompts={len(all_prompts)}, "
+            f"global_search_prompts={len(search_prompt_pool)}, "
+            f"local_search_prompts={len(search_prompts)}"
+        )
+
+        os.makedirs(args.output_dir, exist_ok=True)
+        payload = {}
+
+        if args.kv_granularity == "per-tensor":
+            print("\nRegistering KV-value capture hooks...")
+            hook_results = llm.apply_model(setup_kvcache_value_hooks)
+            for i, result in enumerate(hook_results):
+                print(f"  Worker {i}: {result}")
+
+            llm.generate(
+                search_prompts,
+                SamplingParams(temperature=0.8, top_p=0.95, max_tokens=1),
+            )
+
+            collector = KVMSEProfileCollector(
+                activation_stats=activation_stats,
+                min_multiplier=args.search_kv_min_multiplier,
+                max_multiplier=args.search_kv_max_multiplier,
+                num_steps=args.search_kv_num_steps,
+            )
+            profile_results = llm.apply_model(collector)
+            kv_profiles = get_kv_mse_profile_results(profile_results)
+            llm.apply_model(remove_kv_scale_search_hooks)
+
+            profiles_path = os.path.join(args.output_dir, "kv_scale_mse_profiles.json")
+            with open(profiles_path, "w", encoding="utf8") as f:
+                json.dump(kv_profiles, f, indent=2)
+            print(f"KV-cache local MSE profiles saved to: {profiles_path}")
+            payload["kv_scale_mse_profiles.json"] = kv_profiles
+
+        elif args.kv_granularity == "per-head":
+            print("\nRegistering per-head KV-value capture hooks...")
+            hook_results = llm.apply_model(setup_kvcache_perhead_value_hooks)
+            for i, result in enumerate(hook_results):
+                print(f"  Worker {i}: {result}")
+
+            llm.generate(
+                search_prompts,
+                SamplingParams(temperature=0.8, top_p=0.95, max_tokens=1),
+            )
+
+            collector_ph = KVPerHeadMSEProfileCollector(
+                activation_stats=activation_stats,
+                min_multiplier=args.search_kv_min_multiplier,
+                max_multiplier=args.search_kv_max_multiplier,
+                num_steps=args.search_kv_num_steps,
+            )
+            profile_results_ph = llm.apply_model(collector_ph)
+            kv_profiles_perhead = get_kv_mse_profile_results_perhead(profile_results_ph)
+            llm.apply_model(remove_kvcache_perhead_value_hooks)
+
+            profiles_ph_path = os.path.join(
+                args.output_dir,
+                "kv_scale_mse_profiles_per_head.json",
+            )
+            with open(profiles_ph_path, "w", encoding="utf8") as f:
+                json.dump(kv_profiles_perhead, f, indent=2)
+            print(f"Per-head KV-cache local MSE profiles saved to: {profiles_ph_path}")
+            payload["kv_scale_mse_profiles_per_head.json"] = kv_profiles_perhead
+
+        else:
+            print("KV search skipped because kv_granularity=none")
+
+        if return_llm:
+            return payload, llm
+        return payload
 
     # Setup activation hooks on all workers
     # kv_granularity controls which KV hooks are registered alongside Linear hooks:
@@ -413,9 +618,13 @@ def main():
     slim_engine = Engine()
     slim_engine.slim_model = llm
     slim_engine.series = "LLM"
-    slim_engine.slim_model.tokenizer = tokenizer
-    slim_engine.slim_model.model = llm
-    slim_engine.slim_model.model.device = "cpu"
+    from types import SimpleNamespace
+    slim_engine.slim_model = SimpleNamespace(
+        tokenizer=tokenizer,
+        model=SimpleNamespace(
+            device="cpu",
+        ),
+    )
     dataset = slim_engine.prepare_data(
         data_path=args.ptq_data_path,
         max_length=args.max_length,
@@ -425,8 +634,23 @@ def main():
         use_audio_in_video=False,
     )
 
-    prompts = [tokenizer.decode(data["input_ids"][0]) for data in dataset]
-    print(f"Loaded {len(prompts)} prompts from dataset")
+    all_prompts = [tokenizer.decode(data["input_ids"][0]) for data in dataset]
+    print(f"Loaded {len(all_prompts)} prompts from dataset before DP sharding")
+    
+    # Apply DP sharding
+    prompts = shard_prompts(
+        all_prompts,
+        dp_rank=getattr(args, "dp_rank", 0),
+        dp_size=args.dp_size,
+    )
+    
+    # prompts = prompts[:10]
+    # prompts = prompts[-10:]
+    print(
+        f"[DP {getattr(args, 'dp_rank', 0)}/{args.dp_size}] "
+        f"total_prompts={len(all_prompts)}, "
+        f"local_prompts={len(prompts)}"
+    )
 
     # Create sampling params (fixed values for calibration)
     # When MTP is enabled, we need to generate more tokens to trigger
@@ -496,11 +720,15 @@ def main():
     # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
 
+    payload = {}
+
     # Save activation statistics
     stats_list = llm.apply_model(get_activation_stats)
     save_stats_to_json(
         stats_list, args.output_dir, "activation_stats.json", stats_type="activation statistics"
     )
+    if stats_list and stats_list[0] is not None:
+        payload["activation_stats.json"] = stats_list[0]
 
     # Save MoE expert statistics
     moe_stats_dict = llm.apply_model(get_moe_stats)
@@ -510,6 +738,8 @@ def main():
         "moe_expert_stats.json",
         stats_type="MoE expert statistics",
     )
+    if moe_stats_dict and moe_stats_dict[0] is not None:
+        payload["moe_expert_stats.json"] = moe_stats_dict[0]
 
     # Save MTP draft model statistics (if MTP is enabled)
     if args.enable_mtp:
@@ -522,6 +752,10 @@ def main():
             "mtp_activation_stats.json",
             stats_type="MTP activation statistics",
         )
+        if mtp_stats_list:
+            mtp_stats = next((r for r in mtp_stats_list if r), None)
+            if mtp_stats is not None:
+                payload["mtp_activation_stats.json"] = mtp_stats
 
         mtp_moe_stats_dict = llm.llm_engine.collective_rpc(
             lambda w: _apply_on_draft_model(w, get_mtp_moe_stats)
@@ -532,6 +766,10 @@ def main():
             "mtp_moe_expert_stats.json",
             stats_type="MTP MoE expert statistics",
         )
+        if mtp_moe_stats_dict:
+            mtp_moe_stats = next((r for r in mtp_moe_stats_dict if r), None)
+            if mtp_moe_stats is not None:
+                payload["mtp_moe_expert_stats.json"] = mtp_moe_stats
 
         # ---------------------------------------------------------------
         # Per-head KV-cache stats for the MTP draft model.
@@ -575,6 +813,7 @@ def main():
                     f"[MTP] Merged {len(mtp_ph_stats)} per-head KV-cache entries "
                     f"into {mtp_act_path} (per-tensor scalars overwritten)."
                 )
+                payload["mtp_activation_stats.json"] = merged_mtp
 
             # Clean up the per-head hooks on the draft model.
             llm.llm_engine.collective_rpc(
@@ -635,6 +874,7 @@ def main():
         with open(multipliers_path, "w") as f:
             json.dump(kv_multipliers, f, indent=2)
         print(f"\nKV-cache scale multipliers saved to: {multipliers_path}")
+        payload["kv_scale_multipliers.json"] = kv_multipliers
 
         # Also save the final (scaled) kv cache scales for direct use
         fp8_max = 448.0  # torch.finfo(torch.float8_e4m3fn).max
@@ -650,6 +890,7 @@ def main():
         with open(tuned_scales_path, "w") as f:
             json.dump(tuned_kv_scales, f, indent=2)
         print(f"Tuned KV-cache scales saved to: {tuned_scales_path}")
+        payload["kv_cache_tuned_scales.json"] = tuned_kv_scales
 
         print("\n" + "=" * 80)
         print("KV-cache per-tensor scale search completed!")
@@ -685,6 +926,7 @@ def main():
             with open(merged_stats_path, "w") as f:
                 json.dump(merged_stats, f, indent=2)
             print(f"\nKV-cache per-head statistics merged into: {merged_stats_path}")
+            payload["activation_stats.json"] = merged_stats
 
             # Remove per-head min/max hooks before (optionally) registering value hooks
             llm.apply_model(remove_kvcache_perhead_hooks)
@@ -742,6 +984,7 @@ def main():
                 with open(multipliers_ph_path, "w") as f:
                     json.dump(kv_multipliers_perhead, f, indent=2)
                 print(f"\nKV-cache per-head scale multipliers saved to: {multipliers_ph_path}")
+                payload["kv_scale_multipliers_per_head.json"] = kv_multipliers_perhead
 
                 # Compute and save final tuned per-head scales
                 fp8_max = 448.0
@@ -763,10 +1006,28 @@ def main():
                 with open(tuned_ph_path, "w") as f:
                     json.dump(tuned_kv_scales_perhead, f, indent=2)
                 print(f"Tuned per-head KV-cache scales saved to: {tuned_ph_path}")
+                payload["kv_cache_tuned_scales_per_head.json"] = tuned_kv_scales_perhead
 
                 print("\n" + "=" * 80)
                 print("KV-cache per-head scale search completed!")
                 print("=" * 80)
+
+    if return_llm:
+        return payload, llm
+    return payload
+
+
+def main():
+    """Main function to run calibration."""
+    args = parse_args()
+
+    if args.dp_size == 1:
+        args.dp_rank = 0
+        run_one_calibration(args)
+        return
+
+    # For dp_size > 1, delegate to the existing DP launcher
+    run_vllm_calibration_with_dp(args, run_one_calibration)
 
 
 if __name__ == "__main__":
