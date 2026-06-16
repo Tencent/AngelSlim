@@ -24,6 +24,7 @@ output_fp8_hf_path: /path/to/output/fp8_model  # stage2 only
 
 # -------- Model loading / runtime --------
 tp_size: 16
+dp_size: 1  
 batch_size: 4
 num_samples: 512
 max_length: 16384
