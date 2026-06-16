@@ -264,7 +264,7 @@ class GPTQ:
             layers = layers.cpu()
 
         for i in range(len(layers)):
-            layer = self._move_layer_to_device(layers[i], inps.device)
+            layer = self._move_layer_to_device(layers[i], dev)
             subset = find_layers(layer, layers=self.model.observer_layer_classes)
             subset = self._filter_distributed_expert_subset(layer, subset)
             print_info("subset:{}".format(subset))
