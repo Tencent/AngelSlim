@@ -127,10 +127,6 @@ class TextDataset(BaseDataset):
                     or "input" in data
                     or "conversations" in data
                     or "applied_message" in data
-                    "messages" in data
-                    or "input" in data
-                    or "conversations" in data
-                    or "applied_message" in data
                 ), "JSON format error"
 
                 # Fast path for data that has already been chat-templated.
@@ -165,58 +161,58 @@ class TextDataset(BaseDataset):
                 # Prepare messages
                 messages = self._prepare_messages(data)
 
-                    # Find the LAST assistant turn — loss is computed ONLY on
-                    # this reply. Everything before it (system + user(s) +
-                    # earlier assistant(s)) serves as prompt context.
-                    last_assistant_idx = None
-                    for idx, item in enumerate(messages):
-                        if item["role"] == "assistant":
-                            last_assistant_idx = idx
-                    if last_assistant_idx is None:
-                        # No assistant turn -> nothing to supervise; skip.
-                        continue
-                    prompt_messages = messages[:last_assistant_idx]
-                    assistant_msg = messages[last_assistant_idx]
+                # Find the LAST assistant turn — loss is computed ONLY on
+                # this reply. Everything before it (system + user(s) +
+                # earlier assistant(s)) serves as prompt context.
+                last_assistant_idx = None
+                for idx, item in enumerate(messages):
+                    if item["role"] == "assistant":
+                        last_assistant_idx = idx
+                if last_assistant_idx is None:
+                    # No assistant turn -> nothing to supervise; skip.
+                    continue
+                prompt_messages = messages[:last_assistant_idx]
+                assistant_msg = messages[last_assistant_idx]
 
-                    # Tokenize the prompt (up to the generation marker) and the
-                    # full conversation separately so we know exactly where the
-                    # assistant reply starts.
-                    prompt_text = self.processor.apply_chat_template(
-                        prompt_messages, tokenize=False, add_generation_prompt=True
-                    )
-                    full_messages = prompt_messages + [assistant_msg]
-                    full_text = self.processor.apply_chat_template(
-                        full_messages, tokenize=False, add_generation_prompt=False
-                    )
+                # Tokenize the prompt (up to the generation marker) and the
+                # full conversation separately so we know exactly where the
+                # assistant reply starts.
+                prompt_text = self.processor.apply_chat_template(
+                    prompt_messages, tokenize=False, add_generation_prompt=True
+                )
+                full_messages = prompt_messages + [assistant_msg]
+                full_text = self.processor.apply_chat_template(
+                    full_messages, tokenize=False, add_generation_prompt=False
+                )
 
-                    # Legacy branch: thinking-style data without a chat template.
-                    thinking_data = any(
-                        m["role"] == "assistant"
-                        and "<think>" in m.get("content", "")
-                        and "</think>" in m.get("content", "")
-                        for m in messages
-                    )
-                    if thinking_data:
-                        bos = self.processor.bos_token or ""
-                        prompt_text = bos
-                        for m in prompt_messages:
-                            if m["role"] == "system":
-                                prompt_text += m["content"]
-                            elif m["role"] == "user":
-                                prompt_text += "<｜User｜>" + m["content"] + "<｜Assistant｜>"
-                            elif m["role"] == "assistant":
-                                prompt_text += m["content"] + self.processor.eos_token
-                        full_text = prompt_text + assistant_msg["content"] + self.processor.eos_token
+                # Legacy branch: thinking-style data without a chat template.
+                thinking_data = any(
+                    m["role"] == "assistant"
+                    and "<think>" in m.get("content", "")
+                    and "</think>" in m.get("content", "")
+                    for m in messages
+                )
+                if thinking_data:
+                    bos = self.processor.bos_token or ""
+                    prompt_text = bos
+                    for m in prompt_messages:
+                        if m["role"] == "system":
+                            prompt_text += m["content"]
+                        elif m["role"] == "user":
+                            prompt_text += "<｜User｜>" + m["content"] + "<｜Assistant｜>"
+                        elif m["role"] == "assistant":
+                            prompt_text += m["content"] + self.processor.eos_token
+                    full_text = prompt_text + assistant_msg["content"] + self.processor.eos_token
 
-                    # Token-level prompt length: count tokens in ``prompt_text``
-                    # without special-token insertion so it aligns with the
-                    # prefix of the tokenization of ``full_text``.
-                    prompt_ids = self.processor(
-                        prompt_text,
-                        add_special_tokens=False,
-                        return_tensors=None,
-                    )["input_ids"]
-                    prompt_len = len(prompt_ids)
+                # Token-level prompt length: count tokens in ``prompt_text``
+                # without special-token insertion so it aligns with the
+                # prefix of the tokenization of ``full_text``.
+                prompt_ids = self.processor(
+                    prompt_text,
+                    add_special_tokens=False,
+                    return_tensors=None,
+                )["input_ids"]
+                prompt_len = len(prompt_ids)
 
                 model_inputs = self.processor(
                     text=[full_text],
