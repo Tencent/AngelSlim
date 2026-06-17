@@ -82,12 +82,18 @@ class FP8:
             device=dev,
             dtype=self.dtype,
         )
-        cache = {"i": 0}
         layers[0] = layers[0].to(dev)
         self.model.model.model.embed_tokens = self.model.model.model.embed_tokens.to(dev)
-        layers[0] = Catcher(layers[0], self.inps, cache)
+        layers[0] = Catcher(layers[0], max_seq_length=self.seq_length)
         self.model.model_forward(dataloader)
-        layer_kwargs = layers[0].layer_kwargs
+        # Catcher stores per-sample captures; rebuild the fixed-shape inps
+        # tensor and a single layer_kwargs dict to match the previous API.
+        captured_inputs = layers[0].captured_inputs
+        captured_kwargs = layers[0].captured_kwargs
+        for idx in range(min(len(captured_inputs), self.inps.shape[0])):
+            inp = captured_inputs[idx]
+            self.inps[idx, : inp.shape[1], :].copy_(inp[0])
+        layer_kwargs = captured_kwargs[0] if captured_kwargs else {}
         dev = get_best_device()
         for k, v in layer_kwargs.items():
             # position embeddings
@@ -99,7 +105,7 @@ class FP8:
             if isinstance(v, torch.Tensor):
                 layer_kwargs[k] = v.to(dev)
 
-        print_info("cache['i']:{}".format(cache["i"]))
+        print_info("captured samples: {}".format(len(captured_inputs)))
         print_info(len(layers))
         layers[0] = layers[0].module
         print_info(self.inps.shape)
