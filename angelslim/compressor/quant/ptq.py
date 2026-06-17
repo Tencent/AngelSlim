@@ -55,15 +55,28 @@ class PTQ:
         # trasform first, then run quantization
         self.transform_runner.run()
 
-        if "fp8" in self.quant_algo or "int8" in self.quant_algo or "nvfp4" in self.quant_algo:
+        # NVFP4 weight-only GPTQ (``nvfp4_gptq``) is driven by the GPTQ runner
+        # and computes its scales directly from weights, so it must NOT install
+        # the activation/weight observer hook even though "nvfp4" is in algo.
+        is_gptq = "gptq" in self.quant_algo or "gptaq" in self.quant_algo
+        if (
+            "fp8" in self.quant_algo
+            or "int8" in self.quant_algo
+            or ("nvfp4" in self.quant_algo and not is_gptq)
+        ):
             # Add ptq observer hook
             self.ptq_hook = PTQHook(self.quant_model)
             self.ptq_hook.apply_hook()
 
-        if "gptq" in self.quant_algo or "gptaq" in self.quant_algo:
+        if is_gptq:
             max_seq_length = self.quant_model.quant_config.max_seq_length
             hidden_size = self.quant_model.quant_config.hidden_size
-            self.gptq = GPTQ(self.quant_model, seq_length=max_seq_length, hidden_size=hidden_size)
+            self.gptq = GPTQ(
+                self.quant_model,
+                seq_length=max_seq_length,
+                hidden_size=hidden_size,
+                actorder=self.quant_model.quant_config.quant_algo_info.get("actorder", True),
+            )
         elif "w4a8i8" in self.quant_algo:
             max_seq_length = self.quant_model.quant_config.max_seq_length
             hidden_size = self.quant_model.quant_config.hidden_size
@@ -334,8 +347,15 @@ class PTQ:
         self.ptq_hook.post_process()
 
         quant_convert_module = self.quant_model.get_quant_convert_module()
-        if "nvfp4" in self.quant_algo and not is_nvfp4_weight_only:
-            self.quant_model.get_observer_values()
+        if "nvfp4" in self.quant_algo:
+            if is_nvfp4_weight_only:
+                # Populate weight_observer_amax_dict for fuse_observer_amax in weight-only mode
+                self.quant_model.weight_observer_amax_dict = {}
+                for name, sub_layer in self.ptq_hook.quant_layers_dict.items():
+                    weight = sub_layer.weight.detach()
+                    self.quant_model.weight_observer_amax_dict[name] = weight.abs().max()
+            else:
+                self.quant_model.get_observer_values()
         # 2. insert qdq module
         for name, sub_layer in self.ptq_hook.quant_layers_dict.items():
             parent_layer, sub_name = find_parent_layer_and_sub_name(quant_convert_module, name)

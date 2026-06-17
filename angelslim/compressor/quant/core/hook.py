@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ....utils import print_info
 from ..observers import ParentObserver, PTQObserver
 from .quant_func import get_fp_maxval, get_fp_search_maxval
 
@@ -29,7 +30,9 @@ class PTQHook:
         self.kv_names = []
 
     def apply_hook(self):
+        print_info("Searching observer layers...")
         self.quant_layers_dict = self.quant_model.get_observer_layers()
+        print_info(f"Find {len(self.quant_layers_dict)} quant layers.")
         self.kv_names = self.quant_model.get_kvcache_observer_layers_names(
             self.quant_layers_dict.keys()
         )
@@ -55,11 +58,12 @@ class PTQHook:
                 # so we pass None here
                 None,
                 self.quant_model.quant_algo_dict,
-                **extra_kwargs
+                **extra_kwargs,
             )
             forward_hook_handle = sub_layer.register_forward_hook(self._forward_hook)
             self.observer_dict[sub_layer] = observer
             self._forward_hook_list.append(forward_hook_handle)
+        print_info(f"Applied {len(self.observer_dict)} observers.")
 
         # Apply KV cache observers using monkey patching (for attention-level observation)
         if kv_cache_observer is not None and hasattr(self.quant_model, "apply_kvcache_observers"):

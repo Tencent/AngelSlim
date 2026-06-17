@@ -692,6 +692,93 @@ class QLinear(torch.nn.Module):
         return output
 
 
+# ---------------------------------------------------------------------------
+# NVFP4 module-level primitives (E2M1 grid + two-level scale).
+#
+# These mirror the mxfp4_* helpers but implement NVFP4's two-level scaling:
+#   per-block scale (FP8 E4M3) * per-tensor scale_2 (FP32).
+# The E2M1 weight grid is identical to MXFP4, so the cast/round logic matches
+# NVFP4QDQModule._cast_fp4 bit-for-bit. GPTQ's inner loop calls these so that
+# the grid it compensates against is exactly the one used at packing time.
+# ---------------------------------------------------------------------------
+NVFP4_E2M1_BOUNDS = torch.tensor([0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0])
+NVFP4_E2M1_VALUES = torch.tensor([0, 0.5, 1, 1.5, 2, 3, 4, 6, 0, -0.5, -1, -1.5, -2, -3, -4, -6])
+NVFP4_E2M1_VALUES_ON_DEVICE = {}
+NVFP4_E2M1_MAX = 6.0
+NVFP4_E4M3_MAX = 448.0
+
+
+def nvfp4_get_e2m1_values(device):
+    if device not in NVFP4_E2M1_VALUES_ON_DEVICE:
+        NVFP4_E2M1_VALUES_ON_DEVICE[device] = NVFP4_E2M1_VALUES.to(device)
+    return NVFP4_E2M1_VALUES_ON_DEVICE[device]
+
+
+def nvfp4_cast_to_e2m1(weight: torch.Tensor):
+    """Round a (pre-scaled) tensor to nearest E2M1 grid, return uint4 codes.
+
+    Matches NVFP4QDQModule._cast_fp4 exactly (round-half-to-even on ties).
+    """
+    device = weight.device
+    bounds = NVFP4_E2M1_BOUNDS.to(device)
+
+    mask = torch.tensor([0, 1, 0, 1, 0, 1, 0], dtype=torch.uint8, device=device)
+    mask = mask.expand([*list(weight.shape), 7])
+
+    sign_bit = (weight < 0).to(torch.uint8)
+    weight_abs = weight.abs()
+    ord_idx = torch.searchsorted(bounds, weight_abs, out_int32=True).to(torch.uint8)
+    round_up = torch.any((weight_abs.unsqueeze(-1) == bounds) * mask, dim=-1)
+    return (sign_bit * 0b1000 + ord_idx + round_up).to(torch.uint8)
+
+
+def nvfp4_dequantize_e2m1(code: torch.Tensor, dtype: torch.dtype = torch.float32):
+    return nvfp4_get_e2m1_values(code.device)[(code.to(torch.long) & 0x0F)].to(dtype)
+
+
+def compute_nvfp4_weight_scale_2(weight_amax: torch.Tensor) -> torch.Tensor:
+    """Per-tensor (level-2) FP32 scale: amax / 6 / 448.
+
+    Computed once per layer; does not change during GPTQ compensation.
+    """
+    scale2 = weight_amax.float() / NVFP4_E2M1_MAX / NVFP4_E4M3_MAX
+    return torch.where(scale2 > 0, scale2, torch.ones_like(scale2))
+
+
+def compute_nvfp4_block_scale(
+    x_block: torch.Tensor,
+    weight_scale_2: torch.Tensor,
+    keep_high_precision: bool = False,
+) -> torch.Tensor:
+    """Per-block (level-1) effective scale, including the E4M3 round-trip.
+
+    Args:
+        x_block: weight block, last dim is the block (e.g. [rows, block_size]).
+        weight_scale_2: per-tensor scale from compute_nvfp4_weight_scale_2.
+    Returns:
+        Effective scale (block_scale_e4m3 * scale_2), last dim kept as 1, so
+        that GPTQ compensates against the exact stored scale.
+    """
+    per_block_amax = x_block.abs().amax(dim=-1, keepdim=True).float()
+    per_block_scale = per_block_amax / NVFP4_E2M1_MAX
+    q_per_block_scale = per_block_scale / weight_scale_2
+    q_per_block_scale = torch.where(
+        per_block_scale > 0, q_per_block_scale, torch.ones_like(q_per_block_scale)
+    )
+    if not keep_high_precision:
+        finfo = torch.finfo(torch.float8_e4m3fn)
+        q_per_block_scale = q_per_block_scale.clamp(min=finfo.min, max=finfo.max)
+        q_per_block_scale = q_per_block_scale.to(torch.float8_e4m3fn).float()
+    return q_per_block_scale * weight_scale_2
+
+
+def nvfp4_quant_dequant(x: torch.Tensor, eff_scale: torch.Tensor):
+    """Fake-quantize x onto the E2M1 grid and dequantize back (float32)."""
+    scaled = x.float() / eff_scale
+    code = nvfp4_cast_to_e2m1(scaled)
+    return nvfp4_dequantize_e2m1(code, dtype=torch.float32) * eff_scale
+
+
 class NVFP4QDQModule(torch.nn.Module):
     def __init__(
         self,

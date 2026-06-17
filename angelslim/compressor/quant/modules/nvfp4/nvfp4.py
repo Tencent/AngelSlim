@@ -92,9 +92,9 @@ class NVFP4:
 
     def post_process(self, sub_layer, name):
         if self.weight_only:
-            # Weight-only mode: compute scales directly from weight tensor
-            weight = sub_layer.weight.detach()
-            weight_observer_amax = weight.abs().max()
+            # Weight-only mode: use fuse_observer_amax to share weight_scale_2
+            # between gate_proj/up_proj (and qkv), matching vLLM's expectation
+            weight_observer_amax = self.model.fuse_observer_amax_weight_only(name)
         else:
             # TODO:Fuse observer amax because TRT-LLM requires the qkv,
             # gate and up to share the weight_scale2
