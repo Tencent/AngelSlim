@@ -15,6 +15,7 @@
 import re
 
 from ...compressor.quant.core import PTQSaveVllmHF
+from ...utils.utils import find_layers
 from ..base_model import BaseLLMModel
 from ..model_factory import SlimModelFactory
 
@@ -43,7 +44,7 @@ class SeedOss(BaseLLMModel):
             "down_proj",
         ]
         observer_layers_dict = {}
-        layers_dict = self.find_layers(self.model, layers=self.observer_layer_classes)
+        layers_dict = find_layers(self.model, layers=self.observer_layer_classes)
 
         ignore_layers = self.skip_layer_names()
         for name, module in layers_dict.items():
