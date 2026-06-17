@@ -26,6 +26,7 @@ from ..compressor.quant.core import QuantConfig
 from ..compressor.quant.modules import NVFP4QDQModule, QDQModule
 from ..utils import (
     common_prefix,
+    decide_device_for_distributed,
     is_deepspeed_zero3_enabled,
     print_info,
     stream_load_weights,
@@ -110,6 +111,7 @@ class BaseLLMModel(metaclass=ABCMeta):
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_path, trust_remote_code=trust_remote_code
         )
+        print_info("Finish load model.")
 
     def init_ptq(self, slim_config):
         """
@@ -145,6 +147,59 @@ class BaseLLMModel(metaclass=ABCMeta):
 
     def get_model(self):
         return self.model
+
+    def get_checkpoint_key_conversions(self, include_converters=True):
+        try:
+            from transformers.conversion_mapping import get_model_conversion_mapping
+            from transformers.core_model_loading import WeightConverter, WeightRenaming
+        except ImportError:
+            return [], []
+
+        if self.model is None:
+            return [], []
+
+        weight_conversions = get_model_conversion_mapping(self.model, add_legacy=False) or []
+        renamings = [entry for entry in weight_conversions if isinstance(entry, WeightRenaming)]
+        converters = [entry for entry in weight_conversions if isinstance(entry, WeightConverter)]
+        if not include_converters:
+            converters = []
+        return renamings, converters
+
+    def resolve_checkpoint_key_for_model(
+        self,
+        key,
+        target_state_dict=None,
+        weight_renamings=None,
+        weight_converters=None,
+    ):
+        try:
+            from transformers.core_model_loading import rename_source_key
+        except ImportError:
+            return key
+
+        if weight_renamings is None or weight_converters is None:
+            weight_renamings, weight_converters = self.get_checkpoint_key_conversions()
+
+        prefix = getattr(self.model, "base_model_prefix", None) if self.model is not None else None
+        renamed_key, _ = rename_source_key(
+            key,
+            weight_renamings,
+            weight_converters,
+            prefix,
+            target_state_dict,
+        )
+        return renamed_key
+
+    def format_state_dict_for_save(self, state_dict):
+        try:
+            from transformers.core_model_loading import revert_weight_conversion
+        except ImportError:
+            return state_dict
+
+        if self.model is None or getattr(self.model, "_weight_conversions", None) is None:
+            return state_dict
+
+        return revert_weight_conversion(self.model, state_dict)
 
     def get_quant_module(self):
         """
@@ -219,6 +274,37 @@ class BaseLLMModel(metaclass=ABCMeta):
     def get_observer_values(self):
         self.weight_observer_amax_dict = copy.deepcopy(self.weight_scales_dict)
         self.input_observer_amax_dict = copy.deepcopy(self.act_scales_dict)
+
+    def fuse_observer_amax_weight_only(self, name):
+        """Fuse weight observer amax for weight-only quantization.
+
+        For gate_proj/up_proj pairs (and qkv groups), returns the max amax
+        across the group so they share the same weight_scale_2, matching
+        vLLM's fused gate_up_proj kernel expectation.
+        """
+        if "gate_proj" in name or "up_proj" in name:
+            prefix = name.rsplit(".", 1)[0]
+            gate_name = f"{prefix}.gate_proj"
+            up_name = f"{prefix}.up_proj"
+
+            weight_scales = []
+            for key in [gate_name, up_name]:
+                if key in self.weight_observer_amax_dict:
+                    weight_scales.append(self.weight_observer_amax_dict[key])
+            if weight_scales:
+                return max(weight_scales)
+        elif "q_proj" in name or "k_proj" in name or "v_proj" in name:
+            prefix = name.rsplit(".", 1)[0]
+            qkv_names = [f"{prefix}.q_proj", f"{prefix}.k_proj", f"{prefix}.v_proj"]
+
+            weight_scales = []
+            for key in qkv_names:
+                if key in self.weight_observer_amax_dict:
+                    weight_scales.append(self.weight_observer_amax_dict[key])
+            if weight_scales:
+                return max(weight_scales)
+
+        return self.weight_observer_amax_dict[name]
 
     def get_kvcache_observer_layers_names(self, observe_names):
         names = ["self_attn.k_proj", "self_attn.v_proj"]
@@ -313,7 +399,7 @@ class BaseLLMModel(metaclass=ABCMeta):
             or "awq" in self.quant_config.quant_algo
             or "gptaq" in self.quant_config.quant_algo
         ):
-            device = "cuda:0"
+            device = decide_device_for_distributed()
         else:
             device = self.model.device
 

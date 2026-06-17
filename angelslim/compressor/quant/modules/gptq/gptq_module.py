@@ -19,18 +19,26 @@ import torch
 
 from .....utils import get_tensor_item, print_info
 from ...core import compute_scales_with_zero
+from ..helper_layer import (
+    compute_nvfp4_block_scale,
+    compute_nvfp4_weight_scale_2,
+    nvfp4_quant_dequant,
+)
 
 __all__ = ["GPTQModule"]
 
 
 class GPTQModule:
-    def __init__(self, layer, quant_bits=4):
+    def __init__(self, layer, quant_bits=4, weight_format="int4", block_size=16):
         """
         GPTQ quantization wrapper for neural network layers.
 
         Args:
             layer: Full-precision torch.nn.Module to quantize (Linear)
             quant_bits: Quantization bitwidth (2-8 bits, default=4)
+            weight_format: "int4" (default, uniform) or "nvfp4" (E2M1 grid +
+                two-level scale). Routes compute_quant_params / quant_dequant.
+            block_size: NVFP4 micro-scaling block size (nvfp4 only).
         """
         super(GPTQModule, self).__init__()
         self.layer = layer
@@ -41,6 +49,10 @@ class GPTQModule:
         self.h = torch.zeros((self.columns, self.columns), device=self.dev, dtype=torch.float32)
         self.nsamples = 0
         self.quant_bits = quant_bits
+        self.weight_format = weight_format
+        self.block_size = block_size
+        # Per-tensor (level-2) NVFP4 scale, set at the start of fasterquant.
+        self.weight_scale_2 = None
 
     def add_batch(self, inp, out):
         # Handle 4D input (e.g., Conv2d or multi-head attention internals)
@@ -57,6 +69,21 @@ class GPTQModule:
         inp = math.sqrt(2 / self.nsamples) * inp
         self.h += inp.matmul(inp.t())
 
+    def compute_quant_params(self, x, bits, sym):
+        if self.weight_format == "nvfp4":
+            # Per-block effective scale (block_scale_e4m3 * weight_scale_2).
+            # weight_scale_2 is computed once in fasterquant before this runs.
+            eff_scale = compute_nvfp4_block_scale(x, self.weight_scale_2)
+            return eff_scale, torch.zeros_like(eff_scale)
+        return compute_scales_with_zero(x, bits=bits, sym=sym)
+
+    def quant_dequant(self, x, weight_scale, weight_zero):
+        if self.weight_format == "nvfp4":
+            return nvfp4_quant_dequant(x, weight_scale)
+        maxq = torch.tensor(2**self.quant_bits - 1, device=x.device)
+        q = torch.clamp(torch.round(x / weight_scale) + weight_zero, 0, maxq)
+        return weight_scale * (q - weight_zero)
+
     def fasterquant(
         self,
         blocksize=128,
@@ -69,7 +96,7 @@ class GPTQModule:
 
         tick = time.time()
 
-        hessian = self.h
+        hessian = self.h.float()
         if torch.isnan(hessian).any():
             print_info("[error] Hessian contains nan!")
             exit()
@@ -79,25 +106,33 @@ class GPTQModule:
         hessian[dead, dead] = 1
         w_weight[:, dead] = 0
 
-        g_idx = []
+        # NVFP4: per-tensor level-2 scale, computed once from the (dead-zeroed)
+        # weights before any per-block scale. GPTQ compensation does not change
+        # the amax magnitude, so this stays valid for the whole layer.
+        if self.weight_format == "nvfp4":
+            self.weight_scale_2 = compute_nvfp4_weight_scale_2(w_weight.abs().amax())
+
         scale = []
         zero = []
         now_idx = 1
         static_groups = True
+        effective_group_size = group_size if group_size != -1 else self.columns
+        input_perm = None
+
+        if actorder:
+            input_perm = torch.argsort(torch.diag(hessian), descending=True)
+            w_weight = w_weight[:, input_perm]
+            hessian = hessian[input_perm][:, input_perm]
 
         if static_groups:
-            for i in range(0, self.columns, group_size):
-                weight_scale, weight_zero = compute_scales_with_zero(
-                    w_weight[:, i : (i + group_size)], bits=self.quant_bits, sym=sym
+            for i in range(0, self.columns, effective_group_size):
+                weight_scale, weight_zero = self.compute_quant_params(
+                    w_weight[:, i : (i + effective_group_size)],
+                    bits=self.quant_bits,
+                    sym=sym,
                 )
                 scale.append(weight_scale)
                 zero.append(weight_zero)
-
-        if actorder:
-            perm = torch.argsort(torch.diag(hessian), descending=True)
-            w_weight = w_weight[:, perm]
-            hessian = hessian[perm][:, perm]
-            invperm = torch.argsort(perm)
 
         losses = torch.zeros_like(w_weight)
         q_weight = torch.zeros_like(w_weight)
@@ -131,29 +166,23 @@ class GPTQModule:
                 w = w1[:, i]
                 d = hinv1[i, i]
 
-                if group_size != -1:
-                    if not static_groups:
-                        if (i1 + i) % group_size == 0:
-                            weight_scale, weight_zero = compute_scales_with_zero(
-                                w_weight[:, (i1 + i) : (i1 + i + group_size)],
-                                bits=self.quant_bits,
-                                sym=sym,
-                            )
+                if not static_groups:
+                    if (i1 + i) % effective_group_size == 0:
+                        weight_scale, weight_zero = self.compute_quant_params(
+                            w_weight[:, (i1 + i) : (i1 + i + effective_group_size)],
+                            bits=self.quant_bits,
+                            sym=sym,
+                        )
 
-                        if ((i1 + i) // group_size) - now_idx == -1:
-                            scale.append(weight_scale)
-                            zero.append(weight_zero)
-                            now_idx += 1
-                    else:
-                        idx = i1 + i
-                        if actorder:
-                            idx = perm[idx]
-                        weight_scale = scale[idx // group_size]
-                        weight_zero = zero[idx // group_size]
+                    if ((i1 + i) // effective_group_size) - now_idx == -1:
+                        scale.append(weight_scale)
+                        zero.append(weight_zero)
+                        now_idx += 1
+                else:
+                    weight_scale = scale[(i1 + i) // effective_group_size]
+                    weight_zero = zero[(i1 + i) // effective_group_size]
 
-                maxq = torch.tensor(2**self.quant_bits - 1)
-                q = torch.clamp(torch.round(w.unsqueeze(1) / weight_scale) + weight_zero, 0, maxq)
-                q = weight_scale * (q - weight_zero)
+                q = self.quant_dequant(w.unsqueeze(1), weight_scale, weight_zero)
                 q = q.flatten()
                 q1[:, i] = q
                 losses1[:, i] = (w - q) ** 2 / d**2
@@ -167,22 +196,16 @@ class GPTQModule:
 
             w_weight[:, i2:] -= err1.matmul(hinv[i1:i2, i2:])
 
-        torch.cuda.synchronize()
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
         print_info(f" duration: {(time.time() - tick)}")
+        print_info(f" avg loss: {torch.sum(losses).item() / self.nsamples}")
 
-        group_size = group_size if group_size != -1 else self.columns
-        if static_groups and actorder:
-            g_idx = perm // group_size
-        else:
-            g_idx = torch.arange(self.columns, device=q_weight.device) // group_size
-        g_idx = g_idx.to(dtype=torch.int32)
-        if actorder:
-            q_weight = q_weight[:, invperm]
-            g_idx = g_idx[invperm]
-
+        target_weight = self.layer.weight.data
+        if input_perm is not None:
+            target_weight = target_weight[:, input_perm]
         norm_loss = torch.norm(
-            q_weight.reshape(self.layer.weight.shape).type_as(self.layer.weight.data)
-            - self.layer.weight.data
+            q_weight.reshape(self.layer.weight.shape).type_as(target_weight) - target_weight
         )
 
         all_norm_loss = [norm_loss]
@@ -198,6 +221,27 @@ class GPTQModule:
             zero = torch.zeros_like(weight_scale)
         scale = torch.cat(scale, dim=1)
         zero = torch.cat(zero, dim=1)
+
+        if self.weight_format == "nvfp4":
+            # ``scale`` currently holds the effective scale (block_e4m3 *
+            # weight_scale_2). Recover the stored E4M3 block scale and hand the
+            # per-tensor level-2 scale back via the second return value. Move
+            # both to CPU so the per-layer scales never pile up on GPU across
+            # all transformer layers.
+            block_scale_e4m3 = (scale / self.weight_scale_2).to(torch.float8_e4m3fn).cpu()
+            weight_scale_2 = self.weight_scale_2.detach().clone().cpu()
+            losses = losses.cpu()
+            q_weight = q_weight.cpu()
+            w_weight = w_weight.cpu()
+            hessian = hessian.cpu()
+            hinv = hinv.cpu()
+            del losses, q_weight, w_weight, hessian, hinv
+            self.w = self.w.cpu()
+            del self.w
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            return block_scale_e4m3, weight_scale_2, input_perm
+
         losses = losses.cpu()
         q_weight = q_weight.cpu()
         w_weight = w_weight.cpu()
@@ -206,11 +250,13 @@ class GPTQModule:
         del losses, q_weight, w_weight, hessian, hinv
         self.w = self.w.cpu()
         del self.w
-        torch.cuda.empty_cache()
-        return scale, zero, g_idx
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        return scale, zero, input_perm
 
     def free(self):
         self.h = None
         self.w = None
         self.losses = None
-        torch.cuda.empty_cache()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
