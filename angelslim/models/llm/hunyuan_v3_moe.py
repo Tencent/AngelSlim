@@ -67,7 +67,6 @@ def _patch_hyv3_router_for_zero3():
     HYV3TopKRouter._angelslim_zero3_dtype_patch = True
 
 
-
 def _is_hyv3_parameter_experts(module):
     if HYV3Experts is not None and isinstance(module, HYV3Experts):
         return True
@@ -157,7 +156,9 @@ class HYV3ExpertsWithLinear(HYV3Experts):
             expert_idx = int(expert_idx[0].item())
             if expert_idx == self.num_experts:
                 continue
-            if expert_parallel_enabled and (expert_idx < experts_start_idx or expert_idx >= experts_end_idx):
+            if expert_parallel_enabled and (
+                expert_idx < experts_start_idx or expert_idx >= experts_end_idx
+            ):
                 continue
             top_k_pos, token_idx = torch.where(expert_mask[expert_idx])
             current_state = hidden_states[token_idx]
@@ -308,9 +309,7 @@ class HYV3MoE(BaseLLMModel):
             self._enable_expert_parallel()
 
     def _is_router_fp32_name(self, name):
-        return name.endswith(".mlp.gate.weight") or name.endswith(
-            ".mlp.e_score_correction_bias"
-        )
+        return name.endswith(".mlp.gate.weight") or name.endswith(".mlp.e_score_correction_bias")
 
     def _restore_router_fp32_from_checkpoint(self, model_path):
         from accelerate.utils import set_module_tensor_to_device
@@ -550,8 +549,7 @@ class HYV3MoE(BaseLLMModel):
         )
         if missing_targets:
             print_info(
-                "HYV3 expert-parallel loading first missing targets: "
-                f"{missing_targets[:10]}"
+                "HYV3 expert-parallel loading first missing targets: " f"{missing_targets[:10]}"
             )
 
     def _configure_linearized_expert_parallel(self, experts_layer, layer_name):
@@ -613,7 +611,9 @@ class HYV3MoE(BaseLLMModel):
         ), f"num_experts {num_experts} must be divisible by world_size {self.world_size}"
 
         print_info(
-            f"Enable HYV3 expert parallel: rank={self.rank}, world_size={self.world_size}, num_experts={num_experts}"
+            "Enable HYV3 expert parallel: "
+            f"rank={self.rank}, world_size={self.world_size}, "
+            f"num_experts={num_experts}"
         )
         for layer_idx, layer in enumerate(self.model.model.layers):
             moe_module = getattr(layer, "mlp", None)
@@ -640,9 +640,7 @@ class HYV3MoE(BaseLLMModel):
             batch_size, seq_len, hidden_dim = hidden_states.shape
             x = hidden_states.view(-1, hidden_dim)
 
-            _, top_k_weights, top_k_index = moe_module.gate(
-                x, moe_module.e_score_correction_bias
-            )
+            _, top_k_weights, top_k_index = moe_module.gate(x, moe_module.e_score_correction_bias)
             expert_output = torch.zeros_like(x)
             experts_start_idx = moe_module.experts_start_idx
             experts_end_idx = moe_module.experts_end_idx

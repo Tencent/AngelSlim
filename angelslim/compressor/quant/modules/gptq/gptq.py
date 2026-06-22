@@ -142,9 +142,7 @@ class GPTQ:
         for prev_name in prev_names:
             prev_layer = subset[prev_name]
             weight_perm = input_perm.to(prev_layer.weight.device)
-            prev_layer.weight.data.copy_(
-                prev_layer.weight.data.index_select(0, weight_perm)
-            )
+            prev_layer.weight.data.copy_(prev_layer.weight.data.index_select(0, weight_perm))
             if prev_layer.bias is not None:
                 prev_layer.bias.data.copy_(prev_layer.bias.data.index_select(0, weight_perm))
 
@@ -177,11 +175,15 @@ class GPTQ:
                 aligned_kwargs[key] = value
             elif key == "position_embeddings" and isinstance(value, tuple):
                 aligned_kwargs[key] = tuple(
-                    self._truncate_tensor_dim(tensor, seq_len, dim=1)
-                    if isinstance(tensor, torch.Tensor) and tensor.dim() >= 3
-                    else self._truncate_tensor_dim(tensor, seq_len, dim=0)
-                    if isinstance(tensor, torch.Tensor)
-                    else tensor
+                    (
+                        self._truncate_tensor_dim(tensor, seq_len, dim=1)
+                        if isinstance(tensor, torch.Tensor) and tensor.dim() >= 3
+                        else (
+                            self._truncate_tensor_dim(tensor, seq_len, dim=0)
+                            if isinstance(tensor, torch.Tensor)
+                            else tensor
+                        )
+                    )
                     for tensor in value
                 )
             else:
@@ -255,7 +257,8 @@ class GPTQ:
 
         if skipped > 0:
             print_info(
-                f"Filter non-local expert layers for GPTQ: local experts [{start}, {end}), skipped {skipped} layer(s)."
+                "Filter non-local expert layers for GPTQ: "
+                f"local experts [{start}, {end}), skipped {skipped} layer(s)."
             )
         return filtered_subset
 
@@ -357,7 +360,7 @@ class GPTQ:
                 # native hook forward
                 for j in range(nsamples):
                     with torch.no_grad():
-                        outs[j] = self._forward_layer(layer, native_inps[j],layer_kwargs_list[j])
+                        outs[j] = self._forward_layer(layer, native_inps[j], layer_kwargs_list[j])
                 native_inps = [x.clone().detach() for x in outs]
 
                 print_info("Native HOOK Step{}".format(j))
@@ -386,7 +389,8 @@ class GPTQ:
                     and self.gptq[name].nsamples == 0
                 ):
                     print_info(
-                        f"Skip {name} because no calibration samples were routed to this local expert layer."
+                        f"Skip {name} because no calibration samples were routed "
+                        "to this local expert layer."
                     )
                     self.gptq[name].free()
                     continue
@@ -513,7 +517,9 @@ class GPTQ:
         """
         print_info("Start convert model...")
         if self.dequant_to_bf16:
-            print_info("dequant_to_bf16=True: skip int4 packing, keep fake-quantized bf16 weights.")
+            print_info(
+                "dequant_to_bf16=True: skip int4 packing, keep fake-quantized bf16 weights."
+            )
         else:
             self._convert_llm()
         print_info("convert model done.")

@@ -184,8 +184,7 @@ class GPTQModule:
         if input_perm is not None:
             target_weight = target_weight[:, input_perm]
         norm_loss = torch.norm(
-            q_weight.reshape(self.layer.weight.shape).type_as(target_weight)
-            - target_weight
+            q_weight.reshape(self.layer.weight.shape).type_as(target_weight) - target_weight
         )
 
         all_norm_loss = [norm_loss]

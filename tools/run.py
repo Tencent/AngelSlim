@@ -21,12 +21,12 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-import torch
-import torch.distributed as dist
+import torch  # noqa: E402
+import torch.distributed as dist  # noqa: E402
 
-from angelslim.engine import Engine, VLLMCalibrateEngine
-from angelslim.utils import get_yaml_prefix_simple, print_info
-from angelslim.utils.config_parser import SlimConfigParser, print_config
+from angelslim.engine import Engine, VLLMCalibrateEngine  # noqa: E402
+from angelslim.utils import get_yaml_prefix_simple, print_info  # noqa: E402
+from angelslim.utils.config_parser import SlimConfigParser, print_config  # noqa: E402
 
 
 def get_args():
@@ -311,9 +311,7 @@ def _prewarm_hf_deepspeed_config(config):
 
 def _is_torchrun_launched():
     return (
-        "LOCAL_RANK" in os.environ
-        or "RANK" in os.environ
-        or int(os.getenv("WORLD_SIZE", "1")) > 1
+        "LOCAL_RANK" in os.environ or "RANK" in os.environ or int(os.getenv("WORLD_SIZE", "1")) > 1
     )
 
 

@@ -158,12 +158,8 @@ class BaseLLMModel(metaclass=ABCMeta):
             return [], []
 
         weight_conversions = get_model_conversion_mapping(self.model, add_legacy=False) or []
-        renamings = [
-            entry for entry in weight_conversions if isinstance(entry, WeightRenaming)
-        ]
-        converters = [
-            entry for entry in weight_conversions if isinstance(entry, WeightConverter)
-        ]
+        renamings = [entry for entry in weight_conversions if isinstance(entry, WeightRenaming)]
+        converters = [entry for entry in weight_conversions if isinstance(entry, WeightConverter)]
         if not include_converters:
             converters = []
         return renamings, converters
