@@ -37,7 +37,10 @@ try:
     if _tools_path not in sys.path:
         sys.path.insert(0, _tools_path)
         _angelslim_logger.debug("[AngelSlim] Added tools_path to sys.path")
-    from vllm_calibrate_utils import collect_fused_moe_internal_stats  # noqa: E402
+    from vllm_calibrate_utils import (  # noqa: E402
+        collect_fused_moe_internal_stats,
+        collect_fused_moe_scale_stats,
+    )
 
     _angelslim_logger.info("[AngelSlim] Successfully imported collect_fused_moe_internal_stats")
 except ImportError as _e:
@@ -48,6 +51,10 @@ except ImportError as _e:
     )
 
     def collect_fused_moe_internal_stats(*args, **kwargs):  # noqa: D401
+        """No-op fallback when AngelSlim calibration utils are unavailable."""
+        pass
+
+    def collect_fused_moe_scale_stats(*args, **kwargs):  # noqa: D401
         """No-op fallback when AngelSlim calibration utils are unavailable."""
         pass
 
@@ -2120,11 +2127,27 @@ class TritonExperts(LoRAExpertsMixin, mk.FusedMoEExpertsModular):
                 "layer. (this message is only logged once)"
             )
             _ANGELSLIM_WARNED_ATTRS.add("_moe_activation_stats_of_model")
-        collect_fused_moe_internal_stats(
+        # FP8 scale-only mode: we recover the BF16 amax from the dynamic
+        # activation scale (``a1q_scale``) via ``scale_max * 448`` and
+        # therefore skip the BF16 hook entirely (the BF16 tensor is
+        # unrecoverable here anyway because the outer prepare_finalize
+        # already quantised it to FP8).
+        _scale_only = getattr(w1, "_moe_scale_only", False)
+        if not _scale_only:
+            collect_fused_moe_internal_stats(
+                stage="gate_up_proj",
+                hidden_states=hidden_states,
+                topk_ids=topk_ids,
+                global_num_experts=global_num_experts,
+                layer_name=_layer_name,
+                global_moe_activation_stats=_moe_activation_stats,
+            )
+        # Always collect statistics from the activation scale tensor.  For
+        # FP8 MoE this yields the BF16 amax via ``scale_max * 448``.  For
+        # BF16 MoE ``a1q_scale`` is None and this is a no-op.
+        collect_fused_moe_scale_stats(
             stage="gate_up_proj",
-            hidden_states=hidden_states,
-            topk_ids=topk_ids,
-            global_num_experts=global_num_experts,
+            scale=a1q_scale,
             layer_name=_layer_name,
             global_moe_activation_stats=_moe_activation_stats,
         )
@@ -2185,32 +2208,35 @@ class TritonExperts(LoRAExpertsMixin, mk.FusedMoEExpertsModular):
         # === AngelSlim ===
         # Collect statistics for the down projection input (pre-quantization FP
         # activation entering the second GEMM, after gate-up + activation).
-        collect_fused_moe_internal_stats(
-            stage="down_proj",
-            hidden_states=intermediate_cache2,
-            topk_ids=topk_ids,
-            global_num_experts=global_num_experts,
-            layer_name=_layer_name,
-            global_moe_activation_stats=_moe_activation_stats,
-        )
-        # Smooth stats collection (per-channel absmax/EMA for SmoothQuant).
-        collect_fused_moe_smooth_stats(
-            stage="down_proj",
-            hidden_states=intermediate_cache2,
-            topk_ids=topk_ids,
-            layer_name=getattr(w1, "_vllm_layer_name_smooth", None),
-            global_smooth_stats=getattr(w1, "_smooth_stats_of_model", None),
-            ema_momentum=getattr(w1, "_smooth_ema_momentum", 0.9),
-        )
-        # Alpha search raw activation collection.
-        collect_fused_moe_alpha_search_values(
-            stage="down_proj",
-            hidden_states=intermediate_cache2,
-            topk_ids=topk_ids,
-            layer_name=getattr(w1, "_vllm_layer_name_smooth", None),
-            alpha_search_values=getattr(w1, "_alpha_search_values_of_model", None),
-            max_tokens_per_expert=getattr(w1, "_alpha_search_max_tokens", 512),
-        )
+        # In FP8 scale-only mode we skip this BF16 collection (the same
+        # information is recovered from ``a2q_scale * 448`` below).
+        if not _scale_only:
+            collect_fused_moe_internal_stats(
+                stage="down_proj",
+                hidden_states=intermediate_cache2,
+                topk_ids=topk_ids,
+                global_num_experts=global_num_experts,
+                layer_name=_layer_name,
+                global_moe_activation_stats=_moe_activation_stats,
+            )
+            # Smooth stats collection (per-channel absmax/EMA for SmoothQuant).
+            collect_fused_moe_smooth_stats(
+                stage="down_proj",
+                hidden_states=intermediate_cache2,
+                topk_ids=topk_ids,
+                layer_name=getattr(w1, "_vllm_layer_name_smooth", None),
+                global_smooth_stats=getattr(w1, "_smooth_stats_of_model", None),
+                ema_momentum=getattr(w1, "_smooth_ema_momentum", 0.9),
+            )
+            # Alpha search raw activation collection.
+            collect_fused_moe_alpha_search_values(
+                stage="down_proj",
+                hidden_states=intermediate_cache2,
+                topk_ids=topk_ids,
+                layer_name=getattr(w1, "_vllm_layer_name_smooth", None),
+                alpha_search_values=getattr(w1, "_alpha_search_values_of_model", None),
+                max_tokens_per_expert=getattr(w1, "_alpha_search_max_tokens", 512),
+            )
         # === /AngelSlim ===
 
         a2q_scale: torch.Tensor | None = None
@@ -2223,6 +2249,20 @@ class TritonExperts(LoRAExpertsMixin, mk.FusedMoEExpertsModular):
             self.block_shape,
             quantization_emulation=self.quantization_emulation,
         )
+
+        # === AngelSlim ===
+        # Collect statistics from the down_proj activation scale tensor.
+        # For FP8 MoE this lets us cross-check the BF16 amax recovered via
+        # ``scale_max * 448`` against the raw BF16 stats collected on
+        # ``intermediate_cache2`` above.  For BF16 MoE ``a2q_scale`` is
+        # None and this is a no-op.
+        collect_fused_moe_scale_stats(
+            stage="down_proj",
+            scale=a2q_scale,
+            layer_name=_layer_name,
+            global_moe_activation_stats=_moe_activation_stats,
+        )
+        # === /AngelSlim ===
 
         invoke_fused_moe_triton_kernel(
             qintermediate_cache2,
