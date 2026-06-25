@@ -18,13 +18,21 @@ import json
 import os
 import shutil
 from argparse import ArgumentParser
-from glob import glob
 
+import accelerate
 import torch
 import torch.multiprocessing as mp
 from safetensors.torch import safe_open, save_file
+from torch import nn
+from transformers import (
+    AutoConfig,
+    AutoModelForCausalLM,
+    Qwen3_5ForConditionalGeneration,
+    Qwen3_5MoeForConditionalGeneration,
+)
 
 from angelslim.compressor.quant.core.quant_func import weight_dequant
+from angelslim.utils import find_layers
 
 SUFFIX_TO_QUANT = [
     ".gate_and_up_proj.weight",
@@ -42,7 +50,53 @@ SUFFIX_TO_QUANT = [
     ".o_proj.weight",
     ".indexer.wq_b.weight",
     ".indexer.wk.weight",
+    ".experts.gate_up_proj",
+    ".experts.down_proj",
 ]
+
+
+def build_ignored_layers(input_path):
+    """Build ignored layers from the model structure, following fp8_quant_blockwise.py."""
+    hf_config = AutoConfig.from_pretrained(input_path)
+    model_type = hf_config.model_type
+    with accelerate.init_empty_weights():
+        if model_type == "qwen3_5_moe":
+            model = Qwen3_5MoeForConditionalGeneration._from_config(hf_config)
+        elif model_type == "qwen3_5":
+            model = Qwen3_5ForConditionalGeneration._from_config(hf_config)
+        else:
+            model = AutoModelForCausalLM.from_config(hf_config)
+
+    layers = find_layers(model, [nn.Linear])
+    print(f"Found {len(layers)} linear layers")
+
+    ignored_layers = []
+    if model_type in ("qwen3_5_moe", "qwen3_5"):
+        for name, module in model.named_modules():
+            if not hasattr(module, "weight") or module.weight is None:
+                continue
+            if module.weight.ndim < 2:
+                continue
+            weight_name = f"{name}.weight"
+            if not any(weight_name.endswith(suffix) for suffix in SUFFIX_TO_QUANT):
+                ignored_layers.append(name)
+
+        text_config = getattr(hf_config, "text_config", hf_config)
+        num_mtp_layers = getattr(text_config, "mtp_num_hidden_layers", 0)
+        for i in range(num_mtp_layers):
+            ignored_layers.append("mtp.fc")
+            ignored_layers.append(f"mtp.layers.{i}.mlp.gate")
+            ignored_layers.append(f"mtp.layers.{i}.mlp.shared_expert_gate")
+    else:
+        for name in layers:
+            if name.endswith("mlp.experts"):
+                continue
+            weight_name = f"{name}.weight"
+            if not any(weight_name.endswith(suffix) for suffix in SUFFIX_TO_QUANT):
+                ignored_layers.append(name)
+
+    del model
+    return ignored_layers
 
 
 def process_worker(
@@ -161,7 +215,6 @@ def main(input_path, int8_path, num_workers):
     """
     torch.set_default_dtype(torch.bfloat16)
     os.makedirs(int8_path, exist_ok=True)
-    model_index_file = os.path.join(int8_path, "model.safetensors.index.json")
     config_file = os.path.join(int8_path, "config.json")
 
     for fname in os.listdir(input_path):
@@ -184,6 +237,32 @@ def main(input_path, int8_path, num_workers):
     if quant_config is not None:
         input_type = quant_config.get("quant_method", input_type)
     print("input_type", input_type)
+
+    input_model_index_file = os.path.join(input_path, "model.safetensors.index.json")
+    output_model_index_file = os.path.join(int8_path, "model.safetensors.index.json")
+    has_index = os.path.exists(input_model_index_file)
+    if has_index:
+        with open(input_model_index_file, "r") as f:
+            model_index = json.load(f)
+        weight_map = model_index["weight_map"]
+        safetensor_files = [
+            os.path.join(input_path, file_name) for file_name in sorted(set(weight_map.values()))
+        ]
+        safetensor_files.sort()
+    else:
+        single_safetensor_file = os.path.join(input_path, "model.safetensors")
+        if not os.path.exists(single_safetensor_file):
+            raise FileNotFoundError(
+                f"Neither {input_model_index_file} nor {single_safetensor_file} exists"
+            )
+        safetensor_files = [single_safetensor_file]
+        with safe_open(single_safetensor_file, framework="pt", device="cpu") as f:
+            weight_map = {name: "model.safetensors" for name in f.keys()}
+    print(f"Found {len(safetensor_files)} safetensor files")
+
+    ignored_layers = build_ignored_layers(input_path)
+    print(f"Ignored layers: {ignored_layers}")
+
     config["quantization_config"] = {
         "config_groups": {
             "group_0": {
@@ -216,7 +295,7 @@ def main(input_path, int8_path, num_workers):
             }
         },
         "format": "int-quantized",
-        "ignore": ["lm_head"],
+        "ignore": ignored_layers,
         "kv_cache_scheme": None,
         "quant_method": "compressed-tensors",
         "quantization_status": "compressed",
@@ -226,12 +305,6 @@ def main(input_path, int8_path, num_workers):
         json.dump(config, f, indent=2, ensure_ascii=False, sort_keys=True)
     print(f"config.json modified and saved to {config_file}")
 
-    with open(model_index_file, "r") as f:
-        model_index = json.load(f)
-    weight_map = model_index["weight_map"]
-
-    safetensor_files = list(glob(os.path.join(input_path, "*.safetensors")))
-    safetensor_files.sort()
     quant_count = 0
     new_weight_map = {}
 
@@ -265,13 +338,16 @@ def main(input_path, int8_path, num_workers):
         new_weight_map.update(wm)
     print(f"{quant_count} weights are quantized.")
 
-    # modify model.safetensors.index.json
-    with open(model_index_file, "r") as f:
-        model_index = json.load(f)
-    model_index["weight_map"] = new_weight_map
-    with open(model_index_file, "w", encoding="utf-8") as f:
-        json.dump(model_index, f, indent=2, ensure_ascii=False, sort_keys=True)
-    print(f"model.safetensors.index.json modified and saved to {model_index_file}")
+    if has_index:
+        # modify model.safetensors.index.json
+        with open(output_model_index_file, "r") as f:
+            model_index = json.load(f)
+        model_index["weight_map"] = new_weight_map
+        with open(output_model_index_file, "w", encoding="utf-8") as f:
+            json.dump(model_index, f, indent=2, ensure_ascii=False, sort_keys=True)
+        print(f"model.safetensors.index.json modified and saved to {output_model_index_file}")
+    else:
+        print("model.safetensors.index.json not found; skipped index update")
 
 
 if __name__ == "__main__":
