@@ -109,7 +109,12 @@ class GPTQModule:
         # NVFP4: per-tensor level-2 scale, computed once from the (dead-zeroed)
         # weights before any per-block scale. GPTQ compensation does not change
         # the amax magnitude, so this stays valid for the whole layer.
-        if self.weight_format == "nvfp4":
+        #
+        # If ``self.weight_scale_2`` was already set externally (e.g. a shared
+        # gate/up or qkv level-2 scale injected by GPTQ.run so fused-GEMM
+        # deployment uses one per-tensor scale across the group), keep it and do
+        # NOT recompute from this layer's amax alone.
+        if self.weight_format == "nvfp4" and self.weight_scale_2 is None:
             self.weight_scale_2 = compute_nvfp4_weight_scale_2(w_weight.abs().amax())
 
         scale = []

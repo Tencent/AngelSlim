@@ -200,6 +200,9 @@ class QuantConfig:
                 "checkpoint_format": "nvfp4",
                 "dequant_to_bf16": quantization_args.quant_method.get("dequant_to_bf16", False),
                 "actorder": quantization_args.quant_method.get("actorder", True),
+                "share_gate_up_weight_scale_2": quantization_args.quant_method.get(
+                    "share_gate_up_weight_scale_2", True
+                ),
                 "w": f"nvfp4_{weight_quant_method}",
             }
         elif "nvfp4" in self.quant_algo:
