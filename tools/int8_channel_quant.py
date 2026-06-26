@@ -54,11 +54,25 @@ SUFFIX_TO_QUANT = [
     ".experts.down_proj",
 ]
 
+# Qwen3.5-specific extra suffixes not covered by the generic SUFFIX_TO_QUANT.
+QWEN35_EXTRA_SUFFIX_TO_QUANT = [
+    ".linear_attn.in_proj_qkv.weight",
+    ".linear_attn.in_proj_z.weight",
+    ".linear_attn.out_proj.weight",
+]
+
+
+def get_suffix_to_quant(model_type):
+    if model_type in ("qwen3_5_moe", "qwen3_5"):
+        return SUFFIX_TO_QUANT + QWEN35_EXTRA_SUFFIX_TO_QUANT
+    return SUFFIX_TO_QUANT
+
 
 def build_ignored_layers(input_path):
     """Build ignored layers from the model structure, following fp8_quant_blockwise.py."""
     hf_config = AutoConfig.from_pretrained(input_path)
     model_type = hf_config.model_type
+    suffix_to_quant = get_suffix_to_quant(model_type)
     with accelerate.init_empty_weights():
         if model_type == "qwen3_5_moe":
             model = Qwen3_5MoeForConditionalGeneration._from_config(hf_config)
@@ -78,7 +92,7 @@ def build_ignored_layers(input_path):
             if module.weight.ndim < 2:
                 continue
             weight_name = f"{name}.weight"
-            if not any(weight_name.endswith(suffix) for suffix in SUFFIX_TO_QUANT):
+            if not any(weight_name.endswith(s) for s in suffix_to_quant):
                 ignored_layers.append(name)
 
         text_config = getattr(hf_config, "text_config", hf_config)
@@ -92,11 +106,21 @@ def build_ignored_layers(input_path):
             if name.endswith("mlp.experts"):
                 continue
             weight_name = f"{name}.weight"
-            if not any(weight_name.endswith(suffix) for suffix in SUFFIX_TO_QUANT):
+            if not any(weight_name.endswith(suffix) for suffix in suffix_to_quant):
                 ignored_layers.append(name)
 
     del model
-    return ignored_layers
+    return ignored_layers, model_type
+
+
+def _quant_and_record_int8(weight_name, weight_bf16, new_state_dict, new_weight_map, file_name):
+    """Quantize a single 2-D BF16/FP32 weight to INT8 and record the result."""
+    int8_weight, scale = weight_quant(weight_bf16)
+    new_state_dict[weight_name] = int8_weight
+    scale_name = f"{weight_name}_scale"
+    new_state_dict[scale_name] = scale
+    new_weight_map[weight_name] = file_name
+    new_weight_map[scale_name] = file_name
 
 
 def process_worker(
@@ -106,6 +130,7 @@ def process_worker(
     int8_path,
     weight_map,
     return_dict,
+    suffix_to_quant,
     input_type="bf16",
 ):
     """
@@ -129,7 +154,7 @@ def process_worker(
             keys = set(f.keys())
             for weight_name in keys:
                 weight = f.get_tensor(weight_name)
-                if any(weight_name.endswith(suffix) for suffix in SUFFIX_TO_QUANT):
+                if any(weight_name.endswith(suffix) for suffix in suffix_to_quant):
                     quant_count += 1
                     if input_type == "fp8":
                         scale_inv_name = f"{weight_name}_scale_inv"
@@ -139,12 +164,121 @@ def process_worker(
                         weight_bf16 = weight_dequant(weight, scale_inv)
                     else:
                         weight_bf16 = weight
-                    int8_weight, scale_inv = weight_quant(weight_bf16)
-                    new_state_dict[weight_name] = int8_weight
-                    new_scale_name = f"{weight_name}_scale"
-                    new_state_dict[new_scale_name] = scale_inv
+                    _quant_and_record_int8(
+                        weight_name,
+                        weight_bf16,
+                        new_state_dict,
+                        new_weight_map,
+                        file_name,
+                    )
+                else:
+                    if weight_name.endswith("_scale_inv"):
+                        continue
+                    new_state_dict[weight_name] = weight
                     new_weight_map[weight_name] = file_name
-                    new_weight_map[new_scale_name] = file_name
+
+        new_safetensor_file = os.path.join(int8_path, file_name)
+        save_file(new_state_dict, new_safetensor_file)
+    return_dict[worker_id] = (quant_count, new_weight_map)
+
+
+def process_worker_qwen35(
+    worker_id,
+    safetensor_files,
+    input_path,
+    int8_path,
+    weight_map,
+    return_dict,
+    suffix_to_quant,
+    input_type="bf16",
+):
+    """
+    Qwen3.5-specific worker.
+
+    Handles the batched-expert tensors used by Qwen3.5-MoE checkpoints:
+        - ``.experts.gate_up_proj`` of shape [num_experts, 2*intermediate, hidden]
+          is split along dim=1 into per-expert ``experts.{i}.gate_proj.weight``
+          and ``experts.{i}.up_proj.weight``.
+        - ``.experts.down_proj`` of shape [num_experts, hidden, intermediate]
+          is split along dim=0 into per-expert ``experts.{i}.down_proj.weight``.
+    All other tensors follow the same path as :func:`process_worker`.
+    """
+    num_gpus = torch.cuda.device_count()
+    rank = worker_id % num_gpus
+    torch.cuda.set_device(rank)
+    quant_count = 0
+    new_weight_map = {}
+    for safetensor_file in safetensor_files:
+        file_name = os.path.basename(safetensor_file)
+        print(f"[Worker(qwen35) {worker_id}][GPU {rank}] processing {file_name}")
+        with safe_open(safetensor_file, framework="pt", device=f"cuda:{rank}") as f:
+            new_state_dict = {}
+            keys = set(f.keys())
+            for weight_name in keys:
+                weight = f.get_tensor(weight_name)
+
+                # ------------------------------------------------------------
+                # Batched expert tensors: split per-expert and quantize each
+                # 2-D slice independently (channel-int8).
+                # ------------------------------------------------------------
+                if weight_name.endswith(".experts.gate_up_proj"):
+                    weight_bf16 = weight
+                    num_experts = weight_bf16.shape[0]
+                    gate_w, up_w = weight_bf16.chunk(2, dim=1)
+                    prefix = weight_name[: -len(".experts.gate_up_proj")]
+                    for i in range(num_experts):
+                        gate_name = f"{prefix}.experts.{i}.gate_proj.weight"
+                        up_name = f"{prefix}.experts.{i}.up_proj.weight"
+                        _quant_and_record_int8(
+                            gate_name,
+                            gate_w[i].contiguous(),
+                            new_state_dict,
+                            new_weight_map,
+                            file_name,
+                        )
+                        _quant_and_record_int8(
+                            up_name,
+                            up_w[i].contiguous(),
+                            new_state_dict,
+                            new_weight_map,
+                            file_name,
+                        )
+                        quant_count += 2
+                    del weight, weight_bf16, gate_w, up_w
+                    torch.cuda.empty_cache()
+                    continue
+
+                if weight_name.endswith(".experts.down_proj"):
+                    weight_bf16 = weight
+                    num_experts = weight_bf16.shape[0]
+                    prefix = weight_name[: -len(".experts.down_proj")]
+                    for i in range(num_experts):
+                        down_name = f"{prefix}.experts.{i}.down_proj.weight"
+                        _quant_and_record_int8(
+                            down_name,
+                            weight_bf16[i].contiguous(),
+                            new_state_dict,
+                            new_weight_map,
+                            file_name,
+                        )
+                        quant_count += 1
+                    del weight, weight_bf16
+                    torch.cuda.empty_cache()
+                    continue
+
+                # ------------------------------------------------------------
+                # Regular tensors
+                # ------------------------------------------------------------
+                if any(weight_name.endswith(suffix) for suffix in suffix_to_quant):
+                    quant_count += 1
+                    weight_bf16 = weight
+                    _quant_and_record_int8(
+                        weight_name,
+                        weight_bf16,
+                        new_state_dict,
+                        new_weight_map,
+                        file_name,
+                    )
                 else:
                     if weight_name.endswith("_scale_inv"):
                         continue
@@ -237,6 +371,7 @@ def main(input_path, int8_path, num_workers):
     if quant_config is not None:
         input_type = quant_config.get("quant_method", input_type)
     print("input_type", input_type)
+    suffix_to_quant = get_suffix_to_quant(config.get("model_type"))
 
     input_model_index_file = os.path.join(input_path, "model.safetensors.index.json")
     output_model_index_file = os.path.join(int8_path, "model.safetensors.index.json")
@@ -260,8 +395,9 @@ def main(input_path, int8_path, num_workers):
             weight_map = {name: "model.safetensors" for name in f.keys()}
     print(f"Found {len(safetensor_files)} safetensor files")
 
-    ignored_layers = build_ignored_layers(input_path)
+    ignored_layers, model_type = build_ignored_layers(input_path)
     print(f"Ignored layers: {ignored_layers}")
+    is_qwen35 = model_type in ("qwen3_5_moe", "qwen3_5")
 
     config["quantization_config"] = {
         "config_groups": {
@@ -296,6 +432,7 @@ def main(input_path, int8_path, num_workers):
         },
         "format": "int-quantized",
         "ignore": ignored_layers,
+        "modules_to_not_convert": ignored_layers,
         "kv_cache_scheme": None,
         "quant_method": "compressed-tensors",
         "quantization_status": "compressed",
@@ -314,9 +451,10 @@ def main(input_path, int8_path, num_workers):
     manager = mp.Manager()
     return_dict = manager.dict()
     processes = []
+    target_worker = process_worker_qwen35 if is_qwen35 else process_worker
     for i in range(num_workers):
         p = mp.Process(
-            target=process_worker,
+            target=target_worker,
             args=(
                 i,
                 file_subsets[i],
@@ -324,6 +462,7 @@ def main(input_path, int8_path, num_workers):
                 int8_path,
                 weight_map,
                 return_dict,
+                suffix_to_quant,
                 input_type,
             ),
         )
