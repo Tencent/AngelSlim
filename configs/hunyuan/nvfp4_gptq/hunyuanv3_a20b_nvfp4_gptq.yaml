@@ -21,8 +21,9 @@ compression:
     quant_method:
       weight: "per-group"
       group_size: 16          # NVFP4 micro-scaling block (fixed at 16; -1 also resolves to 16)
-      dequant_to_bf16: false  # false: produce packed NVFP4 weights; true: keep fake-quantized bf16 for PPL eval
-      actorder: true          # act-order is folded into the previous layer's output channels (block stays K-contiguous)
+      dequant_to_bf16: false
+      actorder: true         
+      share_gate_up_weight_scale_2: true  # share one per-tensor scale_2 across each fused gate/up (q/k/v) group; matches fused-GEMM deployment
     ignore_layers:         # Skip quantization for these layers
       - "lm_head"
       - "self_attn.q_proj"

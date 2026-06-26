@@ -31,7 +31,11 @@ from .....utils import (
     print_info,
 )
 from ...modules.catcher import Catcher
-from ...modules.helper_layer import GPTQQuantLinear, NVFP4QDQModule
+from ...modules.helper_layer import (
+    GPTQQuantLinear,
+    NVFP4QDQModule,
+    compute_nvfp4_weight_scale_2,
+)
 from .gptaq_module import GPTAQModule
 from .gptq_module import GPTQModule
 
@@ -68,6 +72,13 @@ class GPTQ:
         )
         self.dequant_to_bf16 = bool(
             self.model.quant_config.quant_algo_info.get("dequant_to_bf16", False)
+        )
+        # NVFP4 only: share one per-tensor (level-2) weight scale across each
+        # fused gate/up (and q/k/v) group, matching the single per-tensor scale
+        # a fused-GEMM deployment applies. Default on; set False to keep the
+        # legacy per-layer scale_2.
+        self.share_gate_up_weight_scale_2 = bool(
+            self.model.quant_config.quant_algo_info.get("share_gate_up_weight_scale_2", True)
         )
         self.percdamp = 0.01
         self.sym = sym
@@ -250,6 +261,65 @@ class GPTQ:
             )
         return filtered_subset
 
+    @staticmethod
+    def _nvfp4_scale_2_group_key(name):
+        """Group key for layers that must share one NVFP4 per-tensor scale_2.
+
+        Deployment fuses each expert's gate_proj+up_proj (and attention's
+        q/k/v) into a single GEMM that can apply only one per-tensor (level-2)
+        scale across the fused weight. GPTQ must therefore quantize every member
+        of such a group against the *same* weight_scale_2, otherwise the half of
+        the fused weight whose scale_2 was overwritten at deploy time is
+        dequantized with the wrong per-tensor scale -> a systematic multiplicative
+        bias that occasionally flips a token.
+
+        Returns (group_prefix, member_tag) for fusible layers, else None.
+        """
+        for suffix in ("gate_proj", "up_proj"):
+            if name.endswith(suffix):
+                return name[: -len(suffix)], "gate_up"
+        for suffix in ("q_proj", "k_proj", "v_proj"):
+            if name.endswith(suffix):
+                return name[: -len(suffix)], "qkv"
+        return None
+
+    def _assign_shared_nvfp4_weight_scale_2(self):
+        """Pre-pass: give fused gate/up (and q/k/v) groups one shared scale_2.
+
+        Runs BEFORE fasterquant so GPTQ compensates against the exact grid that
+        deployment will use. The shared scale_2 is derived from the group-wide
+        amax (max of each member's amax). Because the shared amax is >= each
+        member's own amax, every per-block E4M3 scale only shrinks, so no block
+        scale overflows the E4M3 range that single-layer scaling would have hit.
+        """
+        groups = {}
+        for name in self.gptq:
+            if any(ignore in name for ignore in self.ignore_layers):
+                continue
+            key = self._nvfp4_scale_2_group_key(name)
+            if key is None:
+                continue
+            groups.setdefault(key, []).append(name)
+
+        for (prefix, tag), names in groups.items():
+            if len(names) < 2:
+                # Nothing to fuse with; let fasterquant compute scale_2 itself.
+                continue
+            group_amax = None
+            for name in names:
+                # self.gptq[name].w is the cloned fp32 weight before compensation;
+                # GPTQ compensation preserves amax magnitude, so this is the same
+                # amax fasterquant would otherwise use per-layer.
+                w_amax = self.gptq[name].w.abs().amax().to(torch.float32)
+                group_amax = w_amax if group_amax is None else torch.maximum(group_amax, w_amax)
+            shared_scale_2 = compute_nvfp4_weight_scale_2(group_amax)
+            for name in names:
+                self.gptq[name].weight_scale_2 = shared_scale_2.to(self.gptq[name].dev)
+            print_info(
+                f"NVFP4 shared weight_scale_2 for {tag} group '{prefix}*': "
+                f"{shared_scale_2.item():.6g} across {len(names)} layers"
+            )
+
     @torch.no_grad()
     def run(self, dataloader):
         for model_module in self.layers:
@@ -379,6 +449,9 @@ class GPTQ:
             print_info("HOOK Step{}".format(j))
             for h in handles:
                 h.remove()
+
+            if self.weight_format == "nvfp4" and self.share_gate_up_weight_scale_2:
+                self._assign_shared_nvfp4_weight_scale_2()
 
             for name in self.gptq:
                 if any(ignore in name for ignore in self.ignore_layers):
