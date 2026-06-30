@@ -152,12 +152,12 @@ class GPTQ:
                 return []
         return prev_names
 
-    def reorder_quantizer_output_channels(self, quantizer_name, perm):
+    def reorder_quantizer_output_channels(self, quantizer_name, input_perm):
         if quantizer_name not in self.quantizers:
             return
 
         scale, zero = self.quantizers[quantizer_name]
-        scale_perm = perm.to(scale.device)
+        scale_perm = input_perm.to(scale.device)
         # Reorder per-output-channel scale rows. For nvfp4 the second element
         # is the per-tensor (scalar) weight_scale_2, which is invariant to
         # output-channel permutation and must NOT be index_select'd.
@@ -167,7 +167,7 @@ class GPTQ:
                 zero,
             )
         else:
-            zero_perm = perm.to(zero.device)
+            zero_perm = input_perm.to(zero.device)
             self.quantizers[quantizer_name] = (
                 scale.index_select(0, scale_perm),
                 zero.index_select(0, zero_perm),
@@ -192,6 +192,51 @@ class GPTQ:
 
             quantizer_name = f"{self.layers_block_name}.{layer_idx}.{prev_name}"
             self.reorder_quantizer_output_channels(quantizer_name, input_perm)
+
+    @staticmethod
+    def _truncate_tensor_dim(tensor, max_len, dim):
+        if tensor is None or tensor.dim() == 0:
+            return tensor
+        dim = dim if dim >= 0 else tensor.dim() + dim
+        if dim < 0 or dim >= tensor.dim() or tensor.shape[dim] <= max_len:
+            return tensor
+        return tensor.narrow(dim, 0, max_len)
+
+    def _align_layer_input(self, hidden_states, kwargs):
+        seq_len = hidden_states.shape[1]
+        if self.seq_length is not None:
+            seq_len = min(seq_len, int(self.seq_length))
+        hidden_states = self._truncate_tensor_dim(hidden_states, seq_len, dim=1)
+
+        aligned_kwargs = {}
+        for key, value in kwargs.items():
+            if key == "position_ids" and isinstance(value, torch.Tensor):
+                aligned_kwargs[key] = self._truncate_tensor_dim(value, seq_len, dim=-1)
+            elif key == "attention_mask" and isinstance(value, torch.Tensor):
+                value = self._truncate_tensor_dim(value, seq_len, dim=-1)
+                if value.dim() >= 3:
+                    value = self._truncate_tensor_dim(value, seq_len, dim=-2)
+                aligned_kwargs[key] = value
+            elif key == "position_embeddings" and isinstance(value, tuple):
+                aligned_kwargs[key] = tuple(
+                    (
+                        self._truncate_tensor_dim(tensor, seq_len, dim=1)
+                        if isinstance(tensor, torch.Tensor) and tensor.dim() >= 3
+                        else (
+                            self._truncate_tensor_dim(tensor, seq_len, dim=0)
+                            if isinstance(tensor, torch.Tensor)
+                            else tensor
+                        )
+                    )
+                    for tensor in value
+                )
+            else:
+                aligned_kwargs[key] = value
+        return hidden_states, aligned_kwargs
+
+    def _forward_layer(self, layer, hidden_states, kwargs):
+        hidden_states, kwargs = self._align_layer_input(hidden_states, kwargs)
+        return _extract_hidden_states(layer(hidden_states=hidden_states, **kwargs))
 
     @staticmethod
     def _get_expert_idx_from_name(name):
@@ -371,7 +416,7 @@ class GPTQ:
             layers = layers.cpu()
 
         for i in range(len(layers)):
-            layer = layers[i].to(dev)
+            layer = self._move_layer_to_device(layers[i], dev)
             subset = find_layers(layer, layers=self.model.observer_layer_classes)
             subset = self._filter_distributed_expert_subset(layer, subset)
             print_info("subset:{}".format(subset))
@@ -423,12 +468,7 @@ class GPTQ:
                 # native hook forward
                 for j in range(nsamples):
                     with torch.no_grad():
-                        outs[j] = _extract_hidden_states(
-                            layer(
-                                hidden_states=native_inps[j],
-                                **layer_kwargs_list[j],
-                            )
-                        )
+                        outs[j] = self._forward_layer(layer, native_inps[j], layer_kwargs_list[j])
                 native_inps = [x.clone().detach() for x in outs]
 
                 print_info("Native HOOK Step{}".format(j))
@@ -442,9 +482,7 @@ class GPTQ:
             # hook forward
             for j in range(nsamples):
                 with torch.no_grad():
-                    outs[j] = _extract_hidden_states(
-                        layer(hidden_states=inps[j], **layer_kwargs_list[j])
-                    )
+                    outs[j] = self._forward_layer(layer, inps[j], layer_kwargs_list[j])
 
             print_info("HOOK Step{}".format(j))
             for h in handles:
@@ -503,9 +541,7 @@ class GPTQ:
 
             for j in range(nsamples):
                 with torch.no_grad():
-                    outs[j] = _extract_hidden_states(
-                        layer(hidden_states=inps[j], **layer_kwargs_list[j])
-                    )
+                    outs[j] = self._forward_layer(layer, inps[j], layer_kwargs_list[j])
 
             for name in self.gptq:
                 del self.gptq[name].layer
@@ -513,7 +549,8 @@ class GPTQ:
             layers[i] = self._move_layer_to_device(layer, "cpu")
             del layer
             # del gptq
-            torch.cuda.empty_cache()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             gc.collect()
             inps, outs = outs, inps
             print_info("GPTQ end layer {}\n".format(i))

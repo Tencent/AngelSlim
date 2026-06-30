@@ -58,7 +58,11 @@ class GPTQModule:
         # Handle 4D input (e.g., Conv2d or multi-head attention internals)
         if len(inp.shape) == 4:
             inp = inp[0, 0, :, :]
-        # Flatten to 2D: [total_tokens, feature_dim]
+        if len(inp.shape) == 3 and inp.shape[0] == 1:
+            inp = inp[0]
+        if len(inp.shape) == 2:
+            inp = inp.unsqueeze(0)
+        tmp = inp.shape[0]
         if len(inp.shape) == 3:
             inp = inp.reshape((-1, inp.shape[-1]))
         inp = inp.float()
@@ -110,7 +114,8 @@ class GPTQModule:
         # weights before any per-block scale. GPTQ compensation does not change
         # the amax magnitude, so this stays valid for the whole layer.
         #
-        # If ``self.weight_scale_2`` was already set externally (e.g. a shared
+        # If ``self.weight_scale_2``
+        # was already set externally (e.g. a shared
         # gate/up or qkv level-2 scale injected by GPTQ.run so fused-GEMM
         # deployment uses one per-tensor scale across the group), keep it and do
         # NOT recompute from this layer's amax alone.

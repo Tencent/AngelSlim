@@ -20,7 +20,11 @@ Vision Selector Pruning Strategy module.
 import torch
 
 from ..base.context import PruningContext
-from .utils.utils import _extract_and_validate_vision_token_info, get_valid_content_mask
+from .utils.utils import (
+    _extract_and_validate_vision_token_info,
+    get_valid_content_mask,
+    resolve_num_tokens_to_keep,
+)
 from .utils.vision_selector_utils import get_universal_selector_scores
 
 
@@ -89,9 +93,7 @@ def vision_selector_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
         return torch.ones_like(input_ids, dtype=torch.bool)
 
     # Calculate retention target
-    num_to_keep = int(round(num_vision_tokens * (1.0 - pruning_ratio)))
-    if pruning_ratio < 1.0 and num_to_keep == 0:
-        num_to_keep = 1
+    num_to_keep = resolve_num_tokens_to_keep(pruning_ratio, num_vision_tokens)
 
     # If budget exceeds current token count, retain everything
     if num_to_keep >= num_vision_tokens:

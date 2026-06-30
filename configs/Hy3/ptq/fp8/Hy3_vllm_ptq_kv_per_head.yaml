@@ -15,7 +15,7 @@
 # ============================================================================
 model_path: /path/to/model              # stage1: bf16 model dir; stage2 reuses as input_bf16_hf_path
 ptq_data_path: /path/to/dataset         # stage1 only
-output_dir: /path/to/statistics         # stage1: where stats are written; stage2 reuses as input_vllm_ac_json_path
+output_dir: /path/to/statistics         # stage1: where stats are written; stage2 reuses as input_vllm_ac_json_path. Must be on a shared filesystem when dp_size > 1 spans multiple nodes.
 output_fp8_hf_path: /path/to/output/fp8_model  # stage2 only
 
 # ============================================================================
@@ -24,6 +24,7 @@ output_fp8_hf_path: /path/to/output/fp8_model  # stage2 only
 
 # -------- Model loading / runtime --------
 tp_size: 16
+dp_size: 1
 batch_size: 4
 num_samples: 512
 max_length: 16384

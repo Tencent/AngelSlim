@@ -17,7 +17,10 @@ import math
 import torch
 
 from ..base.context import PruningContext
-from .utils.utils import _extract_and_validate_vision_token_info
+from .utils.utils import (
+    _extract_and_validate_vision_token_info,
+    resolve_num_tokens_to_keep,
+)
 
 
 def special_token_based_attention_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
@@ -76,9 +79,7 @@ def special_token_based_attention_pruning(context: PruningContext, **kwargs) -> 
             batch_keep_masks.append(torch.ones_like(ids_single, dtype=torch.bool))
             continue
 
-        num_to_keep = int(round(num_vision_tokens * (1 - ratio)))
-        if ratio < 1.0 and num_to_keep == 0 and num_vision_tokens > 0:
-            num_to_keep = 1
+        num_to_keep = resolve_num_tokens_to_keep(ratio, num_vision_tokens)
 
         if num_to_keep >= num_vision_tokens:
             batch_keep_masks.append(torch.ones_like(ids_single, dtype=torch.bool))

@@ -18,13 +18,21 @@ import json
 import os
 import shutil
 from argparse import ArgumentParser
-from glob import glob
 
+import accelerate
 import torch
 import torch.multiprocessing as mp
 from safetensors.torch import safe_open, save_file
+from torch import nn
+from transformers import (
+    AutoConfig,
+    AutoModelForCausalLM,
+    Qwen3_5ForConditionalGeneration,
+    Qwen3_5MoeForConditionalGeneration,
+)
 
 from angelslim.compressor.quant.core.quant_func import weight_dequant
+from angelslim.utils import find_layers
 
 SUFFIX_TO_QUANT = [
     ".gate_and_up_proj.weight",
@@ -42,7 +50,77 @@ SUFFIX_TO_QUANT = [
     ".o_proj.weight",
     ".indexer.wq_b.weight",
     ".indexer.wk.weight",
+    ".experts.gate_up_proj",
+    ".experts.down_proj",
 ]
+
+# Qwen3.5-specific extra suffixes not covered by the generic SUFFIX_TO_QUANT.
+QWEN35_EXTRA_SUFFIX_TO_QUANT = [
+    ".linear_attn.in_proj_qkv.weight",
+    ".linear_attn.in_proj_z.weight",
+    ".linear_attn.out_proj.weight",
+]
+
+
+def get_suffix_to_quant(model_type):
+    if model_type in ("qwen3_5_moe", "qwen3_5"):
+        return SUFFIX_TO_QUANT + QWEN35_EXTRA_SUFFIX_TO_QUANT
+    return SUFFIX_TO_QUANT
+
+
+def build_ignored_layers(input_path):
+    """Build ignored layers from the model structure, following fp8_quant_blockwise.py."""
+    hf_config = AutoConfig.from_pretrained(input_path)
+    model_type = hf_config.model_type
+    suffix_to_quant = get_suffix_to_quant(model_type)
+    with accelerate.init_empty_weights():
+        if model_type == "qwen3_5_moe":
+            model = Qwen3_5MoeForConditionalGeneration._from_config(hf_config)
+        elif model_type == "qwen3_5":
+            model = Qwen3_5ForConditionalGeneration._from_config(hf_config)
+        else:
+            model = AutoModelForCausalLM.from_config(hf_config)
+
+    layers = find_layers(model, [nn.Linear])
+    print(f"Found {len(layers)} linear layers")
+
+    ignored_layers = []
+    if model_type in ("qwen3_5_moe", "qwen3_5"):
+        for name, module in model.named_modules():
+            if not hasattr(module, "weight") or module.weight is None:
+                continue
+            if module.weight.ndim < 2:
+                continue
+            weight_name = f"{name}.weight"
+            if not any(weight_name.endswith(s) for s in suffix_to_quant):
+                ignored_layers.append(name)
+
+        text_config = getattr(hf_config, "text_config", hf_config)
+        num_mtp_layers = getattr(text_config, "mtp_num_hidden_layers", 0)
+        for i in range(num_mtp_layers):
+            ignored_layers.append("mtp.fc")
+            ignored_layers.append(f"mtp.layers.{i}.mlp.gate")
+            ignored_layers.append(f"mtp.layers.{i}.mlp.shared_expert_gate")
+    else:
+        for name in layers:
+            if name.endswith("mlp.experts"):
+                continue
+            weight_name = f"{name}.weight"
+            if not any(weight_name.endswith(suffix) for suffix in suffix_to_quant):
+                ignored_layers.append(name)
+
+    del model
+    return ignored_layers, model_type
+
+
+def _quant_and_record_int8(weight_name, weight_bf16, new_state_dict, new_weight_map, file_name):
+    """Quantize a single 2-D BF16/FP32 weight to INT8 and record the result."""
+    int8_weight, scale = weight_quant(weight_bf16)
+    new_state_dict[weight_name] = int8_weight
+    scale_name = f"{weight_name}_scale"
+    new_state_dict[scale_name] = scale
+    new_weight_map[weight_name] = file_name
+    new_weight_map[scale_name] = file_name
 
 
 def process_worker(
@@ -52,6 +130,7 @@ def process_worker(
     int8_path,
     weight_map,
     return_dict,
+    suffix_to_quant,
     input_type="bf16",
 ):
     """
@@ -75,7 +154,7 @@ def process_worker(
             keys = set(f.keys())
             for weight_name in keys:
                 weight = f.get_tensor(weight_name)
-                if any(weight_name.endswith(suffix) for suffix in SUFFIX_TO_QUANT):
+                if any(weight_name.endswith(suffix) for suffix in suffix_to_quant):
                     quant_count += 1
                     if input_type == "fp8":
                         scale_inv_name = f"{weight_name}_scale_inv"
@@ -85,12 +164,121 @@ def process_worker(
                         weight_bf16 = weight_dequant(weight, scale_inv)
                     else:
                         weight_bf16 = weight
-                    int8_weight, scale_inv = weight_quant(weight_bf16)
-                    new_state_dict[weight_name] = int8_weight
-                    new_scale_name = f"{weight_name}_scale"
-                    new_state_dict[new_scale_name] = scale_inv
+                    _quant_and_record_int8(
+                        weight_name,
+                        weight_bf16,
+                        new_state_dict,
+                        new_weight_map,
+                        file_name,
+                    )
+                else:
+                    if weight_name.endswith("_scale_inv"):
+                        continue
+                    new_state_dict[weight_name] = weight
                     new_weight_map[weight_name] = file_name
-                    new_weight_map[new_scale_name] = file_name
+
+        new_safetensor_file = os.path.join(int8_path, file_name)
+        save_file(new_state_dict, new_safetensor_file)
+    return_dict[worker_id] = (quant_count, new_weight_map)
+
+
+def process_worker_qwen35(
+    worker_id,
+    safetensor_files,
+    input_path,
+    int8_path,
+    weight_map,
+    return_dict,
+    suffix_to_quant,
+    input_type="bf16",
+):
+    """
+    Qwen3.5-specific worker.
+
+    Handles the batched-expert tensors used by Qwen3.5-MoE checkpoints:
+        - ``.experts.gate_up_proj`` of shape [num_experts, 2*intermediate, hidden]
+          is split along dim=1 into per-expert ``experts.{i}.gate_proj.weight``
+          and ``experts.{i}.up_proj.weight``.
+        - ``.experts.down_proj`` of shape [num_experts, hidden, intermediate]
+          is split along dim=0 into per-expert ``experts.{i}.down_proj.weight``.
+    All other tensors follow the same path as :func:`process_worker`.
+    """
+    num_gpus = torch.cuda.device_count()
+    rank = worker_id % num_gpus
+    torch.cuda.set_device(rank)
+    quant_count = 0
+    new_weight_map = {}
+    for safetensor_file in safetensor_files:
+        file_name = os.path.basename(safetensor_file)
+        print(f"[Worker(qwen35) {worker_id}][GPU {rank}] processing {file_name}")
+        with safe_open(safetensor_file, framework="pt", device=f"cuda:{rank}") as f:
+            new_state_dict = {}
+            keys = set(f.keys())
+            for weight_name in keys:
+                weight = f.get_tensor(weight_name)
+
+                # ------------------------------------------------------------
+                # Batched expert tensors: split per-expert and quantize each
+                # 2-D slice independently (channel-int8).
+                # ------------------------------------------------------------
+                if weight_name.endswith(".experts.gate_up_proj"):
+                    weight_bf16 = weight
+                    num_experts = weight_bf16.shape[0]
+                    gate_w, up_w = weight_bf16.chunk(2, dim=1)
+                    prefix = weight_name[: -len(".experts.gate_up_proj")]
+                    for i in range(num_experts):
+                        gate_name = f"{prefix}.experts.{i}.gate_proj.weight"
+                        up_name = f"{prefix}.experts.{i}.up_proj.weight"
+                        _quant_and_record_int8(
+                            gate_name,
+                            gate_w[i].contiguous(),
+                            new_state_dict,
+                            new_weight_map,
+                            file_name,
+                        )
+                        _quant_and_record_int8(
+                            up_name,
+                            up_w[i].contiguous(),
+                            new_state_dict,
+                            new_weight_map,
+                            file_name,
+                        )
+                        quant_count += 2
+                    del weight, weight_bf16, gate_w, up_w
+                    torch.cuda.empty_cache()
+                    continue
+
+                if weight_name.endswith(".experts.down_proj"):
+                    weight_bf16 = weight
+                    num_experts = weight_bf16.shape[0]
+                    prefix = weight_name[: -len(".experts.down_proj")]
+                    for i in range(num_experts):
+                        down_name = f"{prefix}.experts.{i}.down_proj.weight"
+                        _quant_and_record_int8(
+                            down_name,
+                            weight_bf16[i].contiguous(),
+                            new_state_dict,
+                            new_weight_map,
+                            file_name,
+                        )
+                        quant_count += 1
+                    del weight, weight_bf16
+                    torch.cuda.empty_cache()
+                    continue
+
+                # ------------------------------------------------------------
+                # Regular tensors
+                # ------------------------------------------------------------
+                if any(weight_name.endswith(suffix) for suffix in suffix_to_quant):
+                    quant_count += 1
+                    weight_bf16 = weight
+                    _quant_and_record_int8(
+                        weight_name,
+                        weight_bf16,
+                        new_state_dict,
+                        new_weight_map,
+                        file_name,
+                    )
                 else:
                     if weight_name.endswith("_scale_inv"):
                         continue
@@ -161,7 +349,6 @@ def main(input_path, int8_path, num_workers):
     """
     torch.set_default_dtype(torch.bfloat16)
     os.makedirs(int8_path, exist_ok=True)
-    model_index_file = os.path.join(int8_path, "model.safetensors.index.json")
     config_file = os.path.join(int8_path, "config.json")
 
     for fname in os.listdir(input_path):
@@ -184,6 +371,34 @@ def main(input_path, int8_path, num_workers):
     if quant_config is not None:
         input_type = quant_config.get("quant_method", input_type)
     print("input_type", input_type)
+    suffix_to_quant = get_suffix_to_quant(config.get("model_type"))
+
+    input_model_index_file = os.path.join(input_path, "model.safetensors.index.json")
+    output_model_index_file = os.path.join(int8_path, "model.safetensors.index.json")
+    has_index = os.path.exists(input_model_index_file)
+    if has_index:
+        with open(input_model_index_file, "r") as f:
+            model_index = json.load(f)
+        weight_map = model_index["weight_map"]
+        safetensor_files = [
+            os.path.join(input_path, file_name) for file_name in sorted(set(weight_map.values()))
+        ]
+        safetensor_files.sort()
+    else:
+        single_safetensor_file = os.path.join(input_path, "model.safetensors")
+        if not os.path.exists(single_safetensor_file):
+            raise FileNotFoundError(
+                f"Neither {input_model_index_file} nor {single_safetensor_file} exists"
+            )
+        safetensor_files = [single_safetensor_file]
+        with safe_open(single_safetensor_file, framework="pt", device="cpu") as f:
+            weight_map = {name: "model.safetensors" for name in f.keys()}
+    print(f"Found {len(safetensor_files)} safetensor files")
+
+    ignored_layers, model_type = build_ignored_layers(input_path)
+    print(f"Ignored layers: {ignored_layers}")
+    is_qwen35 = model_type in ("qwen3_5_moe", "qwen3_5")
+
     config["quantization_config"] = {
         "config_groups": {
             "group_0": {
@@ -216,7 +431,8 @@ def main(input_path, int8_path, num_workers):
             }
         },
         "format": "int-quantized",
-        "ignore": ["lm_head"],
+        "ignore": ignored_layers,
+        "modules_to_not_convert": ignored_layers,
         "kv_cache_scheme": None,
         "quant_method": "compressed-tensors",
         "quantization_status": "compressed",
@@ -226,12 +442,6 @@ def main(input_path, int8_path, num_workers):
         json.dump(config, f, indent=2, ensure_ascii=False, sort_keys=True)
     print(f"config.json modified and saved to {config_file}")
 
-    with open(model_index_file, "r") as f:
-        model_index = json.load(f)
-    weight_map = model_index["weight_map"]
-
-    safetensor_files = list(glob(os.path.join(input_path, "*.safetensors")))
-    safetensor_files.sort()
     quant_count = 0
     new_weight_map = {}
 
@@ -241,9 +451,10 @@ def main(input_path, int8_path, num_workers):
     manager = mp.Manager()
     return_dict = manager.dict()
     processes = []
+    target_worker = process_worker_qwen35 if is_qwen35 else process_worker
     for i in range(num_workers):
         p = mp.Process(
-            target=process_worker,
+            target=target_worker,
             args=(
                 i,
                 file_subsets[i],
@@ -251,6 +462,7 @@ def main(input_path, int8_path, num_workers):
                 int8_path,
                 weight_map,
                 return_dict,
+                suffix_to_quant,
                 input_type,
             ),
         )
@@ -265,13 +477,16 @@ def main(input_path, int8_path, num_workers):
         new_weight_map.update(wm)
     print(f"{quant_count} weights are quantized.")
 
-    # modify model.safetensors.index.json
-    with open(model_index_file, "r") as f:
-        model_index = json.load(f)
-    model_index["weight_map"] = new_weight_map
-    with open(model_index_file, "w", encoding="utf-8") as f:
-        json.dump(model_index, f, indent=2, ensure_ascii=False, sort_keys=True)
-    print(f"model.safetensors.index.json modified and saved to {model_index_file}")
+    if has_index:
+        # modify model.safetensors.index.json
+        with open(output_model_index_file, "r") as f:
+            model_index = json.load(f)
+        model_index["weight_map"] = new_weight_map
+        with open(output_model_index_file, "w", encoding="utf-8") as f:
+            json.dump(model_index, f, indent=2, ensure_ascii=False, sort_keys=True)
+        print(f"model.safetensors.index.json modified and saved to {output_model_index_file}")
+    else:
+        print("model.safetensors.index.json not found; skipped index update")
 
 
 if __name__ == "__main__":

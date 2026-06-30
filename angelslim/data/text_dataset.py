@@ -261,13 +261,25 @@ class TextDataset(BaseDataset):
             ):
                 messages = [{"role": "system", "content": data["system_prompt"]}] + messages
         elif "conversations" in data:
-            share_gpt_data = data["conversations"]
-            messages = [
-                {"role": "user", "content": share_gpt_data[0]["value"]},
-                {"role": "assistant", "content": share_gpt_data[1]["value"]},
-            ]
-            if "system" in data and data["system"]:
-                messages = [{"role": "system", "content": data["system_prompt"]}] + messages
+            # ShareGPT-style record: a list of multi-turn entries keyed by
+            # ``from``/``value``. Keep every turn and carry its role through so
+            # the normalization below maps each one. The previous code read
+            # only the first two turns and assumed a fixed user/assistant
+            # ordering, which silently dropped longer conversations and
+            # mislabeled system-led ones.
+            messages = []
+            for turn in data["conversations"]:
+                content = turn.get("content", turn.get("value"))
+                if content is None:
+                    # Skip malformed turns that carry no text payload.
+                    continue
+                role = turn.get("role", turn.get("from", ""))
+                messages.append({"role": role, "content": content})
+            # ShareGPT keeps an optional system prompt alongside the turns
+            # rather than inside ``conversations``.
+            system_prompt = data.get("system") or data.get("system_prompt")
+            if system_prompt and (not messages or messages[0]["role"] != "system"):
+                messages = [{"role": "system", "content": system_prompt}] + messages
         else:
             messages = [
                 {"role": "user", "content": data["input"]},
@@ -282,7 +294,7 @@ class TextDataset(BaseDataset):
                 item["role"] = item["from"]
             if "content" not in item and "value" in item:
                 item["content"] = item["value"]
-            role = item["role"]
+            role = item.get("role") or ""
             if "human" in role:
                 item["role"] = "user"
             elif "gpt" in role:

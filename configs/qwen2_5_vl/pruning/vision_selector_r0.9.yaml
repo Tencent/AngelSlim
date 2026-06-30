@@ -16,7 +16,7 @@ compressor:
     global:
       strategy: "vision_selector"
       params:
-        ratio: 9
+        ratio: 0.9
       model_related_params:
         selector_path:
           "7b": "AngelSlim/Qwen2.5-VL-7B-Instruct-Selector"

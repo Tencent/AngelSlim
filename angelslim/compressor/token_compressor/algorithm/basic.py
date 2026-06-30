@@ -16,7 +16,10 @@
 import torch
 
 from ..base.context import PruningContext
-from .utils.utils import _extract_and_validate_vision_token_info
+from .utils.utils import (
+    _extract_and_validate_vision_token_info,
+    resolve_num_tokens_to_keep,
+)
 
 
 def baseline_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
@@ -128,10 +131,7 @@ def random_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
             batch_keep_masks.append(torch.ones_like(input_ids_single, dtype=torch.bool))
             continue
 
-        num_to_keep = int(round(num_vision_tokens * (1 - ratio)))
-        # Retain at least one token if ratio < 1.0
-        if ratio < 1.0 and num_to_keep == 0 and num_vision_tokens > 0:
-            num_to_keep = 1
+        num_to_keep = resolve_num_tokens_to_keep(ratio, num_vision_tokens)
 
         kept_vision_indices = torch.tensor([], dtype=torch.long, device=device)
         if num_to_keep > 0:

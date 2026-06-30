@@ -57,7 +57,8 @@ if [ "$SKIP_CALIBRATE" = false ]; then
     echo "[Phase 1] Smooth Stats Calibration"
     echo "========================================"
     mkdir -p logs
-    python3 tools/smooth/run_vllm_smooth.py -c "$CONFIG"
+    python3 tools/smooth/run_vllm_smooth.py -c "$CONFIG" \
+    2>&1 | tee logs/run_smooth_calibrate_Hy3.log
 fi
 
 # -------- Phase 2: Offline Weight Conversion --------
@@ -65,7 +66,9 @@ if [ "$SKIP_CONVERT" = false ]; then
     echo "========================================"
     echo "[Phase 2] Offline Weight Conversion"
     echo "========================================"
-    python3 tools/smooth/convert_smooth_weights.py -c "$CONFIG"
+    mkdir -p logs
+    python3 tools/smooth/convert_smooth_weights.py -c "$CONFIG" \
+    2>&1 | tee logs/run_smooth_convert_Hy3.log
 fi
 
 # revert 

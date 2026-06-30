@@ -24,6 +24,7 @@ from ..base.context import PruningContext
 from .utils.utils import (
     _extract_and_validate_vision_token_info,
     _recompute_attention_maps_for_all_images,
+    resolve_num_tokens_to_keep,
 )
 
 
@@ -138,9 +139,7 @@ def scope_pruning(context: PruningContext, **kwargs) -> torch.Tensor:
     cls_attn = torch.cat(scores_list, dim=1).to(device=device, dtype=inputs_embeds.dtype)
 
     # 5. Execute SCOPE core
-    num_to_keep = int(round(N_vision * (1.0 - ratio)))
-    if ratio < 1.0 and num_to_keep == 0 and N_vision > 0:
-        num_to_keep = 1
+    num_to_keep = resolve_num_tokens_to_keep(ratio, N_vision)
 
     if num_to_keep >= N_vision:
         return torch.ones_like(input_ids, dtype=torch.bool)

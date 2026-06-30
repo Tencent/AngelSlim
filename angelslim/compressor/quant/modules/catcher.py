@@ -62,6 +62,11 @@ class Catcher(torch.nn.Module):
             if k in cls._SEQ_DIM_KWARGS and isinstance(v, torch.Tensor):
                 # position_ids shape: [batch, seq_len]
                 out[k] = cls._truncate_seq(v, max_len, dim=-1)
+            elif k == "attention_mask" and isinstance(v, torch.Tensor):
+                truncated = cls._truncate_seq(v, max_len, dim=-1)
+                if truncated.dim() >= 3:
+                    truncated = cls._truncate_seq(truncated, max_len, dim=-2)
+                out[k] = truncated
             elif k == "position_embeddings" and isinstance(v, tuple):
                 # position_embeddings is (cos, sin), each [batch, seq_len, dim]
                 out[k] = tuple(cls._truncate_seq(t, max_len, dim=1) for t in v)

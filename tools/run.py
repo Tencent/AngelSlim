@@ -17,12 +17,16 @@ import os
 import sys
 from datetime import timedelta
 
-import torch
-import torch.distributed as dist
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
-from angelslim.engine import Engine, VLLMCalibrateEngine
-from angelslim.utils import get_yaml_prefix_simple, print_info
-from angelslim.utils.config_parser import SlimConfigParser, print_config
+import torch  # noqa: E402
+import torch.distributed as dist  # noqa: E402
+
+from angelslim.engine import Engine, VLLMCalibrateEngine  # noqa: E402
+from angelslim.utils import get_yaml_prefix_simple, print_info  # noqa: E402
+from angelslim.utils.config_parser import SlimConfigParser, print_config  # noqa: E402
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
@@ -34,7 +38,7 @@ def get_args():
     parser.add_argument("-c", "--config", type=str, required=True)
     parser.add_argument("--model-path", type=str, default=None)
     parser.add_argument("--save-path", type=str, default=None)
-    parser.add_argument("--multi-nodes", action="store_true")
+    parser.add_argument("--multi-nodes", "--muti-nodes", dest="multi_nodes", action="store_true")
     parser.add_argument("--lm-eval", action="store_true")
     parser.add_argument("--lm-eval-task", nargs="+", default=["ceval-valid"])
     parser.add_argument("--ppl-eval", action="store_true")

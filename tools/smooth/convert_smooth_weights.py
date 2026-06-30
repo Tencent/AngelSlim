@@ -35,8 +35,10 @@ Smooth stats JSON format (from run_vllm_smooth.py):
 """
 
 import argparse
+import glob
 import json
 import os
+import shutil
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -625,8 +627,23 @@ def main():
         max_shard_size=f"{args.shard_size_gb}GB",
         safe_serialization=True,
     )
+
+    # copy config.json from source model_path to save_path
+    shutil.copy(
+        os.path.join(args.model_path, "config.json"), os.path.join(args.save_path, "config.json")
+    )
     print(f"  [Save] Model saved via save_pretrained to {args.save_path}")
 
+    #  check if generation_config.json exists in source model_path, if exists, copy it to save_path
+    if os.path.exists(os.path.join(args.model_path, "generation_config.json")):
+        shutil.copy(
+            os.path.join(args.model_path, "generation_config.json"),
+            os.path.join(args.save_path, "generation_config.json"),
+        )
+    else:
+        print(f"  [Save] generation_config.json not found in source model_path: {args.model_path}")
+        if os.path.exists(os.path.join(args.save_path, "generation_config.json")):
+            os.remove(os.path.join(args.save_path, "generation_config.json"))
     # ------------------------------------------------------------------
     # Step 4.1: Append keys present in the source but dropped on save
     # ------------------------------------------------------------------
@@ -639,8 +656,50 @@ def main():
         args.model_path, args.save_path, shard_size_gb=args.shard_size_gb
     )
 
-    if tokenizer is not None:
+    # ------------------------------------------------------------------
+    # Step 4.2: Copy all tokenizer-related files from the source directory
+    # ------------------------------------------------------------------
+    # Instead of re-serializing via tokenizer.save_pretrained (which may drop
+    # or alter custom/auxiliary files), copy every tokenizer-related file
+    # verbatim from the source model directory to the output directory.
+    print("\n[Step 4.2] Copying tokenizer files from source ...")
+    _TOKENIZER_FILE_PATTERNS = [
+        "tokenizer*.json",
+        "tokenizer*.model",
+        "tokenizer_config.json",
+        "special_tokens_map.json",
+        "added_tokens.json",
+        "vocab.json",
+        "vocab.txt",
+        "merges.txt",
+        "spiece.model",
+        "sentencepiece.bpe.model",
+        "*.tiktoken",
+        "chat_template.*",
+        "generation_config.json",
+    ]
+    copied = 0
+    for pattern in _TOKENIZER_FILE_PATTERNS:
+        for src_file in glob.glob(os.path.join(args.model_path, pattern)):
+            if not os.path.isfile(src_file):
+                continue
+            dst_file = os.path.join(args.save_path, os.path.basename(src_file))
+            if os.path.abspath(src_file) == os.path.abspath(dst_file):
+                continue
+            shutil.copy2(src_file, dst_file)
+            copied += 1
+            print(f"  [Copy] {os.path.basename(src_file)}")
+    print(f"  [Copy] {copied} tokenizer-related file(s) copied to {args.save_path}")
+
+    # Fallback: if no tokenizer file was found in the source directory, fall
+    # back to re-serializing via tokenizer.save_pretrained.
+    if copied == 0 and tokenizer is not None:
+        print(
+            "  [Fallback] No tokenizer files found in source; "
+            "saving via tokenizer.save_pretrained"
+        )
         tokenizer.save_pretrained(args.save_path)
+
     print(f"  Done. Saved to {args.save_path}")
     print("=" * 70)
 
