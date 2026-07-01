@@ -270,3 +270,112 @@ bash run_vllm_quant_for_Hy3.sh --help             # 打印用法
 
 - 已经量化好的 FP8 模型，只想刷一组新的 KV scale，不愿重跑 `fp8_quant_with_vllm_activation.py`。
 - A/B 对比不同搜索范围（multiplier / num_steps）下的 KV scale，对**同一个**底层 FP8 模型快速热替换。
+
+---
+
+## 三、GLM-5 系列脚本（GLM-5.1-MoE 等 GLM-5 模型）
+
+GLM-5 走的是与 Hy3 不同的一条量化链路：**输入是 FP8-blockwise 的 GLM-5 checkpoint**，产出是 **MoE 专家 NVFP4 + Dense FP8 ue8m0** 的混合精度模型（对齐官方参考实现 `GLM-5.1-moe_nvfp4-dense_fp8_ue8m0`）。校准阶段只对 MoE 的**路由专家**采集激活统计，其他模块（attention / dense MLP / shared_experts / router gate / lm_head / MTP 层）不做激活校准。
+
+| 脚本 | 用途 | 入口 |
+| --- | --- | --- |
+| [`run_vllm_quant_for_glm5.sh`](./run_vllm_quant_for_glm5.sh) | ★ 一键流水线：MoE 专家激活校准 + NVFP4 权重量化 | `tools/run_vllm_calibrate.py` + `tools/glm5_nvfp4_weight_only_blockwise.py` |
+
+---
+
+### 1. `run_vllm_quant_for_glm5.sh` ★推荐的"一键流水线"
+
+**功能**：FP8-blockwise 的 GLM-5 模型 → vLLM MoE 专家激活校准 → NVFP4（experts）+ FP8 ue8m0（dense）HF safetensors，全流程一次完成。
+
+#### 硬性前置条件
+
+- **输入模型必须是 FP8-blockwise 的 GLM-5 checkpoint**（例如官方 GLM-5.1-FP8 发布版），即 `config.json` 中 `quantization_config.quant_method == "fp8"`，且权重以 `weight` + `weight_scale_inv`（128×128 blockwise scale）配对存储。
+  - 阶段 2 会显式 assert 这一点，传入 BF16/FP16 或其它 quant_method 的模型会直接报错。
+  - 阶段 2 的 dense 层 ue8m0 重量化是从 "FP8 dequant 回 BF16 → 再量化到 FP8 ue8m0" 走一次的，输入不是 blockwise FP8 时无法复用现有 128×128 scale 布局。
+- **vLLM 版本 + 补丁**：与 Hy3 完全一致，先按第一节 [环境准备](#一环境准备运行校准脚本前必须完成) 拉起 Ray 集群并给每个节点的 vLLM 打上 AngelSlim patch（`bash tools/vllm_patch/install.sh install`），补丁提供的 `VLLM_MOE_COLLECT_PER_EXPERT_STATS` 钩子即使权重是 FP8 也能正常触发（vLLM 内部仍走 `FusedMoE` 前向）。
+
+#### 阶段 1：MoE 路由专家激活校准（`tools/run_vllm_calibrate.py`）
+
+- 用 vLLM 加载 **FP8 GLM-5** 模型，在 PTQ 数据集上跑前向，**仅注册 MoE 路由专家的激活采集钩子**：
+  - 采集 `model.layers.{L}.mlp.experts.gate_up_proj.scale_amax`（gate_proj / up_proj 共享此 scale）
+  - 采集 `model.layers.{L}.mlp.experts.down_proj.scale_amax`
+  - **不**采集 attention / dense MLP / shared_experts / router gate 的激活；**不**采集 KV-cache 统计（YAML 里未开启 `--search-kv-scale`，也未指定 `kv_granularity`，保持轻量）。
+- 相关环境变量（脚本已内置）：
+  ```bash
+  VLLM_MOE_COLLECT_STATS=1
+  VLLM_MOE_COLLECT_PER_EXPERT_STATS=1
+  VLLM_MOE_COLLECT_STATS_VERBOSE=0
+  ```
+- 产物（写入 YAML 中 `output_dir`）：
+  - `moe_expert_stats.json` — 每个 MoE 层路由专家的 `scale_amax`（NVFP4 全局 input_scale 就是 `scale_amax_max / 6`，阶段 2 自动换算）
+  - `activation_stats.json` — 会同步生成，但 GLM-5 流水线**不消费**这个文件（阶段 2 只读 `moe_expert_stats.json`）
+
+> ⚠️ GLM-5.1 的 MTP（Multi-Token Prediction）层在 YAML 里通过 `enable_mtp: false` 关闭：MoE-only 校准不需要走 draft path，MTP 层最终在阶段 2 会保持在 dense FP8 分支。
+
+#### 阶段 2：NVFP4 权重-only 重量化（`tools/glm5_nvfp4_weight_only_blockwise.py`）
+
+流式（shard-by-shard, `num_workers` 并行）读取源 FP8 safetensors，分类处理：
+
+| 层类型 | 处理方式 | 输出字段 |
+| --- | --- | --- |
+| MoE 路由专家（layer ≥ `first_k_dense_replace` 且 `< num_hidden_layers`）的 `gate_proj` / `up_proj` / `down_proj` | FP8 dequant → BF16 → **NVFP4 weight-only 量化**（block_size=16），再注入阶段 1 得到的 per-tensor `input_scale` | `weight`（uint8 packed FP4）+ `weight_scale`（fp8 e4m3, per-block）+ `weight_scale_2`（fp32 scalar）+ `input_scale`（fp32 scalar） |
+| Dense FP8 层（attention / 前 `first_k_dense_replace` 层的 dense MLP / `shared_experts` / indexer / MTP 层） | FP8 dequant → BF16 → **重量化为 FP8 E4M3 + ue8m0 per-block scale**（block_size=128） | `weight`（fp8 e4m3）+ `scale`（uint8 ue8m0, per-block） |
+| 其它（router gate / layernorms / embed / lm_head / e_score_correction_bias 等） | 原样透传 | 保持 BF16 / FP32 |
+
+产出目录（YAML `output_nvfp4_hf_path`）额外会写入：
+- 重写后的 `config.json` — 保留源 FP8 的 `quantization_config`，追加 `scale_fmt: "ue8m0"`。
+- `hf_quant_config.json.nvfp4` — modelopt 风格的 NVFP4 sidecar，标注 `quant_algo=NVFP4`、`group_size`、`exclude_modules`（dense / attention / shared_experts / MTP 层的 glob 列表）。切换到 NVFP4 推理后端时，将该文件重命名为 `hf_quant_config.json` 即可生效。
+- `model.safetensors.index.json` — 合并所有 shard 的 weight_map。
+- tokenizer / generation_config / 建模代码 (`*.py`, `*.json`, `*.md`, `*.txt`, `*.jinja`) 从源目录 copy 过来。
+
+#### 配置
+
+校准和量化共享同一份 YAML：[`configs/glm5/ptq/fp8/glm5_vllm_ptq_moe.yaml`](../../configs/glm5/ptq/fp8/glm5_vllm_ptq_moe.yaml)。关键字段：
+
+```yaml
+model_path: /path/to/GLM-5.1-FP8            # 必须是 FP8-blockwise 的 GLM-5 源模型
+ptq_data_path: /path/to/calibration.jsonl   # 校准数据集
+output_dir: /path/to/statistics             # 阶段 1 产物（moe_expert_stats.json）
+output_nvfp4_hf_path: /path/to/nvfp4_model  # 阶段 2 产物：NVFP4+FP8 ue8m0 混合模型
+
+tp_size: 16                                  # 单机 8 卡填 8；跨节点 Ray 16 卡填 16
+dp_size: 1
+batch_size: 4
+num_samples: 64
+max_length: 2048
+distributed_executor_backend: ray            # ray | mp
+enable_mtp: false                            # MoE-only 校准，不启用 MTP
+
+nvfp4_block_size: 16                         # NVFP4 group size
+fp8_block_size: 128                          # Dense FP8 ue8m0 block size
+num_workers: 8                               # Stage 2 shard 并行度
+use_gpu: true                                # true => triton on GPU；false => CPU-only
+no_quantize_dense_fp8: false                 # true => 退化到 legacy：dense 层 dequant 回 BF16
+```
+
+路径回退规则（阶段 2 只需要在 YAML 里配一次）：
+- `input_path` ← `model_path`（FP8 源 checkpoint）
+- `output_path` ← `output_nvfp4_hf_path`
+- `moe_stats_json` ← `${output_dir}/moe_expert_stats.json`
+
+#### CLI 开关
+
+```bash
+bash scripts/ptq/run_vllm_quant_for_glm5.sh                    # 两阶段都跑
+bash scripts/ptq/run_vllm_quant_for_glm5.sh --skip-calibrate   # 仅量化（复用已有 moe_expert_stats.json）
+bash scripts/ptq/run_vllm_quant_for_glm5.sh --skip-quantize    # 仅校准
+bash scripts/ptq/run_vllm_quant_for_glm5.sh --help             # 打印用法
+```
+
+> 脚本开启 `set -euo pipefail`，任一阶段失败将立即中断。日志会 tee 到 `logs/run_vllm_quant_glm5-{calibrate,quantize}.log`。
+
+#### 与 Hy3 流水线的关键差异
+
+| 维度 | GLM-5 | Hy3 |
+| --- | --- | --- |
+| 输入模型精度 | **必须** FP8-blockwise（`quant_method=fp8` + `weight_scale_inv`） | BF16 |
+| 校准范围 | **仅 MoE 路由专家**（gate_up_proj / down_proj） | 全模型 W8A8C8（attention + MoE + KV-cache） |
+| 校准产物消费 | 只用 `moe_expert_stats.json` | `activation_stats.json` + `moe_expert_stats.json` + KV scale |
+| 输出格式 | MoE 专家 NVFP4 + Dense FP8 ue8m0（混合精度） | 全模型 per-tensor FP8 |
+| KV-cache 处理 | 校准 + 量化均不处理 | 校准 + 量化均可配置（per-tensor / per-head） |
+| 量化脚本内存 | 流式 shard-by-shard，**不需要**把整模型载入显存 | 依赖 `AutoModelForCausalLM.from_pretrained`，需要能装下模型 |

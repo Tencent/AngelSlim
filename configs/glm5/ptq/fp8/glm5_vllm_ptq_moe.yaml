@@ -26,9 +26,10 @@
 # ============================================================================
 # Shared paths
 # ============================================================================
-model_path: /dockerdata/GLM-5.1-FP8
-ptq_data_path: /apdcephfs_zwfy14/share_300532381/krizaltang/datasets/HY3-R3-SFT0608-RL0617-exp109-calibrate-data/PTQ_data.json # TODO: fill in calibration JSONL path
-output_dir: /dockerdata/GLM-5.1-FP8-stat-999     # TODO: fill in stats output directory (must be on a shared FS when dp_size > 1 spans nodes)
+model_path: /path/to/model
+ptq_data_path: /path/to/model/ptq_data_path # TODO: fill in calibration JSONL path
+output_dir: /path/to/statistics    # TODO: fill in stats output directory (must be on a shared FS when dp_size > 1 spans nodes)
+output_nvfp4_hf_path: /path/to/output/nvfp4_model  # TODO: fill in NVFP4 output dir
 
 # ============================================================================
 # Stage 1 — vLLM activation calibration (tools/run_vllm_calibrate.py)
@@ -58,8 +59,6 @@ num_speculative_tokens: 1
 #   * output_path      <- output_nvfp4_hf_path             (NVFP4 destination)
 #   * moe_stats_json   <- ${output_dir}/moe_expert_stats.json
 # ============================================================================
-
-output_nvfp4_hf_path: /dockerdata/GLM-5.1-moe_nvfp4-dense_fp8_ue8m0_one_click  # TODO: fill in NVFP4 output dir
 
 nvfp4_block_size: 16                    # NVFP4 group size along last dim
 fp8_block_size: 128                     # Dense FP8 ue8m0 block size
