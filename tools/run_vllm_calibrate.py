@@ -245,12 +245,6 @@ def parse_args():
         help="Calibration data parallel size (default: 1). When > 1, Ray Data "
         "creates one vLLM calibration actor per DP replica.",
     )
-    parser.add_argument(
-        "--dp-timeout",
-        type=int,
-        default=7200,
-        help="Seconds to wait for Ray Data-managed DP workers before failing " "(default: 7200).",
-    )
 
     # MTP (Multi-Token Prediction) configuration
     parser.add_argument(
