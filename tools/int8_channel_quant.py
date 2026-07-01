@@ -16,6 +16,7 @@
 
 import json
 import os
+import re
 import shutil
 from argparse import ArgumentParser
 
@@ -68,7 +69,132 @@ def get_suffix_to_quant(model_type):
     return SUFFIX_TO_QUANT
 
 
-def build_ignored_layers(input_path):
+def parse_skip_layers(skip_specs):
+    """
+    Parse ``--skip-layers`` CLI values into a list of matcher rules.
+
+    Each rule is a tuple ``(kind, pattern)`` where ``kind`` is one of:
+
+    * ``"prefix"``  – ``pattern`` is a dotted path prefix; a weight name matches
+      if it equals ``pattern`` (as a layer name plus ``.weight``) or if it
+      starts with ``pattern + "."``.
+    * ``"regex"``   – ``pattern`` is a compiled regex object; matches a weight
+      name via :meth:`re.Pattern.search`.
+
+    Accepted input forms (each spec may also contain comma-separated items):
+
+    * Bare integer, e.g. ``77``       -> prefix ``model.layers.77``
+    * ``layers.77`` / ``layer.77``     -> prefix ``model.layers.77``
+    * Explicit dotted path, e.g. ``model.layers.0.self_attn.q_proj``
+      -> prefix that exact module (its ``.weight`` and any children).
+    * Trailing ``*``, e.g. ``model.layers.5.*`` -> prefix ``model.layers.5``
+    * ``re:<pattern>`` -> regex over the full weight name.
+    """
+    rules = []
+    if not skip_specs:
+        return rules
+    raw_items = []
+    for spec in skip_specs:
+        if spec is None:
+            continue
+        for part in str(spec).split(","):
+            part = part.strip()
+            if part:
+                raw_items.append(part)
+
+    for item in raw_items:
+        if item.startswith("re:"):
+            rules.append(("regex", re.compile(item[3:])))
+            continue
+        # Trailing '*' -> prefix match; strip the star (and optional trailing dot).
+        if item.endswith("*"):
+            prefix = item[:-1].rstrip(".")
+            if prefix:
+                rules.append(("prefix", prefix))
+            continue
+        # Pure integer (or "layers.N" / "layer.N") -> model.layers.N.*
+        m = re.fullmatch(r"(?:layers?\.)?(\d+)", item)
+        if m:
+            rules.append(("prefix", f"model.layers.{m.group(1)}"))
+            continue
+        rules.append(("prefix", item.rstrip(".")))
+    return rules
+
+
+def make_skip_matcher(skip_rules):
+    """Return a picklable callable ``matcher(weight_name) -> bool``.
+
+    ``skip_rules`` is the output of :func:`parse_skip_layers`.  Regex rules
+    stored inside are re-compiled inside the callable so the result is safe
+    to pass across ``multiprocessing`` process boundaries (compiled regex
+    objects pickle fine, but we normalize to string form for robustness).
+    """
+    normalized = []
+    for kind, pat in skip_rules:
+        if kind == "regex":
+            normalized.append(("regex", pat.pattern))
+        else:
+            normalized.append((kind, pat))
+
+    return _SkipMatcher(normalized)
+
+
+class _SkipMatcher:
+    """Picklable matcher used by worker processes."""
+
+    def __init__(self, rules):
+        self._rules = rules
+        self._compiled = None
+
+    def _ensure_compiled(self):
+        if self._compiled is not None:
+            return
+        compiled = []
+        for kind, pat in self._rules:
+            if kind == "regex":
+                compiled.append(("regex", re.compile(pat)))
+            else:
+                compiled.append(("prefix", pat))
+        self._compiled = compiled
+
+    def __bool__(self):
+        return bool(self._rules)
+
+    def __call__(self, weight_name):
+        if not self._rules:
+            return False
+        self._ensure_compiled()
+        for kind, pat in self._compiled:
+            if kind == "regex":
+                if pat.search(weight_name):
+                    return True
+            else:
+                # prefix: exact ``pat.weight`` OR anything under ``pat.``
+                if weight_name == f"{pat}.weight":
+                    return True
+                if weight_name.startswith(pat + "."):
+                    return True
+        return False
+
+
+def expand_skip_layer_names(skip_rules, all_layer_names):
+    """Expand skip rules to concrete layer names present in the model.
+
+    Used for populating ``ignored_layers`` in ``config.json`` so the runtime
+    (vLLM / compressed-tensors) also treats these layers as un-quantized.
+    """
+    if not skip_rules:
+        return []
+    matcher = make_skip_matcher(skip_rules)
+    hits = []
+    for name in all_layer_names:
+        # Test as if it were a real weight tensor.
+        if matcher(f"{name}.weight"):
+            hits.append(name)
+    return hits
+
+
+def build_ignored_layers(input_path, skip_rules=None):
     """Build ignored layers from the model structure, following fp8_quant_blockwise.py."""
     hf_config = AutoConfig.from_pretrained(input_path)
     model_type = hf_config.model_type
@@ -85,6 +211,12 @@ def build_ignored_layers(input_path):
     print(f"Found {len(layers)} linear layers")
 
     ignored_layers = []
+    # User-specified skip layers -> add them to ignored_layers so runtime
+    # loaders (vLLM / compressed-tensors) also treat them as un-quantized.
+    user_skipped = expand_skip_layer_names(skip_rules, list(layers.keys()))
+    if user_skipped:
+        print(f"User-specified skip layers ({len(user_skipped)}): {user_skipped}")
+        ignored_layers.extend(user_skipped)
     if model_type in ("qwen3_5_moe", "qwen3_5"):
         for name, module in model.named_modules():
             if not hasattr(module, "weight") or module.weight is None:
@@ -110,7 +242,14 @@ def build_ignored_layers(input_path):
                 ignored_layers.append(name)
 
     del model
-    return ignored_layers, model_type
+    # De-duplicate while preserving order.
+    seen = set()
+    deduped = []
+    for name in ignored_layers:
+        if name not in seen:
+            seen.add(name)
+            deduped.append(name)
+    return deduped, model_type
 
 
 def _quant_and_record_int8(weight_name, weight_bf16, new_state_dict, new_weight_map, file_name):
@@ -132,6 +271,7 @@ def process_worker(
     return_dict,
     suffix_to_quant,
     input_type="bf16",
+    skip_matcher=None,
 ):
     """
     Process worker.
@@ -145,6 +285,7 @@ def process_worker(
     rank = worker_id % num_gpus
     torch.cuda.set_device(rank)
     quant_count = 0
+    skipped_count = 0
     new_weight_map = {}
     for safetensor_file in safetensor_files:
         file_name = os.path.basename(safetensor_file)
@@ -155,6 +296,13 @@ def process_worker(
             for weight_name in keys:
                 weight = f.get_tensor(weight_name)
                 if any(weight_name.endswith(suffix) for suffix in suffix_to_quant):
+                    if skip_matcher is not None and skip_matcher(weight_name):
+                        # User asked to skip this layer -> keep original weight,
+                        # do NOT emit a scale, and drop any incoming scale_inv.
+                        skipped_count += 1
+                        new_state_dict[weight_name] = weight
+                        new_weight_map[weight_name] = file_name
+                        continue
                     quant_count += 1
                     if input_type == "fp8":
                         scale_inv_name = f"{weight_name}_scale_inv"
@@ -179,7 +327,7 @@ def process_worker(
 
         new_safetensor_file = os.path.join(int8_path, file_name)
         save_file(new_state_dict, new_safetensor_file)
-    return_dict[worker_id] = (quant_count, new_weight_map)
+    return_dict[worker_id] = (quant_count, new_weight_map, skipped_count)
 
 
 def process_worker_qwen35(
@@ -191,6 +339,7 @@ def process_worker_qwen35(
     return_dict,
     suffix_to_quant,
     input_type="bf16",
+    skip_matcher=None,
 ):
     """
     Qwen3.5-specific worker.
@@ -207,6 +356,7 @@ def process_worker_qwen35(
     rank = worker_id % num_gpus
     torch.cuda.set_device(rank)
     quant_count = 0
+    skipped_count = 0
     new_weight_map = {}
     for safetensor_file in safetensor_files:
         file_name = os.path.basename(safetensor_file)
@@ -229,21 +379,20 @@ def process_worker_qwen35(
                     for i in range(num_experts):
                         gate_name = f"{prefix}.experts.{i}.gate_proj.weight"
                         up_name = f"{prefix}.experts.{i}.up_proj.weight"
-                        _quant_and_record_int8(
-                            gate_name,
-                            gate_w[i].contiguous(),
-                            new_state_dict,
-                            new_weight_map,
-                            file_name,
-                        )
-                        _quant_and_record_int8(
-                            up_name,
-                            up_w[i].contiguous(),
-                            new_state_dict,
-                            new_weight_map,
-                            file_name,
-                        )
-                        quant_count += 2
+                        for tname, tval in ((gate_name, gate_w[i]), (up_name, up_w[i])):
+                            if skip_matcher is not None and skip_matcher(tname):
+                                skipped_count += 1
+                                new_state_dict[tname] = tval.contiguous()
+                                new_weight_map[tname] = file_name
+                            else:
+                                _quant_and_record_int8(
+                                    tname,
+                                    tval.contiguous(),
+                                    new_state_dict,
+                                    new_weight_map,
+                                    file_name,
+                                )
+                                quant_count += 1
                     del weight, weight_bf16, gate_w, up_w
                     torch.cuda.empty_cache()
                     continue
@@ -254,14 +403,19 @@ def process_worker_qwen35(
                     prefix = weight_name[: -len(".experts.down_proj")]
                     for i in range(num_experts):
                         down_name = f"{prefix}.experts.{i}.down_proj.weight"
-                        _quant_and_record_int8(
-                            down_name,
-                            weight_bf16[i].contiguous(),
-                            new_state_dict,
-                            new_weight_map,
-                            file_name,
-                        )
-                        quant_count += 1
+                        if skip_matcher is not None and skip_matcher(down_name):
+                            skipped_count += 1
+                            new_state_dict[down_name] = weight_bf16[i].contiguous()
+                            new_weight_map[down_name] = file_name
+                        else:
+                            _quant_and_record_int8(
+                                down_name,
+                                weight_bf16[i].contiguous(),
+                                new_state_dict,
+                                new_weight_map,
+                                file_name,
+                            )
+                            quant_count += 1
                     del weight, weight_bf16
                     torch.cuda.empty_cache()
                     continue
@@ -270,6 +424,11 @@ def process_worker_qwen35(
                 # Regular tensors
                 # ------------------------------------------------------------
                 if any(weight_name.endswith(suffix) for suffix in suffix_to_quant):
+                    if skip_matcher is not None and skip_matcher(weight_name):
+                        skipped_count += 1
+                        new_state_dict[weight_name] = weight
+                        new_weight_map[weight_name] = file_name
+                        continue
                     quant_count += 1
                     weight_bf16 = weight
                     _quant_and_record_int8(
@@ -287,7 +446,7 @@ def process_worker_qwen35(
 
         new_safetensor_file = os.path.join(int8_path, file_name)
         save_file(new_state_dict, new_safetensor_file)
-    return_dict[worker_id] = (quant_count, new_weight_map)
+    return_dict[worker_id] = (quant_count, new_weight_map, skipped_count)
 
 
 # Helper function to get tensor from the correct file
@@ -332,7 +491,7 @@ def weight_quant(tensor: torch.Tensor):
     return quantized.to(torch.int8), scale.to(torch.float32)
 
 
-def main(input_path, int8_path, num_workers):
+def main(input_path, int8_path, num_workers, skip_layers=None):
     """
     Run the FP8-to-INT8 per-channel quantization pipeline.
 
@@ -395,8 +554,13 @@ def main(input_path, int8_path, num_workers):
             weight_map = {name: "model.safetensors" for name in f.keys()}
     print(f"Found {len(safetensor_files)} safetensor files")
 
-    ignored_layers, model_type = build_ignored_layers(input_path)
-    print(f"Ignored layers: {ignored_layers}")
+    skip_rules = parse_skip_layers(skip_layers)
+    if skip_rules:
+        print(f"Skip rules ({len(skip_rules)}): {skip_rules}")
+    skip_matcher = make_skip_matcher(skip_rules) if skip_rules else None
+
+    ignored_layers, model_type = build_ignored_layers(input_path, skip_rules=skip_rules)
+    print(f"Ignored layers ({len(ignored_layers)}): {ignored_layers}")
     is_qwen35 = model_type in ("qwen3_5_moe", "qwen3_5")
 
     config["quantization_config"] = {
@@ -443,6 +607,7 @@ def main(input_path, int8_path, num_workers):
     print(f"config.json modified and saved to {config_file}")
 
     quant_count = 0
+    skipped_count = 0
     new_weight_map = {}
 
     file_subsets = [safetensor_files[i::num_workers] for i in range(num_workers)]
@@ -464,6 +629,7 @@ def main(input_path, int8_path, num_workers):
                 return_dict,
                 suffix_to_quant,
                 input_type,
+                skip_matcher,
             ),
         )
         p.start()
@@ -472,10 +638,13 @@ def main(input_path, int8_path, num_workers):
         p.join()
 
     for i in range(num_workers):
-        qc, wm = return_dict[i]
+        qc, wm, sc = return_dict[i]
         quant_count += qc
+        skipped_count += sc
         new_weight_map.update(wm)
     print(f"{quant_count} weights are quantized.")
+    if skip_matcher is not None:
+        print(f"{skipped_count} weights are skipped (kept original) by --skip-layers.")
 
     if has_index:
         # modify model.safetensors.index.json
@@ -494,7 +663,27 @@ if __name__ == "__main__":
     parser.add_argument("--input-path", type=str, required=True)
     parser.add_argument("--output-int8-path", type=str, required=True)
     parser.add_argument("--num-workers", type=int, default=32)
+    parser.add_argument(
+        "--skip-layers",
+        type=str,
+        nargs="*",
+        default=None,
+        help=(
+            "Layer specs to skip (keep original weights, no INT8 quantization). "
+            "Accepts multiple values and/or comma-separated lists. Forms: "
+            "'77' -> model.layers.77.*; "
+            "'model.layers.0.self_attn.q_proj' -> that exact module and its children; "
+            "'model.layers.5.*' -> prefix match; "
+            "'re:<pattern>' -> regex over the full weight name. "
+            "Example: --skip-layers 77 78 79"
+        ),
+    )
 
     args = parser.parse_args()
-    main(args.input_path, args.output_int8_path, args.num_workers)
+    main(
+        args.input_path,
+        args.output_int8_path,
+        args.num_workers,
+        skip_layers=args.skip_layers,
+    )
     print("done")
