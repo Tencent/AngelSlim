@@ -77,6 +77,34 @@ body {
   font-size: 0.92rem;
   font-weight: 400;
 }
+.hero-links {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+.hero-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+.hero-link:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.hero-link img {
+  width: 15px;
+  height: 15px;
+}
 
 /* ===== Article ===== */
 .article {
@@ -522,6 +550,10 @@ body .zh { display: inline; }
   </div>
   <div class="hero-inner">
     <h1><span>D-Cut</span>: Adaptive Verification Depth Pruning for Speculative Decoding</h1>
+    <div class="hero-links">
+      <a class="hero-link" href="https://arxiv.org/abs/2607.14647" target="_blank" rel="noopener"><img src="https://cdn.simpleicons.org/arxiv/B31B1B" alt="">Paper</a>
+      <a class="hero-link" href="https://github.com/vllm-project/vllm/pull/47131" target="_blank" rel="noopener"><img src="https://cdn.simpleicons.org/github/181717" alt="">GitHub</a>
+    </div>
     <p class="hero-subtitle" style="margin-top:16px;font-size:0.88rem;color:var(--text-secondary)"><strong style="color:var(--text)">TL;DR:</strong> <span class="zh">D-Cut 是一种针对 DFlash 的动态剪枝优化算法。通过建立硬件驱动的 cost model，跨请求进行剪枝，减少不必要的验证开销，实现全方面加速。</span><span class="en">D-Cut is a dynamic pruning optimization for DFlash. By building a hardware-driven cost model and pruning across requests, it eliminates unnecessary verification overhead for end-to-end speedup.</span></p>
   </div>
 </div>
@@ -636,6 +668,7 @@ body .zh { display: inline; }
   <p><span class="zh">bs=64 时 full verify 比只保留 25% 慢了 2.42 倍。多出来的时间花在了"注定被拒绝"的位置上。</span><span class="en">At bs=64, full verify is 2.42× slower than keeping only 25%. The extra time is spent on positions that will be rejected anyway.</span></p>
 
   <h3><span class="zh">直接后果：投机解码在高 bs 下退化</span><span class="en">Consequence: Speculative Decoding Degrades at High bs</span></h3>
+  <p class="table-caption" style="font-style:normal;color:var(--text-secondary)"><span class="zh">以下曲线基于 GSM8K、Math500、HumanEval、MBPP 和 MT-Bench 的平均吞吐计算。</span><span class="en">The curves below are computed from mean throughput over GSM8K, Math500, HumanEval, MBPP, and MT-Bench.</span></p>
 
   <div class="chart-grid-2">
     <div class="chart-card">
@@ -648,7 +681,7 @@ body .zh { display: inline; }
     </div>
   </div>
 
-  <p><span class="zh">Qwen3-8B 上，DFlash-B16 从 bs=16 开始就比 AR 更慢。bs=64 时仅有 AR 吞吐的 42%。</span><span class="en">On Qwen3-8B, DFlash-B16 becomes slower than AR starting at bs=16. At bs=64 it only achieves 42% of AR throughput.</span></p>
+  <p><span class="zh">Qwen3-8B 上，DFlash-B16 从 bs=32 开始比 AR 更慢。bs=64 时平均吞吐仅为 AR 的 65%。</span><span class="en">On Qwen3-8B, DFlash-B16 becomes slower than AR starting at bs=32. At bs=64, its mean throughput is only 65% of AR.</span></p>
 </div>
 
 <div class="section-divider"></div>
@@ -776,7 +809,7 @@ body .zh { display: inline; }
 
   <h3><span class="zh">CUDA Graph Bucket</span><span class="en">CUDA Graph Bucket</span></h3>
   <p><span class="zh">verify 深度离散化为 4 个 ratio bucket，每个对应一个预 capture 的 CUDA graph shape，避免 graph miss。<sup>*</sup></span><span class="en">Verify depth is discretized into 4 ratio buckets, each corresponding to a pre-captured CUDA graph shape, avoiding graph misses.<sup>*</sup></span></p>
-  <p style="font-size:0.8rem;color:var(--text-secondary)"><sup>*</sup> <span class="zh">当前 D-Cut 实现采用 piecewise CUDA graph，实际上由于大部分 bs 的不同 ratio 存在 overlap，几乎不增加额外 capture 的 CUDA graph。</span><span class="en">The current D-Cut implementation uses piecewise CUDA graphs. In practice, since different ratios overlap for most batch sizes, this barely increases the number of additionally captured CUDA graphs.</span></p>
+  <p style="font-size:0.8rem;color:var(--text-secondary)"><sup>*</sup> <span class="zh"><strong>实现状态：</strong>当前 vLLM 实现支持 V1 model runner + piecewise CUDA graph；启用 full CUDA graph 时会自动回退到 piecewise，full CUDA graph 支持正在适配中。由于不同 ratio 的 shape 大量重叠，piecewise 模式几乎不增加额外 graph capture。</span><span class="en"><strong>Implementation status:</strong> The current vLLM implementation supports the V1 model runner with piecewise CUDA graphs. Full CUDA Graph mode automatically falls back to piecewise, while native full-graph support is in progress. Because shapes overlap heavily across ratios, piecewise mode adds almost no extra graph captures.</span></p>
 
 </div>
 
@@ -788,7 +821,7 @@ body .zh { display: inline; }
     <div class="section-num">Section 06</div>
     <h2><span class="zh">实验结果</span><span class="en">Experiments</span></h2>
   </div>
-  <p class="table-caption" style="font-style:normal;color:var(--text-secondary);margin-bottom:24px"><span class="zh">Profiled on H20, vLLM=0.20.2, temperature=0, 仅 report 稳态吞吐 (active_bs ≥ 85%).</span><span class="en">Profiled on H20, vLLM=0.20.2, temperature=0, only reporting steady-state throughput (active_bs ≥ 85%).</span></p>
+  <p class="table-caption" style="font-style:normal;color:var(--text-secondary);margin-bottom:24px"><span class="zh">单节点 8×H20、temperature=0、target-only verification；每条曲线均为 GSM8K、Math500、HumanEval、MBPP 和 MT-Bench 的平均输出 token 吞吐。Qwen3-8B 使用 TP1，Qwen3.5-27B/35B-A3B 使用 TP4，Hy3-295B-A21B 使用 TP8。</span><span class="en">Single-node 8×H20, temperature=0, and target-only verification. Each curve reports mean output-token throughput over GSM8K, Math500, HumanEval, MBPP, and MT-Bench. Qwen3-8B uses TP1, Qwen3.5-27B/35B-A3B use TP4, and Hy3-295B-A21B uses TP8.</span></p>
 
   <h3><span class="zh">吞吐对比</span><span class="en">Throughput Comparison</span></h3>
   <div class="chart-grid-2">
@@ -803,56 +836,62 @@ body .zh { display: inline; }
   </div>
   <div class="chart-grid-2">
     <div class="chart-card">
-      <div class="chart-title"><span class="dot"></span>Qwen3.5-35B-A3B (MoE, TP2)</div>
+      <div class="chart-title"><span class="dot"></span>Qwen3.5-35B-A3B (MoE, TP4)</div>
       <canvas id="chartTp35B"></canvas>
     </div>
     <div class="chart-card">
-      <div class="chart-title"><span class="dot"></span>Qwen3.5-122B-A10B (MoE, TP8)</div>
-      <canvas id="chartTp122B"></canvas>
+      <div class="chart-title"><span class="dot"></span>Hy3-295B-A21B (MoE, TP8)</div>
+      <canvas id="chartTpHy3"></canvas>
     </div>
   </div>
 
   <h3><span class="zh">加速比 (vs AR)</span><span class="en">Speedup (vs AR)</span></h3>
+  <p class="table-caption" style="font-style:normal;color:var(--text-secondary)"><span class="zh">每个 bs 对 5 个 benchmark 的 speedup 取平均；Geo Mean 对全部 25 个 benchmark-bs 配置计算。详见 <a href="https://arxiv.org/abs/2607.14647" style="color:var(--accent)">D-cut 论文</a>。</span><span class="en">Each bs reports the mean speedup over five benchmarks; Geo Mean is computed over all 25 benchmark-bs settings. See the <a href="https://arxiv.org/abs/2607.14647" style="color:var(--accent)">D-cut paper</a>.</span></p>
 
   <div class="tab-bar" id="speedupTabs">
     <button class="tab active" data-target="spd-8b">Qwen3-8B</button>
     <button class="tab" data-target="spd-27b">Qwen3.5-27B</button>
     <button class="tab" data-target="spd-35b">Qwen3.5-35B-A3B</button>
-    <button class="tab" data-target="spd-122b">Qwen3.5-122B-A10B</button>
+    <button class="tab" data-target="spd-hy3">Hy3-295B-A21B</button>
   </div>
   <div class="tab-panel active" id="spd-8b">
   <div class="table-container"><table id="tbl-8b">
   <tr><th style="text-align:left">Method</th><th>bs=4</th><th>bs=8</th><th>bs=16</th><th>bs=32</th><th>bs=64</th><th>Geo Mean</th></tr>
-  <tr><td>DFlash-B16</td><td>2.04×</td><td>1.28×</td><td class="cell-dim">0.80×</td><td class="cell-dim">0.52×</td><td class="cell-dim">0.42×</td><td>0.85×</td></tr>
-  <tr><td>D-Cut-B16</td><td class="cell-best">2.42×</td><td>1.93×</td><td>1.41×</td><td class="cell-dim">0.99×</td><td class="cell-dim">0.81×</td><td>1.39×</td></tr>
-  <tr><td>D-Cut-B8</td><td>2.34×</td><td class="cell-best">2.05×</td><td class="cell-best">1.59×</td><td class="cell-best">1.13×</td><td class="cell-best">0.92×</td><td class="cell-best">1.51×</td></tr>
-  <tr><td>EAGLE-3</td><td>1.70×</td><td>1.64×</td><td>1.37×</td><td>1.01×</td><td>0.84×</td><td>1.26×</td></tr>
+  <tr><td>EAGLE-3<sup><a href="#ref4" style="color:var(--accent);text-decoration:none">[4]</a></sup></td><td>2.04×</td><td>1.90×</td><td>1.52×</td><td>1.11×</td><td class="cell-dim">0.91×</td><td>1.43×</td></tr>
+  <tr><td>DFlash-B8</td><td>3.27×</td><td>2.43×</td><td>1.57×</td><td>1.12×</td><td class="cell-dim">0.91×</td><td>1.63×</td></tr>
+  <tr><td>D-Cut-B8</td><td>3.16×</td><td class="cell-best">2.53×</td><td class="cell-best">1.76×</td><td class="cell-best">1.31×</td><td class="cell-best">1.07×</td><td class="cell-best">1.80×</td></tr>
+  <tr><td>DFlash-B16</td><td>3.16×</td><td>1.87×</td><td>1.16×</td><td class="cell-dim">0.80×</td><td class="cell-dim">0.65×</td><td>1.24×</td></tr>
+  <tr><td>D-Cut-B16</td><td class="cell-best">3.50×</td><td>2.52×</td><td>1.67×</td><td>1.21×</td><td class="cell-dim">0.98×</td><td>1.74×</td></tr>
   </table></div>
   </div>
   <div class="tab-panel" id="spd-27b">
   <div class="table-container"><table id="tbl-27b">
   <tr><th style="text-align:left">Method</th><th>bs=4</th><th>bs=8</th><th>bs=16</th><th>bs=32</th><th>bs=64</th><th>Geo Mean</th></tr>
-  <tr><td>DFlash-B16</td><td class="cell-best">2.85×</td><td>2.23×</td><td>1.54×</td><td>1.14×</td><td class="cell-dim">0.91×</td><td>1.59×</td></tr>
-  <tr><td>D-Cut-B16</td><td>2.83×</td><td class="cell-best">2.55×</td><td>1.94×</td><td>1.59×</td><td>1.41×</td><td class="cell-best">1.99×</td></tr>
-  <tr><td>D-Cut-B8</td><td>2.17×</td><td>2.33×</td><td>1.79×</td><td>1.52×</td><td>1.37×</td><td>1.80×</td></tr>
-  <tr><td>MTP</td><td>2.45×</td><td>2.30×</td><td class="cell-best">2.01×</td><td class="cell-best">1.66×</td><td class="cell-best">1.44×</td><td>1.93×</td></tr>
+  <tr><td>MTP</td><td>1.37×</td><td>1.41×</td><td>1.42×</td><td class="cell-best">1.31×</td><td class="cell-best">1.22×</td><td>1.34×</td></tr>
+  <tr><td>DFlash-B8</td><td>2.18×</td><td>2.08×</td><td class="cell-best">1.57×</td><td>1.21×</td><td>1.04×</td><td>1.52×</td></tr>
+  <tr><td>D-Cut-B8</td><td>2.10×</td><td>2.00×</td><td>1.51×</td><td>1.24×</td><td>1.13×</td><td>1.53×</td></tr>
+  <tr><td>DFlash-B16</td><td class="cell-best">2.51×</td><td>1.85×</td><td>1.28×</td><td class="cell-dim">0.94×</td><td class="cell-dim">0.78×</td><td>1.30×</td></tr>
+  <tr><td>D-Cut-B16</td><td>2.50×</td><td class="cell-best">2.10×</td><td>1.55×</td><td>1.25×</td><td>1.08×</td><td class="cell-best">1.58×</td></tr>
   </table></div>
   </div>
   <div class="tab-panel" id="spd-35b">
   <div class="table-container"><table id="tbl-35b">
   <tr><th style="text-align:left">Method</th><th>bs=4</th><th>bs=8</th><th>bs=16</th><th>bs=32</th><th>bs=64</th><th>Geo Mean</th></tr>
-  <tr><td>DFlash-B16</td><td>1.99×</td><td>2.30×</td><td>2.75×</td><td>3.20×</td><td>3.08×</td><td>2.62×</td></tr>
-  <tr><td>D-Cut-B16</td><td class="cell-best">2.36×</td><td class="cell-best">2.47×</td><td class="cell-best">2.86×</td><td class="cell-best">3.34×</td><td class="cell-best">3.26×</td><td class="cell-best">2.83×</td></tr>
-  <tr><td>D-Cut-B8</td><td>2.06×</td><td>2.12×</td><td>2.46×</td><td>2.91×</td><td>3.08×</td><td>2.50×</td></tr>
-  <tr><td>MTP</td><td>1.67×</td><td>1.77×</td><td>1.98×</td><td>2.24×</td><td>2.47×</td><td>2.00×</td></tr>
+  <tr><td>MTP</td><td>1.23×</td><td>1.47×</td><td>1.57×</td><td>1.75×</td><td>1.80×</td><td>1.55×</td></tr>
+  <tr><td>DFlash-B8</td><td>1.74×</td><td>1.88×</td><td>2.09×</td><td>2.35×</td><td>2.34×</td><td>2.04×</td></tr>
+  <tr><td>D-Cut-B8</td><td>1.60×</td><td>1.86×</td><td>2.12×</td><td>2.32×</td><td>2.27×</td><td>2.00×</td></tr>
+  <tr><td>DFlash-B16</td><td>1.78×</td><td>1.90×</td><td>2.16×</td><td>2.36×</td><td>2.20×</td><td>2.02×</td></tr>
+  <tr><td>D-Cut-B16</td><td class="cell-best">1.91×</td><td class="cell-best">1.94×</td><td class="cell-best">2.28×</td><td class="cell-best">2.50×</td><td class="cell-best">2.46×</td><td class="cell-best">2.17×</td></tr>
   </table></div>
   </div>
-  <div class="tab-panel" id="spd-122b">
-  <div class="table-container"><table id="tbl-122b">
+  <div class="tab-panel" id="spd-hy3">
+  <div class="table-container"><table id="tbl-hy3">
   <tr><th style="text-align:left">Method</th><th>bs=4</th><th>bs=8</th><th>bs=16</th><th>bs=32</th><th>bs=64</th><th>Geo Mean</th></tr>
-  <tr><td>DFlash-B16</td><td>1.14×</td><td>1.46×</td><td>1.74×</td><td>2.01×</td><td>2.06×</td><td>1.64×</td></tr>
-  <tr><td>D-Cut-B16</td><td class="cell-best">1.33×</td><td class="cell-best">1.55×</td><td class="cell-best">1.85×</td><td class="cell-best">2.08×</td><td class="cell-best">2.56×</td><td class="cell-best">1.83×</td></tr>
-  <tr><td>MTP</td><td>1.45×</td><td>1.59×</td><td>1.77×</td><td>2.08×</td><td>2.30×</td><td>1.81×</td></tr>
+  <tr><td>MTP</td><td>1.30×</td><td>1.38×</td><td>1.36×</td><td>1.34×</td><td>1.51×</td><td>1.38×</td></tr>
+  <tr><td>DFlash-B8</td><td>2.05×</td><td>2.06×</td><td>2.21×</td><td>2.33×</td><td>1.90×</td><td>2.07×</td></tr>
+  <tr><td>D-Cut-B8</td><td>2.11×</td><td>2.11×</td><td>2.37×</td><td>2.40×</td><td class="cell-best">2.27×</td><td>2.22×</td></tr>
+  <tr><td>DFlash-B16</td><td>1.86×</td><td>2.10×</td><td>2.18×</td><td>1.83×</td><td>1.56×</td><td>1.85×</td></tr>
+  <tr><td>D-Cut-B16</td><td class="cell-best">2.19×</td><td class="cell-best">2.35×</td><td class="cell-best">2.38×</td><td class="cell-best">2.48×</td><td>2.08×</td><td class="cell-best">2.26×</td></tr>
   </table></div>
   </div>
 
@@ -880,6 +919,10 @@ body .zh { display: inline; }
       <div class="chart-title"><span class="dot"></span>Qwen3.5-35B-A3B: D-Cut / MTP</div>
       <canvas id="chartVsMtp"></canvas>
     </div>
+    <div class="chart-card" style="grid-column:1 / -1">
+      <div class="chart-title"><span class="dot"></span>Hy3-295B-A21B: Best D-Cut / MTP</div>
+      <canvas id="chartVsMtpHy3"></canvas>
+    </div>
   </div>
 
   <p><span class="zh">D-Cut 在 MoE 上全面超越 MTP，在 dense 8B 上全面超越 EAGLE-3。且无需修改 target model、无需额外训练。</span><span class="en">D-Cut outperforms MTP on MoE models and EAGLE-3 on dense 8B across all batch sizes. No target model modification needed, no extra training.</span></p>
@@ -895,6 +938,7 @@ body .zh { display: inline; }
   <p style="font-size:0.82rem;line-height:1.9;color:var(--text-secondary)" id="ref1">[1] Leviathan, Y., Kalman, M., & Matias, Y. (2023). Fast inference from transformers via speculative decoding. <em>ICML 2023</em>.</p>
   <p style="font-size:0.82rem;line-height:1.9;color:var(--text-secondary)" id="ref2">[2] Chen, J., Liang, Y., & Liu, Z. (2026). DFlash: Block Diffusion for Flash Speculative Decoding. <em>arXiv:2602.06036</em>.</p>
   <p style="font-size:0.82rem;line-height:1.9;color:var(--text-secondary)" id="ref3">[3] Li, Y., Wei, F., Zhang, C., & Zhang, H. (2024). EAGLE-2: Faster Inference of Language Models with Dynamic Draft Trees. <em>EMNLP 2024</em>.</p>
+  <p style="font-size:0.82rem;line-height:1.9;color:var(--text-secondary)" id="ref4">[4] Li, Y., Wei, F., Zhang, C., & Zhang, H. (2025). EAGLE-3: Scaling up Inference Acceleration of Large Language Models via Training-Time Test. <em>NeurIPS 2025</em>.</p>
 </div>
 </div>
 
@@ -902,6 +946,40 @@ body .zh { display: inline; }
 <script>
 // ===== DATA =====
 const DATA = {"Qwen3-8B": {"AR": {"4": {"steady_throughput": 525.7714285714286}, "8": {"steady_throughput": 958.6653846153846}, "16": {"steady_throughput": 1691.262962962963}, "32": {"steady_throughput": 2700.2}, "64": {"steady_throughput": 3594.3888888888887}}, "DFlash-B16": {"4": {"steady_throughput": 1070.9615384615386, "keep_ratio": null}, "8": {"steady_throughput": 1229.9125, "keep_ratio": null}, "16": {"steady_throughput": 1350.5297297297298, "keep_ratio": null}, "32": {"steady_throughput": 1415.7058823529412, "keep_ratio": null}, "64": {"steady_throughput": 1498.4645161290323, "keep_ratio": null}}, "D-Cut-B16": {"4": {"steady_throughput": 1272.5272727272727, "keep_ratio": 0.455}, "8": {"steady_throughput": 1853.0576923076924, "keep_ratio": 0.339}, "16": {"steady_throughput": 2376.7, "keep_ratio": 0.256}, "32": {"steady_throughput": 2666.144444444444, "keep_ratio": 0.251}, "64": {"steady_throughput": 2910.225, "keep_ratio": 0.255}}, "D-Cut-B8": {"4": {"steady_throughput": 1231.0222222222224, "keep_ratio": 0.762}, "8": {"steady_throughput": 1961.4, "keep_ratio": 0.646}, "16": {"steady_throughput": 2685.972222222222, "keep_ratio": 0.533}, "32": {"steady_throughput": 3048.8875, "keep_ratio": 0.5}, "64": {"steady_throughput": 3321.4384615384615, "keep_ratio": 0.5}}, "D-Cut-Fixed-R75": {"4": {"steady_throughput": 1194.257142857143}, "8": {"steady_throughput": 1432.1257142857144}, "16": {"steady_throughput": 1585.890322580645}, "32": {"steady_throughput": 1725.4464285714287}, "64": {"steady_throughput": 1816.964}}, "D-Cut-Fixed-R50": {"4": {"steady_throughput": 1287.8}, "8": {"steady_throughput": 1784.667857142857}, "16": {"steady_throughput": 2027.6875}, "32": {"steady_throughput": 2222.8136363636363}, "64": {"steady_throughput": 2318.721052631579}}, "EAGLE-3": {"4": {"steady_throughput": 895.3}, "8": {"steady_throughput": 1575.390322580645}, "16": {"steady_throughput": 2320.9238095238097}, "32": {"steady_throughput": 2721.8888888888887}, "64": {"steady_throughput": 3006.786666666667}}}, "Qwen3.5-27B-TP4": {"AR": {"4": {"steady_throughput": 432.522641509434}, "8": {"steady_throughput": 804.3614035087719}, "16": {"steady_throughput": 1429.4773195876287}, "32": {"steady_throughput": 2173.622950819672}, "64": {"steady_throughput": 2972.395}}, "DFlash-B16": {"4": {"steady_throughput": 1230.6000000000001, "keep_ratio": null}, "8": {"steady_throughput": 1791.738775510204, "keep_ratio": null}, "16": {"steady_throughput": 2202.7873015873015, "keep_ratio": null}, "32": {"steady_throughput": 2476.5301886792454, "keep_ratio": null}, "64": {"steady_throughput": 2712.3488888888887, "keep_ratio": null}}, "D-Cut-B16": {"4": {"steady_throughput": 1225.0083333333334, "keep_ratio": 0.785}, "8": {"steady_throughput": 2053.019444444444, "keep_ratio": 0.594}, "16": {"steady_throughput": 2772.0148936170212, "keep_ratio": 0.500}, "32": {"steady_throughput": 3448.9605263157896, "keep_ratio": 0.485}, "64": {"steady_throughput": 4194.377777777778, "keep_ratio": 0.536}}, "D-Cut-B8": {"4": {"steady_throughput": 937.7538461538461, "keep_ratio": 0.973}, "8": {"steady_throughput": 1874.3760000000002, "keep_ratio": 0.991}, "16": {"steady_throughput": 2562.9574074074076, "keep_ratio": 0.971}, "32": {"steady_throughput": 3314.3357142857144, "keep_ratio": 0.963}, "64": {"steady_throughput": 4074.4666666666667, "keep_ratio": 0.981}}, "D-Cut-Fixed-R75": {"4": {"steady_throughput": 1227.7227272727273}, "8": {"steady_throughput": 1921.5602739726028}, "16": {"steady_throughput": 2558.2754716981135}, "32": {"steady_throughput": 2975.5666666666666}, "64": {"steady_throughput": 3320.74054054054}}, "D-Cut-Fixed-R50": {"4": {"steady_throughput": 979.6642857142857}, "8": {"steady_throughput": 1878.9973333333332}, "16": {"steady_throughput": 2763.9854166666664}, "32": {"steady_throughput": 3457.1552631578948}, "64": {"steady_throughput": 3950.6032258064515}}, "MTP": {"4": {"steady_throughput": 1058.6878787878786}, "8": {"steady_throughput": 1850.5450980392156}, "16": {"steady_throughput": 2869.25625}, "32": {"steady_throughput": 3602.95}, "64": {"steady_throughput": 4270.086206896552}}}, "Qwen3.5-35B-A3B": {"AR": {"4": {"steady_throughput": 262.64430379746835}, "8": {"steady_throughput": 349.5696721311475}, "16": {"steady_throughput": 473.87692307692305}, "32": {"steady_throughput": 664.9418994413409}, "64": {"steady_throughput": 1013.2571428571429}}, "DFlash-B16": {"4": {"steady_throughput": 522.836, "keep_ratio": null}, "8": {"steady_throughput": 803.6179487179487, "keep_ratio": null}, "16": {"steady_throughput": 1303.7842105263157, "keep_ratio": null}, "32": {"steady_throughput": 2124.8982142857144, "keep_ratio": null}, "64": {"steady_throughput": 3118.2542857142857, "keep_ratio": null}}, "D-Cut-B16": {"4": {"steady_throughput": 620.0500000000001, "keep_ratio": 0.521}, "8": {"steady_throughput": 862.8230263157895, "keep_ratio": 0.508}, "16": {"steady_throughput": 1353.9340909090909, "keep_ratio": 0.542}, "32": {"steady_throughput": 2218.1358490566035, "keep_ratio": 0.545}, "64": {"steady_throughput": 3305.2212121212124, "keep_ratio": 0.530}}, "D-Cut-B8": {"4": {"steady_throughput": 541.5884615384615, "keep_ratio": 1.0}, "8": {"steady_throughput": 742.304705882353, "keep_ratio": 0.777}, "16": {"steady_throughput": 1167.7528301886794, "keep_ratio": 0.833}, "32": {"steady_throughput": 1937.2649999999999, "keep_ratio": 0.758}, "64": {"steady_throughput": 3118.062857142857, "keep_ratio": 0.649}}, "D-Cut-Fixed-R75": {"4": {"steady_throughput": 557.3057142857143}, "8": {"steady_throughput": 846.3481481481482}, "16": {"steady_throughput": 1397.0837209302326}, "32": {"steady_throughput": 2179.516981132075}, "64": {"steady_throughput": 3289.051515151515}}, "D-Cut-Fixed-R50": {"4": {"steady_throughput": 547.5783783783784}, "8": {"steady_throughput": 857.3949152542374}, "16": {"steady_throughput": 1334.4604395604395}, "32": {"steady_throughput": 2166.3535714285713}, "64": {"steady_throughput": 3369.134375}}, "MTP": {"4": {"steady_throughput": 439.2075}, "8": {"steady_throughput": 617.2436893203883}, "16": {"steady_throughput": 940.6044776119403}, "32": {"steady_throughput": 1487.9316455696203}, "64": {"steady_throughput": 2501.8199999999997}}}, "Qwen3.5-122B-A10B": {"AR": {"4": {"steady_throughput": 257.651}, "8": {"steady_throughput": 334.405}, "16": {"steady_throughput": 445.147}, "32": {"steady_throughput": 620.917}, "64": {"steady_throughput": 950.074}}, "DFlash-B16": {"4": {"steady_throughput": 292.559, "keep_ratio": null}, "8": {"steady_throughput": 488.087, "keep_ratio": null}, "16": {"steady_throughput": 776.192, "keep_ratio": null}, "32": {"steady_throughput": 1246.120, "keep_ratio": null}, "64": {"steady_throughput": 1959.261, "keep_ratio": null}}, "D-Cut-B16": {"4": {"steady_throughput": 341.855, "keep_ratio": 0.609}, "8": {"steady_throughput": 517.951, "keep_ratio": 0.575}, "16": {"steady_throughput": 825.038, "keep_ratio": 0.504}, "32": {"steady_throughput": 1294.552, "keep_ratio": 0.497}, "64": {"steady_throughput": 2428.920, "keep_ratio": 0.408}}, "MTP": {"4": {"steady_throughput": 372.601}, "8": {"steady_throughput": 530.151}, "16": {"steady_throughput": 786.503}, "32": {"steady_throughput": 1289.247}, "64": {"steady_throughput": 2185.583}}}};
+
+Object.assign(DATA['Qwen3-8B'], {
+    'AR': {'4': {'steady_throughput': 533.048}, '8': {'steady_throughput': 1017.867}, '16': {'steady_throughput': 1784.334}, '32': {'steady_throughput': 2663.086}, '64': {'steady_throughput': 3445.986}},
+    'EAGLE-3': {'4': {'steady_throughput': 1087.637}, '8': {'steady_throughput': 1933.044}, '16': {'steady_throughput': 2714.420}, '32': {'steady_throughput': 2946.222}, '64': {'steady_throughput': 3117.620}},
+    'DFlash-B8': {'4': {'steady_throughput': 1742.648}, '8': {'steady_throughput': 2476.655}, '16': {'steady_throughput': 2788.242}, '32': {'steady_throughput': 2970.273}, '64': {'steady_throughput': 3121.371}},
+    'D-Cut-B8': {'4': {'steady_throughput': 1684.144}, '8': {'steady_throughput': 2580.240}, '16': {'steady_throughput': 3144.191}, '32': {'steady_throughput': 3492.415}, '64': {'steady_throughput': 3683.762}},
+    'DFlash-B16': {'4': {'steady_throughput': 1681.400}, '8': {'steady_throughput': 1904.860}, '16': {'steady_throughput': 2064.072}, '32': {'steady_throughput': 2137.384}, '64': {'steady_throughput': 2226.804}},
+    'D-Cut-B16': {'4': {'steady_throughput': 1864.063, 'keep_ratio': 0.455}, '8': {'steady_throughput': 2560.444, 'keep_ratio': 0.339}, '16': {'steady_throughput': 2967.737, 'keep_ratio': 0.256}, '32': {'steady_throughput': 3209.052, 'keep_ratio': 0.251}, '64': {'steady_throughput': 3349.553, 'keep_ratio': 0.255}}
+});
+Object.assign(DATA['Qwen3.5-27B-TP4'], {
+    'AR': {'4': {'steady_throughput': 419.161}, '8': {'steady_throughput': 771.844}, '16': {'steady_throughput': 1324.692}, '32': {'steady_throughput': 1992.405}, '64': {'steady_throughput': 2554.180}},
+    'MTP': {'4': {'steady_throughput': 575.735}, '8': {'steady_throughput': 1088.120}, '16': {'steady_throughput': 1883.801}, '32': {'steady_throughput': 2600.444}, '64': {'steady_throughput': 3100.321}},
+    'DFlash-B8': {'4': {'steady_throughput': 911.517}, '8': {'steady_throughput': 1602.714}, '16': {'steady_throughput': 2072.802}, '32': {'steady_throughput': 2397.882}, '64': {'steady_throughput': 2638.464}},
+    'D-Cut-B8': {'4': {'steady_throughput': 879.357}, '8': {'steady_throughput': 1543.019}, '16': {'steady_throughput': 1999.080}, '32': {'steady_throughput': 2448.117}, '64': {'steady_throughput': 2871.430}},
+    'DFlash-B16': {'4': {'steady_throughput': 1050.301}, '8': {'steady_throughput': 1422.897}, '16': {'steady_throughput': 1687.259}, '32': {'steady_throughput': 1848.886}, '64': {'steady_throughput': 1952.013}},
+    'D-Cut-B16': {'4': {'steady_throughput': 1045.484, 'keep_ratio': 0.785}, '8': {'steady_throughput': 1619.972, 'keep_ratio': 0.594}, '16': {'steady_throughput': 2037.950, 'keep_ratio': 0.500}, '32': {'steady_throughput': 2479.037, 'keep_ratio': 0.485}, '64': {'steady_throughput': 2739.622, 'keep_ratio': 0.536}}
+});
+Object.assign(DATA['Qwen3.5-35B-A3B'], {
+    'AR': {'4': {'steady_throughput': 372.939}, '8': {'steady_throughput': 527.049}, '16': {'steady_throughput': 709.726}, '32': {'steady_throughput': 959.319}, '64': {'steady_throughput': 1317.566}},
+    'MTP': {'4': {'steady_throughput': 459.484}, '8': {'steady_throughput': 774.341}, '16': {'steady_throughput': 1111.061}, '32': {'steady_throughput': 1680.683}, '64': {'steady_throughput': 2374.862}},
+    'DFlash-B8': {'4': {'steady_throughput': 650.103}, '8': {'steady_throughput': 989.541}, '16': {'steady_throughput': 1482.941}, '32': {'steady_throughput': 2263.801}, '64': {'steady_throughput': 3096.639}},
+    'D-Cut-B8': {'4': {'steady_throughput': 596.590}, '8': {'steady_throughput': 982.514}, '16': {'steady_throughput': 1509.427}, '32': {'steady_throughput': 2232.024}, '64': {'steady_throughput': 3001.479}},
+    'DFlash-B16': {'4': {'steady_throughput': 663.022}, '8': {'steady_throughput': 1000.440}, '16': {'steady_throughput': 1536.752}, '32': {'steady_throughput': 2271.395}, '64': {'steady_throughput': 2908.526}},
+    'D-Cut-B16': {'4': {'steady_throughput': 712.204, 'keep_ratio': 0.521}, '8': {'steady_throughput': 1020.642, 'keep_ratio': 0.508}, '16': {'steady_throughput': 1623.313, 'keep_ratio': 0.542}, '32': {'steady_throughput': 2397.292, 'keep_ratio': 0.545}, '64': {'steady_throughput': 3257.695, 'keep_ratio': 0.530}}
+});
+DATA['Hy3-295B-A21B'] = {
+    'AR': {'4': {'steady_throughput': 273.533}, '8': {'steady_throughput': 407.989}, '16': {'steady_throughput': 638.108}, '32': {'steady_throughput': 978.771}, '64': {'steady_throughput': 1466.866}},
+    'MTP': {'4': {'steady_throughput': 356.366}, '8': {'steady_throughput': 563.242}, '16': {'steady_throughput': 867.466}, '32': {'steady_throughput': 1316.653}, '64': {'steady_throughput': 2216.310}},
+    'DFlash-B8': {'4': {'steady_throughput': 560.000}, '8': {'steady_throughput': 838.784}, '16': {'steady_throughput': 1413.719}, '32': {'steady_throughput': 2284.572}, '64': {'steady_throughput': 2793.649}},
+    'D-Cut-B8': {'4': {'steady_throughput': 576.207}, '8': {'steady_throughput': 859.864}, '16': {'steady_throughput': 1513.224}, '32': {'steady_throughput': 2353.663}, '64': {'steady_throughput': 3339.626}},
+    'DFlash-B16': {'4': {'steady_throughput': 507.899}, '8': {'steady_throughput': 857.911}, '16': {'steady_throughput': 1397.154}, '32': {'steady_throughput': 1802.386}, '64': {'steady_throughput': 2298.481}},
+    'D-Cut-B16': {'4': {'steady_throughput': 599.648, 'keep_ratio': 0.499}, '8': {'steady_throughput': 960.683, 'keep_ratio': 0.578}, '16': {'steady_throughput': 1525.277, 'keep_ratio': 0.524}, '32': {'steady_throughput': 2431.058, 'keep_ratio': 0.476}, '64': {'steady_throughput': 3051.827, 'keep_ratio': 0.448}}
+};
+delete DATA['Qwen3.5-122B-A10B'];
 
 const BS = [4, 8, 16, 32, 64];
 const LABELS = BS.map(b => 'bs=' + b);
@@ -954,6 +1032,7 @@ const C = {
 };
 const methodColors = {
   'AR': C.gray,
+  'DFlash-B8': C.gray,
   'DFlash-B16': C.gray,
   'D-Cut-B16': C.accent,
   'D-Cut-B8': C.accentLight,
@@ -1012,10 +1091,10 @@ motivConfigs.forEach(([id, model, color]) => {
 
 // ===== Throughput Charts =====
 const tpConfigs = [
-  ['chartTp8B', 'Qwen3-8B', ['DFlash-B16', 'D-Cut-B16', 'D-Cut-B8', 'EAGLE-3']],
-  ['chartTp27B', 'Qwen3.5-27B-TP4', ['DFlash-B16', 'D-Cut-B16', 'D-Cut-B8', 'MTP']],
-  ['chartTp35B', 'Qwen3.5-35B-A3B', ['DFlash-B16', 'D-Cut-B16', 'D-Cut-B8', 'MTP']],
-  ['chartTp122B', 'Qwen3.5-122B-A10B', ['DFlash-B16', 'D-Cut-B16', 'MTP']]
+  ['chartTp8B', 'Qwen3-8B', ['DFlash-B8', 'D-Cut-B8', 'DFlash-B16', 'D-Cut-B16', 'EAGLE-3']],
+  ['chartTp27B', 'Qwen3.5-27B-TP4', ['DFlash-B8', 'D-Cut-B8', 'DFlash-B16', 'D-Cut-B16', 'MTP']],
+  ['chartTp35B', 'Qwen3.5-35B-A3B', ['DFlash-B8', 'D-Cut-B8', 'DFlash-B16', 'D-Cut-B16', 'MTP']],
+  ['chartTpHy3', 'Hy3-295B-A21B', ['DFlash-B8', 'D-Cut-B8', 'DFlash-B16', 'D-Cut-B16', 'MTP']]
 ];
 tpConfigs.forEach(([id, model, methods]) => {
   const el = document.getElementById(id);
@@ -1035,7 +1114,7 @@ tpConfigs.forEach(([id, model, methods]) => {
         pointBackgroundColor: m === 'D-Cut-B16' ? '#fff' : methodColors[m],
         pointBorderColor: methodColors[m],
         pointBorderWidth: m === 'D-Cut-B16' ? 2 : 0,
-        borderDash: m.includes('DFlash') || m === 'AR' ? [5, 3] : [],
+        borderDash: m === 'DFlash-B8' ? [2, 2] : (m === 'DFlash-B16' || m === 'AR' ? [5, 3] : []),
         fill: m === 'D-Cut-B16'
       }))
     },
@@ -1055,9 +1134,9 @@ tpConfigs.forEach(([id, model, methods]) => {
 (function() {
   const el = document.getElementById('chartKeepRatio');
   if (!el) return;
-  const models = ['Qwen3-8B', 'Qwen3.5-27B-TP4', 'Qwen3.5-35B-A3B', 'Qwen3.5-122B-A10B'];
+  const models = ['Qwen3-8B', 'Qwen3.5-27B-TP4', 'Qwen3.5-35B-A3B', 'Hy3-295B-A21B'];
   const colors = [C.accent, C.purple, C.green, C.orange];
-  const names = ['8B', '27B', '35B', '122B'];
+  const names = ['8B', '27B', '35B', 'Hy3'];
   new Chart(el, {
     type: 'line',
     data: {
@@ -1189,13 +1268,14 @@ tpConfigs.forEach(([id, model, methods]) => {
   });
 })();
 
-// ===== vs MTP 122B =====
+// ===== vs MTP Hy3 =====
 (function() {
-  const el = document.getElementById('chartVsMtp122B');
+  const el = document.getElementById('chartVsMtpHy3');
   if (!el) return;
-  const mtp = tp('Qwen3.5-122B-A10B', 'MTP');
-  const b16 = tp('Qwen3.5-122B-A10B', 'D-Cut-B16');
-  const ratio = BS.map((_, i) => mtp[i] ? b16[i] / mtp[i] : null);
+  const mtp = tp('Hy3-295B-A21B', 'MTP');
+  const b16 = tp('Hy3-295B-A21B', 'D-Cut-B16');
+  const b8 = tp('Hy3-295B-A21B', 'D-Cut-B8');
+  const ratio = BS.map((_, i) => mtp[i] ? Math.max(b16[i] || 0, b8[i] || 0) / mtp[i] : null);
   new Chart(el, {
     type: 'bar',
     data: {
@@ -1212,7 +1292,7 @@ tpConfigs.forEach(([id, model, methods]) => {
       responsive: true,
       plugins: { legend: { display: false } },
       scales: {
-        y: { min: 0.8, max: 1.3, ticks: { callback: v => v.toFixed(1) + '×' }, grid: { color: '#f1f5f9' } },
+        y: { min: 1.0, max: 2.0, ticks: { callback: v => v.toFixed(1) + '×' }, grid: { color: '#f1f5f9' } },
         x: { grid: { display: false } }
       }
     }
