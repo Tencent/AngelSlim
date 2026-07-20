@@ -4,6 +4,10 @@ QAD trains a quantized student with an independent full-precision teacher. It is
 
 Use `Distill` for full-precision students. Use `QAD` when the student should be quantized during training.
 
+For scale-only distributed training on Megatron-Core, use the independent
+[MCoreQAD backend](mcore_qad.md). It supports Qwen3-MoE and HunYuan-3 with
+TP/EP/CP/SP parallelism and does not replace the QAD flow documented below.
+
 ## Features
 
 - Build the student with the same quantization configuration used by QAT.

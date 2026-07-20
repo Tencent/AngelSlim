@@ -81,6 +81,7 @@ setup(
             + get_requirements("requirements/requirements_diffusion.txt")
             + get_requirements("requirements/requirements_multimodal.txt")
             + get_requirements("requirements/requirements_benchmark.txt")
+            + get_requirements("requirements/requirements_mcore_qad.txt")
         ),
         # Install speculative sampling functionality: pip install angelslim[speculative]
         "speculative": get_requirements("requirements/requirements_speculative.txt"),
@@ -90,6 +91,8 @@ setup(
         "multimodal": get_requirements("requirements/requirements_multimodal.txt"),
         # Install benchmark functionality: pip install angelslim[benchmark]
         "benchmark": get_requirements("requirements/requirements_benchmark.txt"),
+        # Install the Megatron-Core scale-only QAT/QAD backend
+        "mcore-qad": get_requirements("requirements/requirements_mcore_qad.txt"),
     },
     packages=find_packages(),
     python_requires=">=3.0",
