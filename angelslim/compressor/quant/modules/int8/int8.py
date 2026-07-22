@@ -93,10 +93,30 @@ class INT8:
             inp = captured_inputs[idx]
             self.inps[idx, : inp.shape[1], :].copy_(inp[0])
         layer_kwargs = captured_kwargs[0] if captured_kwargs else {}
+        # ``prev_topk_indices`` is a DSA-specific cross-layer state.  The HF
+        # top-level forward passes ``prev_topk_indices=None`` into layer 0
+        # via kwargs, so ``Catcher`` captures it into ``layer_kwargs``.
+        # We re-inject a per-sample value below, so we must remove the
+        # captured one to avoid "got multiple values for keyword argument
+        # 'prev_topk_indices'".  Do the same for a few other DSA/MoE
+        # per-layer scratch kwargs that must not be shared across layers.
+        for _k in (
+            "prev_topk_indices",
+            "topk_indices",
+            "router_logits",
+            "output_router_logits",
+        ):
+            layer_kwargs.pop(_k, None)
         dev = get_best_device()
         for k, v in layer_kwargs.items():
-            # position embeddings
-            if isinstance(v, tuple):
+            # Move every tensor/module kwarg to ``dev`` (cuda:0 in low_memory).
+            # The previous branch only handled ``tuple``-valued kwargs, which
+            # silently left plain ``torch.Tensor`` kwargs (e.g. position_ids)
+            # on CPU and triggered a device-mismatch inside the GLM-5 DSA
+            # indexer (key_positions on cuda:0 vs position_ids on cpu).
+            if isinstance(v, (torch.Tensor, nn.Module)):
+                layer_kwargs[k] = v.to(dev)
+            elif isinstance(v, tuple):
                 layer_kwargs[k] = tuple(
                     (item.to(dev) if isinstance(item, (torch.Tensor, nn.Module)) else item)
                     for item in v
@@ -114,6 +134,23 @@ class INT8:
 
         outs = outs.to("cpu")
         self.inps = self.inps.to("cpu")
+
+        # GLM-5 DSA (and other DeepSeek-Sparse-Attention models) route the
+        # top-k selection through a cross-layer ``prev_topk_indices`` state:
+        # a "full" indexer layer computes the top-k and the following
+        # "shared" layers reuse it.  Because ``low_memory_run`` drives the
+        # transformer blocks one-by-one (instead of through HF's top-level
+        # forward), we must carry that state across layers (and across
+        # samples) by hand — otherwise the first ``shared`` layer raises
+        # "Shared DSA layers require top-k indices from a previous full
+        # indexer layer.".  Detect the DSA layout once from the layer type.
+        carry_topk = (
+            len(layers) > 0
+            and hasattr(layers[0], "self_attn")
+            and hasattr(layers[0].self_attn, "indexer")
+        )
+        prev_topk_indices = [None] * nsamples if carry_topk else None
+
         for i in range(len(layers)):
             if torch.cuda.is_available():
                 print_info(f"GPU Memory: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB")
@@ -124,9 +161,20 @@ class INT8:
             # being hook
             for j in range(min(self.inps.shape[0], nsamples)):
                 with torch.no_grad():
-                    outs[j, :, :] = layer(
-                        hidden_states=self.inps[j, :, :].unsqueeze(0), **layer_kwargs
-                    )[0].squeeze(1)
+                    out = layer(
+                        hidden_states=self.inps[j, :, :].unsqueeze(0),
+                        **(
+                            {"prev_topk_indices": prev_topk_indices[j]}
+                            if carry_topk
+                            else {}
+                        ),
+                        **layer_kwargs,
+                    )
+                    outs[j, :, :] = out[0].squeeze(1)
+                    if carry_topk:
+                        # [0]=hidden_states, [1]=topk_indices (to feed the next
+                        # shared DSA layer).  Keep it on ``dev`` for the next iter.
+                        prev_topk_indices[j] = out[1]
 
             print_info("HOOK Step{}".format(j))
 

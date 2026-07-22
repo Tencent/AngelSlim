@@ -1,0 +1,53 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output_glm5_w8a8c16
+
+# GLM-5 (GlmMoeDsaForCausalLM): MLA + DSA indexer + 78-layer MoE.
+# Requires transformers >= 5.4.0 (already satisfied at 5.6.2).
+model:
+  name: GLM5
+  model_path: /apdcephfs_zwfy2/share_300532381/harviexu/chatglm5.2
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  # Load the checkpoint in bf16 (native dtype in config.json).  The
+  # low_memory pipeline in INT8 will move the model to CPU and stream
+  # one transformer block at a time onto GPU for calibration.
+  torch_dtype: bfloat16
+  device_map: cpu
+
+# W8A8C16 = INT8 weight + INT8 activation + bf16 KV cache (no KV quant).
+# We omit ``kv_cache`` under ``quant_method`` on purpose; that makes
+# ``QuantConfig`` skip installing any KV observer, leaving the KV path
+# in its original bf16 precision.
+compression:
+  name: PTQ
+  quantization:
+    name: int8_dynamic
+    bits: 8
+    low_memory: true            # layer-by-layer streaming; CPU-resident model
+    quant_method:
+      weight: "per-channel"     # int8 per-channel weight
+      activation: "per-token"   # int8 per-token dynamic activation (no static scale)
+    quant_helpers:
+      - "smooth"                # SmoothQuant pre-processing (a la msmodelslim's flex_smooth_quant)
+    smooth_alpha: 0.5
+    # GLM5 model class also FORCE-skips: kv_b_proj / indexer / weights_proj /
+    # mlp.gate / lm_head / embed_tokens.  MTP-block linears (q_a_proj /
+    # q_b_proj / kv_a_proj_with_mqa / o_proj / gate_proj / up_proj / down_proj)
+    # ARE quantized; MTP-internal kv_b_proj / indexer / router still skipped.
+    # Anything you list here is appended to that hard-skip list.
+    ignore_layers:
+      - "lm_head"
+      - "embed_tokens"
+
+# Small calibration set (~80 short prompts, pre-templated as
+# ``applied_message`` so TextDataset takes the fast path: it just
+# tokenizes the string, no chat-template / assistant-turn required —
+# exactly what PTQ needs (forward-only, no loss/labels).
+dataset:
+  name: TextDataset
+  data_path: ./dataset/qa/question_calib.jsonl
+  max_seq_length: 2048
+  num_samples: 64
+  batch_size: 1

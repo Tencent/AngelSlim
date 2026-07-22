@@ -294,6 +294,49 @@ class PTQSaveVllmHF(PTQSaveBase):
         print_info("Save quantization_config: {}".format(quant_dict))
 
         os.makedirs(save_path, exist_ok=True)
+        # ------------------------------------------------------------------
+        # Sanitize ``generation_config`` before save_pretrained().
+        # Newer transformers (>= 4.50 and 5.x) call generation_config
+        # .validate(strict=True) inside save_pretrained().  Some legacy
+        # checkpoints (e.g. ChatGLM-5.2) ship a generation_config that sets
+        # sampling-only fields such as ``top_p`` / ``top_k`` / ``typical_p``
+        # without ``do_sample=True`` — that used to be a warning, now it's a
+        # hard ValueError:
+        #
+        #     ValueError: GenerationConfig is invalid:
+        #     - `top_p`: `do_sample` is not set to `True`. However, `top_p`
+        #       is set to `0.95` ...
+        #
+        # We must not silently flip ``do_sample`` to True (that would change
+        # the model's default decoding behaviour).  Instead we drop the
+        # sampling-only fields when they are inconsistent with do_sample.
+        gen_cfg = getattr(self.quant_model.get_model(), "generation_config", None)
+        if gen_cfg is not None and not getattr(gen_cfg, "do_sample", False):
+            for _sampling_key in ("top_p", "top_k", "typical_p", "epsilon_cutoff", "eta_cutoff"):
+                if getattr(gen_cfg, _sampling_key, None) is not None:
+                    print_info(
+                        "[generation_config] drop `{}` (do_sample=False, "
+                        "value was {}) to pass strict validate()".format(
+                            _sampling_key, getattr(gen_cfg, _sampling_key)
+                        )
+                    )
+                    try:
+                        setattr(gen_cfg, _sampling_key, None)
+                    except Exception:
+                        pass
+            # ``temperature`` is only meaningful with do_sample=True; the
+            # default value 1.0 is safe to keep, but any other value would
+            # also trip the strict validator.
+            _tmp = getattr(gen_cfg, "temperature", None)
+            if _tmp is not None and _tmp != 1.0:
+                print_info(
+                    "[generation_config] reset `temperature` "
+                    "({} -> 1.0) to pass strict validate()".format(_tmp)
+                )
+                try:
+                    gen_cfg.temperature = 1.0
+                except Exception:
+                    pass
         self.quant_model.get_model().save_pretrained(save_path, max_shard_size="5GB")
 
         with open(os.path.join(save_path, "hf_quant_config.json"), "w") as f:

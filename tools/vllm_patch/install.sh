@@ -9,6 +9,14 @@
 #   bash install.sh check        # verify whether patch is currently active
 #   bash install.sh -h | --help  # show this help
 #
+# Environment:
+#   ANGELSLIM_ROOT  Override the AngelSlim repo root. By default it is derived
+#                   from this script's location (tools/vllm_patch -> repo root).
+#                   Set it when you want this script (from any path) to copy
+#                   patch files out of a specific AngelSlim checkout, e.g.:
+#                     ANGELSLIM_ROOT=/apdcephfs_zwfy2_300532381/.../AngelSlim \
+#                       bash install.sh install
+#
 # Behavior:
 #   * Auto-detects the installed vLLM directory via `python3 -c 'import vllm'`.
 #   * Backs up original files to *.bak on first install (skipped if backup
@@ -31,7 +39,14 @@ set -euo pipefail
 
 # ---------- locate paths ----------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ANGELSLIM_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+# ANGELSLIM_ROOT can be overridden via env var; otherwise it is derived from
+# the script location (tools/vllm_patch -> .. -> AngelSlim root).
+if [[ -n "${ANGELSLIM_ROOT:-}" ]]; then
+    ANGELSLIM_ROOT="$(cd "${ANGELSLIM_ROOT}" && pwd)"
+    log "Using ANGELSLIM_ROOT from environment: ${ANGELSLIM_ROOT}"
+else
+    ANGELSLIM_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+fi
 
 PATCH_ENVS_SRC="${SCRIPT_DIR}/envs.py"
 PATCH_FUSED_MOE_SRC="${SCRIPT_DIR}/fused_moe.py"
