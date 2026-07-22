@@ -22,6 +22,37 @@ from torch import Tensor
 IGNORE_INDEX = -100
 
 
+class _DifferentiableAllReduceSum(torch.autograd.Function):
+    """SUM in forward and backward for shared normalization terms."""
+
+    @staticmethod
+    def forward(ctx, value: Tensor, group):
+        ctx.group = group
+        output = value.clone()
+        dist.all_reduce(output, op=dist.ReduceOp.SUM, group=group)
+        return output
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        grad_input = grad_output.clone()
+        dist.all_reduce(grad_input, op=dist.ReduceOp.SUM, group=ctx.group)
+        return grad_input, None
+
+
+class _ForwardAllReduceSum(torch.autograd.Function):
+    """SUM in forward, identity in backward for partitioned vocab contributions."""
+
+    @staticmethod
+    def forward(ctx, value: Tensor, group):
+        output = value.clone()
+        dist.all_reduce(output, op=dist.ReduceOp.SUM, group=group)
+        return output
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output, None
+
+
 def _tp():
     return ps.get_tensor_model_parallel_group()
 
@@ -31,17 +62,16 @@ def _vp_log_softmax(x: Tensor) -> Tensor:
     g = _tp()
     m = x.max(dim=-1, keepdim=True).values
     dist.all_reduce(m, op=dist.ReduceOp.MAX, group=g)
-    x = x - m
+    x = x - m.detach()  # softmax is shift-invariant; do not backprop through distributed max
     Z = x.exp().sum(dim=-1, keepdim=True)
-    dist.all_reduce(Z, op=dist.ReduceOp.SUM, group=g)
+    Z = _DifferentiableAllReduceSum.apply(Z, g)
     return x - Z.log()
 
 
 def _vp_kl(log_p_src: Tensor, log_p_tgt: Tensor) -> Tensor:
     """Per-token KL(tgt || src) with the vocab sum reduced across TP. -> [N]."""
     s = (log_p_tgt.exp() * (log_p_tgt - log_p_src)).sum(dim=-1)
-    dist.all_reduce(s, op=dist.ReduceOp.SUM, group=_tp())
-    return s
+    return _ForwardAllReduceSum.apply(s, _tp())
 
 
 def _vp_gold_prob(log_p_tgt: Tensor, gold: Tensor) -> Tensor:

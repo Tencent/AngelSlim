@@ -18,7 +18,7 @@ def save_dist_checkpoint(model, ckpt_dir: str) -> None:
     dc.save(model.sharded_state_dict(), ckpt_dir)
 
 
-def load_dist_checkpoint(model, ckpt_dir: str, strict: bool = False):
+def load_dist_checkpoint(model, ckpt_dir: str, strict: bool = True):
     sharded = model.sharded_state_dict()
     model.load_state_dict(dc.load(sharded, ckpt_dir), strict=strict)
     return model

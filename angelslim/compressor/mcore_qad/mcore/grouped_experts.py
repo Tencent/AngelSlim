@@ -24,6 +24,7 @@ import torch.nn.functional as F
 from torch import Tensor, nn
 
 from angelslim.compressor.mcore_qad.quant.formats import FORMAT_REGISTRY
+from angelslim.compressor.mcore_qad.quant.functional import grad_scale, lsq_grad_scale
 from angelslim.compressor.mcore_qad.quant.grouped_quant import (
     build_grouped_weight_quant,
 )
@@ -48,6 +49,68 @@ def build_grouped_act_quant(act_spec: QuantSpec):
     return Quantizer(fmt, scheme)
 
 
+class GroupedNVFP4Activation(nn.Module):
+    """Per-expert static global scale + dynamic per-token block-16 NVFP4 QDQ."""
+
+    def __init__(self, num_local_experts: int, group_size: int = 16) -> None:
+        super().__init__()
+        self.num_local_experts = num_local_experts
+        self.g = group_size
+        self.alpha = nn.Parameter(torch.ones(num_local_experts))
+        self.register_buffer("ref", torch.ones(num_local_experts))
+        self.register_buffer("_initialized", torch.zeros((), dtype=torch.bool))
+        self.e2m1 = FORMAT_REGISTRY.create("e2m1")
+        self.e4m3 = FORMAT_REGISTRY.create("e4m3")
+        self.lsq = lsq_grad_scale(group_size, self.e2m1.max_repr)
+        self.enabled = True
+
+    def global_scale(self) -> Tensor:
+        return self.ref * self.alpha.clamp(0.25, 4.0)
+
+    @torch.no_grad()
+    def _initialize(self, x: Tensor, tokens_per_expert: Tensor) -> None:
+        start = 0
+        fallback = (
+            x.float().abs().amax() / (self.e2m1.max_repr * self.e4m3.max_repr)
+            if x.numel()
+            else x.new_tensor(1.0, dtype=torch.float32)
+        ).clamp_min(1e-10)
+        for expert, count in enumerate(tokens_per_expert.tolist()):
+            if count:
+                value = x[start : start + count].float().abs().amax()
+                value = value / (self.e2m1.max_repr * self.e4m3.max_repr)
+                self.ref[expert].copy_(value.clamp_min(1e-10))
+            else:
+                self.ref[expert].copy_(fallback)
+            start += count
+        self.alpha.fill_(1.0)
+        self._initialized.fill_(True)
+
+    def forward(self, x: Tensor, tokens_per_expert: Tensor) -> Tensor:
+        if not self.enabled or x.numel() == 0:
+            return x
+        if x.shape[-1] % self.g:
+            raise ValueError(f"activation K={x.shape[-1]} is not divisible by {self.g}")
+        if not bool(self._initialized):
+            self._initialize(x, tokens_per_expert)
+        counts = tokens_per_expert.to(device=x.device, dtype=torch.long)
+        total_tokens = int(counts.sum())
+        if total_tokens != x.shape[0]:
+            raise ValueError(
+                f"tokens_per_expert sums to {total_tokens}, expected {x.shape[0]}"
+            )
+        token_global = torch.repeat_interleave(self.global_scale(), counts).view(-1, 1)
+        xb = x.float().reshape(x.shape[0], x.shape[-1] // self.g, self.g)
+        block_amax = xb.detach().abs().amax(dim=-1)
+        block_raw = (block_amax / self.e2m1.max_repr) / token_global
+        block_raw = torch.where(block_amax > 0, block_raw, torch.ones_like(block_raw))
+        block_scale = self.e4m3.quantize_scale(block_raw)
+        eff = (token_global * block_scale).unsqueeze(-1).clamp_min(1e-10)
+        eff = grad_scale(eff, self.lsq)
+        qdq = self.e2m1.to_grid(xb / eff) * eff
+        return qdq.reshape_as(x).to(x.dtype)
+
+
 class QuantGroupedExperts(nn.Module):
     def __init__(
         self,
@@ -67,9 +130,22 @@ class QuantGroupedExperts(nn.Module):
         self.weight2 = nn.Parameter(torch.empty(E, H, F_, dtype=params_dtype), requires_grad=False)
         self.weight_q1 = build_grouped_weight_quant(weight_spec, (E, 2 * F_, H))
         self.weight_q2 = build_grouped_weight_quant(weight_spec, (E, H, F_))
-        self.act_q = build_grouped_act_quant(act_spec)  # None -> weight-only experts
+        if act_spec.fmt == "e2m1" and act_spec.scheme == "two_level_block":
+            self.act_q1 = GroupedNVFP4Activation(E, act_spec.group_size or 16)
+            self.act_q2 = GroupedNVFP4Activation(E, act_spec.group_size or 16)
+            self.act_q = None
+        else:
+            self.act_q1 = self.act_q2 = None
+            self.act_q = build_grouped_act_quant(act_spec)  # None -> weight-only experts
 
-    def _q_act(self, x: Tensor) -> Tensor:
+    def _q_act(
+        self, x: Tensor, tokens_per_expert: Tensor | None = None, *, second: bool = False
+    ) -> Tensor:
+        nvfp4_q = self.act_q2 if second else self.act_q1
+        if nvfp4_q is not None:
+            if tokens_per_expert is None:
+                raise ValueError("NVFP4 grouped activation requires tokens_per_expert")
+            return nvfp4_q(x, tokens_per_expert)
         return self.act_q(x.float()).to(x.dtype) if self.act_q is not None else x
 
     def _q_w(self, q, W: Tensor) -> Tensor:
@@ -88,16 +164,19 @@ class QuantGroupedExperts(nn.Module):
         # checkpointing. This is the same grouped-GEMM strategy mcore/TE use for MoE.
         Wq1 = self._q_w(self.weight_q1, self.weight1)  # [E,2F,H] (out,in), quantized once
         Wq2 = self._q_w(self.weight_q2, self.weight2)  # [E,H,F]
-        x = self._q_act(permuted_hidden)  # [M, H]  (fp8 per-token in W4A8)
+        x = self._q_act(permuted_hidden, tokens_per_expert)  # [M, H]
         offs = torch.cumsum(tokens_per_expert.to(x.device), 0).to(torch.int32)  # group boundaries
         # _grouped_mm(a[M,K], b[E,K,N], offs) = per-group a@b -> [M,N]; b = W^T = [E,in,out]
         h = torch._grouped_mm(x, Wq1.transpose(-1, -2), offs=offs)  # [M, 2F]
         gate, up = torch.chunk(h, 2, dim=-1)
         a = F.silu(gate) * up  # SwiGLU -> [M, F]
-        if permuted_probs is not None:
-            a = a * permuted_probs.unsqueeze(-1).to(a.dtype)  # route weighting (post-activation)
-        a = self._q_act(a)  # quantize fc2 input too (W4A8)
+        a = self._q_act(a, tokens_per_expert, second=True)  # quantize fc2 input too
         y = torch._grouped_mm(a, Wq2.transpose(-1, -2), offs=offs)  # [M, H]
+        # Apply routing after the down projection in FP32. Applying it before the
+        # fc2 input quantizer changes the activation distribution and diverges from
+        # the HF/deployment semantics.
+        if permuted_probs is not None:
+            y = (y.float() * permuted_probs.unsqueeze(-1).float()).to(y.dtype)
         return y, None
 
 

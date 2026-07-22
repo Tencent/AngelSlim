@@ -68,17 +68,20 @@ def convert(hf_path: str, output_path: str, use_cpu: bool = False) -> None:
         device = "cpu" if use_cpu else "cuda"
         model = build_gpt_model(config, metadata).to(device)
         target = model.state_dict()
+        missing_keys = sorted(target.keys() - state_dict.keys())
+        unexpected_keys = sorted(state_dict.keys() - target.keys())
+        if missing_keys or unexpected_keys:
+            raise RuntimeError(
+                "HF->MCore conversion was not exact: "
+                f"missing={missing_keys[:20]} unexpected={unexpected_keys[:20]}"
+            )
         state_dict = {
-            key: value.to(target[key].dtype) for key, value in state_dict.items() if key in target
+            key: value.to(target[key].dtype) for key, value in state_dict.items()
         }
-        result = model.load_state_dict(state_dict, strict=False)
+        model.load_state_dict(state_dict, strict=True)
         del state_dict
         gc.collect()
-        print(
-            f"loaded HF->mcore: missing={len(result.missing_keys)} "
-            f"unexpected={len(result.unexpected_keys)}",
-            flush=True,
-        )
+        print("loaded HF->mcore: missing=0 unexpected=0", flush=True)
         save_dist_checkpoint(model, output_path)
         print(f"saved dist-checkpoint -> {output_path}", flush=True)
     finally:

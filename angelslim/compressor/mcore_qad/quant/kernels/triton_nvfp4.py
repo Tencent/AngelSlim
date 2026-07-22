@@ -30,18 +30,22 @@ def _snap_e2m1(u):
     uc = tl.minimum(tl.maximum(u, -_E2M1_MAX), _E2M1_MAX)
     au = tl.abs(uc)
     q = tl.where(
-        au < 0.25,
+        au <= 0.25,
         0.0,
         tl.where(
             au < 0.75,
             0.5,
             tl.where(
-                au < 1.25,
+                au <= 1.25,
                 1.0,
                 tl.where(
                     au < 1.75,
                     1.5,
-                    tl.where(au < 2.5, 2.0, tl.where(au < 3.5, 3.0, tl.where(au < 5.0, 4.0, 6.0))),
+                    tl.where(
+                        au <= 2.5,
+                        2.0,
+                        tl.where(au < 3.5, 3.0, tl.where(au <= 5.0, 4.0, 6.0)),
+                    ),
                 ),
             ),
         ),
