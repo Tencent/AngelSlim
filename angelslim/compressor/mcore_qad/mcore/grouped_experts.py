@@ -96,9 +96,7 @@ class GroupedNVFP4Activation(nn.Module):
         counts = tokens_per_expert.to(device=x.device, dtype=torch.long)
         total_tokens = int(counts.sum())
         if total_tokens != x.shape[0]:
-            raise ValueError(
-                f"tokens_per_expert sums to {total_tokens}, expected {x.shape[0]}"
-            )
+            raise ValueError(f"tokens_per_expert sums to {total_tokens}, expected {x.shape[0]}")
         token_global = torch.repeat_interleave(self.global_scale(), counts).view(-1, 1)
         xb = x.float().reshape(x.shape[0], x.shape[-1] // self.g, self.g)
         block_amax = xb.detach().abs().amax(dim=-1)

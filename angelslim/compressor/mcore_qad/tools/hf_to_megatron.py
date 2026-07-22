@@ -75,9 +75,7 @@ def convert(hf_path: str, output_path: str, use_cpu: bool = False) -> None:
                 "HF->MCore conversion was not exact: "
                 f"missing={missing_keys[:20]} unexpected={unexpected_keys[:20]}"
             )
-        state_dict = {
-            key: value.to(target[key].dtype) for key, value in state_dict.items()
-        }
+        state_dict = {key: value.to(target[key].dtype) for key, value in state_dict.items()}
         model.load_state_dict(state_dict, strict=True)
         del state_dict
         gc.collect()
