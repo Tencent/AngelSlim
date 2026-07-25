@@ -42,9 +42,14 @@ def _unique_named_params(model, predicate):
 
 class QATSeq2SeqTrainer(Seq2SeqTrainer):
     def __init__(self, *args, loss_config=None, quant_config=None, **kwargs):
-        super().__init__(*args, **kwargs)
         loss_config = loss_config or {}
         quant_config = quant_config or {}
+        super().__init__(*args, **kwargs)
+        self.model_accepts_loss_kwargs = True
+        # DeepSpeed may ask HF Trainer to create an optimizer again. Keep the
+        # externally built FOCUS optimizer so its differential scale learning
+        # rates are not collapsed into a generic single-lr optimizer.
+        self._qat_prebuilt_optimizer = self.optimizer
         self.loss_type = str(loss_config.get("loss_type", "origin")).lower()
         self.loss_topk = loss_config.get("loss_topk")
         self.kd_temperature = float(loss_config.get("kd_temperature", 1.0))
@@ -67,6 +72,18 @@ class QATSeq2SeqTrainer(Seq2SeqTrainer):
         from collections import defaultdict
 
         self._qat_metrics = {"train": defaultdict(list), "eval": defaultdict(list)}
+
+    def create_optimizer(self):
+        if getattr(self, "_qat_prebuilt_optimizer", None) is not None:
+            self.optimizer = self._qat_prebuilt_optimizer
+            return self.optimizer
+        return super().create_optimizer()
+
+    def training_step(self, *args, **kwargs):
+        loss = super().training_step(*args, **kwargs)
+        # ``super`` has already run backward. Returning a normalized detached
+        # value fixes GA-inflated logs without changing modern-path gradients.
+        return loss / max(int(self.current_gradient_accumulation_steps), 1)
 
     def _record(self, name, value):
         if value is None:
@@ -226,17 +243,36 @@ class End2EndTrainer:
     def _init_optimizer(self):
         lr = float(self.config["compress_config"].QAT.hf_args.get("learning_rate", 1e-5))
         wd = float(self.config["compress_config"].QAT.hf_args.get("weight_decay", 0))
+
+        learnable_cfg = (
+            self.config["compress_config"]
+            .QAT.plugin_config.get("quant_config", {})
+            .get("learnable", {})
+        )
+        quant_max_scale_lr = float(learnable_cfg.get("quant_max_scale_lr", lr))
+
         scale_params = _unique_named_params(
             self.quant_model.model,
-            lambda n, p: p.requires_grad and ("scale" in n or "zero_point" in n),
+            lambda n, p: p.requires_grad
+            and ("scale" in n or "zero_point" in n)
+            and "quant_max_scale" not in n,
         )
-        params = [
-            {
-                "params": scale_params,
-                "weight_decay": wd,
-                "lr": lr,
-            }
-        ]
+        quant_max_scale_params = _unique_named_params(
+            self.quant_model.model,
+            lambda n, p: p.requires_grad and "quant_max_scale" in n,
+        )
+
+        params = []
+        if scale_params:
+            params.append({"params": scale_params, "weight_decay": wd, "lr": lr})
+        if quant_max_scale_params:
+            params.append(
+                {
+                    "params": quant_max_scale_params,
+                    "weight_decay": wd,
+                    "lr": quant_max_scale_lr,
+                }
+            )
 
         enable_lwc = (
             self.config["compress_config"]
@@ -267,12 +303,16 @@ class End2EndTrainer:
         if enable_lwc:
             print_info(
                 f"Init optimizer with {len(scale_params)} scale params, "
-                f"{lwc_param_count} lwc params, lr={lr} lwc_lr={lwc_lr} weight_decay={wd}"
+                f"{len(quant_max_scale_params)} quant_max_scale params, "
+                f"{lwc_param_count} lwc params, "
+                f"lr={lr} quant_max_scale_lr={quant_max_scale_lr} "
+                f"lwc_lr={lwc_lr} weight_decay={wd}"
             )
         else:
             print_info(
                 f"Init optimizer with {len(scale_params)} scale params, "
-                f"lr={lr} weight_decay={wd}"
+                f"{len(quant_max_scale_params)} quant_max_scale params, "
+                f"lr={lr} quant_max_scale_lr={quant_max_scale_lr} weight_decay={wd}"
             )
 
     def prepare_trainer(self):
@@ -315,7 +355,30 @@ class End2EndTrainer:
         else:
             self.train_dataset = QATDataset(dataloader.dataset, self.quant_model.tokenizer)
 
+    def _validate_focus_resume_mode(self):
+        if self.resume_ckpt_dir is None or getattr(self, "config", None) is None:
+            return
+        qat_config = self.config["compress_config"].QAT
+        weight_qtype = str(
+            qat_config.plugin_config.get("quant_config", {}).get("weight", {}).get("qtype", "")
+        ).lower()
+        if "mxfp4" not in weight_qtype and "nvfp4" not in weight_qtype:
+            return
+        if self.do_train:
+            raise RuntimeError(
+                "FOCUS resume checkpoints contain baked fake-quantized weights "
+                "and cannot be used to continue QAT without quantizing weights "
+                "again. Resume is supported for evaluation only."
+            )
+        if qat_config.save_format in ("real", "real_and_kvcache"):
+            raise RuntimeError(
+                "FOCUS fake checkpoints cannot be converted through direct "
+                "`save_format: real`; use the offline FOCUS FP4 exporter with "
+                "the frozen base model."
+            )
+
     def run(self, dataloader):
+        self._validate_focus_resume_mode()
         self.prepare_dataset(dataloader)
         self.plugin_manager.call_before_train(train_dataset=self.train_dataset)
         self.prepare_trainer()
@@ -323,7 +386,18 @@ class End2EndTrainer:
         if self.resume_ckpt_dir is not None:
             print_info(f"Loading from resume {self.resume_ckpt_dir}")
             save_dict = torch.load(self.resume_ckpt_dir, map_location="cpu")
-            self.quant_model.model.load_state_dict(save_dict)
+            load_result = self.quant_model.model.load_state_dict(save_dict, strict=False)
+            missing = set(load_result.missing_keys)
+            unexpected = set(load_result.unexpected_keys)
+            allowed_missing = {"lm_head.weight"}
+            if unexpected or not missing.issubset(allowed_missing):
+                raise RuntimeError(
+                    "Resume state_dict mismatch: "
+                    f"missing={sorted(load_result.missing_keys)}, "
+                    f"unexpected={sorted(load_result.unexpected_keys)}"
+                )
+            if missing and hasattr(self.quant_model.model, "tie_weights"):
+                self.quant_model.model.tie_weights()
 
         if self.do_train:
             if self.external_trainer is not None:
@@ -331,4 +405,20 @@ class End2EndTrainer:
             else:
                 self.train()
 
-        self.plugin_manager.call_after_train()
+        # Fake checkpoints already contain baked fake-quantized weights.
+        # Eval-only resume must restore inference state without applying
+        # ``quant_inplace`` for a second time.
+        real_focus_fp4_export = False
+        if getattr(self, "config", None) is not None:
+            qat_config = self.config["compress_config"].QAT
+            weight_qtype = str(
+                qat_config.plugin_config.get("quant_config", {}).get("weight", {}).get("qtype", "")
+            ).lower()
+            real_focus_fp4_export = qat_config.save_format in ("real", "real_and_kvcache") and (
+                "mxfp4" in weight_qtype or "nvfp4" in weight_qtype
+            )
+        self.plugin_manager.call_after_train(
+            skip_weight_bake=(
+                (self.resume_ckpt_dir is not None and not self.do_train) or real_focus_fp4_export
+            )
+        )

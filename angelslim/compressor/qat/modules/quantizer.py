@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
 import re
 
 import torch
@@ -22,6 +23,27 @@ from ....utils import is_deepspeed_zero3_enabled, is_zero3_param
 
 FP8_E4M3_QMIN = -448
 FP8_E4M3_QMAX = 448
+
+FP32_EXPONENT_BIAS = 127
+FP32_MIN_NORMAL = 2 ** (-FP32_EXPONENT_BIAS + 1)
+
+MXFP_FORMAT_CACHE = {
+    "mx_int8": (0, 8, 0, 1.984375, 0),
+    "mx_int4": (0, 4, 0, 1.75, 0),
+    "mx_int2": (0, 2, 0, 1.0, 0),
+    "mx_fp8e5m2": (5, 4, 15, 57344.0, 6.103515625e-05),
+    "mx_fp8": (4, 5, 8, 448.0, 0.015625),
+    "mx_fp8e4m3": (4, 5, 8, 448.0, 0.015625),
+    "mx_fp6e3m2": (3, 4, 4, 28.0, 0.25),
+    "mx_fp6": (2, 5, 2, 7.5, 1.0),
+    "mx_fp6e2m3": (2, 5, 2, 7.5, 1.0),
+    "mx_fp4": (2, 3, 2, 6.0, 1.0),
+    "mx_fp4e2m1": (2, 3, 2, 6.0, 1.0),
+    "mx_float16": (5, 12, 15, 65504.0, 6.103515625e-05),
+    "mx_fp16": (5, 12, 15, 65504.0, 6.103515625e-05),
+    "mx_bfloat16": (8, 9, 127, 3.3895313892515355e38, 1.1754943508222875e-38),
+    "mx_bf16": (8, 9, 127, 3.3895313892515355e38, 1.1754943508222875e-38),
+}
 
 
 def round_ste(x: torch.Tensor):
@@ -38,11 +60,78 @@ def fp8_cast_ste(x: torch.Tensor):
     return (x_fp8.to(x.dtype) - x).detach() + x
 
 
+def floor_ste(x: torch.Tensor):
+    return (torch.floor(x) - x).detach() + x
+
+
+def ceil_ste(x: torch.Tensor):
+    return (torch.ceil(x) - x).detach() + x
+
+
+def _reshape_pad_tensor_by_group_size(tensor: torch.Tensor, group_size: int):
+    if group_size <= 0:
+        raise ValueError(f"group_size must be positive for MXFP quantization, got {group_size}")
+    orig_shape = tuple(tensor.shape)
+    tensor = tensor.reshape(-1, orig_shape[-1])
+    pad_len = (-tensor.shape[-1]) % group_size
+    if pad_len > 0:
+        tensor = F.pad(tensor, (0, pad_len))
+    return tensor.reshape(-1, group_size), orig_shape, pad_len
+
+
+def _revert_tensor_by_pad(tensor: torch.Tensor, orig_shape, pad_len: int):
+    rows = math.prod(orig_shape[:-1]) if len(orig_shape) > 1 else 1
+    padded_last_dim = orig_shape[-1] + pad_len
+    tensor = tensor.reshape(rows, padded_last_dim)
+    if pad_len > 0:
+        tensor = tensor[..., :-pad_len]
+    return tensor.reshape(orig_shape)
+
+
+def _quant_fp4_element(
+    tensor: torch.Tensor, ebits: int, mbits: int, max_norm: float, mantissa_rounding: str = "even"
+):
+    if ebits != 0:
+        private_exp = floor_ste(torch.log2(torch.abs(tensor) + (tensor == 0).type(tensor.dtype)))
+        min_exp = -(2.0 ** float(ebits - 1)) + 2
+        private_exp = private_exp.clip(min=min_exp)
+    else:
+        private_exp = None
+
+    tensor = (
+        tensor * (2.0 ** float(mbits - 2))
+        if private_exp is None
+        else tensor / (2.0 ** private_exp.float()) * (2.0 ** float(mbits - 2))
+    )
+
+    if mantissa_rounding == "even":
+        abs_tensor = torch.abs(tensor)
+        mask_tensor = ((abs_tensor - 0.5) % 2 == torch.zeros_like(abs_tensor)).type(tensor.dtype)
+        tensor = torch.sign(tensor) * (floor_ste(abs_tensor + 0.5) - mask_tensor)
+    elif mantissa_rounding == "nearest":
+        tensor = torch.sign(tensor) * round_ste(torch.abs(tensor))
+    elif mantissa_rounding == "floor":
+        tensor = torch.sign(tensor) * floor_ste(torch.abs(tensor))
+    else:
+        raise ValueError("mantissa_rounding only supports even, nearest or floor.")
+
+    tensor = (
+        tensor / (2.0 ** float(mbits - 2))
+        if private_exp is None
+        else tensor / (2.0 ** float(mbits - 2)) * (2.0 ** private_exp.float())
+    )
+    return torch.clamp(tensor, min=-max_norm, max=max_norm)
+
+
 def _parse_bits_and_dtype(qtype_str):
     match = re.search(r"\d+", qtype_str)
     if match is None:
         raise ValueError(f"Cannot parse bit-width from: {qtype_str}")
     bits = int(match.group())
+    if "mxfp" in qtype_str or "mx_fp" in qtype_str:
+        return bits, "mxfp4"
+    if "nvfp" in qtype_str or "nv_fp" in qtype_str:
+        return bits, "nvfp4"
     if "fp8" in qtype_str:
         return bits, "fp8"
     elif "int" in qtype_str:
@@ -112,6 +201,9 @@ class Quantizer(nn.Module):
             self.group_size = rewrite_conf.get("group_size", -1)
             self.is_sym = rewrite_conf.get("is_sym", True)
             self.dynamic = rewrite_conf.get("dynamic", False)
+            self.mantissa_rounding = rewrite_conf.get("mantissa_rounding", "even")
+            self.use_subgroup_scale = rewrite_conf.get("use_subgroup_scale", False)
+            self.num_sub = rewrite_conf.get("num_sub", 4)
         else:
             self.bits, self.dtype = _parse_bits_and_dtype(info)
             self.is_sym = True
@@ -121,13 +213,22 @@ class Quantizer(nn.Module):
                 raise ValueError(f"Cannot parse granularity from quant info: {info}")
             sub_parts = parts[1].rsplit("-")
             self.granularity = "-".join(sub_parts[0:2])
+            self.mantissa_rounding = "even"
+            self.use_subgroup_scale = False
+            self.num_sub = 4
 
         if self.dtype == "fp8":
             self.is_sym = True
+        if self.dtype in ("mxfp4", "nvfp4"):
+            self.is_sym = True
+            self.mxfp_data_type = f"mx_fp{self.bits}"
         if self.granularity == "per-token":
             self.dynamic = True
 
     def _set_quant_range(self):
+        if self.dtype in ("mxfp4", "nvfp4"):
+            self.qmin, self.qmax = None, None
+            return
         if self.dtype == "fp8":
             self.qmin, self.qmax = FP8_E4M3_QMIN, FP8_E4M3_QMAX
         elif self.dtype == "int" and self.is_sym:
@@ -143,6 +244,12 @@ class Quantizer(nn.Module):
 
     def _init_quant_params(self, x):
         with torch.no_grad():
+            if self.dtype == "mxfp4":
+                self._init_mxfp_params(x)
+                return
+            if self.dtype == "nvfp4":
+                self._init_nvfp4_params(x)
+                return
             if self.is_act:
                 if self.dynamic:
                     self.init = True
@@ -224,13 +331,134 @@ class Quantizer(nn.Module):
         # per-tensor and any reduce-to-scalar variant
         return (1,)
 
+    def _get_fp4_param_shape(self, x_or_shape, group_size: int):
+        """Calculate FP4 parameter shape from a tensor or an (out, in) tuple."""
+        if isinstance(x_or_shape, tuple):
+            out_dim, in_dim = x_or_shape
+        else:
+            if x_or_shape.dim() != 2:
+                x_or_shape = x_or_shape.flatten(1)
+            out_dim, in_dim = x_or_shape.shape
+        num_groups = math.ceil(in_dim / group_size)
+        return (out_dim, num_groups)
+
+    def _init_mxfp_params(self, x):
+        """Initialize MXFP quantization parameters."""
+        self.scale = None
+        self.zero_point = None
+
+        if self.is_act:
+            self.max_scale = nn.Parameter(torch.ones(1, dtype=torch.float32))
+            self.quant_max_scale = None
+            self.init = True if self.dynamic else False
+            return
+
+        if self._needs_external_weight_init(x):
+            shape_2d = self._weight_2d_shape()
+            shape = self._get_fp4_param_shape(shape_2d, self.group_size)
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            if x is None:
+                raise ValueError(
+                    "MXFP weight quantizer requires weight tensor for parameter initialization."
+                )
+            shape = self._get_fp4_param_shape(x, self.group_size)
+            device = x.device
+
+        if self.group_size <= 0:
+            raise ValueError(
+                f"MXFP weight quantizer requires positive group_size, got {self.group_size}."
+            )
+
+        self.max_scale = nn.Parameter(torch.ones(shape, device=device, dtype=torch.float32))
+
+        if self.use_subgroup_scale:
+            num_sub = self.num_sub
+            if self.group_size % num_sub != 0:
+                raise ValueError(
+                    f"group_size ({self.group_size}) must be divisible by num_sub ({num_sub})."
+                )
+            # The input is padded to whole parent groups before subgrouping.
+            # Derive this shape from the parent-group count so a partial tail
+            # still allocates all ``num_sub`` subgroup scales.
+            quant_shape = (shape[0], shape[1] * num_sub)
+            self.quant_max_scale = nn.Parameter(
+                torch.ones(quant_shape, device=device, dtype=torch.float32) * 6.0
+            )
+            self.sigmoid_scale = nn.Sigmoid()
+        else:
+            self.quant_max_scale = None
+            self.sigmoid_scale = None
+
+    def _init_nvfp4_params(self, x):
+        """Initialize NVFP4 quantization parameters."""
+        self.scale = None
+        self.zero_point = None
+        self.block_size = self.group_size
+        self.nvfp4_max_norm = 6.0
+
+        if self.is_act:
+            self.register_buffer("scale_2", torch.ones(1, dtype=torch.float32))
+            self.max_scale = None
+            self.quant_max_scale = None
+            self.sigmoid_scale = None
+            self.init = False
+            return
+
+        if self._needs_external_weight_init(x):
+            shape_2d = self._weight_2d_shape()
+            shape = self._get_fp4_param_shape(shape_2d, self.block_size)
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.register_buffer("scale_2", torch.ones(1, device=device))
+            self.init = False
+        else:
+            if x is None:
+                raise ValueError(
+                    "NVFP4 weight quantizer requires weight tensor for parameter initialization."
+                )
+            if self.block_size <= 0:
+                raise ValueError(
+                    f"NVFP4 weight quantizer requires positive group_size (block_size), "
+                    f"got {self.block_size}."
+                )
+            shape = self._get_fp4_param_shape(x, self.block_size)
+            device = x.device
+            amax = x.abs().amax()
+            init_scale_2 = amax.float() / self.nvfp4_max_norm / FP8_E4M3_QMAX
+            init_scale_2 = init_scale_2.clamp(min=1e-12)
+            self.register_buffer("scale_2", init_scale_2.view(1).to(device))
+            self.init = True
+
+        self.max_scale = nn.Parameter(torch.ones(shape, device=device, dtype=torch.float32))
+
+        if self.use_subgroup_scale:
+            num_sub = self.num_sub
+            if self.block_size % num_sub != 0:
+                raise ValueError(
+                    f"block_size ({self.block_size}) must be divisible by num_sub ({num_sub})."
+                )
+            quant_shape = (shape[0], shape[1] * num_sub)
+            self.quant_max_scale = nn.Parameter(
+                torch.ones(quant_shape, device=device, dtype=torch.float32) * 6.0
+            )
+            self.sigmoid_scale = nn.Sigmoid()
+        else:
+            self.quant_max_scale = None
+            self.sigmoid_scale = None
+
     def _init_lwc_params(self, x, config):
         lwc_cfg = config.get("lwc", {})
         if isinstance(lwc_cfg, dict):
-            self.lwc = (not self.is_act) and bool(lwc_cfg.get("enable_lwc", False))
+            self.lwc = (
+                (not self.is_act)
+                and (self.dtype not in ("mxfp4", "nvfp4"))
+                and bool(lwc_cfg.get("enable_lwc", False))
+            )
             self.lwc_init_value = float(lwc_cfg.get("lwc_init_value", 4.0))
         else:
-            self.lwc = (not self.is_act) and bool(lwc_cfg)
+            self.lwc = (
+                (not self.is_act) and (self.dtype not in ("mxfp4", "nvfp4")) and bool(lwc_cfg)
+            )
             self.lwc_init_value = 4.0
 
         if self.lwc:
@@ -565,7 +793,112 @@ class Quantizer(nn.Module):
         x_dequant = x_dequant.mul(scale)
         return x_dequant
 
+    def _fake_quant_mxfp4(self, x: torch.Tensor) -> torch.Tensor:
+        tensor, orig_shape, pad_len = _reshape_pad_tensor_by_group_size(x, self.group_size)
+        ebits, mbits, _, max_norm, _ = MXFP_FORMAT_CACHE[self.mxfp_data_type]
+        orig_dtype = tensor.dtype
+        tensor = tensor.to(torch.float32)
+        max_val = torch.max(torch.abs(tensor), dim=-1, keepdim=True)[0]
+
+        max_scale = self.max_scale.reshape(-1).to(tensor.device)
+        max_val = max_val * max_scale.unsqueeze(-1)
+
+        shared_exp = torch.where(
+            max_val == 0,
+            torch.ones_like(max_val),
+            ceil_ste(
+                torch.log2(
+                    max_val / max_norm + FP32_MIN_NORMAL * (max_val == 0).type(max_val.dtype)
+                )
+            ),
+        )
+        scale_emax = 2.0 ** float(8 - 1) - 1
+        shared_exp = shared_exp.clamp(min=-scale_emax, max=scale_emax)
+        scale = torch.pow(2.0, shared_exp.float())
+
+        if self.use_subgroup_scale and isinstance(self.quant_max_scale, torch.Tensor):
+            quant_max_scale = self.sigmoid_scale(self.quant_max_scale)
+
+            num_sub = self.num_sub
+            if self.group_size % num_sub != 0:
+                raise ValueError(
+                    f"group_size ({self.group_size}) must be divisible by num_sub ({num_sub})."
+                )
+            quant_scale = scale.expand(scale.shape[0], num_sub).reshape(-1, 1)
+            quant_scale = quant_scale * quant_max_scale.reshape(-1).to(tensor.device).unsqueeze(-1)
+
+            tensor = (tensor.reshape(-1, self.group_size // num_sub) / quant_scale).reshape(
+                -1, self.group_size
+            )
+        else:
+            tensor = tensor / scale
+
+        if self.mxfp_data_type in ("mx_fp8", "mx_fp8e4m3"):
+            tensor = clamp_ste(tensor, -max_norm, max_norm)
+            tensor = fp8_cast_ste(tensor)
+        else:
+            tensor = torch.clamp(tensor, min=-max_norm, max=max_norm)
+            tensor = _quant_fp4_element(
+                tensor, ebits, mbits, max_norm, mantissa_rounding=self.mantissa_rounding
+            )
+        tensor = tensor * scale
+        tensor = _revert_tensor_by_pad(tensor, orig_shape=orig_shape, pad_len=pad_len)
+        return tensor.to(orig_dtype)
+
+    def _fake_quant_nvfp4(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply NVFP4 fake quantization with STE and two-level scaling."""
+        max_norm = self.nvfp4_max_norm
+        block_size = self.block_size
+
+        tensor, orig_shape, pad_len = _reshape_pad_tensor_by_group_size(x, block_size)
+        orig_dtype = tensor.dtype
+        tensor = tensor.to(torch.float32)
+
+        max_val = torch.max(torch.abs(tensor), dim=-1, keepdim=True)[0]
+        if self.max_scale is not None:
+            max_scale = self.max_scale.reshape(-1).to(tensor.device)
+            max_val = max_val * max_scale.unsqueeze(-1)
+
+        scale_2 = self.scale_2.to(tensor.device)
+        block_scale = max_val / max_norm / scale_2
+        block_scale = torch.where(max_val == 0, torch.ones_like(block_scale), block_scale)
+
+        finfo = torch.finfo(torch.float8_e4m3fn)
+        block_scale_clamped = block_scale.clamp(min=finfo.tiny, max=finfo.max)
+        block_scale_fp8 = fp8_cast_ste(block_scale_clamped)
+        effective_scale = block_scale_fp8 * scale_2
+
+        if self.use_subgroup_scale and isinstance(self.quant_max_scale, torch.Tensor):
+            quant_max_scale = self.sigmoid_scale(self.quant_max_scale)
+            num_sub = self.num_sub
+            quant_scale = block_scale_fp8.expand(block_scale_fp8.shape[0], num_sub).reshape(-1, 1)
+            quant_scale = quant_scale * quant_max_scale.reshape(-1).to(tensor.device).unsqueeze(-1)
+            quant_divisor = quant_scale * scale_2
+            tensor = (tensor.reshape(-1, block_size // num_sub) / quant_divisor).reshape(
+                -1, block_size
+            )
+        else:
+            tensor = tensor / effective_scale
+
+        tensor = torch.clamp(tensor, min=-max_norm, max=max_norm)
+        tensor = _quant_fp4_element(
+            tensor,
+            ebits=2,
+            mbits=3,
+            max_norm=max_norm,
+            mantissa_rounding=self.mantissa_rounding,
+        )
+        tensor = tensor * effective_scale
+        tensor = _revert_tensor_by_pad(tensor, orig_shape=orig_shape, pad_len=pad_len)
+        return tensor.to(orig_dtype)
+
     def fake_quant(self, x):
+        if self.dtype == "mxfp4":
+            return self._fake_quant_mxfp4(x)
+
+        if self.dtype == "nvfp4":
+            return self._fake_quant_nvfp4(x)
+
         scale = clamp_ste(self.scale, 1e-4, 1e4)
         round_zero_point = (
             None if self.is_sym else clamp_ste(round_ste(self.zero_point), self.qmin, self.qmax)
@@ -590,6 +923,18 @@ class Quantizer(nn.Module):
         if self.is_act and not self.dynamic and not self.init:
             self._lazy_init(x)
             return x
+
+        if self.dtype == "mxfp4":
+            return self.fake_quant(x)
+
+        if self.dtype == "nvfp4":
+            if not self.init:
+                with torch.no_grad():
+                    global_amax = x.abs().amax().clamp(min=1e-12).float()
+                    init_val = global_amax / self.nvfp4_max_norm / FP8_E4M3_QMAX
+                    self.scale_2.data.copy_(init_val.view(1))
+                self.init = True
+            return self.fake_quant(x)
 
         if self.dynamic:
             if self.is_sym:

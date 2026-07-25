@@ -416,10 +416,38 @@ def zero3_empty_model_from_pretrained(
     return model
 
 
-def _shards(model_path):
-    """Yield ``(shard_path, [keys])`` for every safetensors shard."""
+def resolve_safetensors_model_path(model_path):
+    """Resolve a local model directory or Hugging Face Hub repository ID.
+
+    The ZeRO-3 streaming loader operates on local safetensors files. Standard
+    ``from_pretrained`` accepts Hub IDs as well, so mirror that behavior by
+    materializing only the safetensors files in the Hugging Face cache.
+    """
+    local_path = os.path.expanduser(os.fspath(model_path))
+    if os.path.isdir(local_path):
+        return local_path
+    if os.path.exists(local_path) or os.path.isabs(local_path) or local_path.startswith("."):
+        raise FileNotFoundError(f"Model path is not a directory: {local_path}")
+
+    try:
+        from huggingface_hub import snapshot_download
+
+        return snapshot_download(
+            repo_id=local_path,
+            allow_patterns=["*.safetensors", "*.safetensors.index.json"],
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise FileNotFoundError(
+            f"Could not resolve {local_path!r} as a local model directory "
+            "or Hugging Face Hub repository containing safetensors."
+        ) from exc
+
+
+def iter_safetensors_shards(model_path):
+    """Yield ``(shard_path, [keys])`` for every local or Hub safetensors shard."""
     from safetensors import safe_open
 
+    model_path = resolve_safetensors_model_path(model_path)
     index_path = os.path.join(model_path, "model.safetensors.index.json")
     if os.path.isfile(index_path):
         with open(index_path, "r") as f:
@@ -498,7 +526,7 @@ def stream_load_weights(model, model_path, log_prefix="[zero3]"):
     skipped = 0
     seen_targets = set()
 
-    for shard_path, keys in _shards(model_path):
+    for shard_path, keys in iter_safetensors_shards(model_path):
         with safe_open(shard_path, framework="pt") as reader:
             for key in keys:
                 if key.endswith(".experts.gate_up_proj"):

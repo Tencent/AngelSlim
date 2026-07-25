@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Copyright 2025 Tencent Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,10 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .packing import NVFP4_BLOCK_SIZE, nvfp4_quantize_pack, nvfp4_unpack_dequantize
+set -euo pipefail
 
-__all__ = [
-    "NVFP4_BLOCK_SIZE",
-    "nvfp4_quantize_pack",
-    "nvfp4_unpack_dequantize",
-]
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+export FORMAT="mxfp4"
+export SAVE_FORMAT="${SAVE_FORMAT:-fake}"
+export MASTER_PORT="${MASTER_PORT:-29514}"
+
+exec "${SCRIPT_DIR}/run_focus_fp4_qat.sh" "$@"
