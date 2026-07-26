@@ -70,6 +70,8 @@ def test_focus_checkpoint_validator_accepts_changed_fake_weights(tmp_path, qtype
 
     assert summary["status"] == "PASS"
     assert summary["max_scale_count"] == 1
+    assert summary["quant_max_scale_count"] == 0
+    assert summary["num_sub"] is None
     assert summary["samples"][0]["changed_fraction"] == 1.0
 
 
@@ -178,3 +180,97 @@ def test_focus_checkpoint_validator_requires_nvfp4_scales(tmp_path):
             group_size=4,
             max_weights=1,
         )
+
+
+@pytest.mark.parametrize("qtype", ["mxfp4", "nvfp4"])
+def test_focus_checkpoint_validator_accepts_required_subgroup_scales(tmp_path, qtype):
+    validator = _load_validator()
+    checkpoint, model_dir = _write_fixture(tmp_path, qtype, change_weight=True)
+    state_dict = torch.load(checkpoint, map_location="cpu", weights_only=True)
+    state_dict[f"{_PREFIX}.weight_quantizer.quant_max_scale"] = torch.ones(2, 2)
+    torch.save(state_dict, checkpoint)
+
+    summary = validator.validate_checkpoint(
+        checkpoint_path=str(checkpoint),
+        model_path=str(model_dir),
+        qtype=qtype,
+        group_size=4,
+        max_weights=1,
+        num_sub=2,
+    )
+
+    assert summary["status"] == "PASS"
+    assert summary["num_sub"] == 2
+    assert summary["quant_max_scale_count"] == 1
+
+
+def test_focus_checkpoint_validator_requires_subgroup_scales_when_configured(tmp_path):
+    validator = _load_validator()
+    checkpoint, model_dir = _write_fixture(tmp_path, "mxfp4", change_weight=True)
+
+    with pytest.raises(RuntimeError, match="Missing subgroup scale tensor"):
+        validator.validate_checkpoint(
+            checkpoint_path=str(checkpoint),
+            model_path=str(model_dir),
+            qtype="mxfp4",
+            group_size=4,
+            max_weights=1,
+            num_sub=2,
+        )
+
+
+def test_focus_checkpoint_validator_rejects_wrong_subgroup_shape(tmp_path):
+    validator = _load_validator()
+    checkpoint, model_dir = _write_fixture(tmp_path, "mxfp4", change_weight=True)
+    state_dict = torch.load(checkpoint, map_location="cpu", weights_only=True)
+    state_dict[f"{_PREFIX}.weight_quantizer.quant_max_scale"] = torch.ones(2, 3)
+    torch.save(state_dict, checkpoint)
+
+    with pytest.raises(RuntimeError, match="Subgroup scale shape mismatch"):
+        validator.validate_checkpoint(
+            checkpoint_path=str(checkpoint),
+            model_path=str(model_dir),
+            qtype="mxfp4",
+            group_size=4,
+            max_weights=1,
+            num_sub=2,
+        )
+
+
+def test_focus_checkpoint_validator_rejects_nonfinite_subgroup_scale(tmp_path):
+    validator = _load_validator()
+    checkpoint, model_dir = _write_fixture(tmp_path, "mxfp4", change_weight=True)
+    state_dict = torch.load(checkpoint, map_location="cpu", weights_only=True)
+    quant_max_scale = torch.ones(2, 2)
+    quant_max_scale[0, 0] = torch.nan
+    state_dict[f"{_PREFIX}.weight_quantizer.quant_max_scale"] = quant_max_scale
+    torch.save(state_dict, checkpoint)
+
+    with pytest.raises(RuntimeError, match="Non-finite subgroup scale tensor"):
+        validator.validate_checkpoint(
+            checkpoint_path=str(checkpoint),
+            model_path=str(model_dir),
+            qtype="mxfp4",
+            group_size=4,
+            max_weights=1,
+            num_sub=2,
+        )
+
+
+def test_focus_checkpoint_validator_infers_subgroup_count(tmp_path):
+    validator = _load_validator()
+    checkpoint, model_dir = _write_fixture(tmp_path, "mxfp4", change_weight=True)
+    state_dict = torch.load(checkpoint, map_location="cpu", weights_only=True)
+    state_dict[f"{_PREFIX}.weight_quantizer.quant_max_scale"] = torch.ones(2, 2)
+    torch.save(state_dict, checkpoint)
+
+    summary = validator.validate_checkpoint(
+        checkpoint_path=str(checkpoint),
+        model_path=str(model_dir),
+        qtype="mxfp4",
+        group_size=4,
+        max_weights=1,
+    )
+
+    assert summary["num_sub"] == 2
+    assert summary["quant_max_scale_count"] == 1

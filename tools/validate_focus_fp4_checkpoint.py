@@ -113,6 +113,7 @@ def validate_checkpoint(
     qtype: str,
     group_size: int,
     max_weights: int = 3,
+    num_sub: int | None = None,
 ):
     if qtype not in ("mxfp4", "nvfp4"):
         raise ValueError(f"Unsupported qtype: {qtype}")
@@ -120,6 +121,11 @@ def validate_checkpoint(
         raise ValueError(f"group_size must be positive, got {group_size}")
     if max_weights <= 0:
         raise ValueError(f"max_weights must be positive, got {max_weights}")
+    if num_sub is not None:
+        if num_sub <= 0:
+            raise ValueError(f"num_sub must be positive, got {num_sub}")
+        if group_size % num_sub:
+            raise ValueError(f"group_size ({group_size}) must be divisible by num_sub ({num_sub})")
 
     state_dict = _load_checkpoint(checkpoint_path)
     resolved_model_path = _resolve_model_path(model_path)
@@ -134,6 +140,8 @@ def validate_checkpoint(
         raise RuntimeError("No Qwen dense projection weights found in the base model")
 
     expected_scale_keys = []
+    quant_max_scale_keys = []
+    inferred_num_subs = set()
     for weight_key in expected_weight_keys:
         fake_weight = state_dict.get(weight_key)
         if not isinstance(fake_weight, torch.Tensor):
@@ -167,6 +175,48 @@ def validate_checkpoint(
                 f"Scale shape mismatch for {scale_key}: actual={tuple(max_scale.shape)} "
                 f"expected={expected_scale_shape}"
             )
+
+        quant_scale_key = f"{prefix}.weight_quantizer.quant_max_scale"
+        quant_max_scale = state_dict.get(quant_scale_key)
+        if num_sub is not None and not isinstance(quant_max_scale, torch.Tensor):
+            raise RuntimeError(f"Missing subgroup scale tensor: {quant_scale_key}")
+        if isinstance(quant_max_scale, torch.Tensor):
+            if not quant_max_scale.is_floating_point():
+                raise RuntimeError(f"Invalid subgroup scale tensor: {quant_scale_key}")
+            if not torch.isfinite(quant_max_scale).all():
+                raise RuntimeError(f"Non-finite subgroup scale tensor: {quant_scale_key}")
+
+            layer_num_sub = num_sub
+            if layer_num_sub is None:
+                parent_group_count = max_scale.shape[1]
+                if (
+                    quant_max_scale.ndim != 2
+                    or quant_max_scale.shape[0] != max_scale.shape[0]
+                    or quant_max_scale.shape[1] % parent_group_count
+                ):
+                    raise RuntimeError(
+                        f"Cannot infer num_sub from {quant_scale_key}: "
+                        f"actual={tuple(quant_max_scale.shape)} "
+                        f"parent_scale={tuple(max_scale.shape)}"
+                    )
+                layer_num_sub = quant_max_scale.shape[1] // parent_group_count
+                if layer_num_sub <= 0 or group_size % layer_num_sub:
+                    raise RuntimeError(
+                        f"Invalid inferred num_sub ({layer_num_sub}) for {quant_scale_key}"
+                    )
+
+            expected_quant_scale_shape = (
+                max_scale.shape[0],
+                max_scale.shape[1] * layer_num_sub,
+            )
+            if tuple(quant_max_scale.shape) != expected_quant_scale_shape:
+                raise RuntimeError(
+                    f"Subgroup scale shape mismatch for {quant_scale_key}: "
+                    f"actual={tuple(quant_max_scale.shape)} "
+                    f"expected={expected_quant_scale_shape}"
+                )
+            quant_max_scale_keys.append(quant_scale_key)
+            inferred_num_subs.add(layer_num_sub)
 
         if qtype == "mxfp4":
             act_scale_key = f"{prefix}.act_quantizer.max_scale"
@@ -221,15 +271,25 @@ def validate_checkpoint(
 
     if not samples:
         raise RuntimeError("No comparable dense weights were loaded")
+    if len(inferred_num_subs) > 1:
+        raise RuntimeError(
+            f"Inconsistent num_sub values across checkpoint: {sorted(inferred_num_subs)}"
+        )
+
+    validated_num_sub = num_sub
+    if validated_num_sub is None and inferred_num_subs:
+        validated_num_sub = next(iter(inferred_num_subs))
 
     return {
         "checkpoint": str(Path(checkpoint_path).resolve()),
         "base_model": str(resolved_model_path.resolve()),
         "qtype": qtype,
         "group_size": group_size,
+        "num_sub": validated_num_sub,
         "tensor_count": len(state_dict),
         "validated_dense_layer_count": len(expected_weight_keys),
         "max_scale_count": len(expected_scale_keys),
+        "quant_max_scale_count": len(quant_max_scale_keys),
         "samples": samples,
         "status": "PASS",
     }
@@ -246,6 +306,11 @@ def main():
     parser.add_argument("--model-path", required=True, help="Local base model path or Hub ID")
     parser.add_argument("--qtype", required=True, choices=("mxfp4", "nvfp4"))
     parser.add_argument("--group-size", required=True, type=int)
+    parser.add_argument(
+        "--num-sub",
+        type=int,
+        help="Require and validate subgroup quant_max_scale tensors with this num_sub",
+    )
     parser.add_argument("--max-weights", type=int, default=3)
     args = parser.parse_args()
 
@@ -255,6 +320,7 @@ def main():
         qtype=args.qtype,
         group_size=args.group_size,
         max_weights=args.max_weights,
+        num_sub=args.num_sub,
     )
     print(json.dumps(summary, indent=2, ensure_ascii=False, allow_nan=False))
 

@@ -74,15 +74,17 @@ def _sample_evenly(values: list[str], limit: int) -> list[str]:
 
 def validate_export(
     export_path: str,
-    checkpoint_path: str,
-    model_path: str,
+    checkpoint_path: str | None = None,
+    model_path: str | None = None,
     max_weights: int = 3,
 ) -> dict:
+    if model_path is None:
+        raise ValueError("model_path is required")
     export_path = Path(export_path)
     base_path = Path(resolve_safetensors_model_path(model_path))
     export_map = _weight_map(export_path)
     base_map = _weight_map(base_path)
-    focus_state = load_focus_checkpoint(checkpoint_path)
+    focus_state = load_focus_checkpoint(checkpoint_path) if checkpoint_path else None
 
     config = json.loads((export_path / "config.json").read_text(encoding="utf-8"))
     quant_config = config.get("quantization_config", {})
@@ -97,14 +99,23 @@ def validate_export(
         raise ValueError("NVFP4 activation local scales must be dynamic")
 
     scale_suffix = ".weight_quantizer.max_scale"
-    scale_keys = sorted(key for key in focus_state if key.endswith(scale_suffix))
-    if not scale_keys:
-        raise RuntimeError("No FOCUS max_scale tensors found")
+    if focus_state is not None:
+        scale_keys = sorted(key for key in focus_state if key.endswith(scale_suffix))
+        if not scale_keys:
+            raise RuntimeError("No FOCUS max_scale tensors found")
+        prefixes = [key[: -len(scale_suffix)] for key in scale_keys]
+        validation_mode = "bit_exact"
+    else:
+        packed_suffix = ".weight_packed"
+        packed_keys = sorted(key for key in export_map if key.endswith(packed_suffix))
+        if not packed_keys:
+            raise RuntimeError("No NVFP4 packed weight tensors found")
+        prefixes = [key[: -len(packed_suffix)] for key in packed_keys]
+        validation_mode = "schema_only"
 
     layer_results = []
     weight_keys = []
-    for scale_key in scale_keys:
-        prefix = scale_key[: -len(scale_suffix)]
+    for prefix in prefixes:
         base_weight_key = f"{prefix}.weight"
         required = {
             "packed": f"{prefix}.weight_packed",
@@ -121,15 +132,20 @@ def validate_export(
             raise KeyError(f"Missing packed tensors for {prefix}: {missing}")
 
         base_shape = _tensor_shape(base_path, base_map, base_weight_key)
+        if base_shape[-1] % NVFP4_BLOCK_SIZE:
+            raise ValueError(
+                f"Base weight width must be divisible by {NVFP4_BLOCK_SIZE}: " f"{base_weight_key}"
+            )
         packed = _load_tensor(export_path, export_map, required["packed"])
         local_scale = _load_tensor(export_path, export_map, required["scale"])
         weight_global = _load_tensor(export_path, export_map, required["weight_global"])
         input_global = _load_tensor(export_path, export_map, required["input_global"])
+        expected_packed_shape = (*base_shape[:-1], base_shape[-1] // 2)
         expected_scale_shape = (
             *base_shape[:-1],
             base_shape[-1] // NVFP4_BLOCK_SIZE,
         )
-        if packed.dtype != torch.uint8 or packed.shape[-1] * 2 != base_shape[-1]:
+        if packed.dtype != torch.uint8 or tuple(packed.shape) != expected_packed_shape:
             raise ValueError(f"Invalid packed weight layout for {prefix}")
         if (
             local_scale.dtype != torch.float8_e4m3fn
@@ -140,7 +156,11 @@ def validate_export(
             ("weight_global_scale", weight_global),
             ("input_global_scale", input_global),
         ):
-            if value.dtype != torch.float32 or value.numel() != 1:
+            if (
+                value.dtype != torch.float32
+                or tuple(value.shape) != (1,)
+                or not torch.isfinite(value).all()
+            ):
                 raise ValueError(f"Invalid {name} for {prefix}")
 
         weight_keys.append(base_weight_key)
@@ -154,32 +174,36 @@ def validate_export(
         )
 
     samples = []
-    for weight_key in _sample_evenly(weight_keys, max_weights):
-        prefix = weight_key[: -len(".weight")]
-        expected = nvfp4_quantize_pack(
-            _load_tensor(base_path, base_map, weight_key),
-            focus_state[f"{prefix}{scale_suffix}"],
-            focus_state[f"{prefix}.weight_quantizer.scale_2"],
-            quant_max_scale=focus_state.get(f"{prefix}.weight_quantizer.quant_max_scale"),
-        )
-        actual = (
-            _load_tensor(export_path, export_map, f"{prefix}.weight_packed"),
-            _load_tensor(export_path, export_map, f"{prefix}.weight_scale"),
-            _load_tensor(export_path, export_map, f"{prefix}.weight_global_scale"),
-        )
-        if any(not torch.equal(left, right) for left, right in zip(actual, expected)):
-            raise ValueError(f"NVFP4 packed tensors mismatch for {prefix}")
-        expected_input_global = (
-            1.0 / focus_state[f"{prefix}.act_quantizer.scale_2"].float()
-        ).reshape(1)
-        actual_input_global = _load_tensor(export_path, export_map, f"{prefix}.input_global_scale")
-        if not torch.equal(actual_input_global, expected_input_global):
-            raise ValueError(f"NVFP4 input global scale mismatch for {prefix}")
-        samples.append({"layer": prefix, "bit_exact_match": True})
+    if focus_state is not None:
+        for weight_key in _sample_evenly(weight_keys, max_weights):
+            prefix = weight_key[: -len(".weight")]
+            expected = nvfp4_quantize_pack(
+                _load_tensor(base_path, base_map, weight_key),
+                focus_state[f"{prefix}{scale_suffix}"],
+                focus_state[f"{prefix}.weight_quantizer.scale_2"],
+                quant_max_scale=focus_state.get(f"{prefix}.weight_quantizer.quant_max_scale"),
+            )
+            actual = (
+                _load_tensor(export_path, export_map, f"{prefix}.weight_packed"),
+                _load_tensor(export_path, export_map, f"{prefix}.weight_scale"),
+                _load_tensor(export_path, export_map, f"{prefix}.weight_global_scale"),
+            )
+            if any(not torch.equal(left, right) for left, right in zip(actual, expected)):
+                raise ValueError(f"NVFP4 packed tensors mismatch for {prefix}")
+            expected_input_global = (
+                1.0 / focus_state[f"{prefix}.act_quantizer.scale_2"].float()
+            ).reshape(1)
+            actual_input_global = _load_tensor(
+                export_path, export_map, f"{prefix}.input_global_scale"
+            )
+            if not torch.equal(actual_input_global, expected_input_global):
+                raise ValueError(f"NVFP4 input global scale mismatch for {prefix}")
+            samples.append({"layer": prefix, "bit_exact_match": True})
 
     return {
         "export_path": str(export_path.resolve()),
         "format": "nvfp4-pack-quantized",
+        "validation_mode": validation_mode,
         "validated_layer_count": len(layer_results),
         "samples": samples,
         "status": "PASS",
@@ -189,14 +213,17 @@ def validate_export(
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--export-path", required=True)
-    parser.add_argument("--checkpoint", required=True)
+    parser.add_argument(
+        "--checkpoint",
+        help="FOCUS fake checkpoint; omit for schema-only direct-real validation",
+    )
     parser.add_argument("--model-path", required=True)
     parser.add_argument("--max-weights", type=int, default=3)
     args = parser.parse_args()
     result = validate_export(
-        args.export_path,
-        args.checkpoint,
-        args.model_path,
+        export_path=args.export_path,
+        checkpoint_path=args.checkpoint,
+        model_path=args.model_path,
         max_weights=args.max_weights,
     )
     print(json.dumps(result, indent=2, ensure_ascii=False))
