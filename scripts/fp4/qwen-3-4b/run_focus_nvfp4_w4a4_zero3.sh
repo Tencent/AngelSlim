@@ -20,4 +20,4 @@ export FORMAT="nvfp4"
 export SAVE_FORMAT="${SAVE_FORMAT:-fake}"
 export MASTER_PORT="${MASTER_PORT:-29523}"
 
-exec "${SCRIPT_DIR}/run_focus_fp4_qat.sh" "$@"
+exec "${SCRIPT_DIR}/run_focus_fp4.sh" "$@"

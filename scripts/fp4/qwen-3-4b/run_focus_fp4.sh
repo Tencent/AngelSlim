@@ -69,7 +69,7 @@ if [[ -n "${SAVE_PATH}" ]]; then
 fi
 RUN_ARGS+=("$@")
 
-echo "FOCUS FP4 QAT"
+echo "FOCUS FP4"
 echo "  format:      ${FORMAT}"
 echo "  save format: ${SAVE_FORMAT}"
 echo "  config:      ${CONFIG}"

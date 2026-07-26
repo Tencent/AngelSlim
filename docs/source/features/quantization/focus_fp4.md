@@ -25,7 +25,7 @@ CUDA_VISIBLE_DEVICES=0,1 \
 FORMAT=mxfp4 \
 NPROC=2 \
 MODEL_PATH=/path/to/Qwen3-4B \
-bash scripts/fp4/qwen-3-4b/run_focus_fp4_qat.sh
+bash scripts/fp4/qwen-3-4b/run_focus_fp4.sh
 ```
 
 ### NVFP4
@@ -35,7 +35,7 @@ CUDA_VISIBLE_DEVICES=0,1 \
 FORMAT=nvfp4 \
 NPROC=2 \
 MODEL_PATH=/path/to/Qwen3-4B \
-bash scripts/fp4/qwen-3-4b/run_focus_fp4_qat.sh
+bash scripts/fp4/qwen-3-4b/run_focus_fp4.sh
 ```
 
 脚本默认生成 fake checkpoint。可通过以下环境变量调整运行参数：
@@ -79,7 +79,7 @@ SAVE_FORMAT=real \
 NPROC=2 \
 MODEL_PATH=/path/to/Qwen3-4B \
 SAVE_PATH=./output/focus-mxfp4-real \
-bash scripts/fp4/qwen-3-4b/run_focus_fp4_qat.sh
+bash scripts/fp4/qwen-3-4b/run_focus_fp4.sh
 ```
 
 将 `FORMAT` 改为 `nvfp4` 即可导出 NVFP4。`SAVE_PATH` 和
