@@ -260,6 +260,18 @@ class PTQSaveVllmHF(PTQSaveBase):
         else:
             kv_cache_scheme = None
 
+        # W8A8C8 recipe (e.g. GLM-5): the model adapter attaches a rich
+        # KV-cache scheme descriptor when it hooks the latent-KV / indexer-K
+        # streams via ``apply_kvcache_observers``.  When present, override
+        # the vanilla ``{num_bits, strategy, type}`` blob above with the
+        # richer dict so downstream (vLLM / config.json) knows the
+        # per-block-128 dynamic layout + RoPE-passthrough + indexer scheme.
+        extra_kv_cache_scheme = getattr(
+            self.quant_model, "_extra_kv_cache_scheme", None
+        )
+        if extra_kv_cache_scheme:
+            kv_cache_scheme = dict(extra_kv_cache_scheme)
+
         if save_name == "compressed-tensors":
             quantization_config.update(
                 {
@@ -1537,3 +1549,883 @@ class DeepSeekV3W4A8Int8Save(DeepSeekV3PTQSaveMulti):
             json.dump(index, f, indent=2)
 
         print(f"[Done] Saved MTP int8 shard: {shard_name}")
+
+
+class Glm5EPQuantSaver(PTQSaveVllmHF):
+    """
+    GLM-5 int8 (W8A8 / W8A8C8) saver under expert-parallel (EP).
+
+    Under EP each rank only materialises its local 1/W expert slice; the
+    shared layers (embed / lm_head / attention / norms / shared_experts) are
+    held *完整* (identical) on every rank.  ``PTQSaveVllmHF`` calls
+    ``model.save_pretrained`` which would only ever see the local 1/W experts
+    on rank 0 and silently drop the other 15/16 — producing a corrupt
+    checkpoint.
+
+    This saver instead streams one transformer block at a time:
+      * shared / TP layers  -> rank 0 takes its own (complete) copy
+      * routed ``mlp.experts.*`` -> ``MoEExpertGather`` gathers every rank's
+        local slice via ``gather_object`` onto rank 0
+    and writes safetensors shards + a merged ``model.safetensors.index.json``.
+    Rank 0 never holds the full 2.8 TB model in memory at once (peak =
+    one layer), so the original CPU-OOM root cause stays avoided.
+
+    The quantization format is identical to ``PTQSaveVllmHF`` (per-channel
+    int8 ``weight`` + ``weight_scale`` + ``input_scale``, vLLM /
+    compressed-tensors), because GLM-5's int8 ``convert`` already produced
+    those ``QDQModule`` leaves before save — we only (re)shard, we do NOT
+    re-quantize.
+    """
+
+    # GLMMoE experts live under model.layers.<lid>.mlp.experts.<eid>.*
+    # For the MTP (Multi-Token Prediction) draft layer -- ``model.layers.<N>``
+    # where N == num_hidden_layers (e.g. layer 78 in chatglm5.2) -- the MoE
+    # is nested one level deeper under ``mtp_block.`` in the AngelSlim
+    # modeling code (``model.layers.78.mtp_block.mlp.experts.<eid>.*``).
+    # We accept both forms so that MTP experts also participate in EP
+    # sharding / gathering, otherwise the entire MTP layer is silently
+    # dropped from the exported checkpoint (index.json misses layer 78).
+    _EXPERT_RE = re.compile(r"model\.layers\.(\d+)\.(?:mtp_block\.)?mlp\.experts\.")
+    _LAYER_RE = re.compile(r"model\.layers\.(\d+)\.")
+
+    @torch.no_grad()
+    def save(self, save_path):
+        # Fallback to the standard (non-EP) path when EP is not active.
+        ep_active = getattr(self.quant_model, "expert_parallel_enabled", False)
+        world = int(getattr(self.quant_model, "world_size", 1) or 1)
+        if not ep_active or world <= 1:
+            return super().save(save_path)
+
+        rank = dist.get_rank() if dist.is_initialized() else 0
+        os.makedirs(save_path, exist_ok=True)
+
+        # ---- shared-filesystem sanity check ---------------------------------
+        # Multi-node EP save assumes ``save_path`` is visible on every node
+        # (each rank writes its own shard files there).  Detect the common
+        # foot-gun -- someone points save_path at a node-local disk like
+        # ``/dockerdata`` -- before we spend 20+ minutes writing shards that
+        # will be silently dropped at merge time.
+        if dist.is_initialized():
+            sentinel = os.path.join(save_path, f"_shared_fs_sentinel_r{rank:02d}")
+            with open(sentinel, "w") as f:
+                f.write(str(rank))
+            dist.barrier()
+            missing = []
+            for r in range(world):
+                other = os.path.join(save_path, f"_shared_fs_sentinel_r{r:02d}")
+                if not os.path.exists(other):
+                    missing.append(r)
+            dist.barrier()
+            if rank == 0:
+                # Rank 0 alone cleans up the sentinels.
+                for r in range(world):
+                    other = os.path.join(save_path, f"_shared_fs_sentinel_r{r:02d}")
+                    try:
+                        os.remove(other)
+                    except FileNotFoundError:
+                        pass
+            if missing:
+                local_prefixes = ("/dockerdata", "/data", "/tmp", "/root")
+                local_hint = ""
+                if any(save_path.startswith(pfx) for pfx in local_prefixes):
+                    local_hint = (
+                        f"  ROOT CAUSE HINT: ``save_path={save_path!r}`` "
+                        f"is a node-local path.  Multi-node EP save requires "
+                        f"a filesystem shared across all nodes (e.g. cephfs).  "
+                        f"Point --save-path at ``/apdcephfs*`` or similar.\n"
+                    )
+                raise RuntimeError(
+                    f"Glm5EPQuantSaver (rank {rank}): shared-filesystem check "
+                    f"FAILED -- cannot see sentinel files for rank(s) "
+                    f"{missing} at ``{save_path}``.  Aborting BEFORE spending "
+                    f"time on a checkpoint that would end up half-saved.\n"
+                    f"{local_hint}"
+                )
+
+        # ---- build int8 vLLM quantization_config (same as PTQSaveVllmHF) ----
+        save_name = self.quant_model.quant_config.save_name
+        ignore_field = "ignore" if save_name == "compressed-tensors" else "ignored_layers"
+        w_quant_algo = self.quant_model.quant_config.quant_algo_info.get("w", "")
+        a_quant_algo = self.quant_model.quant_config.quant_algo_info.get("a", "")
+        is_dynamic = "dynamic" in a_quant_algo
+        ignored_layers = self.quant_model.skip_layer_names()
+        trtllm_config = {
+            "quantization": {
+                "exclude_modules": ignored_layers,
+                "kv_cache_quant_algo": None,
+            }
+        }
+        quant_format = "int-quantized"
+        trtllm_config["quantization"]["quant_algo"] = "INT8"
+        act_config = {
+            "num_bits": 8,
+            "strategy": re.search(r"per-([a-zA-Z]+)", a_quant_algo).group(1),
+            "dynamic": is_dynamic,
+            "type": "int",
+        }
+        weight_config = {
+            "num_bits": 8,
+            "strategy": re.search(r"per-([a-zA-Z]+)", w_quant_algo).group(1),
+            "dynamic": False,
+            "type": "int",
+        }
+
+        quantization_config = {"quant_method": save_name, ignore_field: ignored_layers}
+        c_quant_algo = self.quant_model.quant_config.quant_algo_info.get("c", None)
+        kv_cache_scheme = (
+            {
+                "num_bits": 8,
+                "strategy": re.search(r"per-([a-zA-Z]+)", c_quant_algo).group(1),
+                "type": "float",
+            }
+            if c_quant_algo is not None
+            else None
+        )
+        extra_kv_cache_scheme = getattr(self.quant_model, "_extra_kv_cache_scheme", None)
+        if extra_kv_cache_scheme:
+            kv_cache_scheme = dict(extra_kv_cache_scheme)
+
+        quantization_config["activation_scheme"] = "dynamic" if is_dynamic else "static"
+        if kv_cache_scheme is not None:
+            quantization_config["kv_cache_scheme"] = "static"
+
+        if (
+            hasattr(self.quant_model.quant_config, "transform_config")
+            and self.quant_model.quant_config.transform_config is not None
+        ):
+            quantization_config["transform_config"] = (
+                self.quant_model.quant_config.transform_config
+            )
+
+        quant_dict = {"quantization_config": quantization_config}
+        self.quant_model.get_model().config.update(quant_dict)
+        print_info("Save quantization_config: {}".format(quant_dict))
+
+        if rank == 0:
+            with open(os.path.join(save_path, "hf_quant_config.json"), "w") as f:
+                json.dump(trtllm_config, f, indent=4)
+            self.quant_model.tokenizer.save_pretrained(save_path)
+            # ``config.update`` above only mutates the in-memory copy; vLLM
+            # loads from disk, so we must ``save_pretrained`` the config
+            # (this writes ``config.json`` + ``generation_config.json``).
+            # We intentionally do NOT call ``model.save_pretrained`` here --
+            # that would try to dump the state_dict, which under EP has only
+            # 1/W experts on rank 0 and would corrupt the shard layout we
+            # just built.  Only the *config* portion is needed.
+            try:
+                cfg = self.quant_model.get_model().config
+                cfg.save_pretrained(save_path)
+                # Emit generation config as well when present, so vLLM /
+                # HuggingFace inference get default sampling parameters.
+                gen_cfg = getattr(
+                    self.quant_model.get_model(), "generation_config", None
+                )
+                if gen_cfg is not None:
+                    try:
+                        gen_cfg.save_pretrained(save_path)
+                    except Exception as e:  # noqa: BLE001
+                        print_info(
+                            f"[Glm5EPQuantSaver] generation_config.save_pretrained "
+                            f"skipped: {e}"
+                        )
+                print_info(
+                    f"[Glm5EPQuantSaver] wrote config.json (with "
+                    f"quantization_config) to {save_path}"
+                )
+            except Exception as e:  # noqa: BLE001
+                print_info(
+                    f"[Glm5EPQuantSaver] WARNING: config.save_pretrained failed: {e}. "
+                    f"Please run scripts/ptq/fix_glm5_vllm_meta.py to patch."
+                )
+
+        # ---- stream + merge weights (EP) ----
+        # rank0 owns experts [0, local), so every transformer block is present
+        # in its local state_dict; we use that to enumerate layers.
+        state = self.quant_model.get_model().state_dict()
+
+        # ---- [DIAG] MTP layer coverage (layer == num_hidden_layers) ----
+        # GLM-5 uses ``model.layers.<num_hidden_layers>`` for the MTP draft
+        # layer (e.g. layer 78 in chatglm5.2).  If the exported index.json
+        # is missing this layer, the root cause is almost always that
+        # ``state_dict()`` on this rank does not contain any
+        # ``model.layers.<N>.*`` keys for N == num_hidden_layers.  Emit a
+        # one-shot diagnostic (rank 0 only) so users can immediately tell
+        # whether the MTP block reached ``state_dict()`` at all.
+        try:
+            _hf_cfg = self.quant_model.get_model().config
+            _mtp_lid = int(getattr(_hf_cfg, "num_hidden_layers", -1))
+        except Exception:
+            _mtp_lid = -1
+
+        # ---- [DIAG-DEEP] Inspect the live ``model.model.layers[<MTP>]`` slot ----
+        # This runs BEFORE the state_dict-based diagnostic so we still get
+        # the module-tree probe even if state_dict is empty for MTP.  We
+        # print:
+        #   * type(layers[MTP]) and its ``repr`` (truncated)
+        #   * every named sub-module class name (up to a cap)
+        #   * every named parameter: shape / dtype / device / is_meta /
+        #     requires_grad -- so we can tell whether the block exists but
+        #     has meta-only tensors (which explains why ``state_dict()``
+        #     returns no keys)
+        #   * every named buffer: shape / dtype / device
+        # As a control we also print the parameter summary of the LAST
+        # main-stack layer (MTP - 1) so we can compare "empty" MTP to a
+        # fully-loaded neighbour.
+        if rank == 0 and _mtp_lid >= 0:
+            try:
+                _root = self.quant_model.get_model()
+                _layers = _root.model.layers
+                _n_layers_live = len(_layers)
+                print(
+                    f"[Glm5EPQuantSaver][DIAG-DEEP] len(model.model.layers) "
+                    f"= {_n_layers_live}  (main stack expected {_mtp_lid}, "
+                    f"+1 MTP -> {_mtp_lid + 1})",
+                    flush=True,
+                )
+                for probe_lid in (_mtp_lid - 1, _mtp_lid):
+                    if probe_lid < 0 or probe_lid >= _n_layers_live:
+                        print(
+                            f"[Glm5EPQuantSaver][DIAG-DEEP] layer {probe_lid} "
+                            f"OUT OF RANGE (len={_n_layers_live}); skip.",
+                            flush=True,
+                        )
+                        continue
+                    _blk = _layers[probe_lid]
+                    _repr = repr(_blk)
+                    if len(_repr) > 400:
+                        _repr = _repr[:400] + "...<truncated>"
+                    print(
+                        f"[Glm5EPQuantSaver][DIAG-DEEP] --- layer {probe_lid} "
+                        f"({'MTP' if probe_lid == _mtp_lid else 'main-tail'}) "
+                        f"type={type(_blk).__name__} module={type(_blk).__module__}",
+                        flush=True,
+                    )
+                    print(
+                        f"[Glm5EPQuantSaver][DIAG-DEEP]   repr: {_repr}",
+                        flush=True,
+                    )
+                    # Sub-module class names (top-level children only, cap 40).
+                    _kids = list(_blk.named_children())
+                    print(
+                        f"[Glm5EPQuantSaver][DIAG-DEEP]   named_children "
+                        f"({len(_kids)}): "
+                        f"{[(n, type(m).__name__) for n, m in _kids][:40]}",
+                        flush=True,
+                    )
+                    # Parameter status.
+                    _params = list(_blk.named_parameters(recurse=True))
+                    _meta_ct = sum(
+                        1 for _, p in _params
+                        if getattr(p, "is_meta", False)
+                        or (hasattr(p, "device") and p.device.type == "meta")
+                    )
+                    print(
+                        f"[Glm5EPQuantSaver][DIAG-DEEP]   named_parameters "
+                        f"total={len(_params)}  meta={_meta_ct}",
+                        flush=True,
+                    )
+                    # Anonymise per-expert indices to shrink output.
+                    _seen_pat = {}
+                    for _pname, _p in _params:
+                        _anon = re.sub(r"experts\.\d+\.", "experts.<*>.", _pname)
+                        if _anon in _seen_pat:
+                            _seen_pat[_anon] += 1
+                            continue
+                        _seen_pat[_anon] = 1
+                        try:
+                            _dev = str(_p.device)
+                        except Exception:
+                            _dev = "?"
+                        _is_meta = (
+                            getattr(_p, "is_meta", False)
+                            or (hasattr(_p, "device") and _p.device.type == "meta")
+                        )
+                        print(
+                            f"[Glm5EPQuantSaver][DIAG-DEEP]     P {_anon}  "
+                            f"shape={tuple(_p.shape)}  dtype={_p.dtype}  "
+                            f"device={_dev}  is_meta={_is_meta}  "
+                            f"requires_grad={_p.requires_grad}",
+                            flush=True,
+                        )
+                    # Report the per-expert bucket sizes we collapsed above.
+                    for _anon, _cnt in _seen_pat.items():
+                        if _cnt > 1:
+                            print(
+                                f"[Glm5EPQuantSaver][DIAG-DEEP]     "
+                                f"(× {_cnt} occurrences of pattern {_anon})",
+                                flush=True,
+                            )
+                    # Buffers (norms, RoPE inv_freq, etc.).
+                    _buffers = list(_blk.named_buffers(recurse=True))
+                    print(
+                        f"[Glm5EPQuantSaver][DIAG-DEEP]   named_buffers "
+                        f"total={len(_buffers)}",
+                        flush=True,
+                    )
+                    _seen_buf = set()
+                    for _bname, _b in _buffers:
+                        _anon = re.sub(r"experts\.\d+\.", "experts.<*>.", _bname)
+                        if _anon in _seen_buf:
+                            continue
+                        _seen_buf.add(_anon)
+                        try:
+                            _dev = str(_b.device)
+                        except Exception:
+                            _dev = "?"
+                        _is_meta = (
+                            getattr(_b, "is_meta", False)
+                            or (hasattr(_b, "device") and _b.device.type == "meta")
+                        )
+                        print(
+                            f"[Glm5EPQuantSaver][DIAG-DEEP]     B {_anon}  "
+                            f"shape={tuple(_b.shape)}  dtype={_b.dtype}  "
+                            f"device={_dev}  is_meta={_is_meta}",
+                            flush=True,
+                        )
+            except Exception as _e:  # noqa: BLE001
+                print(
+                    f"[Glm5EPQuantSaver][DIAG-DEEP] probe FAILED: "
+                    f"{type(_e).__name__}: {_e}",
+                    flush=True,
+                )
+
+        if rank == 0 and _mtp_lid >= 0:
+            _mtp_prefix = f"model.layers.{_mtp_lid}."
+            _mtp_keys = [k for k in state if k.startswith(_mtp_prefix)]
+            _mtp_expert_keys = [
+                k for k in _mtp_keys if self._EXPERT_RE.search(k)
+            ]
+            print(
+                f"[Glm5EPQuantSaver][DIAG] MTP layer id = {_mtp_lid}; "
+                f"state_dict has {len(_mtp_keys)} keys with prefix "
+                f"'{_mtp_prefix}' ({len(_mtp_expert_keys)} matched as "
+                f"EP experts by _EXPERT_RE).",
+                flush=True,
+            )
+            for _k in _mtp_keys[:20]:
+                try:
+                    _shape = tuple(state[_k].shape)
+                except Exception:
+                    _shape = "?"
+                print(
+                    f"[Glm5EPQuantSaver][DIAG]   {_k}  shape={_shape}",
+                    flush=True,
+                )
+            if len(_mtp_keys) > 20:
+                print(
+                    f"[Glm5EPQuantSaver][DIAG]   ...({len(_mtp_keys) - 20} more)",
+                    flush=True,
+                )
+            if not _mtp_keys:
+                print(
+                    f"[Glm5EPQuantSaver][DIAG] WARNING: state_dict() contains "
+                    f"NO keys for MTP layer {_mtp_lid}. The exported "
+                    f"checkpoint will be missing this layer entirely. "
+                    f"Root cause is UPSTREAM (from_pretrained / EP split / "
+                    f"defuse_moe_experts dropped the MTP block); this saver "
+                    f"cannot recover it. Consider copying MTP tensors "
+                    f"directly from the source HF checkpoint.",
+                    flush=True,
+                )
+
+        # ---- IndexShare: drop indexer keys on shared layers ----
+        # GLM-5 marks each attention layer's indexer as ``full`` or
+        # ``shared`` in ``config.indexer_types``.  On ``shared`` layers the
+        # ``self_attn.indexer`` ``nn.Module`` is instantiated by modeling
+        # code but its parameters are NOT trained/saved (topk is reused
+        # from the previous "full" layer).  Keeping them in the exported
+        # checkpoint would just persist random-init noise and diverge from
+        # the reference weight_map (which contains indexer weights only on
+        # the 22 "full" layers: 0/1/2/6/10/.../74/78).
+        shared_lids = set()
+        get_shared = getattr(
+            self.quant_model, "_shared_indexer_layer_ids", None
+        )
+        if callable(get_shared):
+            try:
+                shared_lids = set(get_shared())
+            except Exception as e:  # noqa: BLE001
+                print(
+                    f"[Glm5EPQuantSaver] IndexShare detection failed: {e}; "
+                    f"falling back to keeping every layer's indexer.",
+                    flush=True,
+                )
+                shared_lids = set()
+        if shared_lids:
+            drop_re = re.compile(
+                r"^model\.layers\.(\d+)\.self_attn\.indexer\."
+            )
+            dropped = 0
+            for k in list(state.keys()):
+                m = drop_re.match(k)
+                if m and int(m.group(1)) in shared_lids:
+                    del state[k]
+                    dropped += 1
+            if rank == 0:
+                print(
+                    f"[Glm5EPQuantSaver] IndexShare: dropped {dropped} "
+                    f"indexer keys across {len(shared_lids)} shared layers "
+                    f"({sorted(shared_lids)[:8]}...).",
+                    flush=True,
+                )
+
+        safetensors_index = {}
+        shard_idx = 1
+
+        def shard_name(i):
+            return f"model-{i:05d}.safetensors"
+
+        # ---------- embed_tokens / lm_head / model.norm ----------
+        # Identical on every rank under EP (only experts are sharded), so rank 0
+        # just copies its own complete copy.
+        head_keys = [
+            k for k in state
+            if k.startswith("model.embed_tokens")
+            or k.startswith("lm_head")
+            or k.startswith("model.norm")
+        ]
+        if rank == 0 and head_keys:
+            head_out = {k: state[k].cpu() for k in head_keys}
+            head_file = shard_name(shard_idx)
+            safe_save(head_out, os.path.join(save_path, head_file))
+            for k in head_out:
+                safetensors_index[k] = head_file
+            shard_idx += 1
+            del head_out
+            gc.collect()
+        for k in head_keys:
+            del state[k]
+        if dist.is_initialized():
+            dist.barrier()
+
+        # ---------- per-layer: rank-independent shard writes (no NCCL) --------
+        # NCCL/RDMA cannot ferry the ~576 MB per-rank per-layer expert dict
+        # (ibv_reg_mr_iova2 hits the MR quota / gets EINVAL for buffers of
+        # this size).  Instead every rank writes its OWN pieces directly to
+        # the shared cephfs -- shared layers by rank 0, EP experts by their
+        # owner -- with unique per-rank shard filenames.  Each rank drops a
+        # partial weight_map JSON, rank 0 reunites them into the final
+        # ``model.safetensors.index.json`` after a barrier.  Small, safe,
+        # and resumable.
+        layer_ids = sorted(
+            {int(m.group(1)) for k in state if (m := self._LAYER_RE.match(k))}
+        )
+        # ranks 1..W each get their own shard id space so filenames never
+        # collide with rank 0's or with each other's.
+        my_shard_idx = 1
+        for lid in layer_ids:
+            layer_keys = [
+                k for k in state
+                if self._LAYER_RE.match(k)
+                and int(self._LAYER_RE.match(k).group(1)) == lid
+            ]
+            expert_keys = [k for k in layer_keys if self._EXPERT_RE.search(k)]
+            shared_keys = [k for k in layer_keys if not self._EXPERT_RE.search(k)]
+
+            # 1) EP experts owned by THIS rank -> its own shard file.
+            if expert_keys:
+                local_experts = {k: state[k].cpu() for k in expert_keys}
+                shard_file = f"model-r{rank:02d}-{my_shard_idx:05d}.safetensors"
+                safe_save(local_experts, os.path.join(save_path, shard_file))
+                for k in local_experts:
+                    safetensors_index[k] = shard_file
+                my_shard_idx += 1
+                del local_experts
+                gc.collect()
+
+            # 2) Shared (non-expert) portion of this layer -> rank 0 only
+            # (identical on every rank under EP; save one copy).
+            if rank == 0 and shared_keys:
+                shared_out = {k: state[k].cpu() for k in shared_keys}
+                shard_file = f"model-r00-{my_shard_idx:05d}.safetensors"
+                safe_save(shared_out, os.path.join(save_path, shard_file))
+                for k in shared_out:
+                    safetensors_index[k] = shard_file
+                my_shard_idx += 1
+                del shared_out
+                gc.collect()
+
+            # Free this layer's memory before the next.
+            for k in layer_keys:
+                del state[k]
+
+        # Sync so every rank has flushed its shards + partial index before
+        # rank 0 stitches them together.
+        if dist.is_initialized():
+            dist.barrier()
+
+        # Each rank writes its own partial index JSON; rank 0 will merge them.
+        partial_index_file = os.path.join(
+            save_path, f"_partial_weight_map_r{rank:02d}.json"
+        )
+        with open(partial_index_file, "w") as f:
+            json.dump(safetensors_index, f)
+
+        if dist.is_initialized():
+            dist.barrier()
+
+        # ---------- KV cache scales + final index merge (rank 0 only) --------
+        if rank == 0:
+            # Merge every rank's partial weight_map JSON.  Under multi-node
+            # EP, ``save_path`` MUST live on a filesystem shared across ALL
+            # nodes (e.g. cephfs); otherwise this loop only sees the local
+            # node's ranks and the resulting checkpoint silently drops the
+            # experts owned by remote ranks.  We detect that case here and
+            # hard-fail, because a "partially saved" 1/2-model looks the
+            # same as a fully saved model until you try to load it into
+            # vLLM.
+            merged_index = {}
+            missing_ranks = []
+            for r in range(world):
+                p = os.path.join(save_path, f"_partial_weight_map_r{r:02d}.json")
+                try:
+                    with open(p, "r") as f:
+                        merged_index.update(json.load(f))
+                except FileNotFoundError:
+                    missing_ranks.append(r)
+            if missing_ranks:
+                # Hint at the most common root cause: node-local save_path.
+                local_prefixes = ("/dockerdata", "/data", "/tmp", "/root")
+                local_hint = ""
+                if any(save_path.startswith(pfx) for pfx in local_prefixes):
+                    local_hint = (
+                        f"\n\n  ROOT CAUSE HINT: ``save_path={save_path!r}`` "
+                        f"looks like a node-local path.  Under multi-node EP "
+                        f"every rank writes its own shard files, so the save "
+                        f"directory MUST be on a filesystem shared across all "
+                        f"nodes (e.g. /apdcephfs*).  Move save_path to shared "
+                        f"storage and re-run."
+                    )
+                raise RuntimeError(
+                    f"Glm5EPQuantSaver: missing partial weight_map JSON for "
+                    f"rank(s) {missing_ranks} (world_size={world}).  Each "
+                    f"rank should have written "
+                    f"``_partial_weight_map_rXX.json`` to ``{save_path}``.  "
+                    f"The resulting checkpoint would be MISSING all experts "
+                    f"owned by those ranks -- refusing to write a corrupt "
+                    f"model.safetensors.index.json.{local_hint}"
+                )
+
+            # ---------- MTP layer offline-quantize fallback ----------
+            # If the live model dropped the MTP block (``model.layers.<N>``
+            # where N == num_hidden_layers) at ``from_pretrained`` time --
+            # confirmed by the [DIAG] probe above showing 0 MTP keys in
+            # ``state_dict()`` -- read layer N's weights straight from the
+            # source HF checkpoint on disk, quantize them offline using the
+            # same recipe as the main stack, and inject them into
+            # ``merged_index`` before writing the final ``index.json``.
+            # Rank 0 alone owns the entire MTP shard (plan B1).
+            self._maybe_emit_mtp_shard_from_source(
+                save_path=save_path,
+                merged_index=merged_index,
+                mtp_lid=_mtp_lid,
+                shared_lids=shared_lids,
+                user_ignore_patterns=tuple(
+                    p for p in ignored_layers if p
+                ),
+            )
+
+            if (
+                hasattr(self.quant_model, "kv_cache_scales_dict")
+                and self.quant_model.kv_cache_scales_dict
+            ):
+                kv_scales_path = os.path.join(save_path, "kv_cache_scales.safetensors")
+                kv_scales_dict = {}
+                kv_scale_map = {}
+                for name, scale in self.quant_model.kv_cache_scales_dict.items():
+                    kv_scales_dict[name] = scale
+                    kv_scale_map[name] = "kv_cache_scales.safetensors"
+                safe_save(kv_scales_dict, kv_scales_path)
+                print_info("Save KV cache scales to: {}".format(kv_scales_path))
+                merged_index.update(kv_scale_map)
+
+            with open(os.path.join(save_path, "model.safetensors.index.json"), "w") as f:
+                json.dump({"metadata": {}, "weight_map": merged_index}, f, indent=2)
+            # Clean up the transient partial JSON files.
+            for r in range(world):
+                p = os.path.join(save_path, f"_partial_weight_map_r{r:02d}.json")
+                try:
+                    os.remove(p)
+                except FileNotFoundError:
+                    pass
+            print_info(
+                f"GLM-5 EP int8 checkpoint merged and saved to {save_path} "
+                f"(total weight_map entries: {len(merged_index)})"
+            )
+
+    # ------------------------------------------------------------------
+    # MTP layer offline-quantize fallback (plan B1).
+    # ------------------------------------------------------------------
+    # Root cause it addresses:
+    #   The upstream transformers ``GlmMoeDsaModel.__init__`` sizes
+    #   ``self.layers`` from ``num_hidden_layers`` only, so the MTP draft
+    #   block (``model.layers.<N>`` with N == num_hidden_layers) never
+    #   gets a slot.  Every disk key under ``model.layers.<N>.*`` is
+    #   silently discarded as "unexpected" at ``from_pretrained`` time,
+    #   which is why ``state_dict()`` has 0 MTP keys and the exported
+    #   index.json misses the whole layer.
+    #
+    # The fix here is a self-contained post-processing pass on rank 0:
+    #   1. Consult the source HF checkpoint's ``model.safetensors.index.json``
+    #      to find every key belonging to layer N.
+    #   2. Stream those tensors from their respective source shards
+    #      (safe_open lazy handle, ``get_tensor`` per key -- constant memory).
+    #   3. For each key, decide by leaf-name / substring rules whether to
+    #      quantize to INT8 per-out-channel (weight + weight_scale bf16,
+    #      symmetric, same layout ``PTQSaveVllmHF`` writes for the main
+    #      stack) or pass through as bf16.
+    #   4. Dump one shard ``model-mtp-r00.safetensors`` and append the
+    #      resulting key -> file mappings to ``merged_index`` so the
+    #      final ``model.safetensors.index.json`` covers layer N too.
+    #
+    # Safeguards:
+    #   * If ``merged_index`` already contains ANY key for layer N (i.e.
+    #     upstream got fixed and the state_dict path already emitted it),
+    #     this method is a no-op.
+    #   * If the source checkpoint can't be read or has 0 keys for layer
+    #     N, we log a warning and return -- the caller will still write
+    #     ``index.json`` (missing MTP, same as before the patch).
+    #   * ``user_ignore_patterns`` is the exact list the main stack used
+    #     (from ``skip_layer_names()``), so quantize / skip decisions on
+    #     the MTP linears stay 1-to-1 consistent with the main stack.
+    def _maybe_emit_mtp_shard_from_source(
+        self,
+        save_path,
+        merged_index,
+        mtp_lid,
+        shared_lids,
+        user_ignore_patterns,
+    ):
+        """Offline-quantize the MTP layer from the source HF checkpoint.
+
+        Rank 0 only.  Mutates ``merged_index`` in place with the new
+        ``model.layers.<mtp_lid>.*`` -> shard-file mappings and writes a
+        single safetensors shard ``model-mtp-r00.safetensors`` under
+        ``save_path``.
+        """
+        if mtp_lid is None or mtp_lid < 0:
+            print_info(
+                "[Glm5EPQuantSaver][MTP] skipped: could not determine "
+                "num_hidden_layers; nothing to do."
+            )
+            return
+
+        mtp_prefix = f"model.layers.{mtp_lid}."
+
+        # ---- guard 1: state_dict path already emitted MTP -----------------
+        existing_mtp_keys = [k for k in merged_index if k.startswith(mtp_prefix)]
+        if existing_mtp_keys:
+            print_info(
+                f"[Glm5EPQuantSaver][MTP] already have "
+                f"{len(existing_mtp_keys)} keys with prefix '{mtp_prefix}' "
+                f"in merged_index (upstream fixed?); skipping offline "
+                f"backfill."
+            )
+            return
+
+        # ---- guard 2: source checkpoint path available --------------------
+        # Try several attribute paths in priority order so we work across
+        # model classes.  ``modeling_deepseek.py`` sets it as a *class*
+        # attribute on the HF model; ``GLM5.from_pretrained`` sets it as
+        # an *instance* attribute on the model (and, as a last resort,
+        # on the adapter).  Users can also pass ``--model-path`` via YAML
+        # ``model.model_path`` -- reach into ``config._name_or_path`` as
+        # a final safety net (HF stores it there after ``from_pretrained``).
+        src_path = None
+        _candidates = []
+        _hf_model = self.quant_model.model
+        _adapter = self.quant_model
+        for _obj, _attr in (
+            (_hf_model, "ori_model_path"),
+            (_adapter, "ori_model_path"),
+            (_adapter, "model_path"),
+        ):
+            _val = getattr(_obj, _attr, None)
+            _candidates.append(
+                f"{type(_obj).__name__}.{_attr}={_val!r}"
+            )
+            if isinstance(_val, str) and _val and os.path.isdir(_val):
+                src_path = _val
+                break
+        if src_path is None:
+            # HF stashes the load path on the model's
+            # ``config._name_or_path`` after ``from_pretrained``; try that.
+            try:
+                _val = getattr(
+                    getattr(_hf_model, "config", None), "_name_or_path", None
+                )
+                _candidates.append(
+                    f"quant_model.model.config._name_or_path={_val!r}"
+                )
+                if isinstance(_val, str) and _val and os.path.isdir(_val):
+                    src_path = _val
+            except Exception:
+                pass
+        if src_path is None:
+            print_info(
+                f"[Glm5EPQuantSaver][MTP] ABORT: cannot locate source "
+                f"checkpoint path on either quant_model.model or "
+                f"quant_model.  Tried: {_candidates}.  Leaving MTP "
+                f"layer missing from the exported checkpoint."
+            )
+            return
+
+        src_index_path = os.path.join(src_path, "model.safetensors.index.json")
+        if not os.path.exists(src_index_path):
+            print_info(
+                f"[Glm5EPQuantSaver][MTP] ABORT: source index.json not "
+                f"found at {src_index_path}; leaving MTP layer missing."
+            )
+            return
+
+        try:
+            with open(src_index_path, "r") as f:
+                src_weight_map = json.load(f).get("weight_map", {})
+        except Exception as e:  # noqa: BLE001
+            print_info(
+                f"[Glm5EPQuantSaver][MTP] ABORT: cannot read "
+                f"{src_index_path}: {e}"
+            )
+            return
+
+        mtp_disk_keys = [k for k in src_weight_map if k.startswith(mtp_prefix)]
+        if not mtp_disk_keys:
+            print_info(
+                f"[Glm5EPQuantSaver][MTP] ABORT: source checkpoint has 0 "
+                f"keys with prefix '{mtp_prefix}'; nothing to backfill."
+            )
+            return
+
+        # Group keys by source shard so we open each shard file once.
+        from collections import defaultdict
+        shard_to_keys = defaultdict(list)
+        for k in mtp_disk_keys:
+            shard_to_keys[src_weight_map[k]].append(k)
+
+        # Lazy imports to avoid touching module-level torch state for
+        # code paths that never trigger this method.
+        from ....models.llm._glm5_skip_lists import (
+            _QUANTIZABLE_LEAF_NAMES,
+            _FORCED_SKIP_SUBSTRINGS,
+        )
+
+        # Precompute the "indexer is shared on MTP layer?" flag so the
+        # decision matches how the main stack treats layer N.  On GLM-5
+        # the MTP layer's indexer_types is 'full' (see ``_fix_hf_config``),
+        # so this is normally False; we still respect ``shared_lids`` in
+        # case a future config marks MTP as shared.
+        mtp_indexer_is_shared = mtp_lid in (shared_lids or set())
+
+        def _should_quantize(fqn: str) -> bool:
+            """Return True if this linear should be INT8-quantized.
+
+            Mirrors ``GLM5.get_observer_layers`` decision tree (see
+            ``glm5.py``).  Any change there must be echoed here.
+            """
+            leaf = fqn.split(".")[-1]
+            if leaf not in _QUANTIZABLE_LEAF_NAMES:
+                return False
+            if any(pat in fqn for pat in _FORCED_SKIP_SUBSTRINGS):
+                return False
+            if any(pat in fqn for pat in user_ignore_patterns):
+                return False
+            # IndexShare: skip indexer sub-linears on shared layers.
+            if mtp_indexer_is_shared and ".self_attn.indexer." in fqn:
+                return False
+            return True
+
+        def _quantize_int8_per_channel(w):
+            """Symmetric per-out-channel INT8 quantization.
+
+            Matches the layout ``PTQSaveVllmHF`` writes for the main
+            stack under this recipe: ``weight`` is int8, ``weight_scale``
+            is bf16 with shape ``(out, 1)``.  Activation is dynamic
+            per-token so no ``input_scale`` is emitted.
+            """
+            # Work in fp32 for numerical safety; cast scale back to bf16
+            # to match the main stack.
+            w_fp32 = w.to(torch.float32)
+            per_ch_absmax = w_fp32.abs().amax(dim=1, keepdim=True)
+            # Clamp to avoid div-by-zero on all-zero rows (rare but real
+            # for freshly-init MoE experts).
+            per_ch_absmax = per_ch_absmax.clamp_min(1e-12)
+            weight_scale = (per_ch_absmax / 127.0).to(torch.bfloat16)
+            # Cast scale back to fp32 for the divide so we keep precision;
+            # storing bf16 is only for the on-disk shard.
+            w_int8 = (
+                (w_fp32 / weight_scale.to(torch.float32))
+                .round()
+                .clamp(-128, 127)
+                .to(torch.int8)
+            )
+            return w_int8, weight_scale
+
+        shard_file = "model-mtp-r00.safetensors"
+        shard_path = os.path.join(save_path, shard_file)
+        out_state = {}
+        n_quantized = 0
+        n_passthrough = 0
+
+        print_info(
+            f"[Glm5EPQuantSaver][MTP] Backfilling layer {mtp_lid} from "
+            f"source checkpoint ({src_path}); {len(mtp_disk_keys)} keys "
+            f"across {len(shard_to_keys)} source shard file(s)."
+        )
+
+        for src_shard_name, keys in shard_to_keys.items():
+            src_shard_path = os.path.join(src_path, src_shard_name)
+            if not os.path.exists(src_shard_path):
+                print_info(
+                    f"[Glm5EPQuantSaver][MTP] WARNING: source shard "
+                    f"{src_shard_path} not found; skipping {len(keys)} "
+                    f"key(s)."
+                )
+                continue
+            with safe_open(src_shard_path, framework="pt", device="cpu") as f:
+                for k in keys:
+                    try:
+                        tensor = f.get_tensor(k)
+                    except Exception as e:  # noqa: BLE001
+                        print_info(
+                            f"[Glm5EPQuantSaver][MTP] WARNING: cannot read "
+                            f"{k} from {src_shard_path}: {e}; skipping."
+                        )
+                        continue
+
+                    # Decide quantize vs pass-through.  Only *.weight of a
+                    # whitelisted leaf linear participates in INT8; bias
+                    # (there is none for these linears anyway), norms and
+                    # scalar tensors pass through untouched.
+                    is_weight = k.endswith(".weight") and tensor.ndim == 2
+                    if is_weight and _should_quantize(k[: -len(".weight")]):
+                        w_int8, w_scale = _quantize_int8_per_channel(tensor)
+                        out_state[k] = w_int8
+                        out_state[k[: -len(".weight")] + ".weight_scale"] = (
+                            w_scale
+                        )
+                        n_quantized += 1
+                    else:
+                        # Preserve original dtype (bf16 for norms /
+                        # eh_proj / enorm / hnorm / shared_head.norm /
+                        # mlp.gate.* / indexer.*).
+                        out_state[k] = tensor
+                        n_passthrough += 1
+
+        if not out_state:
+            print_info(
+                f"[Glm5EPQuantSaver][MTP] ABORT: no tensors produced "
+                f"(all {len(mtp_disk_keys)} keys failed to read); "
+                f"leaving MTP layer missing."
+            )
+            return
+
+        safe_save(out_state, shard_path)
+        for k in out_state:
+            merged_index[k] = shard_file
+        print_info(
+            f"[Glm5EPQuantSaver][MTP] Wrote {shard_path}: "
+            f"{n_quantized} linear(s) quantized (weight+weight_scale), "
+            f"{n_passthrough} tensor(s) passthrough (bf16). "
+            f"Total {len(out_state)} keys added to weight_map."
+        )
+

@@ -10,6 +10,7 @@
 #   MODEL_PATH    default: ./output_glm5_w8a8c16/glm5_w8a8c16_low_memory
 #   TP            tensor-parallel size, default: 8 (single-node 8 GPUs)
 #   PP            pipeline-parallel size, default: 1
+#   EP            enable expert-parallel (0/1), default: 1
 #   GPU_MEM_UTIL  default: 0.9
 #   MAX_LEN       default: 4096
 #   CHAT          set to 1 to apply the chat template, 0 for raw prompts
@@ -22,6 +23,7 @@ cd "${ROOT_DIR}"
 MODEL_PATH="${MODEL_PATH:-${ROOT_DIR}/output_glm5_w8a8c16/glm5_w8a8c16_low_memory}"
 TP="${TP:-8}"
 PP="${PP:-1}"
+EP="${EP:-1}"
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.9}"
 MAX_LEN="${MAX_LEN:-4096}"
 CHAT="${CHAT:-1}"
@@ -33,8 +35,13 @@ if [ "${CHAT}" = "1" ]; then
     CHAT_FLAG="--apply-chat-template"
 fi
 
+EP_FLAG=""
+if [ "${EP}" = "1" ]; then
+    EP_FLAG="--enable-expert-parallel"
+fi
+
 echo "[verify] MODEL_PATH=${MODEL_PATH}"
-echo "[verify] TP=${TP} PP=${PP} GPU_MEM_UTIL=${GPU_MEM_UTIL} MAX_LEN=${MAX_LEN} CHAT=${CHAT}"
+echo "[verify] TP=${TP} PP=${PP} EP=${EP} GPU_MEM_UTIL=${GPU_MEM_UTIL} MAX_LEN=${MAX_LEN} CHAT=${CHAT}"
 echo "[verify] CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"
 
 python3 scripts/deploy/verify_glm5_w8a8.py \
@@ -43,4 +50,5 @@ python3 scripts/deploy/verify_glm5_w8a8.py \
     --pipeline-parallel-size "${PP}" \
     --gpu-memory-utilization "${GPU_MEM_UTIL}" \
     --max-model-len "${MAX_LEN}" \
+    ${EP_FLAG} \
     ${CHAT_FLAG}

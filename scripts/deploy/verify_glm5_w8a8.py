@@ -100,6 +100,18 @@ def _parse_args() -> argparse.Namespace:
         help="vLLM pipeline parallel size (default: 1).",
     )
     parser.add_argument(
+        "--enable-expert-parallel",
+        action="store_true",
+        default=(os.environ.get("EP", "1") == "1"),
+        help=(
+            "Enable expert-parallel routing across the TP ranks.  For "
+            "GLM-5 (256 routed experts, TP=8) this shards experts as "
+            "32 experts/rank instead of column-parallel slicing every "
+            "expert weight, which is dramatically cheaper both in "
+            "memory and comms.  Default: on (set EP=0 in env to disable)."
+        ),
+    )
+    parser.add_argument(
         "--gpu-memory-utilization",
         type=float,
         default=0.9,
@@ -277,8 +289,12 @@ def main() -> int:
         flush=True,
     )
 
-    t0 = time.time()
-    llm = LLM(
+    print(
+        f"[verify] enable_expert_parallel={args.enable_expert_parallel}",
+        flush=True,
+    )
+
+    llm_kwargs = dict(
         model=args.model_path,
         tensor_parallel_size=args.tensor_parallel_size,
         pipeline_parallel_size=args.pipeline_parallel_size,
@@ -289,6 +305,13 @@ def main() -> int:
         trust_remote_code=args.trust_remote_code,
         enforce_eager=args.enforce_eager,
     )
+    if args.enable_expert_parallel:
+        # Available since vLLM 0.6+.  Older builds silently ignore it,
+        # but pass it through anyway so newer vLLM picks it up.
+        llm_kwargs["enable_expert_parallel"] = True
+
+    t0 = time.time()
+    llm = LLM(**llm_kwargs)
     print(f"[verify] LLM ready in {time.time() - t0:.1f}s", flush=True)
 
     sampling = SamplingParams(

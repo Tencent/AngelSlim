@@ -151,15 +151,32 @@ class INT8:
         )
         prev_topk_indices = [None] * nsamples if carry_topk else None
 
-        for i in range(len(layers)):
+        import time as _time
+        n_layers = len(layers)
+        t_ptq_start = _time.time()
+        print_info(
+            f"[INT8] Starting low-memory PTQ over {n_layers} layers "
+            f"x {nsamples} samples (DSA carry_topk={carry_topk})."
+        )
+
+        for i in range(n_layers):
+            t_layer_start = _time.time()
             if torch.cuda.is_available():
-                print_info(f"GPU Memory: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB")
+                mem_mb = torch.cuda.memory_allocated() / 1024 ** 2
+                print_info(
+                    f"[INT8] === layer {i + 1}/{n_layers} start === "
+                    f"GPU={mem_mb:.0f} MB"
+                )
 
             layer = layers[i].to(dev)
             outs = outs.to(dev)
             self.inps = self.inps.to(dev)
             # being hook
-            for j in range(min(self.inps.shape[0], nsamples)):
+            n_iter = min(self.inps.shape[0], nsamples)
+            # Heartbeat every 16 samples so users can see progress on slow
+            # layers (256-expert MoE can take minutes per sample).
+            hb_stride = max(1, n_iter // 8)
+            for j in range(n_iter):
                 with torch.no_grad():
                     out = layer(
                         hidden_states=self.inps[j, :, :].unsqueeze(0),
@@ -175,6 +192,12 @@ class INT8:
                         # [0]=hidden_states, [1]=topk_indices (to feed the next
                         # shared DSA layer).  Keep it on ``dev`` for the next iter.
                         prev_topk_indices[j] = out[1]
+                if (j + 1) % hb_stride == 0 or (j + 1) == n_iter:
+                    dt = _time.time() - t_layer_start
+                    print_info(
+                        f"[INT8]     layer {i + 1}/{n_layers} sample "
+                        f"{j + 1}/{n_iter}  elapsed={dt:.1f}s"
+                    )
 
             print_info("HOOK Step{}".format(j))
 
@@ -185,4 +208,11 @@ class INT8:
             layer = layer.cpu()
             torch.cuda.empty_cache()
             self.inps, outs = outs, self.inps
-            print_info("INT8 end layer {}\n".format(i))
+            dt_layer = _time.time() - t_layer_start
+            dt_total = _time.time() - t_ptq_start
+            eta = dt_total / (i + 1) * (n_layers - i - 1)
+            print_info(
+                f"[INT8] === layer {i + 1}/{n_layers} done in "
+                f"{dt_layer:.1f}s  total={dt_total / 60:.1f}min  "
+                f"ETA={eta / 60:.1f}min ==="
+            )

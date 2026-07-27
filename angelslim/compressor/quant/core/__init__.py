@@ -29,6 +29,7 @@ from .save import DeepSeekV3W4A8Int8Save  # noqa: F401
 from .save import PTQOnlyScaleSave  # noqa: F401
 from .save import PTQPTMSave  # noqa: F401
 from .save import PTQSaveVllmHF  # noqa: F401
+from .save import Glm5EPQuantSaver  # noqa: F401
 from .save import PTQTorchSave  # noqa: F401
 from .save import PTQvLLMSaveHF  # noqa: F401
 from .save import PTQVLMSaveVllmHF  # noqa: F401

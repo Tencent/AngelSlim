@@ -93,6 +93,13 @@ def multi_nodes_run(config):
     # Step 3: Execute complete pipeline
     slim_engine = Engine()
 
+    # Trainer + DeepSpeed: register HfTrainerDeepSpeedConfig BEFORE loading the
+    # model so ``from_pretrained`` takes the ZeRO-3 path.  The returned object
+    # MUST stay alive until after the model is built because HF's weak-ref
+    # mechanism drops the config otherwise.  Under multi-node PTQ, ZeRO-3
+    # pre-shard (``model_config.zero3: true``) is what avoids per-rank OOM.
+    _hf_ds_args = _prewarm_hf_deepspeed_config(config)
+
     # Step 4: Prepare model
     slim_engine.prepare_model(
         model_name=model_config.name,
@@ -108,6 +115,9 @@ def multi_nodes_run(config):
         deploy_backend=global_config.deploy_backend,
         using_multi_nodes=model_config.enable_expert_parallel,
     )
+    # Safe to release now: the model is built and any deepspeed.zero.Init
+    # effects have already happened on all parameters.
+    del _hf_ds_args
 
     # Step 5: Prepare data (optional custom dataloader)
     if compress_config.need_dataset:
@@ -301,6 +311,53 @@ def _prewarm_hf_deepspeed_config(config):
     if not hf_args:
         hf_args = getattr(distill_cfg, "hf_args", None) if distill_cfg is not None else None
     if not hf_args or not hf_args.get("deepspeed"):
+        # PTQ / weight-only path: honour ``model_config.zero3: true`` so the
+        # ZeRO-3 pre-shard loader (angelslim.utils.zero3_io) can shard the
+        # model across ranks instead of materialising it on every rank's GPU
+        # (which OOMs on large MoE models).  Register a minimal ZeRO-3 config
+        # to flip is_deepspeed_zero3_enabled() before from_pretrained.
+        model_cfg = getattr(config, "model_config", None)
+        if getattr(model_cfg, "zero3", False):
+            from transformers import Seq2SeqTrainingArguments
+
+            # DeepSpeed requires:
+            #   train_batch_size == micro_batch_per_gpu * grad_acc * world_size
+            # We do NOT actually train; ZeRO-3 is only used for pre-shard.  So
+            # pick micro=1 / grad_acc=1 and derive train_batch = world_size,
+            # which works under any launcher (single node 8 GPU or 2-node 16
+            # GPU torchrun).
+            _ws = int(os.getenv("WORLD_SIZE", "1"))
+            ds_json = {
+                "fp16": {"enabled": False},
+                "bf16": {"enabled": True},
+                "zero_optimization": {
+                    "stage": 3,
+                    "stage3_gather_16bit_weights_on_model_save": False,
+                    "offload_param": {"device": "none"},
+                    "overlap_comm": True,
+                    "contiguous_gradients": False,
+                    "sub_group_size": 1e9,
+                    "reduce_bucket_size": "auto",
+                    "stage3_prefetch_bucket_size": "auto",
+                    "stage3_param_persistence_threshold": "auto",
+                    "stage3_max_live_parameters": 1e9,
+                    "stage3_max_reuse_distance": 1e9,
+                },
+                "train_micro_batch_size_per_gpu": 1,
+                "train_batch_size": _ws,
+                "gradient_accumulation_steps": 1,
+                "steps_per_print": 100,
+            }
+            trainer_args = Seq2SeqTrainingArguments(
+                output_dir=config.global_config.save_path,
+                per_device_train_batch_size=1,
+                deepspeed=ds_json,
+            )
+            print_info(
+                f"[DeepSpeed pre-warm] ZeRO-3 registered from "
+                f"model_config.zero3=true (PTQ pre-shard path, world_size={_ws})."
+            )
+            return trainer_args
         return None
 
     from transformers import Seq2SeqTrainingArguments
@@ -333,20 +390,33 @@ def _auto_torchrun_for_expert_parallel(config, args):
         return
 
     nproc_per_node = _get_available_gpu_count()
+    # Read multi-node rendezvous env (set by the launcher script per node).
+    # Defaults to single-node (nnodes=1) so single-node runs still work.
+    nnodes = int(os.getenv("NNODES", "1"))
+    node_rank = int(os.getenv("NODE_RANK", "0"))
+    master_addr = os.getenv("MASTER_ADDR", "127.0.0.1")
+    master_port = os.getenv("MASTER_PORT", "29555")
     cmd = [
         sys.executable,
         "-m",
         "torch.distributed.run",
         f"--nproc_per_node={nproc_per_node}",
+        f"--nnodes={nnodes}",
+        f"--node_rank={node_rank}",
+        f"--master_addr={master_addr}",
+        f"--master_port={master_port}",
         os.path.abspath(__file__),
         *sys.argv[1:],
     ]
     if not args.multi_nodes:
         cmd.append("--multi-nodes")
 
+    total_world = nproc_per_node * nnodes
     print_info(
         "enable_expert_parallel is enabled; relaunching with "
-        f"torchrun --nproc_per_node={nproc_per_node} --multi-nodes"
+        f"torchrun --nproc_per_node={nproc_per_node} --nnodes={nnodes} "
+        f"--node_rank={node_rank} --master_addr={master_addr}:{master_port} "
+        f"(total world_size={total_world}) --multi-nodes"
     )
     os.execv(sys.executable, cmd)
 

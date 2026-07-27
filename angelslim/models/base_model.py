@@ -79,6 +79,13 @@ class BaseLLMModel(metaclass=ABCMeta):
         # rank's CPU before sharding.
         if is_deepspeed_zero3_enabled():
             log_prefix = f"[{type(self).__name__}.from_pretrained]"
+            # Forward the model-specific ``_fix_hf_config`` (if any) so the
+            # ZeRO-3 empty build sees a repaired HF config -- notably GLM-5's
+            # per-layer schedule padding (``mlp_layer_types`` / ``indexer_types``
+            # extended to include the MTP-block index), without which
+            # ``GlmMoeDsaDecoderLayer.__init__`` blows up with IndexError
+            # while the MTP block is materialised.
+            config_hook = getattr(self, "_fix_hf_config", None)
             self.model = zero3_empty_model_from_pretrained(
                 model_path,
                 torch_dtype=torch_dtype,
@@ -86,7 +93,74 @@ class BaseLLMModel(metaclass=ABCMeta):
                 use_cache=use_cache,
                 attn_implementation=attn_implementation,
                 log_prefix=log_prefix,
+                config_hook=config_hook,
             )
+            # Model-specific empty defuse of fused MoE experts (e.g. GLM-5's
+            # GlmMoeDsaNaiveMoe -> GlmMoeDsaSplitMoe.empty) so the streaming
+            # loader can fill per-expert shards directly.  This MUST run while
+            # deepspeed.zero.Init is still active (i.e. right after the empty
+            # model build) so the new params are partitioned immediately.
+            if hasattr(self, "_defuse_moe_experts_empty"):
+                self._defuse_moe_experts_empty()
+            stream_load_weights(self.model, model_path, log_prefix=log_prefix)
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                model_path, trust_remote_code=trust_remote_code
+            )
+            return
+
+        # ------------------------------------------------------------------
+        # Pure Expert-Parallel path (no DeepSpeed):
+        # ``enable_expert_parallel: true`` + ``zero3: false``.  This is the
+        # H20-96GB-safe route: we build the model skeleton on ``meta`` via
+        # ``accelerate.init_empty_weights`` (no CUDA allocation, no DeepSpeed
+        # zero.Init hook to hijack ``torch.empty`` onto CUDA), then let the
+        # model-specific ``_defuse_moe_experts_empty`` swap fused MoE for
+        # per-rank EP-sharded ``GlmMoeDsaSplitMoe`` (still meta), and finally
+        # stream weights into CPU memory (per-rank: full shared layers +
+        # local 1/N experts).  INT8 ``low_memory_run`` then walks one
+        # transformer block at a time onto GPU, keeping the per-rank GPU
+        # peak at ~1 layer (~13GB) instead of the full model (~150GB
+        # shared alone would already blow past 96GB H20).
+        if using_multi_nodes and hasattr(self, "_defuse_moe_experts_empty"):
+            log_prefix = f"[{type(self).__name__}.from_pretrained]"
+            from accelerate import init_empty_weights
+            from transformers import AutoConfig
+            hf_cfg = AutoConfig.from_pretrained(
+                model_path, trust_remote_code=trust_remote_code
+            )
+            if attn_implementation != "default":
+                hf_cfg._attn_implementation = attn_implementation
+            if use_cache is not None:
+                hf_cfg.use_cache = use_cache
+            # Model-specific config hook: HF's PretrainedConfig has an
+            # ``attribute_map`` that can silently redirect entries in
+            # config.json onto other fields (e.g. GLM-5's ``head_dim`` key
+            # overrides ``qk_rope_head_dim`` through the alias
+            # ``"head_dim": "qk_rope_head_dim"``).  When that alias is wrong
+            # for the released checkpoint, ``from_config`` allocates
+            # attention linears with the wrong output size and the split in
+            # forward crashes ("split_sizes=[192,192]" vs actual 256).  The
+            # adapter can override ``_fix_hf_config`` to re-derive the
+            # correct fields from the raw config.json.
+            if hasattr(self, "_fix_hf_config"):
+                self._fix_hf_config(hf_cfg, model_path)
+            print_info(
+                f"{log_prefix} EP path (no DeepSpeed): building empty model "
+                f"on meta via accelerate.init_empty_weights."
+            )
+            with init_empty_weights(include_buffers=False):
+                self.model = AutoModelForCausalLM.from_config(
+                    hf_cfg,
+                    torch_dtype=torch_dtype if torch_dtype != "auto" else None,
+                    trust_remote_code=trust_remote_code,
+                )
+            # Swap fused MoE for EP-sharded per-expert split (each rank keeps
+            # only its local 1/N experts as real meta params; the rest are
+            # zero-cost placeholders).
+            self._defuse_moe_experts_empty()
+            # Stream safetensors into CPU (shared layers full; experts local
+            # only).  ``stream_load_weights`` materialises meta -> CPU so
+            # INT8 ``low_memory_run`` can then to("cuda") one block at a time.
             stream_load_weights(self.model, model_path, log_prefix=log_prefix)
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_path, trust_remote_code=trust_remote_code
@@ -102,6 +176,28 @@ class BaseLLMModel(metaclass=ABCMeta):
         )
         if attn_implementation != "default":
             kwargs["attn_implementation"] = attn_implementation
+
+        # Model-specific config repair (see the EP branch for the full
+        # rationale).  We only take this detour when the adapter actually
+        # exposes ``_fix_hf_config`` -- otherwise we keep the vanilla HF
+        # call untouched to avoid perturbing other model classes.  The
+        # repair is essential for GLM-5 whose released ``config.json`` sets
+        # per-layer schedule lists (``mlp_layer_types`` / ``indexer_types``)
+        # to length ``num_hidden_layers``, one entry short of what the MTP
+        # block (constructed at ``layer_idx == num_hidden_layers``) reads;
+        # without the pad, HF ``from_config`` raises IndexError.
+        if hasattr(self, "_fix_hf_config"):
+            from transformers import AutoConfig
+            hf_cfg = AutoConfig.from_pretrained(
+                model_path, trust_remote_code=trust_remote_code
+            )
+            if attn_implementation != "default":
+                hf_cfg._attn_implementation = attn_implementation
+            if use_cache is not None:
+                hf_cfg.use_cache = use_cache
+            self._fix_hf_config(hf_cfg, model_path)
+            kwargs["config"] = hf_cfg
+
         self.model = AutoModelForCausalLM.from_pretrained(
             model_path,
             **kwargs,
@@ -222,14 +318,26 @@ class BaseLLMModel(metaclass=ABCMeta):
         if name in self.weight_scales_dict:
             weight_scale = self.weight_scales_dict[name]
 
+        # group_size is ONLY consumed by group-wise weight algorithms
+        # (e.g. w4a8 / int4-groupwise).  For per-channel int8 / fp8-per-tensor
+        # the value is unused; we still keep a sane default so downstream
+        # code that unconditionally reads self.group_size doesn't crash.
         if hasattr(self.quant_config.quant_algo_info, "w_group_size"):
             self.group_size = self.quant_config.quant_algo_info.w_group_size
+            _group_explicit = True
         elif hasattr(self.quant_config.quant_algo_info, "group_size"):
             self.group_size = self.quant_config.quant_algo_info.group_size
+            _group_explicit = True
         else:
             self.group_size = 128
+            _group_explicit = False
 
-        print_info(f"use weight group size {self.group_size}")
+        # Only log the group size when the algorithm actually uses it, and
+        # only once per run -- otherwise every Linear spams the same line
+        # (see e.g. GLM-5 W8A8 per-channel: >10k Linears -> >10k prints).
+        if _group_explicit and not getattr(self, "_group_size_logged", False):
+            print_info(f"use weight group size {self.group_size}")
+            self._group_size_logged = True
 
         if self.deploy_backend in ["vllm", "huggingface", "trtllm", "tensorrt"]:
             q_linear = QDQModule(

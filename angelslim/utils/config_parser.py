@@ -168,6 +168,7 @@ class ModelConfig:
     use_audio_in_video: bool = field(default=False)
     attn_implementation: str = field(default="default")
     enable_expert_parallel: bool = field(default=False)
+    zero3: bool = field(default=False)
 
 
 @dataclass

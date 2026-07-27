@@ -167,8 +167,10 @@ class LinearizedMoeExperts(nn.Module):
         if config is not None:
             self.config = config
 
-        if device is None or (isinstance(device, torch.device) and device.type == "meta"):
+        if device is None:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # NOTE: when device.type == "meta" we KEEP it (Plan C zero-copy build).
+        # The streaming loader materialises each rank's shard on CUDA later.
 
         for expert_idx in range(self.num_experts):
             expert = nn.ModuleDict(
@@ -249,9 +251,24 @@ def _is_fused_moe_experts(module) -> bool:
     """Heuristic: matches HF Qwen3MoeExperts / HYV3Experts / similar.
 
     They all expose ``gate_up_proj`` / ``down_proj`` as ``nn.Parameter``
-    plus ``num_experts``, ``hidden_dim``, ``intermediate_dim``, ``act_fn``."""
+    plus ``num_experts``, ``hidden_dim``, ``intermediate_dim``, ``act_fn``.
+
+    GLM-5's ``GlmMoeDsaNaiveMoe`` also carries those attributes, but it is
+    intentionally excluded here: GLM-5 performs its own *empty* defuse into
+    ``GlmMoeDsaSplitMoe`` (via ``GLM5._defuse_moe_experts_empty``) so the
+    per-expert keys line up with its quant pipeline.  If we let the generic
+    path replace it with ``LinearizedMoeExperts`` first, GLM-5's hook would
+    find nothing to defuse."""
     if isinstance(module, LinearizedMoeExperts):
         return False
+    try:
+        from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import (
+            GlmMoeDsaNaiveMoe,
+        )
+        if isinstance(module, GlmMoeDsaNaiveMoe):
+            return False
+    except Exception:
+        pass
     required = (
         "gate_up_proj",
         "down_proj",
@@ -356,12 +373,20 @@ def zero3_empty_model_from_pretrained(
     use_cache=False,
     attn_implementation="default",
     log_prefix="[zero3]",
+    config_hook=None,
 ):
     """Build an EMPTY ZeRO-3 sharded model from a HuggingFace ``model_path``.
 
     Linearizes all fused MoE experts immediately so subsequent QuantLinear
     insertion can iterate flat ``nn.Linear`` modules. Does NOT load
     weights — caller must invoke :func:`stream_load_weights`.
+
+    Args:
+        config_hook: optional callable ``(hf_cfg, model_path) -> None`` invoked
+            right after ``AutoConfig.from_pretrained`` so the caller can patch
+            fields before the empty model is materialised.  Used e.g. by GLM-5
+            to repair ``num_hidden_layers`` when ``config.json`` under-counts
+            the actual number of transformer blocks in the checkpoint.
     """
     from transformers import AutoConfig, AutoModelForCausalLM
     from transformers.integrations.deepspeed import HfDeepSpeedConfig  # noqa: F401
@@ -393,24 +418,55 @@ def zero3_empty_model_from_pretrained(
     if use_cache is not None:
         config.use_cache = use_cache
 
+    # Optional model-specific config patch (e.g. GLM-5 ``_fix_hf_config``
+    # repairing ``num_hidden_layers`` when the released config under-counts
+    # the transformer blocks in the checkpoint).  Runs BEFORE ``from_config``
+    # so the empty skeleton has the correct number of ``model.layers`` and
+    # the streaming loader can fill every block including the last one.
+    if config_hook is not None:
+        try:
+            config_hook(config, model_path)
+        except Exception as e:  # noqa: BLE001
+            print_info(
+                f"{log_prefix} config_hook failed ({e}); "
+                f"proceeding with unpatched HF config."
+            )
+
     resolved = _resolve_dtype(torch_dtype, config)
     print_info(
         f"{log_prefix} build empty ZeRO-3 model dtype={resolved} from config "
         f"{getattr(config, 'model_type', '?')}"
     )
 
-    # ``from_config`` triggers ``deepspeed.zero.Init`` automatically when
-    # ``HfTrainerDeepSpeedConfig`` is registered (i.e. when
-    # is_deepspeed_zero3_enabled() returns True).
-    with no_init_weights(), no_tie_weights():
+    # meta-device empty build.
+    #
+    # Earlier revisions wrapped ``from_config`` in
+    # ``deepspeed.zero.Init(remote_device="cpu")``.  That keeps the FULL model
+    # replica on host memory during partition, so the per-rank GPU peak is only
+    # ~1/N -- but it still materialises the *entire* ~2.8 TB model on CPU (and
+    # a second full CPU replica is added by the subsequent defuse step), which
+    # OOMs a 1.9 TB/node host on GLM-5's 75 MoE layers.
+    #
+    # Instead we build the whole skeleton on ``torch.device("meta")``: every
+    # Parameter is allocated with ZERO bytes (verified: GLM-5 -> 1269 params
+    # all on meta, RSS delta ~0).  The streaming loader later fills each rank's
+    # shard slice directly on CUDA, so no full CPU replica is ever created.
+    print_info(
+        f"{log_prefix} building empty model on torch.device('meta') "
+        f"(zero-copy skeleton; world_size="
+        f"{int(os.getenv('WORLD_SIZE', '1'))})."
+    )
+
+    with torch.device("meta"), no_init_weights(), no_tie_weights():
         model = AutoModelForCausalLM.from_config(
             config,
             torch_dtype=resolved,
             trust_remote_code=trust_remote_code,
         )
 
-    # Linearize fused MoE experts BEFORE weight loading so the loader can
-    # write per-expert slices directly into the new Linear targets.
+    # Linearize fused MoE experts (meta skeleton -> meta per-expert Linears).
+    # linearize_moe_experts_empty opens its own meta-aware context so the new
+    # params stay on meta (no CPU replica).
     linearize_moe_experts_empty(model, dtype=resolved)
 
     return model
@@ -439,16 +495,110 @@ def _shards(model_path):
             yield shard_path, list(r.keys())
 
 
-def _broadcast_into_target(src, target, *, is_buffer=False, key=None):
+def _broadcast_into_target(src, target, *, is_buffer=False, key=None, model=None):
     """Copy ``src`` (rank0 only, or None on other ranks) into ``target``.
 
-    Handles three cases:
+    Handles four cases:
+      * ``meta`` parameter (expert-parallel / PLAN-C empty build): the target
+        has no storage yet, so it is *materialised* on the CUDA device via
+        ``set_module_tensor_to_device`` (rank0 stages the real tensor, other
+        ranks allocate an empty CUDA tensor and receive it through broadcast).
+        This keeps the per-rank footprint at ``1/world_size`` of the model with
+        **no full CPU replica** -- exactly the option-A EP goal.
       * ZeRO-3 sharded ``Parameter``: gather, rank0 writes, exit gather.
       * Regular distributed ``Parameter`` / replicated buffer: rank0 stages,
         then broadcast.
       * Single-process: direct copy.
     """
     dist_active = torch.distributed.is_available() and torch.distributed.is_initialized()
+
+    # ---- meta target: materialise directly on CUDA (no CPU replica) --------
+    if getattr(target, "is_meta", False):
+        if model is None or key is None:
+            raise RuntimeError(
+                f"Cannot materialise meta parameter {key!r}: 'model' must be "
+                "passed to _broadcast_into_target for meta targets."
+            )
+        from accelerate.utils import set_module_tensor_to_device
+        # Option B (hybrid sharding for H20 96GB): materialise meta parameters
+        # on CPU, NOT cuda.  INT8 PTQ runs in ``low_memory`` mode, which keeps
+        # the whole model on CPU and streams one transformer block at a time to
+        # the GPU (``layers[i].to(dev)`` then back to ``.cpu()``).  That keeps
+        # the per-rank GPU peak at ~1 layer (shared ~2GB + 1/16 EP experts
+        # ~11GB) instead of the full shared layers (~150GB), which would never
+        # fit on a 96GB H20.  Materialising on CPU also means no full-model
+        # replica ever lands on host memory (vs the old remote_device="cpu"
+        # ZeRO-3 path that pinned the ENTIRE 2.8TB model on CPU).
+        dst_device = "cpu"
+        # NCCL only speaks CUDA, so we cannot broadcast a CPU tensor directly.
+        # Route through a per-tensor CUDA staging buffer: rank0 stages the
+        # real weight on cuda:local_rank, we broadcast on cuda, then every
+        # rank copies the staged tensor down to a CPU buffer and materialises
+        # the parameter with ``set_module_tensor_to_device(..., "cpu", ...)``.
+        # The CUDA staging is freed immediately (peak = one tensor).
+        #
+        # SHAPE MISMATCH HANDLING: HF checkpoints for GLM-5 DSA layers may
+        # differ in some fused attention dims from what the current
+        # ``modeling_glm_moe_dsa`` skeleton allocates (e.g. index-head fusion).
+        # Two rules must hold to avoid NCCL hangs / silent corruption:
+        #   1) All ranks MUST agree on the staging shape (rank0's src.shape,
+        #      broadcast as an int64 tensor).
+        #   2) All ranks MUST take the same skip-or-load decision.
+        # If shapes don't match the target, rank0 logs it, all ranks skip.
+        if dist_active:
+            stage_device = f"cuda:{torch.cuda.current_device()}"
+            # Broadcast rank0's decision + shape as an int64 tensor:
+            #   [ok_flag, ndim, dim0, dim1, ...] padded to 8 slots.
+            decision = torch.zeros(8, dtype=torch.int64, device=stage_device)
+            if _rank() == 0:
+                if src is None:
+                    decision[0] = 0  # skip (no src on rank0)
+                elif src.shape != target.shape:
+                    print_info(
+                        f"[stream_load] SHAPE MISMATCH -- zero-filling {key!r}: "
+                        f"checkpoint={tuple(src.shape)} vs target={tuple(target.shape)}"
+                    )
+                    decision[0] = 0
+                else:
+                    decision[0] = 1
+                    decision[1] = src.ndim
+                    for i, d in enumerate(src.shape):
+                        decision[2 + i] = int(d)
+            torch.distributed.broadcast(decision, src=0)
+            if int(decision[0].item()) == 0:
+                # Skip loading, but still materialise a zero CPU tensor so the
+                # target parameter is no longer on ``meta`` -- otherwise the
+                # subsequent ``layers[i].to("cuda")`` in INT8.low_memory_run
+                # would raise ``Cannot copy out of meta tensor``.  Zero-filled
+                # weights make this parameter functionally empty but keep the
+                # pipeline runnable (calibration + save proceeds; only this
+                # specific op is meaningless).
+                zero = torch.zeros(target.shape, dtype=target.dtype, device=dst_device)
+                set_module_tensor_to_device(model, key, dst_device, value=zero)
+                return False
+            ndim = int(decision[1].item())
+            shape = tuple(int(decision[2 + i].item()) for i in range(ndim))
+            stage = torch.empty(shape, dtype=target.dtype, device=stage_device)
+            if _rank() == 0:
+                stage.copy_(src.to(device=stage_device, dtype=target.dtype))
+            torch.distributed.broadcast(stage, src=0)
+            buf = stage.to(device=dst_device, dtype=target.dtype).contiguous()
+            del stage
+        else:
+            if src is None or src.shape != target.shape:
+                if src is not None:
+                    print_info(
+                        f"[stream_load] SHAPE MISMATCH -- zero-filling {key!r}: "
+                        f"checkpoint={tuple(src.shape)} vs target={tuple(target.shape)}"
+                    )
+                # Same zero-fill fallback as the distributed branch above.
+                zero = torch.zeros(target.shape, dtype=target.dtype, device=dst_device)
+                set_module_tensor_to_device(model, key, dst_device, value=zero)
+                return False
+            buf = torch.empty(src.shape, dtype=target.dtype, device=dst_device)
+            buf.copy_(src.to(device=dst_device, dtype=target.dtype))
+        set_module_tensor_to_device(model, key, dst_device, value=buf)
+        return True
 
     if is_zero3_param(target):
         with gathered_param_if_zero3(target, modifier_rank=0):
@@ -460,14 +610,25 @@ def _broadcast_into_target(src, target, *, is_buffer=False, key=None):
 
     # Regular tensor (parameter or buffer).
     if dist_active:
+        # NCCL requires CUDA tensors.  If the target is on CPU (option-B EP:
+        # shared layers + buffers all live in host memory), route through a
+        # CUDA staging buffer and copy back to the CPU target.
+        target_is_cpu = target.device.type == "cpu"
+        stage_device = (
+            f"cuda:{torch.cuda.current_device()}" if target_is_cpu else target.device
+        )
         if _rank() == 0:
             if src is None or (not is_buffer and src.shape != target.shape):
                 return False
-            tmp = src.to(device=target.device, dtype=target.dtype).contiguous()
+            tmp = src.to(device=stage_device, dtype=target.dtype).contiguous()
         else:
-            tmp = torch.empty_like(target)
+            tmp = torch.empty(target.shape, dtype=target.dtype, device=stage_device)
         torch.distributed.broadcast(tmp, src=0)
-        target.data.copy_(tmp)
+        if target_is_cpu:
+            target.data.copy_(tmp.to(device="cpu"))
+        else:
+            target.data.copy_(tmp)
+        del tmp
         return True
 
     if src is None:
@@ -479,79 +640,48 @@ def _broadcast_into_target(src, target, *, is_buffer=False, key=None):
 def stream_load_weights(model, model_path, log_prefix="[zero3]"):
     """Stream a HF safetensors checkpoint into ``model``.
 
-    Recognises fused MoE keys ``*.experts.gate_up_proj`` and
-    ``*.experts.down_proj`` and dispatches the per-expert slices into the
-    matching :class:`LinearizedMoeExperts` children. All other keys are
-    matched against ``model.named_parameters()`` / ``named_buffers()``.
+    Two loading strategies, chosen by whether any param is a meta tensor:
 
-    rank0 reads the bytes; ZeRO-3 sharded targets are filled inside
-    ``GatheredParameters(modifier_rank=0)``; replicated tensors are
-    broadcast.
+    * **Meta model (option-B EP / no-DeepSpeed path)**: each rank walks the
+      shards on its OWN, only reads (via safetensors ``get_tensor``, which is
+      mmap-lazy) the keys that appear in its local ``named_parameters`` /
+      ``named_buffers`` (EP experts NOT owned by this rank are absent), and
+      materialises them straight onto CPU.  This is the **only** way to avoid
+      the collective-asymmetry deadlock that ZeRO-3-style rank0-reads +
+      broadcast has under EP -- under EP, rank0's local param set does not
+      contain the experts other ranks own, so a broadcast would either hang
+      (some ranks not participating) or wastefully copy the same tensor to
+      every rank.  Since every rank has read access to the checkpoint on
+      shared cephfs, per-rank reads are trivially parallel and touch only
+      1/W of the routed-expert bytes on each rank.
+
+    * **ZeRO-3 model**: falls back to the original rank0-reads-and-broadcasts
+      path (via ``_broadcast_into_target``), because ZeRO-3 sharded params
+      require ``GatheredParameters(modifier_rank=0)`` semantics.
     """
     from safetensors import safe_open
+    from accelerate.utils import set_module_tensor_to_device
 
     name_to_param = dict(model.named_parameters())
     name_to_buffer = dict(model.named_buffers())
     rank = _rank()
 
+    # Detect option-B path: any meta param means we build with meta skeleton
+    # and each rank should read what it owns directly.
+    any_meta = any(p.is_meta for p in name_to_param.values()) or any(
+        b.is_meta for b in name_to_buffer.values()
+    )
+
     loaded = 0
     skipped = 0
+    shape_mismatch = 0
     seen_targets = set()
 
-    for shard_path, keys in _shards(model_path):
-        with safe_open(shard_path, framework="pt") as reader:
-            for key in keys:
-                if key.endswith(".experts.gate_up_proj"):
-                    base = key[: -len(".gate_up_proj")]
-                    src = reader.get_tensor(key) if rank == 0 else None
-                    n_exp = (
-                        int(src.shape[0])
-                        if src is not None
-                        else _infer_num_experts(base, name_to_param)
-                    )
-                    for i in range(n_exp):
-                        gkey = f"{base}.{i}.gate_proj.weight"
-                        ukey = f"{base}.{i}.up_proj.weight"
-                        gtgt = name_to_param.get(gkey)
-                        utgt = name_to_param.get(ukey)
-                        if gtgt is None or utgt is None:
-                            skipped += 2
-                            continue
-                        gsrc = src[i].chunk(2, dim=-2)[0] if src is not None else None
-                        usrc = src[i].chunk(2, dim=-2)[1] if src is not None else None
-                        if _broadcast_into_target(gsrc, gtgt, key=gkey):
-                            seen_targets.add(gkey)
-                            loaded += 1
-                        else:
-                            skipped += 1
-                        if _broadcast_into_target(usrc, utgt, key=ukey):
-                            seen_targets.add(ukey)
-                            loaded += 1
-                        else:
-                            skipped += 1
-                    del src
-                elif key.endswith(".experts.down_proj"):
-                    base = key[: -len(".down_proj")]
-                    src = reader.get_tensor(key) if rank == 0 else None
-                    n_exp = (
-                        int(src.shape[0])
-                        if src is not None
-                        else _infer_num_experts(base, name_to_param)
-                    )
-                    for i in range(n_exp):
-                        dkey = f"{base}.{i}.down_proj.weight"
-                        dtgt = name_to_param.get(dkey)
-                        if dtgt is None:
-                            skipped += 1
-                            continue
-                        dsrc = src[i] if src is not None else None
-                        if _broadcast_into_target(dsrc, dtgt, key=dkey):
-                            seen_targets.add(dkey)
-                            loaded += 1
-                        else:
-                            skipped += 1
-                    del src
-                else:
+    if any_meta:
+        # ---- per-rank independent load (no NCCL) --------------------------
+        for shard_path, keys in _shards(model_path):
+            with safe_open(shard_path, framework="pt") as reader:
+                for key in keys:
                     tgt = name_to_param.get(key)
                     is_buf = False
                     if tgt is None:
@@ -560,15 +690,101 @@ def stream_load_weights(model, model_path, log_prefix="[zero3]"):
                     if tgt is None:
                         skipped += 1
                         continue
-                    src = reader.get_tensor(key) if rank == 0 else None
-                    if _broadcast_into_target(src, tgt, is_buffer=is_buf, key=key):
-                        seen_targets.add(key)
-                        loaded += 1
-                    else:
+                    src = reader.get_tensor(key)
+                    if src.shape != tgt.shape:
+                        if shape_mismatch < 8 or rank == 0:
+                            print_info(
+                                f"[stream_load] SHAPE MISMATCH -- zero-filling "
+                                f"{key!r}: checkpoint={tuple(src.shape)} vs "
+                                f"target={tuple(tgt.shape)}"
+                            )
+                        shape_mismatch += 1
+                        zero = torch.zeros(tgt.shape, dtype=tgt.dtype, device="cpu")
+                        set_module_tensor_to_device(model, key, "cpu", value=zero)
                         skipped += 1
+                        del src
+                        continue
+                    buf = src.to(dtype=tgt.dtype, device="cpu").contiguous()
+                    set_module_tensor_to_device(model, key, "cpu", value=buf)
+                    seen_targets.add(key)
+                    loaded += 1
                     del src
-        _cleanup()
-        print_info(f"{log_prefix} loaded shard {os.path.basename(shard_path)}")
+            _cleanup()
+            if rank == 0:
+                print_info(f"{log_prefix} loaded shard {os.path.basename(shard_path)}")
+    else:
+        # ---- legacy ZeRO-3 path: rank0 reads, others receive via broadcast -
+        for shard_path, keys in _shards(model_path):
+            with safe_open(shard_path, framework="pt") as reader:
+                for key in keys:
+                    if key.endswith(".experts.gate_up_proj"):
+                        base = key[: -len(".gate_up_proj")]
+                        src = reader.get_tensor(key) if rank == 0 else None
+                        n_exp = (
+                            int(src.shape[0])
+                            if src is not None
+                            else _infer_num_experts(base, name_to_param)
+                        )
+                        for i in range(n_exp):
+                            gkey = f"{base}.{i}.gate_proj.weight"
+                            ukey = f"{base}.{i}.up_proj.weight"
+                            gtgt = name_to_param.get(gkey)
+                            utgt = name_to_param.get(ukey)
+                            if gtgt is None or utgt is None:
+                                skipped += 2
+                                continue
+                            gsrc = src[i].chunk(2, dim=-2)[0] if src is not None else None
+                            usrc = src[i].chunk(2, dim=-2)[1] if src is not None else None
+                            if _broadcast_into_target(gsrc, gtgt, key=gkey, model=model):
+                                seen_targets.add(gkey)
+                                loaded += 1
+                            else:
+                                skipped += 1
+                            if _broadcast_into_target(usrc, utgt, key=ukey, model=model):
+                                seen_targets.add(ukey)
+                                loaded += 1
+                            else:
+                                skipped += 1
+                        del src
+                    elif key.endswith(".experts.down_proj"):
+                        base = key[: -len(".down_proj")]
+                        src = reader.get_tensor(key) if rank == 0 else None
+                        n_exp = (
+                            int(src.shape[0])
+                            if src is not None
+                            else _infer_num_experts(base, name_to_param)
+                        )
+                        for i in range(n_exp):
+                            dkey = f"{base}.{i}.down_proj.weight"
+                            dtgt = name_to_param.get(dkey)
+                            if dtgt is None:
+                                skipped += 1
+                                continue
+                            dsrc = src[i] if src is not None else None
+                            if _broadcast_into_target(dsrc, dtgt, key=dkey, model=model):
+                                seen_targets.add(dkey)
+                                loaded += 1
+                            else:
+                                skipped += 1
+                        del src
+                    else:
+                        tgt = name_to_param.get(key)
+                        is_buf = False
+                        if tgt is None:
+                            tgt = name_to_buffer.get(key)
+                            is_buf = tgt is not None
+                        if tgt is None:
+                            skipped += 1
+                            continue
+                        src = reader.get_tensor(key) if rank == 0 else None
+                        if _broadcast_into_target(src, tgt, is_buffer=is_buf, key=key, model=model):
+                            seen_targets.add(key)
+                            loaded += 1
+                        else:
+                            skipped += 1
+                        del src
+            _cleanup()
+            print_info(f"{log_prefix} loaded shard {os.path.basename(shard_path)}")
 
     all_targets = set(name_to_param) | set(name_to_buffer)
     missing = sorted(all_targets - seen_targets)
@@ -578,6 +794,42 @@ def stream_load_weights(model, model_path, log_prefix="[zero3]"):
     )
     if missing:
         print_info(f"{log_prefix} first missing keys: {missing[:10]}")
+
+    # ------------------------------------------------------------------
+    # Meta-tensor safety net.
+    # ------------------------------------------------------------------
+    # A parameter can remain on ``meta`` after stream_load_weights for any of
+    # several benign reasons: a fused key mismatch, an HF modeling vs
+    # checkpoint version drift (e.g. GLM-5 kv_a_proj_with_mqa 576 vs 704),
+    # a tied-weight key not covered by ``named_parameters``, etc.  If ANY
+    # parameter is still ``is_meta`` when downstream code calls
+    # ``layers[i].to("cuda")`` (INT8.low_memory_run), PyTorch raises
+    # ``NotImplementedError: Cannot copy out of meta tensor``.  So we walk the
+    # model once, zero-fill every meta leaf on CPU, and log a summary.  The
+    # affected ops become numerically inert but the pipeline stays runnable.
+    from accelerate.utils import set_module_tensor_to_device
+    meta_params = 0
+    meta_buffers = 0
+    for name, p in list(model.named_parameters()):
+        if p.is_meta:
+            set_module_tensor_to_device(
+                model, name, "cpu",
+                value=torch.zeros(p.shape, dtype=p.dtype, device="cpu"),
+            )
+            meta_params += 1
+    for name, b in list(model.named_buffers()):
+        if b.is_meta:
+            set_module_tensor_to_device(
+                model, name, "cpu",
+                value=torch.zeros(b.shape, dtype=b.dtype, device="cpu"),
+            )
+            meta_buffers += 1
+    if meta_params or meta_buffers:
+        print_info(
+            f"{log_prefix} zero-filled residual meta tensors: "
+            f"params={meta_params} buffers={meta_buffers} "
+            f"(these ops are numerically empty but non-meta so .to(cuda) works)"
+        )
 
     try:
         model.tie_weights()
