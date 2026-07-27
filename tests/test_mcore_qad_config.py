@@ -243,7 +243,7 @@ def test_parallel_folding_rejects_incompatible_world_size(
     "relative_path",
     [
         "configs/qwen3/mcore_qad/qwen3_moe_nvfp4.yaml",
-        "configs/hunyuan/mcore_qad/hy_v3_nvfp4.yaml",
+        "configs/Hy3/mcore_qad/hy_v3_nvfp4.yaml",
     ],
 )
 def test_mcore_qad_example_configs_parse(relative_path):
