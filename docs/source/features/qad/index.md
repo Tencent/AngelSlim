@@ -17,6 +17,37 @@ TP/EP/CP/SP parallelism and does not replace the QAD flow documented below.
 - Support the same supervised and distillation loss composition as Distill.
 - Save quantized outputs through QAT save formats such as `fake`, `real`, and `real_and_kvcache`.
 
+## Evaluation Results
+
+The following experiments use ShareGPT as the QAD data source. All downstream
+benchmarks are evaluated with 0-shot accuracy. PIQA, ARC-Easy, ARC-Challenge,
+and HellaSwag report `acc_norm`; WinoGrande reports `acc`. `AVG` is the mean
+over these five benchmarks.
+
+### Qwen3-4B INT4
+
+| Method | PIQA | ARC-Easy | ARC-Challenge | HellaSwag | WinoGrande | AVG |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| BF16 | 74.76 | 78.37 | 54.01 | 68.42 | 66.30 | **68.37** |
+| GPTQ | 74.54 | 73.40 | 50.00 | 65.67 | 61.96 | 65.11 |
+| QAD | 74.32 | 76.60 | 53.16 | 67.46 | 65.04 | 67.32 |
+
+### Qwen3.5-35B-A3B INT4
+
+| Method | PIQA | ARC-Easy | ARC-Challenge | HellaSwag | WinoGrande | AVG |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| BF16 | 82.92 | 79.17 | 62.12 | 82.53 | 74.03 | 76.15 |
+| GPTQ | 82.81 | 79.92 | 60.67 | 81.35 | 75.37 | 76.02 |
+| QAD | 83.46 | 79.17 | 61.86 | 82.54 | 74.66 | **76.34** |
+
+### Qwen3.5-35B-A3B INT3
+
+| Method | PIQA | ARC-Easy | ARC-Challenge | HellaSwag | WinoGrande | AVG |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| BF16 | 82.92 | 79.17 | 62.12 | 82.53 | 74.03 | 76.15 |
+| GPTQ | 80.03 | 74.03 | 53.84 | 77.36 | 71.43 | 71.34 |
+| QAD | 83.46 | 79.59 | 61.69 | 82.41 | 74.35 | **76.30** |
+
 ## W4A8-FP8 Example
 
 This example distills a W4A8-FP8 Qwen3-4B student from a full-precision Qwen3-4B teacher and trains only quantization parameters.
