@@ -135,6 +135,7 @@ features/token_compressor/index
 features/diffusion/index
 features/distill/index
 features/qad/index
+features/qad/mcore_qad
 :::
 
 % Additional capabilities

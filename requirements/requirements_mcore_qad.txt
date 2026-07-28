@@ -1,0 +1,6 @@
+# Megatron-Core scale-only QAT/QAD backend.
+# Reference environment: Python 3.12, CUDA 12.8, 8x H100 with NVLink.
+# Install Transformer Engine with --no-build-isolation after installing torch.
+torch==2.10.0
+megatron-core==0.18.0
+transformer_engine[pytorch]>=2.16

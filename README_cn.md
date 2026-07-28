@@ -22,6 +22,7 @@
 </p>
 
 ## 📣最新进展
+- [26/07/20] 我们支持了基于 Megatron-Core 的 Qwen3-MoE 和 Hy3 **量化感知蒸馏**，训练时仅更新量化 scale，并支持 TP/EP/CP/SP 分布式训练。[[文档]](docs/source/features/qad/mcore_qad.md)
 - [26/07/06] 我们支持了 **Hy3**（MoE A21B）模型的 FP8-Static 量化，SmoothQuant 量化. [[文档]](https://github.com/Tencent/AngelSlim/tree/main/scripts/ptq)
 - [26/06/04] 我们发布了 **Stem**，一种稀疏注意力算法，通过在 block 粒度动态选择 top-k 关键块执行 block-sparse attention，加速长上下文 LLM 的 **Prefill** 阶段，在大幅降低延迟的同时实现几乎无损的生成质量。[[文档]](https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/stem.html)
 - [26/06/01] 我们发布了 **DFlare**，一种基于 layer-wise fusion 的块扩散投机解码框架，端到端加速比可达 **5.52×**。[[文档]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/dflare.html)
