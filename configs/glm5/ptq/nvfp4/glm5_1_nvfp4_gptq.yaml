@@ -1,0 +1,42 @@
+# Global configuration of pipeline
+global:
+  save_path: ./results
+
+# Simplified Configuration for LLM compression
+model:
+  name: GLM5_1
+  model_path: zai-org/GLM-5.1
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: cpu
+  enable_expert_parallel: true
+
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    name: nvfp4_gptq    # Supported: fp8_static, fp8_dynamic, int4_awq, int4_gptq, nvfp4, nvfp4_gptq
+    bits: 4
+    quant_method:
+      weight: "per-group"
+      group_size: 16          # NVFP4 micro-scaling block (fixed at 16; -1 also resolves to 16)
+      dequant_to_bf16: false  
+      actorder: false        
+    ignore_layers:            # Quantize routed experts only; skip everything else.
+      - "lm_head"
+      - "self_attn"             # all MLA projections + DSA indexer (wq_b/wk/weights_proj)
+      - "mlp.gate"              # MoE router (gate.weight / e_score_correction_bias)
+      - "mlp.shared_experts"    # shared expert MLP
+      - "model.layers.0.mlp"    # leading dense MLP layers (first_k_dense_replace = 3)
+      - "model.layers.1.mlp"
+      - "model.layers.2.mlp"
+
+# Dataset for calibration
+dataset:
+  name: TextDataset
+  data_path: ./dataset/sharegpt_gpt4/sharegpt_gpt4_256.jsonl
+  max_seq_length: 2048
+  num_samples: 128
+  batch_size: 1

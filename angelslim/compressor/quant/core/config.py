@@ -174,6 +174,37 @@ class QuantConfig:
                 "dequant_to_bf16": quantization_args.quant_method.get("dequant_to_bf16", False),
                 "actorder": quantization_args.quant_method.get("actorder", True),
             }
+        elif "nvfp4_gptq" in self.quant_algo or "nvfp4_gptaq" in self.quant_algo:
+            # NVFP4 weight format optimized with the GPTQ error-compensation
+            # loop (weight-only). Shares the GPTQ runner with int4_gptq; the
+            # weight_format flag routes the per-format quant primitives. The
+            # NVFP4 micro-scaling block is fixed at 16. act-order may stay on:
+            # the GPTQ runner folds the input permutation into the previous
+            # layer's output channels, so the 16-element block stays physically
+            # contiguous along K even when columns are reordered.
+            self.act_observer = None
+            self.weight_observer = None
+            self.kv_cache_observer = None
+            block_size = (
+                16
+                if quantization_args.quant_method["group_size"] == -1
+                else quantization_args.quant_method["group_size"]
+            )
+            self.quant_algo_info = {
+                # ``group_size`` is read by the GPTQ runner; ``block_size`` by
+                # the NVFP4 packing path. Keep them in sync.
+                "group_size": block_size,
+                "block_size": block_size,
+                "ignore_layers": quantization_args.ignore_layers,
+                "weight_format": "nvfp4",
+                "checkpoint_format": "nvfp4",
+                "dequant_to_bf16": quantization_args.quant_method.get("dequant_to_bf16", False),
+                "actorder": quantization_args.quant_method.get("actorder", True),
+                "share_gate_up_weight_scale_2": quantization_args.quant_method.get(
+                    "share_gate_up_weight_scale_2", True
+                ),
+                "w": f"nvfp4_{weight_quant_method}",
+            }
         elif "nvfp4" in self.quant_algo:
             is_weight_only = "weight_only" in self.quant_algo
             is_dynamic = "dynamic" if "dynamic" in self.quant_algo else "static"

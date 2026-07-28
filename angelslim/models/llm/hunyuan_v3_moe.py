@@ -271,7 +271,12 @@ class HYV3MoE(BaseLLMModel):
         use_cache=False,
         using_multi_nodes=False,
     ):
-        attn_implementation = "eager"
+        # Attention implementation. Default "eager" so KV-cache / activation
+        # calibration can hook the explicit attention weights. For weight-only
+        # GPTQ (no attention hooks) "eager" materializes a [heads, seq, seq]
+        # fp32 matrix (16 GiB at seq=8192) and OOMs; set ANGELSLIM_ATTN_IMPL=sdpa
+        # to use the flash-style SDPA path that never materializes it.
+        attn_implementation = os.environ.get("ANGELSLIM_ATTN_IMPL", "eager")
         torch_dtype = torch.bfloat16
         if is_deepspeed_zero3_enabled():
             _patch_hyv3_router_for_zero3()
@@ -611,9 +616,8 @@ class HYV3MoE(BaseLLMModel):
         ), f"num_experts {num_experts} must be divisible by world_size {self.world_size}"
 
         print_info(
-            "Enable HYV3 expert parallel: "
-            f"rank={self.rank}, world_size={self.world_size}, "
-            f"num_experts={num_experts}"
+            f"Enable HYV3 expert parallel: rank={self.rank}, "
+            f"world_size={self.world_size}, num_experts={num_experts}"
         )
         for layer_idx, layer in enumerate(self.model.model.layers):
             moe_module = getattr(layer, "mlp", None)

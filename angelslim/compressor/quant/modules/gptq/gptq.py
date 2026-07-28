@@ -24,9 +24,21 @@ import torch.nn as nn
 from huggingface_hub import save_torch_state_dict
 from tqdm import tqdm
 
-from .....utils import decide_device_for_distributed, find_layers, print_info
+from .....utils import (
+    decide_device_for_distributed,
+    find_layers,
+    find_parent_layer_and_sub_name,
+    print_info,
+)
+from ...core.save import copy_mtp_layers_if_present
 from ...modules.catcher import Catcher
-from ...modules.helper_layer import GPTQQuantLinear
+from ...core.quant_func import reduce_block_padding
+from ...modules.helper_layer import (
+    NVFP4_E2M1_MAX,
+    GPTQQuantLinear,
+    NVFP4QDQModule,
+    compute_nvfp4_weight_scale_2,
+)
 from .gptaq_module import GPTAQModule
 from .gptq_module import GPTQModule
 
@@ -56,8 +68,20 @@ class GPTQ:
         self.quant_bits = self.model.quant_config.quant_bit
         self.group_size = self.model.quant_config.quant_algo_info["group_size"]
         self.ignore_layers = self.model.quant_config.quant_algo_info["ignore_layers"]
+        # Weight number format backend: "int4" (default) or "nvfp4".
+        self.weight_format = self.model.quant_config.quant_algo_info.get("weight_format", "int4")
+        self.block_size = self.model.quant_config.quant_algo_info.get(
+            "block_size", self.group_size
+        )
         self.dequant_to_bf16 = bool(
             self.model.quant_config.quant_algo_info.get("dequant_to_bf16", False)
+        )
+        # NVFP4 only: share one per-tensor (level-2) weight scale across each
+        # fused gate/up (and q/k/v) group, matching the single per-tensor scale
+        # a fused-GEMM deployment applies. Default on; set False to keep the
+        # legacy per-layer scale_2.
+        self.share_gate_up_weight_scale_2 = bool(
+            self.model.quant_config.quant_algo_info.get("share_gate_up_weight_scale_2", True)
         )
         self.percdamp = 0.01
         self.sym = sym
@@ -66,6 +90,8 @@ class GPTQ:
         self.hidden_size = hidden_size
         self.dtype = next(iter(self.layers.parameters())).dtype
         self.quantizers = {}
+        # NVFP4: per-tensor (level-2) scale per quantized layer.
+        self.nvfp4_weight_scales_2 = {}
         self.gptq = {}
         self.quant_algo = self.model.quant_config.quant_algo
         self.native_inp_caches = {}
@@ -110,12 +136,24 @@ class GPTQ:
         return layer.to(device)
 
     def get_actorder_prev_names(self, name, subset):
+        # Enable act-order for *_proj layers whose input permutation can be
+        # folded into the output channels of the preceding gate_proj/up_proj.
+        # This keeps the (NVFP4 / int4) group blocks physically contiguous
+        # along K even after column reordering, so no g_idx is needed.
         if not name.endswith("down_proj"):
             return []
 
         prefix = name[: -len("down_proj")]
         prev_names = [f"{prefix}gate_proj", f"{prefix}up_proj"]
-        return [prev_name for prev_name in prev_names if prev_name in subset]
+        if any(prev_name not in subset for prev_name in prev_names):
+            return []
+
+        current_layer = subset[name]
+        for prev_name in prev_names:
+            prev_layer = subset[prev_name]
+            if prev_layer.weight.shape[0] != current_layer.weight.shape[1]:
+                return []
+        return prev_names
 
     def reorder_quantizer_output_channels(self, quantizer_name, input_perm):
         if quantizer_name not in self.quantizers:
@@ -123,11 +161,20 @@ class GPTQ:
 
         scale, zero = self.quantizers[quantizer_name]
         scale_perm = input_perm.to(scale.device)
-        zero_perm = input_perm.to(zero.device)
-        self.quantizers[quantizer_name] = (
-            scale.index_select(0, scale_perm),
-            zero.index_select(0, zero_perm),
-        )
+        # Reorder per-output-channel scale rows. For nvfp4 the second element
+        # is the per-tensor (scalar) weight_scale_2, which is invariant to
+        # output-channel permutation and must NOT be index_select'd.
+        if self.weight_format == "nvfp4":
+            self.quantizers[quantizer_name] = (
+                scale.index_select(0, scale_perm),
+                zero,
+            )
+        else:
+            zero_perm = input_perm.to(zero.device)
+            self.quantizers[quantizer_name] = (
+                scale.index_select(0, scale_perm),
+                zero.index_select(0, zero_perm),
+            )
 
     def fold_input_permutation_into_prev_layers(
         self,
@@ -257,10 +304,97 @@ class GPTQ:
 
         if skipped > 0:
             print_info(
-                "Filter non-local expert layers for GPTQ: "
-                f"local experts [{start}, {end}), skipped {skipped} layer(s)."
+                f"Filter non-local expert layers for GPTQ: local experts "
+                f"[{start}, {end}), skipped {skipped} layer(s)."
             )
         return filtered_subset
+
+    @staticmethod
+    def _nvfp4_scale_2_group_key(name):
+        """Group key for layers that must share one NVFP4 per-tensor scale_2.
+
+        Deployment fuses each expert's gate_proj+up_proj (and attention's
+        q/k/v) into a single GEMM that can apply only one per-tensor (level-2)
+        scale across the fused weight. GPTQ must therefore quantize every member
+        of such a group against the *same* weight_scale_2, otherwise the half of
+        the fused weight whose scale_2 was overwritten at deploy time is
+        dequantized with the wrong per-tensor scale -> a systematic multiplicative
+        bias that occasionally flips a token.
+
+        Returns (group_prefix, member_tag) for fusible layers, else None.
+        """
+        for suffix in ("gate_proj", "up_proj"):
+            if name.endswith(suffix):
+                return name[: -len(suffix)], "gate_up"
+        for suffix in ("q_proj", "k_proj", "v_proj"):
+            if name.endswith(suffix):
+                return name[: -len(suffix)], "qkv"
+        return None
+
+    def _assign_shared_nvfp4_weight_scale_2(self):
+        """Pre-pass: give fused gate/up (and q/k/v) groups one shared scale_2.
+
+        Runs BEFORE fasterquant so GPTQ compensates against the exact grid that
+        deployment will use. The shared scale_2 is derived from the group-wide
+        amax (max of each member's amax). Because the shared amax is >= each
+        member's own amax, every per-block E4M3 scale only shrinks, so no block
+        scale overflows the E4M3 range that single-layer scaling would have hit.
+        """
+        groups = {}
+        for name in self.gptq:
+            if any(ignore in name for ignore in self.ignore_layers):
+                continue
+            key = self._nvfp4_scale_2_group_key(name)
+            if key is None:
+                continue
+            groups.setdefault(key, []).append(name)
+
+        for (prefix, tag), names in groups.items():
+            if len(names) < 2:
+                # Nothing to fuse with; let fasterquant compute scale_2 itself.
+                continue
+            group_amax = None
+            for name in names:
+                # self.gptq[name].w is the cloned fp32 weight before compensation;
+                # GPTQ compensation preserves amax magnitude, so this is the same
+                # amax fasterquant would otherwise use per-layer.
+                w_amax = self.gptq[name].w.abs().amax().to(torch.float32)
+                group_amax = w_amax if group_amax is None else torch.maximum(group_amax, w_amax)
+            shared_scale_2 = compute_nvfp4_weight_scale_2(group_amax)
+            for name in names:
+                self.gptq[name].weight_scale_2 = shared_scale_2.to(self.gptq[name].dev)
+            print_info(
+                f"NVFP4 shared weight_scale_2 for {tag} group '{prefix}*': "
+                f"{shared_scale_2.item():.6g} across {len(names)} layers"
+            )
+
+    def _rtn_nvfp4_scales(self, weight, weight_scale_2):
+        """Round-to-nearest NVFP4 scales for a weight that GPTQ skipped.
+
+        Args:
+            weight: fp32/bf16 weight [out, in]; ``in`` need not be block-aligned.
+            weight_scale_2: per-tensor level-2 scale (shared for fused gate/up).
+        Returns:
+            (block_scale_e4m3 [out, in/block_size] float8_e4m3fn,
+             weight_scale_2 [scalar] float32) both on CPU.
+        """
+        w = reduce_block_padding(weight.float(), block_sizes={-1: self.block_size})
+        w = w.view(*w.shape[:-1], -1, self.block_size)
+        per_block_amax = w.abs().amax(dim=-1).float()
+        per_block_scale = per_block_amax / NVFP4_E2M1_MAX
+        q_per_block_scale = per_block_scale / weight_scale_2
+        q_per_block_scale = torch.where(
+            per_block_scale > 0,
+            q_per_block_scale,
+            torch.ones_like(q_per_block_scale),
+        )
+        finfo = torch.finfo(torch.float8_e4m3fn)
+        block_scale_e4m3 = (
+            q_per_block_scale.clamp(min=finfo.min, max=finfo.max)
+            .to(torch.float8_e4m3fn)
+            .cpu()
+        )
+        return block_scale_e4m3, weight_scale_2.detach().float().cpu()
 
     @torch.no_grad()
     def run(self, dataloader):
@@ -329,7 +463,12 @@ class GPTQ:
                     self.native_inp_caches[name] = []
                     self.gptq[name] = GPTAQModule(subset[name], quant_bits=self.quant_bits)
                 else:
-                    self.gptq[name] = GPTQModule(subset[name], quant_bits=self.quant_bits)
+                    self.gptq[name] = GPTQModule(
+                        subset[name],
+                        quant_bits=self.quant_bits,
+                        weight_format=self.weight_format,
+                        block_size=self.block_size,
+                    )
 
             def pre_process_fwd_hook(layer_name):
                 def tmp(_, inp, out):
@@ -380,6 +519,9 @@ class GPTQ:
             for h in handles:
                 h.remove()
 
+            if self.weight_format == "nvfp4" and self.share_gate_up_weight_scale_2:
+                self._assign_shared_nvfp4_weight_scale_2()
+
             for name in self.gptq:
                 if any(ignore in name for ignore in self.ignore_layers):
                     continue
@@ -388,10 +530,33 @@ class GPTQ:
                     and self._get_expert_idx_from_name(name) is not None
                     and self.gptq[name].nsamples == 0
                 ):
-                    print_info(
-                        f"Skip {name} because no calibration samples were routed "
-                        "to this local expert layer."
-                    )
+                    quant_name = f"{self.layers_block_name}.{i}.{name}"
+                    if self.weight_format == "nvfp4":
+                        gptq_layer = self.gptq[name]
+                        weight_scale_2 = gptq_layer.weight_scale_2
+                        if weight_scale_2 is None:
+                            # Non-fused layer (e.g. down_proj): derive its own.
+                            weight_scale_2 = compute_nvfp4_weight_scale_2(
+                                gptq_layer.w.abs().amax()
+                            )
+                        block_scale_e4m3, weight_scale_2 = self._rtn_nvfp4_scales(
+                            gptq_layer.layer.weight.data, weight_scale_2
+                        )
+                        self.quantizers[quant_name] = (
+                            block_scale_e4m3,
+                            torch.zeros_like(block_scale_e4m3, dtype=torch.float32),
+                        )
+                        self.nvfp4_weight_scales_2[quant_name] = weight_scale_2
+                        print_info(
+                            f"RTN-pack {name} (no calibration samples routed): "
+                            f"NVFP4 round-to-nearest, weight left uncompensated."
+                        )
+                    else:
+                        print_info(
+                            f"Skip {name} because no calibration samples were "
+                            f"routed to this local expert layer; it stays bf16 "
+                            f"(int4 RTN fallback not implemented)."
+                        )
                     self.gptq[name].free()
                     continue
                 print_info(f"Quant {name} ,nsamples: {self.gptq[name].nsamples}...")
@@ -403,10 +568,23 @@ class GPTQ:
                     actorder=actorder,
                     sym=self.sym,
                 )
-                self.quantizers[f"{self.layers_block_name}.{i}.{name}"] = (
-                    scale,
-                    zero,
-                )
+                quant_name = f"{self.layers_block_name}.{i}.{name}"
+                if self.weight_format == "nvfp4":
+                    # NVFP4 uses block_size=16 -> 8x more scale groups than
+                    # int4 (gs=128). Keep the per-layer scales on CPU so they
+                    # do not accumulate on GPU across all 80 layers (the cause
+                    # of the layer-16 OOM). They are only needed at convert().
+                    self.quantizers[quant_name] = (
+                        scale.cpu(),
+                        zero.cpu(),
+                    )
+                    # ``zero`` slot carries the per-tensor level-2 scale.
+                    self.nvfp4_weight_scales_2[quant_name] = zero.cpu()
+                else:
+                    self.quantizers[quant_name] = (
+                        scale,
+                        zero,
+                    )
                 self.fold_input_permutation_into_prev_layers(
                     i,
                     subset,
@@ -511,12 +689,86 @@ class GPTQ:
             force_layer_back_to_cpu=True,
         )
 
+    def _convert_nvfp4(self):
+        """Insert NVFP4QDQModule for each quantized layer (real packing).
+
+        GPTQ has already written the compensated, E2M1-snapped weights back to
+        ``layer.weight`` (bf16). NVFP4QDQModule re-quantizes them into the
+        packed modelopt NVFP4 format (packed uint4 + E4M3 block scale + FP32
+        weight_scale_2) using the scales GPTQ produced, so the deployed grid is
+        exactly what GPTQ optimized against.
+        """
+        model = self.model.model
+        model.cpu()
+        print_info("Packing NVFP4 model...")
+        layers = find_layers(model, layers=self.model.observer_layer_classes)
+
+        try:
+            import ctypes
+
+            _libc = ctypes.CDLL("libc.so.6")
+
+            def _malloc_trim():
+                try:
+                    _libc.malloc_trim(0)
+                except Exception:
+                    pass
+
+        except Exception:
+
+            def _malloc_trim():
+                pass
+
+        with tctl.threadpool_limits(limits=1):
+            names = list(self.quantizers.keys())
+            pbar = tqdm(names, leave=True)
+            for step, name in enumerate(pbar):
+                pbar.set_description(f"Packing {name}...", refresh=True)
+                if name not in layers:
+                    continue
+                sub_layer = layers[name].cpu()
+                block_scale_e4m3, _zero = self.quantizers[name]
+                weight_scale_2 = self.nvfp4_weight_scales_2[name]
+
+                qdq_module = NVFP4QDQModule(
+                    weight=sub_layer.weight,
+                    weight_scale=block_scale_e4m3.cpu(),
+                    weight_scale_2=weight_scale_2.cpu(),
+                    bias=sub_layer.bias,
+                    block_size=self.block_size,
+                    input_scale=None,
+                )
+                parent_layer, sub_name = find_parent_layer_and_sub_name(model, name)
+                setattr(parent_layer, sub_name, qdq_module)
+
+                del sub_layer, block_scale_e4m3, _zero, weight_scale_2
+                layers.pop(name, None)
+                self.quantizers.pop(name, None)
+                self.nvfp4_weight_scales_2.pop(name, None)
+
+                # gc/trim are not free; run them periodically, not every layer.
+                if (step + 1) % 64 == 0:
+                    gc.collect()
+                    _malloc_trim()
+
+        gc.collect()
+        _malloc_trim()
+        print_info("NVFP4 model packed.")
+
     def convert(self):
         """
         Saves scales and inserts QDQ modules.
         """
         print_info("Start convert model...")
-        if self.dequant_to_bf16:
+        if self.weight_format == "nvfp4":
+            if self.dequant_to_bf16:
+                print_info(
+                    "dequant_to_bf16=True: skip NVFP4 packing, keep "
+                    "fake-quantized bf16 weights."
+                )
+            else:
+                self._convert_nvfp4()
+        elif self.dequant_to_bf16:
             print_info(
                 "dequant_to_bf16=True: skip int4 packing, keep fake-quantized bf16 weights."
             )
@@ -542,6 +794,31 @@ class GPTQ:
     def _drop_non_persistent_gptq_buffers(self, state_dict):
         return {k: v for k, v in state_dict.items() if not k.endswith(".g_idx")}
 
+    @staticmethod
+    def _sanitize_generation_config(generation_config):
+        """Enable do_sample when sampling params are set, so strict save-time
+        GenerationConfig validation passes (e.g. GLM-5 ships top_p without do_sample).
+        """
+        if generation_config is None:
+            return
+        do_sample = getattr(generation_config, "do_sample", False)
+        if do_sample:
+            return
+        top_p = getattr(generation_config, "top_p", None)
+        top_k = getattr(generation_config, "top_k", None)
+        temperature = getattr(generation_config, "temperature", None)
+        sampling_intent = (
+            (top_p is not None and top_p < 1.0)
+            or (top_k is not None and top_k != 0)
+            or (temperature is not None and temperature != 1.0)
+        )
+        if sampling_intent:
+            generation_config.do_sample = True
+            print_info(
+                "Set generation_config.do_sample=True to match sampling params "
+                "(top_p/top_k/temperature) for strict save-time validation."
+            )
+
     def _patch_saved_hyv3_config_for_serving(self, save_dir):
         config_path = os.path.join(save_dir, "config.json")
         if not os.path.exists(config_path):
@@ -550,7 +827,7 @@ class GPTQ:
         with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
 
-        if config.get("model_type") != "hy_v3":
+        if config.get("model_type") not in ("hy_v3", "glm_moe_dsa"):
             return
 
         rope_parameters = config.get("rope_parameters")
@@ -600,6 +877,14 @@ class GPTQ:
                 except Exception:
                     self.model.model.config.quantization_config = None
             self.model.model.config.torch_dtype = "bfloat16"
+        elif self.weight_format == "nvfp4":
+            # Packed modelopt-style NVFP4 checkpoint (two-level scaling).
+            self.model.model.config.quantization_config = {
+                "quant_method": "nvfp4",
+                "kv_cache_scheme": None,
+                "group_size": self.block_size,
+                "exclude_modules": self.ignore_layers,
+            }
         else:
             self.model.model.config.quantization_config = {
                 "bits": self.quant_bits,
@@ -614,6 +899,7 @@ class GPTQ:
                 "true_sequential": True,
             }
         self.model.model.config.save_pretrained(save_dir, state_dict=EmptyModule().state_dict())
+        self._sanitize_generation_config(self.model.model.generation_config)
         self.model.model.generation_config.save_pretrained(save_dir)
 
         default_paths = [
@@ -634,6 +920,12 @@ class GPTQ:
         )
         self.model.model.config.to_json_file(os.path.join(save_dir, "config.json"))
         self._patch_saved_hyv3_config_for_serving(save_dir)
+
+        copy_mtp_layers_if_present(
+            ori_model_path=getattr(self.model.model.config, "_name_or_path", None),
+            save_path=save_dir,
+            num_hidden_layers=self.model.model.config.num_hidden_layers,
+        )
 
         if self.modal_type == "VLM" and self.model.processor is not None:
             self.model.processor.save_pretrained(save_dir)

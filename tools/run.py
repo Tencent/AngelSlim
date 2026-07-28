@@ -28,6 +28,10 @@ from angelslim.engine import Engine, VLLMCalibrateEngine  # noqa: E402
 from angelslim.utils import get_yaml_prefix_simple, print_info  # noqa: E402
 from angelslim.utils.config_parser import SlimConfigParser, print_config  # noqa: E402
 
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 
 def get_args():
     parser = argparse.ArgumentParser(description="AngelSlim")

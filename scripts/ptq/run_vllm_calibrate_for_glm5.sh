@@ -22,7 +22,7 @@ export ASYNC_SCHEDULING=1
 export VLLM_ENABLE_PREFIX_CACHING=1
 export PRECISIONMODE=HF
 
-CONFIG=configs/glm5/ptq/fp8/glm5_vllm_ptq_moe.yaml
+CONFIG=configs/glm5/ptq/nvfp4/glm5_vllm_ptq_moe_fp8.yaml
 
 mkdir -p logs
 

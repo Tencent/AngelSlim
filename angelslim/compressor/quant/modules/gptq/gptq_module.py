@@ -19,18 +19,26 @@ import torch
 
 from .....utils import get_tensor_item, print_info
 from ...core import compute_scales_with_zero
+from ..helper_layer import (
+    compute_nvfp4_block_scale,
+    compute_nvfp4_weight_scale_2,
+    nvfp4_quant_dequant,
+)
 
 __all__ = ["GPTQModule"]
 
 
 class GPTQModule:
-    def __init__(self, layer, quant_bits=4):
+    def __init__(self, layer, quant_bits=4, weight_format="int4", block_size=16):
         """
         GPTQ quantization wrapper for neural network layers.
 
         Args:
             layer: Full-precision torch.nn.Module to quantize (Linear)
             quant_bits: Quantization bitwidth (2-8 bits, default=4)
+            weight_format: "int4" (default, uniform) or "nvfp4" (E2M1 grid +
+                two-level scale). Routes compute_quant_params / quant_dequant.
+            block_size: NVFP4 micro-scaling block size (nvfp4 only).
         """
         super(GPTQModule, self).__init__()
         self.layer = layer
@@ -41,6 +49,10 @@ class GPTQModule:
         self.h = torch.zeros((self.columns, self.columns), device=self.dev, dtype=torch.float32)
         self.nsamples = 0
         self.quant_bits = quant_bits
+        self.weight_format = weight_format
+        self.block_size = block_size
+        # Per-tensor (level-2) NVFP4 scale, set at the start of fasterquant.
+        self.weight_scale_2 = None
 
     def add_batch(self, inp, out):
         # Handle 4D input (e.g., Conv2d or multi-head attention internals)
@@ -62,9 +74,16 @@ class GPTQModule:
         self.h += inp.matmul(inp.t())
 
     def compute_quant_params(self, x, bits, sym):
+        if self.weight_format == "nvfp4":
+            # Per-block effective scale (block_scale_e4m3 * weight_scale_2).
+            # weight_scale_2 is computed once in fasterquant before this runs.
+            eff_scale = compute_nvfp4_block_scale(x, self.weight_scale_2)
+            return eff_scale, torch.zeros_like(eff_scale)
         return compute_scales_with_zero(x, bits=bits, sym=sym)
 
     def quant_dequant(self, x, weight_scale, weight_zero):
+        if self.weight_format == "nvfp4":
+            return nvfp4_quant_dequant(x, weight_scale)
         maxq = torch.tensor(2**self.quant_bits - 1, device=x.device)
         q = torch.clamp(torch.round(x / weight_scale) + weight_zero, 0, maxq)
         return weight_scale * (q - weight_zero)
@@ -90,6 +109,17 @@ class GPTQModule:
         dead = torch.diag(hessian) == 0
         hessian[dead, dead] = 1
         w_weight[:, dead] = 0
+
+        # NVFP4: per-tensor level-2 scale, computed once from the (dead-zeroed)
+        # weights before any per-block scale. GPTQ compensation does not change
+        # the amax magnitude, so this stays valid for the whole layer.
+        #
+        # If ``self.weight_scale_2`` was already set externally (e.g. a shared
+        # gate/up or qkv level-2 scale injected by GPTQ.run so fused-GEMM
+        # deployment uses one per-tensor scale across the group), keep it and do
+        # NOT recompute from this layer's amax alone.
+        if self.weight_format == "nvfp4" and self.weight_scale_2 is None:
+            self.weight_scale_2 = compute_nvfp4_weight_scale_2(w_weight.abs().amax())
 
         scale = []
         zero = []
@@ -200,6 +230,27 @@ class GPTQModule:
             zero = torch.zeros_like(weight_scale)
         scale = torch.cat(scale, dim=1)
         zero = torch.cat(zero, dim=1)
+
+        if self.weight_format == "nvfp4":
+            # ``scale`` currently holds the effective scale (block_e4m3 *
+            # weight_scale_2). Recover the stored E4M3 block scale and hand the
+            # per-tensor level-2 scale back via the second return value. Move
+            # both to CPU so the per-layer scales never pile up on GPU across
+            # all transformer layers.
+            block_scale_e4m3 = (scale / self.weight_scale_2).to(torch.float8_e4m3fn).cpu()
+            weight_scale_2 = self.weight_scale_2.detach().clone().cpu()
+            losses = losses.cpu()
+            q_weight = q_weight.cpu()
+            w_weight = w_weight.cpu()
+            hessian = hessian.cpu()
+            hinv = hinv.cpu()
+            del losses, q_weight, w_weight, hessian, hinv
+            self.w = self.w.cpu()
+            del self.w
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            return block_scale_e4m3, weight_scale_2, input_perm
+
         losses = losses.cpu()
         q_weight = q_weight.cpu()
         w_weight = w_weight.cpu()

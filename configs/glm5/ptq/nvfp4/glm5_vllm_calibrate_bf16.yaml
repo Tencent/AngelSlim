@@ -1,0 +1,25 @@
+# vLLM activation/MoE calibration for a BF16 GLM-5.1 checkpoint.
+#
+# This configuration is consumed by tools/run_vllm_calibrate.py from
+# scripts/ptq/run_vllm_quant_for_glm5.sh when GLM5_SOURCE_FORMAT=bf16.
+# SOURCE_MODEL_PATH and BF16_STATISTICS_PATH in the shell pipeline can
+# override model_path and output_dir without editing this file.
+
+model_path: zai-org/GLM-5.1
+ptq_data_path: ./dataset/sharegpt_gpt4/sharegpt_gpt4_256.jsonl
+output_dir: ./output/glm5_bf16/statistics
+
+# vLLM runtime.
+tp_size: 16
+dp_size: 1
+batch_size: 4
+num_samples: 64
+max_length: 2048
+distributed_executor_backend: ray
+skip_weight_loading: false
+
+# Main-model activation + routed-MoE statistics only. MTP and KV-cache
+# calibration can be enabled explicitly in a custom BF16_CALIB_CONFIG.
+enable_mtp: false
+num_speculative_tokens: 1
+kv_granularity: none

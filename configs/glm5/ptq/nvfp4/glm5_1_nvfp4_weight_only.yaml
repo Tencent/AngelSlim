@@ -1,0 +1,33 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output
+
+# Simplified Configuration for LLM compression
+model:
+  name: GLM5_1
+  model_path: zai-org/GLM-5.1
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: cpu
+
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    name: nvfp4_weight_only   # data-free: scales computed directly from weights
+    bits: 4
+    cpu_convert: false
+    quant_method:
+      weight: "per-group"
+      group_size: 16
+      dequant_to_bf16: false
+    ignore_layers:            # Quantize routed experts only; skip everything else.
+      - "lm_head"
+      - "self_attn"             # all MLA projections + DSA indexer
+      - "mlp.gate"              # MoE router
+      - "mlp.shared_experts"    # shared expert MLP
+      - "model.layers.0.mlp"    # leading dense MLP layers (first_k_dense_replace = 3)
+      - "model.layers.1.mlp"
+      - "model.layers.2.mlp"

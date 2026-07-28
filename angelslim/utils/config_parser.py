@@ -50,6 +50,8 @@ class QuantizationMethod(str, Enum):
     INT4_GPTAQ = "int4_gptaq"
     NVFP4 = "nvfp4"
     NVFP4_WEIGHT_ONLY = "nvfp4_weight_only"
+    NVFP4_GPTQ = "nvfp4_gptq"
+    NVFP4_GPTAQ = "nvfp4_gptaq"
     W4A8_INT8 = "w4a8i8"
 
 
