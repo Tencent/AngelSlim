@@ -1,0 +1,25 @@
+# setup.py reads every dependency list at BUILD time via
+# get_requirements("requirements/<name>.txt") (install_requires + each extra,
+# including [sparse]). Those files are not Python modules, so find_packages()
+# never collects them and they were absent from the sdist — building/installing
+# from the sdist (`pip install angelslim-*.tar.gz`) then died with
+# `FileNotFoundError: requirements/requirements.txt` before any dependency
+# resolved. Graft the directory so the lists travel in the sdist too.
+graft requirements
+
+# Ship the vendored MInference CUDA index-extension sources + attribution in the
+# sdist as well as the wheel. The `minference` sparse variant JIT-compiles these
+# at runtime via torch.utils.cpp_extension.load, so they must be packaged;
+# find_packages() / package_data only covers the wheel.
+recursive-include angelslim/compressor/sparsity/algorithms/minference/kernels/csrc *.cpp *.cu *.h
+include angelslim/compressor/sparsity/algorithms/minference/kernels/NOTICE
+
+# sdist parity with the wheel's package_data — every sparse algorithm's
+# license/attribution NOTICE (and vecattention's autotune .pkl caches) must travel
+# in the sdist too, not only the wheel. Without these the sdist would ship sparse
+# code with no attribution trail (and vecattention's tuned launch configs absent).
+include angelslim/compressor/sparsity/algorithms/flexprefill/kernels/NOTICE
+include angelslim/compressor/sparsity/algorithms/xattention/kernels/NOTICE
+include angelslim/compressor/sparsity/algorithms/flashprefill/NOTICE
+include angelslim/compressor/sparsity/algorithms/vecattention/NOTICE
+recursive-include angelslim/compressor/sparsity/algorithms/vecattention/ops/cache *.pkl

@@ -111,6 +111,11 @@
             <strong>稀疏注意力</strong>
             <ul style="padding-left: 1.5rem">
               <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/stem.html">Stem</a></li>
+              <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/index.html">MInference</a>（A-Shape / Tri-Shape / MInference）</li>
+              <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/index.html">FlexPrefill</a></li>
+              <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/index.html">XAttention</a></li>
+              <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/index.html">FlashPrefill</a></li>
+              <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/index.html">VecAttention</a></li>
             </ul>
           </li>
           <li>

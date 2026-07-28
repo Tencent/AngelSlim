@@ -1,0 +1,34 @@
+# MInference sparse-attention (Hunyuan-V3 / hy_v3), vertical-and-slash variant.
+# The `minference` family maps three names (minference / a_shape /
+# tri_shape) onto one algorithm class. This YAML selects `minference`
+# (per-head vertical-and-slash); see the sibling files for a_shape / tri_shape.
+# NOTE: the full Hunyuan-V3 checkpoint (~80 layers) does not fit on one GPU;
+#   `device_map: auto` shards it across every visible GPU. Point `model_path`
+#   at your local checkpoint if `tencent/Hy3` is not cached.
+# Run:  python tools/run.py -c configs/sparse/minference/hy3_minference.yaml
+
+global:
+  save_path: ./output
+
+model:
+  name: HYV3MoE
+  model_path: tencent/Hy3
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+  # Decode runs the model's configured attention; sparse prefill bypasses it.
+  attn_implementation: flash_attention_2
+
+compression:
+  name: Sparsity
+  sparsity:
+    name: minference
+    allow_pseudo_sparse: false      # real Triton + CUDA kernel (JIT-built); set
+                                    # true only to force the slow torch reference
+    attn_kwargs:
+      # pattern_path: omitted => dense per-head fallback (1000, 6096).
+      #   Vendor-time is_search populates a per-head pattern JSON;
+      #   point pattern_path at a hy_v3 pattern for searched (faster) budgets.
+      #   No hy_v3 pattern JSON ships in-repo; the dense fallback runs as-is.

@@ -66,7 +66,10 @@ AngelSlim是腾讯自研的，致力于打造更易用、更全面和更高效�
     - - **稀疏注意力**
 
         - Stem
-        - Minference(建设中)
+        - MInference (A-shape / Tri-shape / Vertical-Slash)（实验性）
+        - FlexPrefill（实验性）
+        - XAttention（实验性）
+        - FlashPrefill（实验性）
    * - **图/视频生文(VLM)**
      - - Hunyuan-VL
        - HunyuanOCR
@@ -97,6 +100,7 @@ AngelSlim是腾讯自研的，致力于打造更易用、更全面和更高效�
        - **稀疏注意力**
 
          - Stem
+         - VecAttention（仅参考实现，快速 kernel 暂未公开）
    * - **语音(TTS/ASR)**
      - - Qwen3-Omni
        - Qwen2-Audio

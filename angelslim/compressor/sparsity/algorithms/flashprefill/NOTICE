@@ -1,0 +1,50 @@
+AngelSlim — FlashPrefill provenance NOTICE (CLEAN-ROOM, no vendored code)
+========================================================================
+
+This package implements the FlashPrefill *method* described in:
+
+    FlashPrefill: Instantaneous Pattern Discovery and Thresholding for
+    Ultra-Fast Long-Context Prefilling
+    Qihang Fan, Huaibo Huang, Zhiying Wu, Juqiu Wang, Bingning Wang, Ran He
+    arXiv:2603.06199
+
+IMPORTANT — why this package is different from the other vendored algorithms
+----------------------------------------------------------------------------
+Unlike `minference`, `flexprefill`, and `xattention` (which vendor MIT-licensed
+kernel files from microsoft/MInference @ a4eb395), FlashPrefill vendors NO
+upstream code. The upstream reference implementation (qhfan/FlashPrefill,
+https://github.com/qhfan/FlashPrefill) ships with **no LICENSE file and no
+license declaration of any kind** — not in a LICENSE/COPYING file, not in
+README/pyproject/setup, and not in any source-file header. Under copyright law,
+absent a license grant, all rights are reserved and the code may not be copied or
+redistributed.
+
+This license fail-open contingency was anticipated up front: if FlashPrefill
+upstream has no Apache-2.0 / MIT / BSD-compatible LICENSE at vendor-cut time,
+FlashPrefill ships as a clean-room implementation because vendoring would be
+legally impermissible. The license was reviewed at integration time
+(2026/06/05) and found absent, so vendoring was NOT performed.
+
+Instead, this package is a CLEAN-ROOM implementation written from the paper's
+textual method description ONLY. The qhfan/FlashPrefill source code was not
+consulted for any of the algorithm logic. Specifically:
+
+  * blockmask.py  — Stage 1 (block-pooled pattern discovery) + Stage 2
+                    (Max-based Dynamic Thresholding: thresh_I = alpha * max_J
+                    s[I,J], keep s[I,J] >= thresh_I; + sink + local window).
+                    Original AngelSlim torch code expressing the paper's method.
+  * reference.py  — Stage 3 in pure torch (masked softmax over the kept blocks);
+                    pseudo-sparse fallback + numerical oracle.
+  * prefill.py    — dispatch; the real path feeds the clean-room keep mask to
+                    `block_sparse_attn` (the SAME kernel that Stem and xattention
+                    already use; mit-han-lab/Block-Sparse-Attention, BSD-3-Clause).
+                    block_sparse_attn's own license is recorded with that package;
+                    no FlashPrefill code is used.
+
+Only the published *method* is reproduced. A method/algorithm is not protected by
+copyright; the specific code expression here is original AngelSlim work licensed
+under Apache-2.0 (see file headers). If the upstream authors later publish a
+permissive LICENSE, a direct kernel vendoring may be revisited as a separate,
+clearly-attributed change.
+
+Please cite the paper above when using this algorithm.

@@ -1,0 +1,73 @@
+AngelSlim — VecAttention NOTICE
+===============================
+
+VecAttention is the sparse-attention algorithm whose
+in-tree code is ORIGINAL AngelSlim work (Apache-2.0, see the file headers under
+`algorithms/vecattention/`). Its method (per query-block MinP column selection:
+`gap = -log(threshold)`; keep key `j` iff `qk[j] + gap >= max_j qk`, plus an
+attention-sink block and a local band) is implemented here as original code.
+
+This NOTICE records the provenance of the two non-original pieces this algorithm
+touches, so a released wheel carries a complete license/attribution trail.
+
+1. Real kernel — `vllm_flash_attn.sparse_attn_func` (EXTERNAL, not vendored here)
+   ---------------------------------------------------------------------------
+   The fast path calls `sparse_attn_func` from a vLLM-flash-attention fork. That
+   fork is NOT vendored into this tree and is NOT a git submodule of this repo —
+   it is an EXTERNAL optional dependency, consumed as an environment-installed
+   package (`pip install vllm_flash_attn`, or a local editable build of the
+   fork). The fork is a 440 MB compiled CUDA project; tracking it in-repo (as a
+   submodule or vendored source) was removed in favor of treating it like any
+   other external compiled kernel (the way the other algorithms depend on an
+   installed `triton`). The fork bundles its own third-party code, EACH under its
+   own license, which travels with the fork (not with AngelSlim):
+     - vLLM flash-attention (Apache-2.0)
+     - Dao-AILab FlashAttention (BSD-3-Clause)
+     - NVIDIA CUTLASS (BSD-3-Clause)
+   AngelSlim ships NONE of these in-tree; they are recorded here only because the
+   vecattention fast path links against them at runtime. On head_dim 256 (Qwen3.5)
+   and on any box where the kernel is not installed, vecattention falls back to
+   the pure-torch reference (`reference.py`, original Apache-2.0 code) — so the
+   algorithm is usable with NO third-party kernel present.
+
+   Distribution note: the fork is not yet publicly cloneable over HTTPS; until it
+   is republished under a public org (or published to PyPI), treat vecattention as
+   REFERENCE-ONLY for external users (the kernel fast path is unavailable to
+   them). If a contributor keeps a
+   local build of the fork under `vecattention/ops/vllm-flash-attention/`, that
+   path is .gitignored and never tracked.
+
+2. Autotune config caches — `ops/cache/*.pkl`
+   ------------------------------------------
+   `dit_vecattention_kernels_best_eff_configs.pkl` /
+   `vlm_vecattention_kernels_best_eff_configs.pkl` are AngelSlim-generated Triton
+   autotune config dictionaries (block sizes / num_warps per shape) — original
+   Tencent artifacts, no third-party content. They are plain config mappings.
+
+3. Pooling helpers in `ops/vecattention_kernel.py` — VENDORED from MInference (MIT)
+   -------------------------------------------------------------------------------
+   The Triton block-pooling helpers `bnhd_pool_kernel` and `triton_bnhd_pool` in
+   `ops/vecattention_kernel.py` are vendored from MInference
+   (https://github.com/microsoft/MInference @ a4eb395), MIT-licensed,
+   (c) 2024-2025 Microsoft — the SAME upstream as the FlexPrefill kernel
+   (`algorithms/flexprefill/kernels/flex_prefill.py`, whose NOTICE records the
+   same provenance). They are NOT original AngelSlim work; only comment
+   formatting differs from upstream. The MIT license text travels in the
+   MInference kernel NOTICE shipped under
+   `algorithms/minference/kernels/NOTICE`.
+
+   MIT License, Copyright (c) 2024-2025 Microsoft Corporation:
+   Permission is hereby granted, free of charge, to any person obtaining a copy
+   of this software and associated documentation files (the "Software"), to deal
+   in the Software without restriction, including without limitation the rights
+   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+   copies of the Software, and to permit persons to whom the Software is
+   furnished to do so, subject to the inclusion of the above copyright notice and
+   this permission notice in all copies or substantial portions of the Software.
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+
+Everything else under `algorithms/vecattention/` — `algorithm.py`, `prefill.py`,
+`reference.py`, `kernels_check.py`, `modules/forward.py`, and the rest of
+`ops/vecattention_kernel.py` (the VecAttention method itself) — is original
+AngelSlim work under Apache-2.0. The exception is the two MInference-vendored
+pooling helpers in `ops/vecattention_kernel.py` recorded in section 3 above.

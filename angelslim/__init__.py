@@ -12,4 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .engine import Engine, MCoreQADEngine  # noqa: F401
+# `Engine` / `MCoreQADEngine` are exposed lazily (PEP 562): importing a
+# lightweight submodule such as `angelslim.compressor.sparsity.registry` should
+# NOT drag in the full engine → compressor → quant(GPTQ/threadpoolctl)
+# eager-import chain. `from angelslim import Engine` still works — it triggers
+# the import on first attribute access.
+__all__ = ["Engine", "MCoreQADEngine"]
+
+
+def __getattr__(name):
+    if name in ("Engine", "MCoreQADEngine"):
+        from . import engine
+
+        return getattr(engine, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

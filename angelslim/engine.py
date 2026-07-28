@@ -21,7 +21,7 @@ from typing import Any, Dict, Optional
 import torch
 from tqdm import tqdm
 
-from .compressor import CompressorFactory
+from .compressor import CompressorFactory, ensure_compressors_registered
 from .compressor.speculative.benchmark import pytorch as pytorch_benchmark
 from .compressor.speculative.benchmark import vllm as vllm_benchmark
 from .data.dataloader import DataLoaderFactory
@@ -99,7 +99,11 @@ class Engine:
             attn_implementation (str): The attention implementation to use in the model.
         """
         assert model_name, "model_name must be specified."
-        assert model_path, "model_path must be specified."
+        # A preloaded ``model`` makes ``model_path`` unnecessary (the docstring
+        # says it is ignored in that case); only require a path when we must
+        # load from disk.
+        if model is None:
+            assert model_path, "model_path must be specified when no preloaded model is given."
 
         # Normalize device_map for DeepSpeed ZeRO / distributed training: YAML
         # configs often write ``None`` / ``"None"`` / ``"distributed"`` to
@@ -120,6 +124,23 @@ class Engine:
                 assert tokenizer, " If model is set, tokenizer must be also set."
                 self.slim_model.tokenizer = tokenizer
             else:
+                # Honor the requested attention backend at
+                # compress time too (the Omni branch + the InferEngine load path
+                # already do). Without this a sparse compress run loads SDPA
+                # despite the YAML's flash_attention_2 default.
+                #
+                # Pass attn_implementation ONLY when it is non-default.
+                # Several model classes (VLM/Audio/DeepSeek/Kimi/HYV3) override
+                # from_pretrained with no attn_implementation parameter and no
+                # **kwargs; forwarding it unconditionally raised TypeError on
+                # every such load (a regression unrelated to sparse). The
+                # overrides now also accept it (default "default" + **kwargs),
+                # but the gate keeps default callers byte-identical regardless.
+                attn_kw = (
+                    {}
+                    if attn_implementation in (None, "default")
+                    else {"attn_implementation": attn_implementation}
+                )
                 self.slim_model.from_pretrained(
                     model_path,
                     torch_dtype=torch_dtype,
@@ -128,6 +149,7 @@ class Engine:
                     low_cpu_mem_usage=low_cpu_mem_usage,
                     use_cache=use_cache,
                     using_multi_nodes=using_multi_nodes,
+                    **attn_kw,
                 )
                 self.model_path = model_path
         elif self.series in ["Omni"]:
@@ -215,6 +237,9 @@ class Engine:
             compress_names = [compress_name]
         elif isinstance(compress_name, list):
             compress_names = compress_name
+        # Compressors register with CompressorFactory lazily (so importing a
+        # sparse submodule doesn't pull the quant stack); realize them now.
+        ensure_compressors_registered()
         for method_name in compress_names:
             if method_name not in CompressorFactory.get_available_compressor():
                 raise ValueError(
@@ -262,6 +287,10 @@ class Engine:
                 compressors[idx].run(self.dataloader)
             elif compress_type == "Distill":
                 compressors[idx].run(self.dataloader)
+            elif compress_type == "Sparsity":
+                # Sparse needs no calibration. The
+                # patch is applied in convert(); run() is a no-op.
+                compressors[idx].run(self.dataloader)
             else:
                 raise NotImplementedError(
                     f"Compression type {self.compress_type} is not implemented"
@@ -275,7 +304,7 @@ class Engine:
         for idx, compress_type in enumerate(self.compress_type):
             if self.only_inference[idx]:
                 continue
-            if compress_type in ["PTQ", "QAT", "QAD", "Distill"]:
+            if compress_type in ["PTQ", "QAT", "QAD", "Distill", "Sparsity"]:
                 # Execute model conversion
                 compressors[idx].convert()
 
@@ -573,10 +602,55 @@ class InferEngine(Engine):
             trust_remote_code=slim_config.model_config.trust_remote_code,
             low_cpu_mem_usage=slim_config.model_config.low_cpu_mem_usage,
             use_cache=slim_config.model_config.use_cache,
+            attn_implementation=getattr(
+                slim_config.model_config, "attn_implementation", "default"
+            ),
             compress_config=slim_config.compression_config,
         )
 
         self.series = SlimModelFactory.get_series_by_models(slim_config.model_config.name)
+
+        # Re-apply the sparse patch on load. ``name`` is always a
+        # list after CompressionConfig.__post_init__, so check membership.
+        comp_cfg = slim_config.compression_config
+        comp_names = getattr(comp_cfg, "name", None) if comp_cfg is not None else None
+        if isinstance(comp_names, str):
+            comp_names = [comp_names]
+        if comp_names and "Sparsity" in comp_names:
+            from .compressor import CompressorFactory, ensure_compressors_registered
+
+            ensure_compressors_registered()
+
+            # Honor the saved attn_implementation (default fa2)
+            # so decode dispatch matches what was used at compress time.
+            saved_impl = getattr(slim_config.model_config, "attn_implementation", None)
+            if saved_impl and saved_impl != "default":
+                try:
+                    self.slim_model.model.config._attn_implementation = saved_impl
+                except Exception:
+                    pass
+            # Anchor pattern_path resolution to the REAL checkpoint dir.
+            # Engine.save() sanitizes model_path/save_path in angelslim_config.json
+            # ("Base Model Path" / "Save Model Path"), so a minference model with a
+            # searched pattern_path (saved as a relative "sparse_patterns/foo.json")
+            # could not be resolved on an off-CWD reload — _resolve_pattern_path
+            # had only CWD to fall back on. The actual checkpoint dir IS this
+            # from_pretrained(model_path); thread it in so the resolver anchors to
+            # <model_path>/sparse_patterns/ where save() put the pattern.
+            try:
+                slim_config.global_config.model_path = model_path
+            except Exception:
+                pass
+            sparse = CompressorFactory.create(
+                ["Sparsity"],
+                self.slim_model,
+                slim_config={
+                    "compress_config": comp_cfg,
+                    "global_config": slim_config.global_config,
+                },
+            )[0]
+            sparse.convert()
+            self._sparse_compressor = sparse
 
     def generate(self, input_prompt: str, **kwargs) -> Any:
         """Run inference with the compressed model
@@ -587,10 +661,51 @@ class InferEngine(Engine):
             raise RuntimeError("Model not initialized. Call from_pretrained() first")
 
         if self.series in ["LLM", "VLM"]:
-            return self.slim_model.generate(
-                input_ids=self.slim_model.tokenizer(input_prompt, return_tensors="pt").input_ids,
-                **kwargs,
-            )
+            # NB: generate lives on the underlying HF model, NOT on the
+            # BaseLLMModel wrapper (whose __getattr__ hard-raises and does not
+            # proxy). Tokenized inputs must be moved to the model's first
+            # parameter device — a bare CPU tensor fails on a CUDA / device_map
+            # model. This is the path tools/infer.py drives.
+            hf_model = self.slim_model.model
+            input_ids = self.slim_model.tokenizer(input_prompt, return_tensors="pt").input_ids
+            try:
+                device = next(hf_model.parameters()).device
+                input_ids = input_ids.to(device)
+            except StopIteration:
+                pass
+            # Drop diffusion-only InferenceConfig fields (height / width /
+            # guidance_scale / num_inference_steps / ...) that tools/infer.py may
+            # pass via infer_config.__dict__ — they are not valid HF generate
+            # kwargs and would raise. `seed` and `max_sequence_length` are
+            # InferenceConfig fields that HF `generate` ALSO rejects, so they are
+            # stripped too (a user setting either to a non-None
+            # value in their infer YAML would otherwise TypeError — the blanket
+            # None-drop only saved the default-None case). genuine generate kwargs
+            # (max_new_tokens, do_sample, …) pass through.
+            _NON_GENERATE_KEYS = {
+                "height",
+                "width",
+                "guidance_scale",
+                "num_inference_steps",
+                "true_cfg_scale",
+                "negative_prompt",
+                "seed",
+                "max_sequence_length",
+            }
+            # `seed` is not a generate() kwarg, but it MUST still take effect for
+            # reproducible sampling — apply it here before stripping it, rather
+            # than silently discarding it.
+            _seed = kwargs.get("seed")
+            if _seed is not None:
+                import torch as _torch
+
+                _torch.manual_seed(int(_seed))
+                if _torch.cuda.is_available():
+                    _torch.cuda.manual_seed_all(int(_seed))
+            gen_kwargs = {
+                k: v for k, v in kwargs.items() if k not in _NON_GENERATE_KEYS and v is not None
+            }
+            return hf_model.generate(input_ids=input_ids, **gen_kwargs)
         else:
             raise NotImplementedError(f"Series {self.series} is not implemented for inference")
 

@@ -1,0 +1,34 @@
+# FlexPrefill adaptive sparse-attention (Hunyuan-V3 / hy_v3).
+# FlexPrefill (MInference family, MIT) keeps, per head,
+# the smallest set of key-blocks whose cumulative attention mass covers `gamma`
+# (estimated from the last query block); `tau` decides block-sparse degradation.
+# Pure-Triton kernel (no CUDA ext); Hunyuan-V3 head_dim 128 -> real kernel path.
+# NOTE: the full Hunyuan-V3 checkpoint (~80 layers) does not fit on one GPU;
+#   `device_map: auto` shards it across every visible GPU. Point `model_path`
+#   at your local checkpoint if `tencent/Hy3` is not cached.
+# Run:  python tools/run.py -c configs/sparse/flexprefill/hy3_flexprefill.yaml
+
+global:
+  save_path: ./output
+
+model:
+  name: HYV3MoE
+  model_path: tencent/Hy3
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+  # Decode runs the model's configured attention; sparse prefill bypasses it.
+  attn_implementation: flash_attention_2
+
+compression:
+  name: Sparsity
+  sparsity:
+    name: flexprefill
+    allow_pseudo_sparse: false      # real Triton kernel; set true only to force
+                                    # the slow torch reference (e.g. head_dim 256)
+    attn_kwargs:
+      gamma: 0.9                    # cumulative attention-mass coverage target
+      tau: 0.1                      # block-sparse degradation threshold
+      block_size: 128

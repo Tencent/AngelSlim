@@ -63,3 +63,48 @@ def test_json_missing_required_section_raises_value_error(tmp_path):
 
     with pytest.raises(ValueError, match="compression_config"):
         parse_json_full_config(_write_json(tmp_path, payload))
+
+
+def test_transform_spin_config_builds_via_lazy_import(tmp_path):
+    """A ``transform_config.spin_config`` block parses into a real ``SpinConfig``.
+
+    ``SpinConfig`` is imported lazily inside the parser (at call time, not at
+    module import) to break an import cycle: a top-level
+    ``from ..compressor.transform.rotation.spin import SpinConfig`` pulls in the
+    ``angelslim.compressor`` package, which imports ``compressor_factory`` ->
+    ``..utils`` -> back into ``config_parser`` mid-initialization. Moving the
+    import to call time removes the cycle with NO behavioral change. This test
+    proves the lazy path still constructs a correct, fully-typed ``SpinConfig``
+    (not a dict, not a stub) with the values from the config.
+    """
+    from angelslim.compressor.transform.rotation.spin import SpinConfig
+
+    payload = {
+        "model_config": {"name": "Qwen", "model_path": "Base Model Path"},
+        "compression_config": {
+            "name": "PTQ",
+            "quantization": {"name": "fp8_dynamic", "bits": 8},
+        },
+        "global_config": {"save_path": "Save Model Path"},
+        "transform_config": {
+            "name": "SpinQuant",
+            "spin_config": {
+                "had_dim": -1,
+                "rotation_mode": "Hadamard",
+                "rotation": ["R1", "R2", "R4"],
+                "ignore_layers": [],
+            },
+        },
+    }
+
+    full_config = parse_json_full_config(_write_json(tmp_path, payload))
+
+    assert full_config.transform_config is not None
+    spin = full_config.transform_config.spin_config
+    assert isinstance(
+        spin, SpinConfig
+    ), "lazy SpinConfig import must yield a real SpinConfig, not a dict/stub"
+    assert spin.had_dim == -1
+    assert spin.rotation_mode == "Hadamard"
+    assert spin.rotation == ["R1", "R2", "R4"]
+    assert spin.ignore_layers == []
