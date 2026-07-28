@@ -20,7 +20,11 @@ import torch
 from safetensors.torch import load_file
 from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import Qwen3VLMoeTextExperts
 
-from ...utils import find_parent_layer_and_sub_name, print_info
+from ...utils import (
+    decide_device_for_distributed,
+    find_parent_layer_and_sub_name,
+    print_info,
+)
 from ..compressor_factory import CompressorFactory
 from ..transform import TransformFactory
 from .core import PTQHook
@@ -351,25 +355,49 @@ class PTQ:
             if is_nvfp4_weight_only:
                 # Populate weight_observer_amax_dict for fuse_observer_amax in weight-only mode
                 self.quant_model.weight_observer_amax_dict = {}
-                for name, sub_layer in self.ptq_hook.quant_layers_dict.items():
+                total_layers = len(self.ptq_hook.quant_layers_dict)
+                for idx, (name, sub_layer) in enumerate(self.ptq_hook.quant_layers_dict.items()):
                     weight = sub_layer.weight.detach()
                     self.quant_model.weight_observer_amax_dict[name] = weight.abs().max()
+                    if (idx + 1) % 10 == 0 or (idx + 1) == total_layers:
+                        print_info(f"[weight_observer_amax] {idx + 1}/{total_layers} layers done.")
             else:
                 self.quant_model.get_observer_values()
         # 2. insert qdq module
-        for name, sub_layer in self.ptq_hook.quant_layers_dict.items():
+
+        pack_on_gpu = not self.quant_model.quant_config.cpu_convert and torch.cuda.is_available()
+        pack_device = decide_device_for_distributed() if pack_on_gpu else None
+        total_convert_layers = len(self.ptq_hook.quant_layers_dict)
+        for convert_idx, (name, sub_layer) in enumerate(self.ptq_hook.quant_layers_dict.items()):
             parent_layer, sub_name = find_parent_layer_and_sub_name(quant_convert_module, name)
 
             if self.quant_model.quant_config.cpu_convert:
                 sub_layer = sub_layer.to("cpu")
+            elif pack_on_gpu:
+                sub_layer = sub_layer.to(pack_device)
             if "nvfp4" in self.quant_algo:
                 self.nvfp4.post_process(sub_layer, name)
                 qdq_module = self.quant_model.get_nvfp4_qdq_module(sub_layer, name)
             else:
                 qdq_module = self.quant_model.get_qdq_module(sub_layer, name)
 
+            if pack_on_gpu:
+                qdq_module = qdq_module.to("cpu")
+                sub_layer.to("cpu")
+                for scales in (
+                    self.quant_model.weight_scales_dict,
+                    self.quant_model.weight_scales_dict_2,
+                    self.quant_model.act_scales_dict,
+                ):
+                    if name in scales and isinstance(scales[name], torch.Tensor):
+                        scales[name] = scales[name].to("cpu")
+                torch.cuda.empty_cache()
+
             if qdq_module is not sub_layer:
                 setattr(parent_layer, sub_name, qdq_module)
+
+            if (convert_idx + 1) % 10 == 0 or (convert_idx + 1) == total_convert_layers:
+                print_info(f"[convert/qdq] {convert_idx + 1}/{total_convert_layers} layers done.")
 
         # 3. insert moe qdq module
         # For qwen3_vl_moe models, we need to insert MoEQDQModule for MOE experts,

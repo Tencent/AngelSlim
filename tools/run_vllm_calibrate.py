@@ -674,9 +674,23 @@ def run_one_calibration(args, llm=None, return_llm: bool = False):
     print("Collecting Statistics...")
     print("=" * 80)
 
-    # Print activation stats from all workers
-    print("\nActivation Statistics:")
-    llm.apply_model(print_activation_stats)
+    # Detect FP8 scale-only mode: in that case the BF16 Linear/KV path was
+    # never hooked, so ``activation_stats`` is empty and not worth printing
+    # or saving.  Only the MoE ``*.scale_amax`` entries (recovered BF16
+    # amax) are meaningful.
+    fp8_scale_only_flags = llm.apply_model(
+        lambda model: bool(getattr(model, "_angelslim_fp8_scale_only", False))
+    )
+    is_fp8_scale_only = bool(fp8_scale_only_flags and any(fp8_scale_only_flags))
+    if is_fp8_scale_only:
+        print(
+            "\n[FP8 scale-only mode] Skipping activation_stats.json "
+            "(no BF16 Linear/KV stats were collected)."
+        )
+    else:
+        # Print activation stats from all workers
+        print("\nActivation Statistics:")
+        llm.apply_model(print_activation_stats)
 
     # Print MoE expert statistics
     print("\nMoE Expert Statistics:")
@@ -704,12 +718,18 @@ def run_one_calibration(args, llm=None, return_llm: bool = False):
     # Save activation statistics. ``get_activation_stats`` performs a TP
     # all-gather/all-reduce internally, so every TP rank returns the same
     # globally-merged dict; taking ``stats_list[0]`` is therefore complete.
-    stats_list = llm.apply_model(get_activation_stats)
-    save_stats_to_json(
-        stats_list, args.output_dir, "activation_stats.json", stats_type="activation statistics"
-    )
-    if stats_list and stats_list[0] is not None:
-        payload["activation_stats.json"] = stats_list[0]
+    # In FP8 scale-only mode we never registered Linear/KV hooks, so we
+    # skip this step entirely (no JSON written, no entry in ``payload``).
+    if not is_fp8_scale_only:
+        stats_list = llm.apply_model(get_activation_stats)
+        save_stats_to_json(
+            stats_list,
+            args.output_dir,
+            "activation_stats.json",
+            stats_type="activation statistics",
+        )
+        if stats_list and stats_list[0] is not None:
+            payload["activation_stats.json"] = stats_list[0]
 
     # Save MoE expert statistics (rank-0 holds the merged result, same reason).
     moe_stats_dict = llm.apply_model(get_moe_stats)

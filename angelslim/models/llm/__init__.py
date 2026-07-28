@@ -14,6 +14,7 @@
 
 from .deepseek import DeepSeek  # noqa: F401
 from .glm import GLM  # noqa: F401
+from .glm5_1 import GLM5_1  # noqa: F401
 from .hunyuan_dense import HunyuanDense  # noqa: F401
 from .hunyuan_moe import HunyuanMoE  # noqa: F401
 from .hunyuan_v3_moe import HYV3MoE  # noqa: F401

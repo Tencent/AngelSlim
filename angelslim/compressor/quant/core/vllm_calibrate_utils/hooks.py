@@ -49,6 +49,7 @@ __all__ = [
     "remove_kvcache_only_hooks",
     # MoE stats (vLLM patch entry point)
     "collect_fused_moe_internal_stats",
+    "collect_fused_moe_scale_stats",
     "get_moe_stats",
     "print_moe_stats",
     # MTP draft model
@@ -132,6 +133,50 @@ class KVCacheHook:
                 v_stats["call_count"] = self.call_count  # Store call count
 
 
+def _is_fp8_model(model):
+    """Detect whether the loaded vLLM model is an FP8 checkpoint.
+
+    Heuristics (any one is sufficient):
+      1. The model's HuggingFace ``config.json`` has a ``quantization_config``
+         with ``quant_method == "fp8"`` (covers GLM-5.1-FP8, DeepSeek-V3-FP8,
+         and any other ckpt that follows the standard fp8 quant config).
+      2. Any ``FusedMoE`` layer carries an FP8 weight tensor.
+
+    Returns ``True`` when FP8 is detected, otherwise ``False``.
+    """
+    # 1) HF quantization_config probe.
+    try:
+        hf_cfg = getattr(model, "config", None)
+        qcfg = getattr(hf_cfg, "quantization_config", None) if hf_cfg is not None else None
+        if qcfg is not None:
+            qm = (
+                qcfg.get("quant_method")
+                if isinstance(qcfg, dict)
+                else getattr(qcfg, "quant_method", None)
+            )
+            if isinstance(qm, str) and qm.lower() == "fp8":
+                return True
+    except Exception:
+        pass
+
+    # 2) FusedMoE weight dtype probe.
+    try:
+        from vllm.model_executor.layers.fused_moe.layer import FusedMoE
+
+        for _, layer in _find_layers(model, layers=[FusedMoE]).items():
+            for attr in ("w13_weight", "w2_weight"):
+                w = getattr(layer, attr, None)
+                if w is not None and w.dtype in (
+                    torch.float8_e4m3fn,
+                    torch.float8_e5m2,
+                ):
+                    return True
+            break  # one MoE layer is enough to decide
+    except Exception:
+        pass
+    return False
+
+
 def setup_activation_hooks(model, kv_granularity="per-tensor"):
     """
     Setup activation hooks on the model to collect min/max statistics.
@@ -143,48 +188,80 @@ def setup_activation_hooks(model, kv_granularity="per-tensor"):
             'per-tensor' – register per-layer (per-tensor) KV min/max hooks (default).
             'per-head'   – register per-head KV min/max hooks (calls
                            setup_kvcache_perhead_hooks internally).
+
+    FP8 fast-path: when the loaded model is an FP8 checkpoint, BF16 activation
+    statistics on Linear / KV / MoE-bf16 paths are either unrecoverable
+    (the activation has already been quantised before reaching the hook) or
+    redundant with the dynamic activation scale captured separately by
+    ``collect_fused_moe_scale_stats``.  We therefore skip ALL Linear and KV
+    hook registration on FP8 models and only pre-allocate the
+    ``*.scale_amax`` keys used by the scale hook.  The model still gets a
+    ``_activation_hooks`` list (empty) and a ``_moe_activation_stats`` dict
+    so downstream introspection helpers continue to work without changes.
     """
     from vllm.model_executor.layers.fused_moe.layer import FusedMoE
     from vllm.model_executor.layers.linear import LinearBase
 
-    # Find all linear layers to monitor
-    layers_to_monitor = _find_layers(model, layers=[torch.nn.Linear, LinearBase])
-    print(f"---------Found {len(layers_to_monitor)} layers to monitor---------")
-    for name in list(layers_to_monitor.keys())[:5]:  # Print first 5
-        print(f"  {name}")
-    if len(layers_to_monitor) > 5:
-        print(f"  ... and {len(layers_to_monitor) - 5} more activation layers")
+    is_fp8 = _is_fp8_model(model)
+    # Cache the decision on the model so that other hooks / collectors can
+    # cheaply consult it without re-running the probe.
+    model._angelslim_fp8_scale_only = is_fp8
+    if is_fp8:
+        print(
+            "---------FP8 model detected: scale-only mode "
+            "(skipping Linear / KV / BF16-MoE hooks)---------"
+        )
+        # Still create the empty containers so downstream code paths that
+        # check ``hasattr(model, "_activation_stats")`` keep working.
+        if not hasattr(model, "_activation_stats"):
+            model._activation_stats = {}
+        if not hasattr(model, "_activation_hooks"):
+            model._activation_hooks = []
+    else:
+        # Find all linear layers to monitor
+        layers_to_monitor = _find_layers(model, layers=[torch.nn.Linear, LinearBase])
+        print(f"---------Found {len(layers_to_monitor)} layers to monitor---------")
+        for name in list(layers_to_monitor.keys())[:5]:  # Print first 5
+            print(f"  {name}")
+        if len(layers_to_monitor) > 5:
+            print(f"  ... and {len(layers_to_monitor) - 5} more activation layers")
 
-    # Initialize activation statistics storage
-    if not hasattr(model, "_activation_stats"):
-        model._activation_stats = {}
-        for name in layers_to_monitor.keys():
-            model._activation_stats[name] = {
-                "min": torch.tensor(float("inf")),
-                "max": torch.tensor(float("-inf")),
-            }
+        # Initialize activation statistics storage
+        if not hasattr(model, "_activation_stats"):
+            model._activation_stats = {}
+            for name in layers_to_monitor.keys():
+                model._activation_stats[name] = {
+                    "min": torch.tensor(float("inf")),
+                    "max": torch.tensor(float("-inf")),
+                }
 
-    # Register hooks for all linear layers
-    if not hasattr(model, "_activation_hooks"):
-        model._activation_hooks = []
-        for name, layer in layers_to_monitor.items():
-            hook = ActivationHook(name, model._activation_stats)
-            hook_handle = layer.register_forward_hook(hook)
-            model._activation_hooks.append(hook_handle)
+        # Register hooks for all linear layers
+        if not hasattr(model, "_activation_hooks"):
+            model._activation_hooks = []
+            for name, layer in layers_to_monitor.items():
+                hook = ActivationHook(name, model._activation_stats)
+                hook_handle = layer.register_forward_hook(hook)
+                model._activation_hooks.append(hook_handle)
 
-    # KV-cache hooks: behaviour controlled by kv_granularity
-    if kv_granularity == "none":
-        print("---------KV-cache hooks skipped (kv_granularity=none)---------")
+        # KV-cache hooks: behaviour controlled by kv_granularity
+        if kv_granularity == "none":
+            print("---------KV-cache hooks skipped (kv_granularity=none)---------")
 
-    elif kv_granularity == "per-tensor":
-        # Delegate to the dedicated per-tensor hook setup
-        setup_kvcache_pertensor_hooks(model)
-        print("---------Per-tensor KV-cache hooks registered via setup_activation_hooks---------")
+        elif kv_granularity == "per-tensor":
+            # Delegate to the dedicated per-tensor hook setup
+            setup_kvcache_pertensor_hooks(model)
+            print(
+                "---------Per-tensor KV-cache hooks registered "
+                "via setup_activation_hooks---------"
+            )
 
-    elif kv_granularity == "per-head":
-        # Delegate to the dedicated per-head hook setup
-        setup_kvcache_perhead_hooks(model)
-        print("---------Per-head KV-cache hooks registered via setup_activation_hooks---------")
+        elif kv_granularity == "per-head":
+            # Delegate to the dedicated per-head hook setup
+            setup_kvcache_perhead_hooks(model)
+            print(
+                "---------Per-head KV-cache hooks registered "
+                "via setup_activation_hooks---------"
+            )
 
     # Register MoE statistics storage and hooks
     moe_layers = _find_layers(model, layers=[FusedMoE])
@@ -201,7 +278,16 @@ def setup_activation_hooks(model, kv_granularity="per-tensor"):
             f"---------Per-expert stats collection: {'ENABLED' if per_expert else 'DISABLED'}---------"  # noqa: E501
         )
 
-        # Initialize MoE activation statistics storage
+        # Initialize MoE activation statistics storage.
+        #
+        # FP8 scale-only mode: only allocate the per-layer ``.scale_amax``
+        # entries that the scale hook actually writes into.  The BF16
+        # ``gate_up_proj`` / ``down_proj`` keys are intentionally NOT
+        # pre-allocated because (a) the BF16 hook short-circuits in
+        # ``collect_fused_moe_internal_stats`` and (b) the BF16 amax can be
+        # exactly recovered from the scale entry as ``scale_max * 448``.
+        # Per-expert keys are also skipped in scale-only mode (the dynamic
+        # scale is per-token / per-token-group, not per-expert).
         if not hasattr(model, "_moe_activation_stats"):
             model._moe_activation_stats = {}
             for name, layer in moe_layers.items():
@@ -215,12 +301,25 @@ def setup_activation_hooks(model, kv_granularity="per-tensor"):
                     )
 
                 for stage in ["gate_up_proj", "down_proj"]:
-                    # Layer-level stats (overall)
+                    if is_fp8:
+                        # Scale-only mode: do NOT pre-allocate the
+                        # ``f"{name}.{stage}.scale_amax"`` entry here.
+                        # ``collect_fused_moe_scale_stats`` performs its own
+                        # lazy initialisation with the full schema
+                        # (``min`` / ``max`` / ``bf16_amax_recovered`` /
+                        # ``call_count``).  Pre-allocating only ``min`` /
+                        # ``max`` would skip that lazy init and crash with
+                        # ``KeyError: 'bf16_amax_recovered'`` on the first
+                        # update.  Sparsely-routed layers that never see a
+                        # token on this worker simply remain absent from the
+                        # dict, which is the correct behaviour.
+                        continue
+                    # BF16 path keeps the original layer-level + (optional)
+                    # per-expert raw activation stats schema.
                     model._moe_activation_stats[f"{name}.{stage}"] = {
                         "min": torch.tensor(float("inf")),
                         "max": torch.tensor(float("-inf")),
                     }
-                    # Per-expert stats (only when enabled)
                     if per_expert:
                         for expert_id in range(num_experts):
                             model._moe_activation_stats[f"{name}.{expert_id}.{stage}"] = {
@@ -232,6 +331,10 @@ def setup_activation_hooks(model, kv_granularity="per-tensor"):
                 if hasattr(layer, "w13_weight") and layer.w13_weight is not None:
                     layer.w13_weight._vllm_layer_name = name
                     layer.w13_weight._moe_activation_stats_of_model = model._moe_activation_stats
+                    # Propagate the scale-only flag through the same channel
+                    # so the in-kernel BF16 collector can early-return
+                    # without needing access to ``model``.
+                    layer.w13_weight._moe_scale_only = is_fp8
                 else:
                     print(
                         f"[DEBUG] Cannot set w13_weight._vllm_layer_name: "
@@ -1053,6 +1156,17 @@ def collect_fused_moe_internal_stats(
     if "experts" not in layer_name.lower():
         return
 
+    # Skip when the tensor is already FP8.  This happens on FP8 checkpoints
+    # (e.g. GLM-5.1-FP8) where the outer ``prepare_finalize`` quantises the
+    # gate_up_proj input to ``Float8_e4m3fn`` *before* ``TritonExperts.apply``
+    # is reached.  PyTorch lacks ``min_all_cuda`` / ``max_all_cuda`` kernels
+    # for FP8 dtypes, and the BF16 amax of that tensor is unrecoverable from
+    # the FP8 view itself -- so we instead rely on
+    # ``collect_fused_moe_scale_stats`` (which records the dynamic activation
+    # scale separately) to recover the BF16 amax via ``scale_max * 448``.
+    if hidden_states.dtype in (torch.float8_e4m3fn, torch.float8_e5m2):
+        return
+
     # Get rank information
     rank, world_size = _get_dist_info()
 
@@ -1140,6 +1254,95 @@ def collect_fused_moe_internal_stats(
                     f"[VERBOSE] Rank {rank}/{world_size}: Expert {expert_id} "
                     f"stats for {key}, min: {e_min.item()}, max: {e_max.item()}"
                 )
+
+
+# FP8 e4m3fn maximum representable positive value used by vLLM's
+# `_fp8_quantize` / `per_token_group_quant_fp8`.  The dynamic activation scale
+# is computed as ``scale = amax_bf16 / FP8_E4M3_MAX``, therefore the BF16
+# amax can be recovered as ``amax_bf16 = scale * FP8_E4M3_MAX``.
+FP8_E4M3_MAX = 448.0
+
+
+def collect_fused_moe_scale_stats(
+    stage,
+    scale,
+    layer_name=None,
+    global_moe_activation_stats=None,
+):
+    """Collect statistics from the dynamic FP8 activation scale tensor.
+
+    For DeepSeek-style block-wise FP8 (e.g. GLM-5.1-FP8 with
+    ``weight_block_size=[128,128]``) the per-token-group scale shape is
+    ``[num_tokens, hidden_size // 128]`` and each entry is computed as
+    ``amax_local / 448``.  Therefore the global max of this scale tensor,
+    multiplied by 448, recovers the BF16 absolute-max of the activation
+    that entered the FP8 quantizer -- without ever needing to materialise
+    the BF16 tensor.
+
+    Stats are stored under the key ``f"{layer_name}.{stage}.scale_amax"`` so
+    they can be inspected side-by-side with the BF16 stats collected by
+    ``collect_fused_moe_internal_stats``.
+
+    Args:
+        stage: ``"gate_up_proj"`` or ``"down_proj"``.
+        scale: The dynamic activation scale tensor (FP32 / FP8 scale).
+        layer_name: Layer name for identification.
+        global_moe_activation_stats: Global dictionary to store statistics.
+
+    Environment Variables:
+        VLLM_MOE_COLLECT_STATS: Set to "1" to enable statistics collection
+            (shared with ``collect_fused_moe_internal_stats``).
+        VLLM_MOE_COLLECT_STATS_VERBOSE: Set to "1" to enable verbose output.
+    """
+    if os.getenv("VLLM_MOE_COLLECT_STATS", "0") != "1":
+        return
+
+    verbose = os.getenv("VLLM_MOE_COLLECT_STATS_VERBOSE", "0") == "1"
+
+    if global_moe_activation_stats is None:
+        return
+    if layer_name is None:
+        return
+    if "experts" not in layer_name.lower():
+        return
+    if scale is None:
+        return
+
+    rank, world_size = _get_dist_info()
+
+    # Use a distinct sub-key so the scale-derived stats never clobber the
+    # raw BF16 stats produced by ``collect_fused_moe_internal_stats``.
+    key = f"{layer_name}.{stage}.scale_amax"
+    with torch.no_grad():
+        # Cast scale to fp32 for safe min/max reduction (some kernels return
+        # fp32 already; this is a no-op in that case).
+        s = scale.detach().to(torch.float32)
+        s_min = s.min().cpu()
+        s_max = s.max().cpu()
+        # Recovered BF16 absolute-max according to ``amax = scale * 448``.
+        bf16_amax_recovered = (s_max * FP8_E4M3_MAX).cpu()
+
+        if key not in global_moe_activation_stats:
+            global_moe_activation_stats[key] = {
+                "min": torch.tensor(float("inf")),
+                "max": torch.tensor(float("-inf")),
+                "bf16_amax_recovered": torch.tensor(float("-inf")),
+                "call_count": 0,
+            }
+        stats = global_moe_activation_stats[key]
+        stats["min"] = torch.minimum(stats["min"], s_min)
+        stats["max"] = torch.maximum(stats["max"], s_max)
+        stats["bf16_amax_recovered"] = torch.maximum(
+            stats["bf16_amax_recovered"], bf16_amax_recovered
+        )
+        stats["call_count"] = stats.get("call_count", 0) + 1
+
+        if verbose:
+            print(
+                f"[VERBOSE] Rank {rank}/{world_size}: scale stats for {key}, "
+                f"scale_min={s_min.item():.6g}, scale_max={s_max.item():.6g}, "
+                f"recovered_bf16_amax={bf16_amax_recovered.item():.6g}"
+            )
 
 
 def get_moe_stats(model):
