@@ -30,6 +30,7 @@ class CompressionMethod(str, Enum):
     PTQ = "PTQ"
     QAT = "QAT"
     QAD = "QAD"
+    MCORE_QAD = "MCoreQAD"
     DISTILL = "Distill"
     SPECULATIVE_DECODING = "speculative_decoding"
     PTQ_WEIGHT_ONLY = "PTQWeightOnly"
@@ -341,6 +342,118 @@ class QADTrainingConfig(DistillTrainingConfig):
     trainable_parameters: str = field(default="quant")
 
 
+MCORE_QAD_FORMATS = ("nvfp4", "nvfp4a16", "w4a16", "w8a8", "fp8", "w4afp8")
+
+
+@dataclass
+class MCoreQADParallelConfig:
+    """Megatron-Core parallel layout for the isolated MCoreQAD backend."""
+
+    tensor_parallel: int = field(default=1)
+    pipeline_parallel: int = field(default=1)
+    expert_parallel: int = field(default=1)
+    context_parallel: int = field(default=1)
+    sequence_parallel: bool = field(default=False)
+
+    def __post_init__(self):
+        dimensions = {
+            "tensor_parallel": self.tensor_parallel,
+            "pipeline_parallel": self.pipeline_parallel,
+            "expert_parallel": self.expert_parallel,
+            "context_parallel": self.context_parallel,
+        }
+        for name, value in dimensions.items():
+            if value < 1:
+                raise ValueError(f"MCoreQAD {name} must be at least 1, got {value}.")
+        if self.pipeline_parallel != 1:
+            raise ValueError("MCoreQAD currently requires pipeline_parallel=1.")
+        if self.sequence_parallel and self.tensor_parallel == 1:
+            raise ValueError("MCoreQAD sequence_parallel requires tensor_parallel greater than 1.")
+        if self.tensor_parallel > 1 and not self.sequence_parallel:
+            raise ValueError(
+                "MCoreQAD MoE training requires sequence_parallel when "
+                "tensor_parallel is greater than 1."
+            )
+
+
+@dataclass
+class MCoreQADOptimConfig:
+    """Scale-only optimizer settings for MCoreQAD."""
+
+    lr: float = field(default=2e-4)
+    weight_decay: float = field(default=0.0)
+    betas: tuple = field(default=(0.9, 0.95))
+    grad_clip: float = field(default=1.0)
+
+    def __post_init__(self):
+        self.betas = tuple(self.betas)
+        if self.lr <= 0:
+            raise ValueError("MCoreQAD optim.lr must be greater than 0.")
+        if len(self.betas) != 2:
+            raise ValueError("MCoreQAD optim.betas must contain exactly two values.")
+        if self.grad_clip <= 0:
+            raise ValueError("MCoreQAD optim.grad_clip must be greater than 0.")
+
+
+@dataclass
+class MCoreQADTrainingConfig:
+    """Configuration for the isolated Megatron-Core scale-only QAT/QAD backend."""
+
+    checkpoint_path: str
+    checkpoint_conversion_cpu: bool = field(default=False)
+    format: str = field(default="nvfp4")
+    init_scales_path: Optional[str] = field(default=None)
+    lm_weight: float = field(default=1.0)
+    distill_weight: float = field(default=0.0)
+    distill_type: str = field(default="kl")
+    distill_temperature: float = field(default=1.0)
+    distill_topk: int = field(default=0)
+    experts_only: bool = field(default=False)
+    seq_len: int = field(default=256)
+    micro_batch_size: int = field(default=1)
+    train_iters: int = field(default=100)
+    recompute: bool = field(default=True)
+    save_every: int = field(default=0)
+    parallel: MCoreQADParallelConfig = field(default_factory=MCoreQADParallelConfig)
+    optim: MCoreQADOptimConfig = field(default_factory=MCoreQADOptimConfig)
+
+    def __post_init__(self):
+        if isinstance(self.parallel, dict):
+            self.parallel = MCoreQADParallelConfig(**self.parallel)
+        if isinstance(self.optim, dict):
+            self.optim = MCoreQADOptimConfig(**self.optim)
+        if not self.checkpoint_path:
+            raise ValueError("MCoreQAD checkpoint_path must be provided.")
+        if self.format not in MCORE_QAD_FORMATS:
+            raise ValueError(
+                f"Unsupported MCoreQAD format: {self.format}. "
+                f"Supported: {list(MCORE_QAD_FORMATS)}"
+            )
+        if self.distill_type not in ("kl", "rkl", "cakld"):
+            raise ValueError("MCoreQAD distill_type must be one of: kl, rkl, cakld.")
+        if self.lm_weight < 0 or self.distill_weight < 0:
+            raise ValueError("MCoreQAD loss weights must be non-negative.")
+        if self.lm_weight == 0 and self.distill_weight == 0:
+            raise ValueError("At least one MCoreQAD loss weight must be greater than 0.")
+        if self.distill_temperature <= 0:
+            raise ValueError("MCoreQAD distill_temperature must be greater than 0.")
+        if self.distill_topk < 0:
+            raise ValueError("MCoreQAD distill_topk must be non-negative.")
+        if self.distill_topk and self.parallel.tensor_parallel > 1:
+            raise ValueError("MCoreQAD distill_topk currently requires tensor_parallel=1.")
+        if self.seq_len < 1 or self.micro_batch_size < 1 or self.train_iters < 1:
+            raise ValueError(
+                "MCoreQAD seq_len, micro_batch_size, and train_iters must be at least 1."
+            )
+        if (
+            self.parallel.context_parallel > 1
+            and self.seq_len % (2 * self.parallel.context_parallel) != 0
+        ):
+            raise ValueError("MCoreQAD seq_len must be divisible by 2 * context_parallel.")
+        if self.save_every < 0:
+            raise ValueError("MCoreQAD save_every must be non-negative.")
+
+
 @dataclass
 class CompressionConfig:
     """
@@ -358,6 +471,7 @@ class CompressionConfig:
     calibrate: Optional["CalibrateConfig"] = None
     QAT: Optional[QATTrainingConfig] = None
     QAD: Optional[QADTrainingConfig] = None
+    MCoreQAD: Optional[MCoreQADTrainingConfig] = None
     Distill: Optional[DistillTrainingConfig] = None
     # speculative_decoding: Optional[SpeculativeDecodingConfig] = None
 
@@ -569,9 +683,21 @@ class SlimConfigParser:
                         f"Unsupported compression method: {name}. "
                         f"Supported methods: {self.supported_methods}"
                     )
+            if CompressionMethod.MCORE_QAD.value in compress_names and len(compress_names) != 1:
+                raise ValueError(
+                    "MCoreQAD uses an independent model lifecycle and cannot be combined "
+                    "with other compression methods in the same run."
+                )
 
             # Initialize compression config
             compression_conf = CompressionConfig(name=compress_names)
+            mcore_qad_dict = compression_dict.get("MCoreQAD", None)
+            if CompressionMethod.MCORE_QAD.value in compress_names:
+                if not mcore_qad_dict:
+                    raise ValueError(
+                        "MCoreQAD compression requires a 'compression.MCoreQAD' section."
+                    )
+                compression_conf.MCoreQAD = MCoreQADTrainingConfig(**mcore_qad_dict)
             qad_dict = compression_dict.get("QAD", None)
             if CompressionMethod.QAD.value in compress_names:
                 if not qad_dict:
@@ -617,6 +743,8 @@ class SlimConfigParser:
                             )
 
                 elif method_name == CompressionMethod.DISTILL.value:
+                    pass
+                elif method_name == CompressionMethod.MCORE_QAD.value:
                     pass
                 elif method_name == CompressionMethod.CACHE.value:
                     # Parse cache configuration (only set if not already set)
@@ -758,8 +886,19 @@ def parse_json_compression_config_section(compress_config: dict) -> CompressionC
     if cache_data:
         cache = CacheConfig(**cache_data)
 
+    # Parse the isolated Megatron-Core QAT/QAD configuration.
+    mcore_qad_data = compress_config.get("MCoreQAD")
+    mcore_qad = None
+    if mcore_qad_data:
+        mcore_qad = MCoreQADTrainingConfig(**mcore_qad_data)
+
     # Create and return the CompressionConfig instance
-    return CompressionConfig(name=comp_names, quantization=quantization, cache=cache)
+    return CompressionConfig(
+        name=comp_names,
+        quantization=quantization,
+        cache=cache,
+        MCoreQAD=mcore_qad,
+    )
 
 
 def _require_json_section(config_data: dict, section_name: str) -> Any:

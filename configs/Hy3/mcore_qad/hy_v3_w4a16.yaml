@@ -1,0 +1,45 @@
+global:
+  save_path: ./output_mcore_qad/hy_v3_w4a16
+
+model:
+  # MCoreQAD dispatches by model_type in config.json; name is descriptive only.
+  name: Hunyuan
+  model_path: /path/to/HunYuan-3
+
+compression:
+  name: MCoreQAD
+  MCoreQAD:
+    checkpoint_path: /path/to/mcore-checkpoint/hy-v3
+    # HunYuan-3 conversion may need host RAM instead of a single GPU.
+    checkpoint_conversion_cpu: true
+    # INT4 per-group-128 weights with BF16 activations (weight-only).
+    format: w4a16
+    init_scales_path: null
+    lm_weight: 0.0
+    distill_weight: 1.0
+    distill_type: cakld
+    distill_temperature: 1.0
+    distill_topk: 0
+    experts_only: false
+    seq_len: 2048
+    # Distillation performs teacher and student forwards; 4 fits on an 80 GB H100.
+    micro_batch_size: 4
+    train_iters: 128
+    recompute: true
+    save_every: 0
+    parallel:
+      tensor_parallel: 1
+      pipeline_parallel: 1
+      expert_parallel: 8
+      context_parallel: 1
+      sequence_parallel: false
+    optim:
+      lr: 2.0e-4
+      weight_decay: 0.0
+      betas: [0.9, 0.95]
+      grad_clip: 1.0
+
+dataset:
+  name: TextDataset
+  # HunYuan-3 expects JSONL records with a pre-rendered applied_message field.
+  data_path: /path/to/hy3_applied_messages.jsonl

@@ -433,6 +433,82 @@ class Engine:
         return results
 
 
+class MCoreQADEngine:
+    """Engine facade for the isolated Megatron-Core QAT/QAD lifecycle.
+
+    Unlike :class:`Engine`, this backend must not preload a Hugging Face model or
+    construct an AngelSlim dataloader. The registered MCoreQAD compressor owns
+    model construction, distributed data sharding, training, and scale saving.
+    """
+
+    def __init__(self):
+        self.compressor = None
+        self.config = None
+
+    def prepare_compressor(self, config: Any) -> Any:
+        compress_names = config.compression_config.name
+        if compress_names != ["MCoreQAD"]:
+            raise ValueError("MCoreQADEngine only accepts compression.name: MCoreQAD.")
+        self.config = config
+        self.compressor = CompressorFactory.create(
+            compress_names,
+            model=None,
+            slim_config=config,
+        )[0]
+        return self.compressor
+
+    def run(self) -> None:
+        if self.compressor is None:
+            raise RuntimeError("Compressor not initialized. Call prepare_compressor() first.")
+        from .compressor.mcore_qad.checkpoint.prepare import ensure_mcore_checkpoint
+
+        ensure_mcore_checkpoint(self.config)
+        self.compressor.run()
+
+    def convert(self) -> None:
+        if self.compressor is None:
+            raise RuntimeError("Compressor not initialized. Call prepare_compressor() first.")
+        self.compressor.convert()
+
+    def save(self, save_path: str, config: dataclass) -> None:
+        if self.compressor is None:
+            raise RuntimeError("Compressor not initialized. Call prepare_compressor() first.")
+        self.compressor.save(save_path)
+        if int(os.environ.get("RANK", "0")) != 0:
+            return
+
+        os.makedirs(save_path, exist_ok=True)
+        config_dict = asdict(config)
+        model_config = config_dict.get("model_config")
+        if isinstance(model_config, dict):
+            model_config["model_path"] = "Base Model Path"
+        global_config = config_dict.get("global_config")
+        if isinstance(global_config, dict):
+            global_config["save_path"] = "Save Model Path"
+        dataset_config = config_dict.get("dataset_config")
+        if isinstance(dataset_config, dict):
+            dataset_config["data_path"] = "Data Path"
+        compression_config = config_dict.get("compression_config")
+        if isinstance(compression_config, dict):
+            mcore_qad_config = compression_config.get("MCoreQAD")
+            if isinstance(mcore_qad_config, dict):
+                mcore_qad_config["checkpoint_path"] = "MCore Checkpoint Path"
+                if mcore_qad_config.get("init_scales_path"):
+                    mcore_qad_config["init_scales_path"] = "Initial Scales Path"
+        config_dict["debug_info"] = {
+            "python": sys.version,
+            "angelslim": get_package_info("angelslim"),
+            "torch": get_package_info("torch"),
+            "transformers": get_package_info("transformers"),
+            "megatron-core": get_package_info("megatron-core"),
+            "transformer-engine": get_package_info("transformer-engine"),
+            "torch_cuda_version": (torch.version.cuda if torch.cuda.is_available() else None),
+        }
+        with open(os.path.join(save_path, "angelslim_config.json"), "w") as config_file:
+            json.dump(config_dict, config_file, indent=4)
+        print_info(f"MCoreQAD scales and config saved to {save_path}")
+
+
 class InferEngine(Engine):
     def __init__(self):
         """

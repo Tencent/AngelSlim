@@ -14,6 +14,7 @@
 
 from .compressor_factory import CompressorFactory  # noqa: F401
 from .distill import Distill  # noqa: F401
+from .mcore_qad.runner import MCoreQAD  # noqa: F401
 from .qad import QAD  # noqa: F401
 from .qat.qat import QAT  # noqa: F401
 from .quant import PTQ  # noqa: F401

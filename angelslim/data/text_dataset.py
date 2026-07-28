@@ -174,15 +174,40 @@ class TextDataset(BaseDataset):
                 prompt_messages = messages[:last_assistant_idx]
                 assistant_msg = messages[last_assistant_idx]
 
+                # Collect optional chat-template kwargs. Two shapes are
+                # supported so we can consume both legacy and new records:
+                #   (a) top-level fields on ``data`` (legacy):
+                #       ``tools`` / ``reasoning_effort`` / ``is_ai_search``
+                #   (b) grouped under ``apply_chat_template_kwargs`` (new
+                #       agent SFT / rollout format), which may also carry
+                #       fields like ``interleaved_thinking`` etc.
+                tpl_kwargs = dict(data.get("apply_chat_template_kwargs") or {})
+                for legacy_key in ("tools", "reasoning_effort", "is_ai_search"):
+                    if legacy_key in data and legacy_key not in tpl_kwargs:
+                        tpl_kwargs[legacy_key] = data[legacy_key]
+                # ``tools`` in the template is invoked as a positional arg
+                # in the legacy path; keep it separate so we can pass it in
+                # the same way when present.
+                tools = tpl_kwargs.pop("tools", None)
+
                 # Tokenize the prompt (up to the generation marker) and the
                 # full conversation separately so we know exactly where the
-                # assistant reply starts.
-                prompt_text = self.processor.apply_chat_template(
-                    prompt_messages, tokenize=False, add_generation_prompt=True
+                # assistant reply starts. The two calls MUST use the same
+                # kwargs, otherwise the tokenized prefix of ``full_text``
+                # will not align with ``prompt_text`` and the label mask
+                # below would be off by a few tokens.
+                prompt_text = self._apply_chat_template_safe(
+                    prompt_messages,
+                    tools=tools,
+                    add_generation_prompt=True,
+                    **tpl_kwargs,
                 )
                 full_messages = prompt_messages + [assistant_msg]
-                full_text = self.processor.apply_chat_template(
-                    full_messages, tokenize=False, add_generation_prompt=False
+                full_text = self._apply_chat_template_safe(
+                    full_messages,
+                    tools=tools,
+                    add_generation_prompt=False,
+                    **tpl_kwargs,
                 )
 
                 # Legacy branch: thinking-style data without a chat template.
@@ -248,6 +273,62 @@ class TextDataset(BaseDataset):
                 )
 
                 line_count += 1
+
+    def _apply_chat_template_safe(
+        self,
+        messages: List[Dict],
+        tools=None,
+        add_generation_prompt: bool = False,
+        **extra_kwargs,
+    ) -> str:
+        """Apply chat template with graceful fallback.
+
+        Newer Hy3-style tokenizers accept extra kwargs such as
+        ``reasoning_effort`` / ``is_ai_search`` / ``interleaved_thinking``
+        and a positional ``tools`` argument, while stock HF tokenizers
+        may not. Try the richest signature first and progressively drop
+        unsupported arguments so this loader stays compatible with both.
+        """
+
+        # Filter out None values so we don't push unnecessary kwargs
+        # through — some templates treat ``None`` differently from
+        # missing.
+        kwargs = {k: v for k, v in extra_kwargs.items() if v is not None}
+        base = dict(
+            tokenize=False,
+            add_generation_prompt=add_generation_prompt,
+        )
+        # Preserve legacy behavior: signal that we are producing training
+        # text so templates that vary between train/eval render the
+        # correct branch.
+        base["is_training"] = True
+
+        # Attempt 1: full signature (tools + all extras).
+        try:
+            if tools is not None:
+                return self.processor.apply_chat_template(messages, tools, **base, **kwargs)
+            return self.processor.apply_chat_template(messages, **base, **kwargs)
+        except TypeError:
+            pass
+
+        # Attempt 2: drop is_training, keep the rest.
+        base.pop("is_training", None)
+        try:
+            if tools is not None:
+                return self.processor.apply_chat_template(messages, tools, **base, **kwargs)
+            return self.processor.apply_chat_template(messages, **base, **kwargs)
+        except TypeError:
+            pass
+
+        # Attempt 3: drop all optional extras (reasoning_effort etc.).
+        try:
+            if tools is not None:
+                return self.processor.apply_chat_template(messages, tools, **base)
+            return self.processor.apply_chat_template(messages, **base)
+        except TypeError:
+            # Attempt 4: also drop ``tools`` — final fallback for stock
+            # HF tokenizers that don't understand tool-call templates.
+            return self.processor.apply_chat_template(messages, **base)
 
     def _prepare_messages(self, data: Dict) -> List[Dict]:
         """Prepare chat messages from data entry"""

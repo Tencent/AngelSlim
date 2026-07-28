@@ -24,7 +24,7 @@ if PROJECT_ROOT not in sys.path:
 import torch  # noqa: E402
 import torch.distributed as dist  # noqa: E402
 
-from angelslim.engine import Engine, VLLMCalibrateEngine  # noqa: E402
+from angelslim.engine import Engine, MCoreQADEngine, VLLMCalibrateEngine  # noqa: E402
 from angelslim.utils import get_yaml_prefix_simple, print_info  # noqa: E402
 from angelslim.utils.config_parser import SlimConfigParser, print_config  # noqa: E402
 
@@ -281,6 +281,15 @@ def weight_only_run(config):
         )
 
 
+def mcore_qad_run(config):
+    """Run the isolated Megatron-Core QAT/QAD backend without HF preloading."""
+    engine = MCoreQADEngine()
+    engine.prepare_compressor(config)
+    engine.run()
+    engine.convert()
+    engine.save(config.global_config.save_path, config)
+
+
 def _prewarm_hf_deepspeed_config(config):
     """Pre-construct ``Seq2SeqTrainingArguments`` so HF's
     ``HfTrainerDeepSpeedConfig`` weak-ref is registered BEFORE
@@ -329,6 +338,8 @@ def _get_available_gpu_count():
 
 
 def _auto_torchrun_for_expert_parallel(config, args):
+    if "MCoreQAD" in config.compression_config.name:
+        return
     if not config.model_config.enable_expert_parallel or _is_torchrun_launched():
         return
 
@@ -365,6 +376,12 @@ def run(config):
     compress_config = config.compression_config
     global_config = config.global_config
     transform_config = config.transform_config
+
+    # MCoreQAD owns model construction and distributed data loading. Dispatch
+    # before the regular Engine preloads a Hugging Face model.
+    if "MCoreQAD" in compress_config.name:
+        mcore_qad_run(config)
+        return
 
     # Dispatch to vLLM calibration if calibrate config specifies vllm backend
     if (
@@ -460,7 +477,9 @@ if __name__ == "__main__":
     merge_config(config, args)
     _auto_torchrun_for_expert_parallel(config, args)
     print_config(config)
-    if args.multi_nodes or config.model_config.enable_expert_parallel:
+    if "MCoreQAD" in config.compression_config.name:
+        run(config)
+    elif args.multi_nodes or config.model_config.enable_expert_parallel:
         multi_nodes_run(config)
     else:
         run(config)
