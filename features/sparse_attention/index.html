@@ -382,7 +382,9 @@ document.write(`
   </button>
 `);
 </script>
-
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
 </div></div>
       
     </div>
@@ -398,6 +400,14 @@ document.write(`
     <div id="print-main-content">
         <div id="jb-print-toc">
             
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">算法状态</a></li>
+</ul>
+            </nav>
         </div>
     </div>
 </div>
@@ -410,12 +420,52 @@ document.write(`
   <section id="id1">
 <h1>稀疏注意力<a class="headerlink" href="#id1" title="Link to this heading">#</a></h1>
 <p>稀疏注意力（Sparse Attention）是 AngelSlim 针对长上下文大模型推理开发的 Prefill 加速模块。其核心目标是在推理过程中动态跳过不重要的注意力块，从而显著降低 Prefill 阶段的计算量与延迟。</p>
+<section id="id2">
+<h2>算法状态<a class="headerlink" href="#id2" title="Link to this heading">#</a></h2>
+<p>当前仓库内置以下 Prefill 稀疏算法，均通过统一的 YAML + <code class="docutils literal notranslate"><span class="pre">tools/run.py</span></code> / <code class="docutils literal notranslate"><span class="pre">tools/infer.py</span></code> 入口调用（<code class="docutils literal notranslate"><span class="pre">compression.name:</span> <span class="pre">Sparsity</span></code>）。<strong>目前只有 Stem 提供了完整的用户文档</strong>；其余算法作为实验性能力提供，参数说明可参考 <code class="docutils literal notranslate"><span class="pre">configs/qwen3/sparse/</span></code> 下对应的 YAML 及各算法目录内的 NOTICE / 源码 docstring：</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>算法</p></th>
+<th class="head"><p>状态</p></th>
+<th class="head"><p>说明</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Stem</p></td>
+<td><p>稳定</p></td>
+<td><p>见下方 <code class="docutils literal notranslate"><span class="pre">stem</span></code> 页。<code class="docutils literal notranslate"><span class="pre">torch</span></code> 后端需要 Triton；<code class="docutils literal notranslate"><span class="pre">hpc</span></code> 后端为内部扩展，非公开可安装。</p></td>
+</tr>
+<tr class="row-odd"><td><p>MInference（a_shape / tri_shape / minference）</p></td>
+<td><p>实验性</p></td>
+<td><p>内置 MIT 来源 kernel；<code class="docutils literal notranslate"><span class="pre">minference</span></code> 变体需运行时 CUDA 工具链（JIT 编译索引扩展）。</p></td>
+</tr>
+<tr class="row-even"><td><p>FlexPrefill</p></td>
+<td><p>实验性</p></td>
+<td><p>内置 Triton kernel（MIT 来源）。</p></td>
+</tr>
+<tr class="row-odd"><td><p>XAttention</p></td>
+<td><p>实验性</p></td>
+<td><p>内置 kernel（MIT 来源）；head_dim 256 走 torch 参考。</p></td>
+</tr>
+<tr class="row-even"><td><p>FlashPrefill</p></td>
+<td><p>实验性</p></td>
+<td><p>clean-room 实现；<code class="docutils literal notranslate"><span class="pre">alpha&lt;=0</span></code> dense 路径需要 <code class="docutils literal notranslate"><span class="pre">flash_attn</span></code>。</p></td>
+</tr>
+<tr class="row-odd"><td><p>VecAttention</p></td>
+<td><p>仅参考实现</p></td>
+<td><p>快速 kernel 依赖尚未公开发布的 vLLM-flash-attention fork；外部用户默认走 torch 参考路径（<code class="docutils literal notranslate"><span class="pre">allow_pseudo_sparse:</span> <span class="pre">true</span></code>）。</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>通用约束（所有算法）：不支持 padding mask（请用 batch=1 或无 padding 输入）、部分 kernel 要求 batch=1、prefix-cache / chunked prefill 会自动回退到 dense（稀疏仅在真正首填 <code class="docutils literal notranslate"><span class="pre">k_len==q_len</span></code> 时生效）、不支持 sliding-window 层、不支持多卡 / TP（<code class="docutils literal notranslate"><span class="pre">WORLD_SIZE&gt;1</span></code> 会被拒绝）、稀疏 prefill 不支持 <code class="docutils literal notranslate"><span class="pre">output_attentions=True</span></code>、<strong>不能与量化组合</strong>。<code class="docutils literal notranslate"><span class="pre">allow_pseudo_sparse</span></code> 是正确性 / 调试回退路径，不是性能路径。</p>
 <div class="toctree-wrapper compound">
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contents</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="stem.html">Stem: Rethinking Causal Information Flow in Sparse Attention</a></li>
 </ul>
 </div>
+</section>
 </section>
 
 
@@ -453,6 +503,21 @@ document.write(`
             </div>
             
             
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">算法状态</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
               
             
           </div>

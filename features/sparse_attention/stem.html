@@ -415,14 +415,13 @@ document.write(`
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">3. 支持范围</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">4. 性能评测</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">5. 快速开始</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#stem-torch">Stem（torch 后端）</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dense-stem-patch">Dense 对照（无 Stem patch）</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#stem-hpc-bf16">Stem + HPC bf16</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#stem-hpc-fp8">Stem + HPC fp8</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#prompt">使用自定义 prompt</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">切换后端 / 精度</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">6. 参数说明</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">7. 代码结构</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">6. 参数说明</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id8">7. 代码结构</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#python-api">8. Python API</a></li>
 </ul>
             </nav>
@@ -458,11 +457,14 @@ document.write(`
 </section>
 <section id="top-k-schedule">
 <h3>2.2 Top-k Schedule<a class="headerlink" href="#top-k-schedule" title="Link to this heading">#</a></h3>
-<p>每层根据预设的 keep-ratio 和 alpha 衰减因子，生成 per-block 的 top-k budget：</p>
+<p>每层的 per-block top-k budget 由两个独立的旋钮共同决定：</p>
 <ul class="simple">
-<li><p><strong>前 N 层（warmup）</strong>：alpha=1.0，保留更多 block 以保证底层特征提取的完整性</p></li>
-<li><p><strong>后续层</strong>：alpha=0.7，更激进的稀疏化以加速计算</p></li>
-<li><p>额外保证 <strong>initial blocks</strong>（sink tokens）和 <strong>sliding window</strong> blocks 始终被保留</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">layer_keep_ratios</span></code>（分层保留比例）</strong>：给出每层的基础 keep-ratio。默认调度为
+warmup 前 2 层保留 100%（<code class="docutils literal notranslate"><span class="pre">1.0</span></code>），其余层保留稳态比例（<code class="docutils literal notranslate"><span class="pre">0.2</span></code>）；生产环境建议按模型层数显式传入完整列表。</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">stem_alpha</span></code>（budget 衰减因子）</strong>：在<strong>单层内部</strong>沿 query-block 位置对 budget 施加线性衰减，
+默认 <code class="docutils literal notranslate"><span class="pre">1.0</span></code>（不衰减）；示例 YAML 中设为 <code class="docutils literal notranslate"><span class="pre">0.7</span></code> 表示后段 query-block 逐步收紧 budget。可传 list
+按层覆盖。</p></li>
+<li><p>额外保证 <strong>initial blocks</strong>（sink tokens）和 <strong>sliding window</strong> blocks 始终被保留。</p></li>
 </ul>
 </section>
 <section id="block-sparse-attention">
@@ -470,7 +472,10 @@ document.write(`
 <p>根据 top-k mask 执行稀疏 attention：</p>
 <ul class="simple">
 <li><p>如果安装了 <code class="docutils literal notranslate"><span class="pre">block-sparse-attn</span></code> 库，使用真正的 block-sparse kernel</p></li>
-<li><p>否则自动 fallback 到 pseudo-sparse 实现（展开 mask 后做 dense attention）</p></li>
+<li><p>否则默认硬失败；仅当显式设置 <code class="docutils literal notranslate"><span class="pre">allow_pseudo_sparse:</span> <span class="pre">true</span></code> 时，才把 <strong>最终 attention</strong>
+回退到 dense masked 实现（展开 top-k mask 后做 dense attention）。注意 block
+重要性 scoring 阶段始终使用 Triton kernel，因此该回退<strong>仍需要 Triton/CUDA</strong>，并非纯
+CPU 参考。</p></li>
 <li><p><strong>HPC 后端</strong>支持 bf16 dense prefill 和 fp8 block-sparse prefill（varlen / paged 两种路径）</p></li>
 </ul>
 <p><strong>Decode 阶段不受影响</strong>，仍使用模型原始的 attention 实现（FlashAttention-2 / eager / SDPA）。</p>
@@ -486,7 +491,7 @@ document.write(`
 </thead>
 <tbody>
 <tr class="row-even"><td><p><strong>后端</strong></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">torch</span></code>（纯 PyTorch + Triton）、<code class="docutils literal notranslate"><span class="pre">hpc</span></code>（HPC C++ 扩展）</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">torch</span></code>（PyTorch + Triton scoring，需 CUDA/Triton）、<code class="docutils literal notranslate"><span class="pre">hpc</span></code>（内部 C++ 扩展，<strong>非公开可安装</strong>）</p></td>
 </tr>
 <tr class="row-odd"><td><p><strong>HPC 精度</strong></p></td>
 <td><p>bf16（dense prefill）、fp8（block-sparse prefill，varlen / paged）</p></td>
@@ -497,68 +502,57 @@ document.write(`
 </tbody>
 </table>
 </div>
+<blockquote>
+<div><p><strong>后端说明</strong>：<code class="docutils literal notranslate"><span class="pre">torch</span></code> 是面向社区的默认后端，其 block 重要性 scoring 使用 Triton kernel（因此需要 CUDA + Triton，<strong>不是</strong> 纯 CPU 参考实现）。<code class="docutils literal notranslate"><span class="pre">hpc</span></code> 后端依赖一个未随本仓库发布、外部无法安装的 HPC C++ 扩展，仅供内部使用；外部用户请使用 <code class="docutils literal notranslate"><span class="pre">backend:</span> <span class="pre">torch</span></code>。</p>
+</div></blockquote>
 </section>
 <section id="id4">
 <h2>4. 性能评测<a class="headerlink" href="#id4" title="Link to this heading">#</a></h2>
-<p>我们在长上下文与 Agent 类任务上评测了 Stem 的精度保持能力。在 <strong>FP8-W8A8 + Stem</strong> 配置下，模型在 LongBench v2、CL-bench、CL-bench Life、SWE-bench Verified、Terminal-Bench 2.0、ClawEval 等多个 benchmark 上的得分与 BF16 基线基本持平，部分任务（如 ClawEval）甚至略有提升，验证了 Stem 稀疏注意力在大幅加速 Prefill 的同时几乎无损模型质量。</p>
+<blockquote>
+<div><p>以下为内部初步评测结果，完整的可复现材料（原始 metric / 数据集 / 模型 commit / 环境 / kernel / 命令）将随后发布。</p>
+</div></blockquote>
+<p>在长上下文与 Agent 类任务上，我们对 Stem 的精度保持能力做了初步评测。在 <strong>FP8-W8A8 + Stem</strong> 配置下，模型在 LongBench v2、CL-bench、CL-bench Life、SWE-bench Verified、Terminal-Bench 2.0、ClawEval 等 benchmark 上的得分与 BF16 基线基本持平，部分任务（如 ClawEval）略有提升，初步验证了 Stem 稀疏注意力在加速 Prefill 的同时对模型质量影响很小。</p>
 <img alt="Stem 在多个 benchmark 上的精度对比（BF16 vs FP8-W8A8+Stem）。" src="../../_images/benchmark.png" />
 </section>
 <section id="id5">
 <h2>5. 快速开始<a class="headerlink" href="#id5" title="Link to this heading">#</a></h2>
-<p>确保已安装 AngelSlim（<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">-e</span> <span class="pre">.</span></code> 或 <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">sync</span></code>），然后在项目根目录运行：</p>
+<p>确保已安装 AngelSlim（<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">-e</span> <span class="pre">.[sparse]</span></code>），然后在项目根目录运行。Stem
+与 PTQ/QAT 一致，统一走标准的 YAML + <code class="docutils literal notranslate"><span class="pre">tools/run.py</span></code> / <code class="docutils literal notranslate"><span class="pre">tools/infer.py</span></code> 入口。</p>
+<section id="stem-torch">
+<h3>Stem（torch 后端）<a class="headerlink" href="#stem-torch" title="Link to this heading">#</a></h3>
+<p>编辑或复用 <code class="docutils literal notranslate"><span class="pre">configs/qwen3/sparse/stem/qwen3-8b_stem_torch.yaml</span></code>，把 <code class="docutils literal notranslate"><span class="pre">model.model_path</span></code>
+指向你的权重，然后：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 压缩并保存稀疏检查点</span>
+python<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/qwen3/sparse/stem/qwen3-8b_stem_torch.yaml
+
+<span class="c1"># 用稀疏配置直接推理</span>
+python<span class="w"> </span>tools/infer.py<span class="w"> </span>-c<span class="w"> </span>configs/qwen3/sparse/stem/qwen3-8b_stem_torch.yaml
+</pre></div>
+</div>
+</section>
 <section id="dense-stem-patch">
 <h3>Dense 对照（无 Stem patch）<a class="headerlink" href="#dense-stem-patch" title="Link to this heading">#</a></h3>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/run_stem.py<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--mode<span class="w"> </span>dense<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--model-path<span class="w"> </span>/path/to/Qwen3-8B<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--prompt-file<span class="w"> </span>prompt.txt<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--max-new-tokens<span class="w"> </span><span class="m">160</span>
-</pre></div>
-</div>
-</section>
-<section id="stem-hpc-bf16">
-<h3>Stem + HPC bf16<a class="headerlink" href="#stem-hpc-bf16" title="Link to this heading">#</a></h3>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/run_stem.py<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--mode<span class="w"> </span>stem<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--stem-backend<span class="w"> </span>hpc<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--hpc-dtype<span class="w"> </span>bf16<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--model-path<span class="w"> </span>/path/to/Qwen3-8B<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--prompt-file<span class="w"> </span>prompt.txt<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--max-new-tokens<span class="w"> </span><span class="m">160</span>
-</pre></div>
-</div>
-</section>
-<section id="stem-hpc-fp8">
-<h3>Stem + HPC fp8<a class="headerlink" href="#stem-hpc-fp8" title="Link to this heading">#</a></h3>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/run_stem.py<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--mode<span class="w"> </span>stem<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--stem-backend<span class="w"> </span>hpc<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--hpc-dtype<span class="w"> </span>fp8<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--model-path<span class="w"> </span>/path/to/Qwen3-8B<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--prompt-file<span class="w"> </span>prompt.txt<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--max-new-tokens<span class="w"> </span><span class="m">160</span>
-</pre></div>
-</div>
-</section>
-<section id="prompt">
-<h3>使用自定义 prompt<a class="headerlink" href="#prompt" title="Link to this heading">#</a></h3>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/run_stem.py<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--mode<span class="w"> </span>stem<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--stem-backend<span class="w"> </span>hpc<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--hpc-dtype<span class="w"> </span>bf16<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--model-path<span class="w"> </span>/path/to/Qwen3-8B<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--prompt-file<span class="w"> </span>my_long_document.txt<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--max-new-tokens<span class="w"> </span><span class="m">256</span>
-</pre></div>
-</div>
-<p>也可以通过封装脚本启动：</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>bash<span class="w"> </span>scripts/sparsity/run_stem.sh<span class="w"> </span>/path/to/Qwen3-8B<span class="w"> </span>prompt.txt<span class="w"> </span>stem
-</pre></div>
-</div>
-</section>
+<p>直接用任意非稀疏 YAML（<code class="docutils literal notranslate"><span class="pre">compression</span></code> 不含 <code class="docutils literal notranslate"><span class="pre">Sparsity</span></code>），或加载未打补丁的模型。</p>
 </section>
 <section id="id6">
-<h2>6. 参数说明<a class="headerlink" href="#id6" title="Link to this heading">#</a></h2>
+<h3>切换后端 / 精度<a class="headerlink" href="#id6" title="Link to this heading">#</a></h3>
+<p>后端与精度通过 YAML 的 <code class="docutils literal notranslate"><span class="pre">compression.sparsity.attn_kwargs</span></code> 设置（见下表），不再用命令行
+开关：</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">compression</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Sparsity</span>
+<span class="w">  </span><span class="nt">sparsity</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">stem</span>
+<span class="w">    </span><span class="nt">allow_pseudo_sparse</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">      </span><span class="c1"># kernel 缺失则硬失败；置 true 回退 dense masked attention（scoring 仍需 Triton）</span>
+<span class="w">    </span><span class="nt">attn_kwargs</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">backend</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hpc</span><span class="w">                  </span><span class="c1"># torch | hpc</span>
+<span class="w">      </span><span class="nt">hpc_dtype</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bf16</span><span class="w">               </span><span class="c1"># bf16 | fp8（仅 hpc 后端）</span>
+<span class="w">      </span><span class="nt">block_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">128</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="id7">
+<h2>6. 参数说明<a class="headerlink" href="#id7" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>参数</p></th>
@@ -576,20 +570,20 @@ document.write(`
 <td><p>HPC 后端精度：<code class="docutils literal notranslate"><span class="pre">&quot;bf16&quot;</span></code> 或 <code class="docutils literal notranslate"><span class="pre">&quot;fp8&quot;</span></code></p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">hpc_fp8_path</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">&quot;paged&quot;</span></code></p></td>
-<td><p>FP8 执行路径：<code class="docutils literal notranslate"><span class="pre">&quot;varlen&quot;</span></code> 或 <code class="docutils literal notranslate"><span class="pre">&quot;paged&quot;</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;varlen&quot;</span></code></p></td>
+<td><p>FP8 执行路径（仅 hpc 后端）：<code class="docutils literal notranslate"><span class="pre">&quot;varlen&quot;</span></code> 或 <code class="docutils literal notranslate"><span class="pre">&quot;paged&quot;</span></code></p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stem_alpha</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">1.0</span></code></p></td>
-<td><p>per-layer alpha 衰减因子，可传 list 实现分层控制</p></td>
+<td><p>单层内沿 query-block 的 budget 衰减因子，可传 list 分层控制</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">block_size</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">128</span></code></p></td>
 <td><p>attention block 大小</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stride</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">8</span></code></p></td>
-<td><p>scoring 阶段的下采样步长</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">8</span></code>（torch）/ <code class="docutils literal notranslate"><span class="pre">16</span></code>（hpc）</p></td>
+<td><p>scoring 阶段的下采样步长（torch 默认 8；hpc 默认 16，可用 <code class="docutils literal notranslate"><span class="pre">hpc_stem_stride</span></code> 覆盖）</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">chunk_size</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">2048</span></code></p></td>
@@ -611,39 +605,44 @@ document.write(`
 </table>
 </div>
 </section>
-<section id="id7">
-<h2>7. 代码结构<a class="headerlink" href="#id7" title="Link to this heading">#</a></h2>
+<section id="id8">
+<h2>7. 代码结构<a class="headerlink" href="#id8" title="Link to this heading">#</a></h2>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>angelslim/compressor/sparsity/
-├── __init__.py                          # re-export StemInference
-└── stem/
-    ├── __init__.py                      # 包入口
-    ├── stem.py                          # StemInference 类（主入口）
-    ├── patch.py                         # 模型 patch 逻辑
-    ├── stem_configuration.py            # StemConfig 配置
-    ├── backends/
-    │   ├── dispatcher.py                # torch / hpc 路由
-    │   ├── torch_impl.py               # PyTorch + Triton 实现
-    │   └── hpc_impl.py                 # HPC C++ 扩展实现
-    ├── modules/
-    │   └── forward.py                   # patched attention forward
-    └── ops/
-        └── stem_kernel.py               # Triton kernel
+├── __init__.py                              # 懒加载入口（仅暴露 Sparsity）
+├── registry.py                              # SparsityAlgorithmRegistry（统一注册表）
+└── algorithms/
+    └── stem/
+        ├── __init__.py                      # 注册副作用
+        ├── algorithm.py                     # Stem(SparsityAlgorithm) 注册类（主入口）
+        ├── backends/
+        │   ├── dispatcher.py                # torch / hpc 路由
+        │   ├── torch_impl.py               # PyTorch + Triton 实现
+        │   └── hpc_impl.py                 # HPC C++ 扩展实现
+        ├── modules/
+        │   └── forward.py                   # patched attention forward
+        └── ops/
+            └── stem_kernel.py               # Triton kernel
 
-tools/run_stem.py                            # 推理入口
-scripts/sparsity/run_stem.sh             # 启动脚本
+# 入口（统一走标准 YAML 路径）：
+tools/run.py    -c configs/qwen3/sparse/stem/*.yaml   # 压缩/保存
+tools/infer.py  -c configs/qwen3/sparse/stem/*.yaml   # 推理
 </pre></div>
 </div>
 </section>
 <section id="python-api">
 <h2>8. Python API<a class="headerlink" href="#python-api" title="Link to this heading">#</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">angelslim.compressor.sparsity</span><span class="w"> </span><span class="kn">import</span> <span class="n">StemInference</span>
+<p>Stem 是一等公民的注册算法，通过统一的 <code class="docutils literal notranslate"><span class="pre">SparsityAlgorithmRegistry</span></code> 构造，或直接走上面
+的 YAML 路径：</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">angelslim.compressor.sparsity.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">SparsityAlgorithmRegistry</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">angelslim.compressor.sparsity.algorithms</span>  <span class="c1"># 触发注册</span>
 
-<span class="n">stem</span> <span class="o">=</span> <span class="n">StemInference</span><span class="p">(</span><span class="n">attn_kwargs</span><span class="o">=</span><span class="p">{</span>
+<span class="n">algo</span> <span class="o">=</span> <span class="n">SparsityAlgorithmRegistry</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="s2">&quot;stem&quot;</span><span class="p">,</span> <span class="n">attn_kwargs</span><span class="o">=</span><span class="p">{</span>
     <span class="s2">&quot;backend&quot;</span><span class="p">:</span> <span class="s2">&quot;hpc&quot;</span><span class="p">,</span>
     <span class="s2">&quot;hpc_dtype&quot;</span><span class="p">:</span> <span class="s2">&quot;fp8&quot;</span><span class="p">,</span>
     <span class="s2">&quot;stem_alpha&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">5</span> <span class="o">+</span> <span class="p">[</span><span class="mf">0.7</span><span class="p">]</span> <span class="o">*</span> <span class="mi">31</span><span class="p">,</span>  <span class="c1"># 36 层 Qwen3-8B</span>
 <span class="p">})</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">stem</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>  <span class="c1"># 返回 patched 后的同一个 model 对象</span>
+<span class="n">algo</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>                 <span class="c1"># 按模型层数派生 per-instance 配置</span>
+<span class="c1"># 框架的 patcher 会对每个注意力模块调用 algo.build_attn_forward(...)</span>
 </pre></div>
 </div>
 </section>
@@ -704,14 +703,13 @@ scripts/sparsity/run_stem.sh             # 启动脚本
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">3. 支持范围</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">4. 性能评测</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">5. 快速开始</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#stem-torch">Stem（torch 后端）</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dense-stem-patch">Dense 对照（无 Stem patch）</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#stem-hpc-bf16">Stem + HPC bf16</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#stem-hpc-fp8">Stem + HPC fp8</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#prompt">使用自定义 prompt</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">切换后端 / 精度</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">6. 参数说明</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">7. 代码结构</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">6. 参数说明</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id8">7. 代码结构</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#python-api">8. Python API</a></li>
 </ul>
   </nav></div>
