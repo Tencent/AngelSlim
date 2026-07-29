@@ -2,7 +2,9 @@
 # Copyright 2025 Tencent Inc. All Rights Reserved.
 #
 # Merge NVFP4 expert weights + FP8 KV cache scales + activation input_scales
-# into a single HF model directory for vLLM inference.
+# into a single HF model directory for vLLM inference.  When the source HY3
+# checkpoint contains appended MTP layers, their GEMM weights are serialized as
+# static per-tensor FP8 and the final model uses ModelOpt MIXED_PRECISION.
 #
 # Inputs:
 #   --statistics_path: dir containing activation_stats.json & moe_expert_stats.json
@@ -26,6 +28,17 @@ import os
 import shutil
 
 import torch
+from hy3_mtp_utils import (
+    detect_hy3_mtp,
+    fp8_scale_from_stats,
+    is_mtp_fp8_weight,
+    is_mtp_key,
+    load_mtp_stats,
+    module_name_from_weight,
+    quantize_weight_per_tensor_fp8,
+    read_weight_map,
+    resolve_mtp_activation_key,
+)
 from safetensors import safe_open
 from safetensors.torch import save_file
 
@@ -68,6 +81,19 @@ def parse_args():
         help="Path to a separate activation_stats JSON file for KV cache scales. "
         "If not set, KV cache stats are loaded from statistics_path/activation_stats.json.",
     )
+    parser.add_argument(
+        "--mtp-fp8-mode",
+        choices=["auto", "on", "off"],
+        default="auto",
+        help="MTP FP8 handling: auto=quantize detected MTP layers, on=require MTP, "
+        "off=keep the existing non-FP8 behavior.",
+    )
+    parser.add_argument(
+        "--allow-missing-mtp-stats",
+        action="store_true",
+        help="Keep MTP GEMM weights with missing activation statistics in BF16 "
+        "instead of failing. Intended for debugging only.",
+    )
     return parser.parse_args()
 
 
@@ -89,7 +115,7 @@ def load_activation_stats(statistics_path):
     return act_stats
 
 
-def compute_kv_scales(act_stats, num_layers):
+def compute_kv_scales(act_stats, layers):
     """
     Compute per-tensor FP8 KV cache scales from activation_stats.
 
@@ -97,8 +123,9 @@ def compute_kv_scales(act_stats, num_layers):
     Output keys: "model.layers.{L}.self_attn.k_proj.k_scale" -> float tensor
                  "model.layers.{L}.self_attn.v_proj.v_scale" -> float tensor
     """
+    layer_ids = range(layers) if isinstance(layers, int) else layers
     kv_scales = {}
-    for layer_idx in range(num_layers):
+    for layer_idx in layer_ids:
         for cache_type, scale_name in [
             ("k_cache", "k_proj.k_scale"),
             ("v_cache", "v_proj.v_scale"),
@@ -168,6 +195,128 @@ def compute_expert_input_scales(act_stats, num_layers, num_experts):
     return input_scales
 
 
+def compute_mtp_kv_scales(mtp_stats, mtp_layer_ids):
+    """Compute per-tensor MTP KV-cache scales from normalized draft stats."""
+
+    return compute_kv_scales(mtp_stats, mtp_layer_ids)
+
+
+def validate_mtp_stats(layout, mtp_stats, allow_missing=False):
+    """Validate that every supported MTP FP8 weight has static input stats."""
+
+    missing = []
+    for weight_name in layout.weight_keys:
+        if not is_mtp_fp8_weight(weight_name):
+            continue
+        stat_key = resolve_mtp_activation_key(weight_name)
+        if stat_key not in mtp_stats:
+            missing.append((weight_name, stat_key))
+
+    if missing and not allow_missing:
+        details = "\n".join(
+            f"  weight={weight_name} expected_stat={stat_key}"
+            for weight_name, stat_key in missing[:20]
+        )
+        suffix = "" if len(missing) <= 20 else f"\n  ... and {len(missing) - 20} more"
+        raise ValueError(
+            "Missing MTP activation statistics required for static FP8 quantization:\n"
+            f"{details}{suffix}"
+        )
+    return missing
+
+
+def write_mtp_fp8_shards(
+    bf16_model_path,
+    output_path,
+    layout,
+    mtp_stats,
+    mtp_kv_scales,
+    allow_missing_stats=False,
+):
+    """Write detected MTP tensors as dedicated FP8/BF16 safetensor shards."""
+
+    source_weight_map = read_weight_map(bf16_model_path)
+    keys_by_shard = {}
+    for key in layout.weight_keys:
+        source_shard = source_weight_map[key]
+        keys_by_shard.setdefault(source_shard, []).append(key)
+
+    missing = validate_mtp_stats(layout, mtp_stats, allow_missing=allow_missing_stats)
+    missing_weights = {weight_name for weight_name, _ in missing}
+
+    output_weight_map = {}
+    fp8_modules = set()
+    written_input_scales = set()
+    kv_items = list(sorted(mtp_kv_scales.items()))
+
+    for shard_idx, (source_shard, weight_names) in enumerate(
+        sorted(keys_by_shard.items()), start=1
+    ):
+        output_filename = f"model-mtp-fp8-{shard_idx:05d}.safetensors"
+        tensors = {}
+
+        with safe_open(
+            os.path.join(bf16_model_path, source_shard), framework="pt", device="cpu"
+        ) as source:
+            for weight_name in sorted(weight_names):
+                weight = source.get_tensor(weight_name)
+                should_quantize = (
+                    is_mtp_fp8_weight(weight_name) and weight_name not in missing_weights
+                )
+                if not should_quantize:
+                    tensors[weight_name] = weight
+                    output_weight_map[weight_name] = output_filename
+                    continue
+
+                stat_key = resolve_mtp_activation_key(weight_name)
+                module_name = module_name_from_weight(weight_name)
+                quantized_weight, weight_scale = quantize_weight_per_tensor_fp8(weight)
+                weight_scale_name = f"{weight_name}_scale"
+                input_scale_name = f"{module_name}.input_scale"
+
+                tensors[weight_name] = quantized_weight
+                tensors[weight_scale_name] = weight_scale
+                output_weight_map[weight_name] = output_filename
+                output_weight_map[weight_scale_name] = output_filename
+
+                if input_scale_name not in written_input_scales:
+                    tensors[input_scale_name] = fp8_scale_from_stats(mtp_stats[stat_key])
+                    output_weight_map[input_scale_name] = output_filename
+                    written_input_scales.add(input_scale_name)
+
+                fp8_modules.add(module_name)
+
+        # KV-cache scales are small and can live in the first MTP shard.
+        if shard_idx == 1:
+            for key, tensor in kv_items:
+                tensors[key] = tensor
+                output_weight_map[key] = output_filename
+
+        save_file(tensors, os.path.join(output_path, output_filename))
+        print(
+            f"  [MTP {shard_idx}/{len(keys_by_shard)}] Saved {output_filename} "
+            f"({len(tensors)} tensors)"
+        )
+
+    return output_weight_map, fp8_modules
+
+
+def build_quantized_layers(weight_map, fp8_modules):
+    """Build vLLM ModelOpt per-layer algorithm metadata from output tensors."""
+
+    quantized_layers = {}
+    for key in weight_map:
+        if not key.endswith(".weight_scale_2"):
+            continue
+        module_name = key[: -len(".weight_scale_2")]
+        quantized_layers[module_name] = {"quant_algo": "NVFP4", "group_size": 16}
+
+    for module_name in sorted(fp8_modules):
+        quantized_layers[module_name] = {"quant_algo": "FP8"}
+
+    return dict(sorted(quantized_layers.items()))
+
+
 def process_shard(shard_path, kv_scales, input_scales, output_dir, shard_idx, total_shards):
     """Process a single safetensors shard: copy weights and inject scales."""
     filename = f"model-{shard_idx:05d}-of-{total_shards:05d}.safetensors"
@@ -223,13 +372,21 @@ def process_shard(shard_path, kv_scales, input_scales, output_dir, shard_idx, to
     return weight_map_entries
 
 
-def build_quantization_config(num_layers):
-    """Build the quantization_config matching the reference model format."""
+def build_ignore_list(num_layers, extra_ignored_prefixes=()):
+    """Build ModelOpt wildcard exclusions for BF16 modules."""
+
     ignore_list = ["lm_head", "model.layers.0*"]
     for layer_idx in range(1, num_layers):
         ignore_list.append(f"model.layers.{layer_idx}.mlp.router*")
         ignore_list.append(f"model.layers.{layer_idx}.mlp.shared_mlp*")
         ignore_list.append(f"model.layers.{layer_idx}.self_attn*")
+    ignore_list.extend(f"{prefix}*" for prefix in extra_ignored_prefixes)
+    return ignore_list
+
+
+def build_quantization_config(num_layers, extra_ignored_prefixes=()):
+    """Build the quantization_config matching the reference model format."""
+    ignore_list = build_ignore_list(num_layers, extra_ignored_prefixes)
 
     return {
         "config_groups": {
@@ -264,6 +421,27 @@ def build_quantization_config(num_layers):
     }
 
 
+def build_mixed_quantization_config(num_layers, quantized_layers):
+    """Build ModelOpt metadata for NVFP4 main experts + FP8 MTP layers."""
+
+    return {
+        "group_size": 16,
+        "ignore": build_ignore_list(num_layers),
+        "quant_algo": "MIXED_PRECISION",
+        "quantized_layers": quantized_layers,
+        "kv_cache_scheme": {
+            "dynamic": False,
+            "num_bits": 8,
+            "type": "float",
+        },
+        "producer": {
+            "name": "modelopt",
+            "version": "angelslim",
+        },
+        "quant_method": "modelopt",
+    }
+
+
 def main():
     args = parse_args()
     bf16_model_path = args.bf16_model_path or args.nvfp4_w_path
@@ -281,12 +459,38 @@ def main():
     num_experts = model_config.get("num_experts", 0)
     print(f"Model: {num_layers} layers, {num_experts} experts")
 
+    mtp_layout = detect_hy3_mtp(bf16_model_path)
+    if args.mtp_fp8_mode == "on" and not mtp_layout.has_mtp:
+        raise ValueError("--mtp-fp8-mode=on was requested, but no MTP layers were detected")
+    mtp_fp8_enabled = args.mtp_fp8_mode != "off" and mtp_layout.has_mtp
+    if mtp_layout.has_mtp:
+        print(
+            "MTP checkpoint layers detected: "
+            f"{list(mtp_layout.layer_ids) or list(mtp_layout.explicit_prefixes)}; "
+            f"FP8 mode={'enabled' if mtp_fp8_enabled else 'disabled'}"
+        )
+    else:
+        print("No MTP checkpoint layers detected")
+
     # =========================================================================
     # 2. Load calibration statistics
     # =========================================================================
     print(f"Loading statistics from: {args.statistics_path}")
     act_stats = load_activation_stats(args.statistics_path)
     print(f"  Loaded {len(act_stats)} stat entries")
+
+    mtp_stats = {}
+    mtp_kv_scales = {}
+    if mtp_fp8_enabled:
+        mtp_stats = load_mtp_stats(args.statistics_path)
+        if not mtp_stats:
+            raise FileNotFoundError(
+                "MTP layers were detected, but mtp_activation_stats.json / "
+                "mtp_moe_expert_stats.json are missing or empty"
+            )
+        print(f"  Loaded {len(mtp_stats)} normalized MTP stat entries")
+        mtp_kv_scales = compute_mtp_kv_scales(mtp_stats, mtp_layout.layer_ids)
+        print(f"  Computed {len(mtp_kv_scales)} MTP KV scale entries")
 
     # =========================================================================
     # 3. Compute KV scales (optionally from a separate file)
@@ -342,7 +546,11 @@ def main():
 
     # Identify which keys need bf16 replacement (shared_mlp weights)
     shared_mlp_weight_keys = [
-        k for k in nvfp4_weight_map if "shared_mlp" in k and k.endswith(".weight")
+        k
+        for k in nvfp4_weight_map
+        if "shared_mlp" in k
+        and k.endswith(".weight")
+        and not (mtp_fp8_enabled and is_mtp_key(k, mtp_layout))
     ]
     needs_bf16_source = len(shared_mlp_weight_keys) > 0
 
@@ -368,6 +576,8 @@ def main():
         with safe_open(shard_path, framework="pt", device="cpu") as f:
             keys = list(f.keys())
             for key in keys:
+                if mtp_fp8_enabled and is_mtp_key(key, mtp_layout):
+                    continue
                 # Skip shared_mlp quantization artifacts (weight_scale, weight_scale_2)
                 if "shared_mlp" in key and "weight_scale" in key:
                     continue
@@ -419,6 +629,23 @@ def main():
                 f"  [{shard_idx}/{total_shards}] Saved {output_filename} ({len(tensors)} tensors)"
             )
 
+    fp8_mtp_modules = set()
+    if mtp_fp8_enabled:
+        print("Quantizing MTP layers to static per-tensor FP8...")
+        mtp_weight_map, fp8_mtp_modules = write_mtp_fp8_shards(
+            bf16_model_path=bf16_model_path,
+            output_path=args.output_path,
+            layout=mtp_layout,
+            mtp_stats=mtp_stats,
+            mtp_kv_scales=mtp_kv_scales,
+            allow_missing_stats=args.allow_missing_mtp_stats,
+        )
+        full_weight_map.update(mtp_weight_map)
+        print(
+            f"  Added {len(mtp_weight_map)} MTP tensor entries across "
+            f"{len(fp8_mtp_modules)} FP8 modules"
+        )
+
     # =========================================================================
     # 7. Write model.safetensors.index.json
     # =========================================================================
@@ -435,8 +662,22 @@ def main():
     # 8. Write config.json with quantization_config
     # =========================================================================
     output_config = copy.deepcopy(model_config)
-    # Remove old quantization_config if present
-    output_config["quantization_config"] = build_quantization_config(num_layers)
+    quantized_layers = {}
+    if mtp_fp8_enabled:
+        quantized_layers = build_quantized_layers(full_weight_map, fp8_mtp_modules)
+        output_config["quantization_config"] = build_mixed_quantization_config(
+            num_layers, quantized_layers
+        )
+    else:
+        extra_ignored = []
+        if mtp_layout.has_mtp:
+            extra_ignored = [
+                *(f"model.layers.{layer_id}" for layer_id in mtp_layout.layer_ids),
+                *mtp_layout.explicit_prefixes,
+            ]
+        output_config["quantization_config"] = build_quantization_config(
+            num_layers, extra_ignored_prefixes=extra_ignored
+        )
     config_out_path = os.path.join(args.output_path, "config.json")
     with open(config_out_path, "w") as f:
         json.dump(output_config, f, indent=2)
@@ -445,23 +686,22 @@ def main():
     # =========================================================================
     # 8b. Write hf_quant_config.json
     # =========================================================================
-    exclude_modules = ["lm_head", "model.layers.0*"]
-    for layer_idx in range(1, num_layers):
-        exclude_modules.append(f"model.layers.{layer_idx}.mlp.router*")
-        exclude_modules.append(f"model.layers.{layer_idx}.mlp.shared_mlp*")
-        exclude_modules.append(f"model.layers.{layer_idx}.self_attn*")
+    exclude_modules = build_ignore_list(num_layers)
+    hf_quantization = {
+        "quant_algo": "MIXED_PRECISION" if mtp_fp8_enabled else "NVFP4",
+        "kv_cache_quant_algo": "FP8",
+        "group_size": 16,
+        "exclude_modules": sorted(exclude_modules),
+    }
+    if mtp_fp8_enabled:
+        hf_quantization["quantized_layers"] = quantized_layers
 
     hf_quant_config = {
         "producer": {
             "name": "modelopt",
             "version": "angelslim",
         },
-        "quantization": {
-            "quant_algo": "NVFP4",
-            "kv_cache_quant_algo": "FP8",
-            "group_size": 16,
-            "exclude_modules": sorted(exclude_modules),
-        },
+        "quantization": hf_quantization,
     }
     hf_quant_config_path = os.path.join(args.output_path, "hf_quant_config.json")
     with open(hf_quant_config_path, "w") as f:
@@ -488,6 +728,7 @@ def main():
     print(f"\nDone! Merged model saved to: {args.output_path}")
     print(f"  - KV scales: {len(kv_scales)} entries")
     print(f"  - Input scales: {len(input_scales)} entries")
+    print(f"  - MTP FP8 modules: {len(fp8_mtp_modules)}")
     print(f"  - Total weight map entries: {len(full_weight_map)}")
 
 

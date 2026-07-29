@@ -253,6 +253,12 @@ def parse_args():
         help="Enable MTP (Multi-Token Prediction) speculative decoding with hunyuan_mtp method",
     )
     parser.add_argument(
+        "--auto-detect-mtp",
+        action="store_true",
+        help="Inspect the local HF checkpoint and automatically enable MTP calibration "
+        "when appended MTP layers are present.",
+    )
+    parser.add_argument(
         "--num-speculative-tokens",
         type=int,
         default=1,
@@ -341,6 +347,17 @@ def parse_args():
             "the following arguments are required (via CLI or YAML config): "
             + ", ".join("--" + n.replace("_", "-") for n in missing)
         )
+
+    if args.auto_detect_mtp:
+        from hy3_mtp_utils import detect_hy3_mtp
+
+        mtp_layout = detect_hy3_mtp(args.model_path)
+        if mtp_layout.has_mtp:
+            args.enable_mtp = True
+            detected = list(mtp_layout.layer_ids) or list(mtp_layout.explicit_prefixes)
+            print(f"[MTP] Auto-detected checkpoint MTP layers: {detected}")
+        else:
+            print("[MTP] No MTP layers detected; MTP calibration remains disabled.")
 
     return validate_vllm_calibration_dp_args(parser, args)
 
@@ -632,20 +649,14 @@ def run_one_calibration(args, llm=None, return_llm: bool = False):
     )
 
     # Create sampling params (fixed values for calibration)
-    # When MTP is enabled, we need to generate more tokens to trigger
-    # speculative decoding so the MTP draft model layers also get activated.
+    # Keep calibration generation at one token for both main-model and MTP
+    # calibration.  This is intentional for the current HY3 pipeline.
     calibration_max_tokens = 1
     if args.enable_mtp:
-        # Generate enough tokens to trigger multiple rounds of speculative
-        # decoding, ensuring MTP layers produce activations for calibration.
-        # The draft model runs during each decode step's propose phase,
-        # so we need max_tokens > 1 to enter decode and trigger at least
-        # one propose call. Using max(8, ...) gives several rounds of
-        # drafter execution for more robust activation statistics.
-        calibration_max_tokens = 1  # max(8, args.num_speculative_tokens * 4)
+        calibration_max_tokens = 1
         print(
             f"  MTP calibration: setting max_tokens={calibration_max_tokens} "
-            f"to trigger speculative decoding"
+            f"(pipeline default)"
         )
 
     sampling_params = SamplingParams(
