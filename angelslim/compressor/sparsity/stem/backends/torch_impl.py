@@ -46,7 +46,13 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 # Default per-layer keep-ratio: first 2 layers keep 100%, remaining layers 20%.
-_DEFAULT_LAYER_KEEP_RATIOS: list[float] = [1.0, 1.0] + [0.2] * 36
+# Exposed as a function of ``layer_idx`` (rather than a fixed-length list) so it
+# generalizes to models with more than 38 transformer layers — e.g. Qwen3-32B
+# has 64 layers and Qwen3-235B-A22B has 94 layers. A length-38 list indexed by
+# ``layer_idx`` raised ``IndexError`` for those models on the very first prefill.
+def _default_layer_keep_ratio(layer_idx: int) -> float:
+    """Return the default token keep-ratio for the given transformer layer."""
+    return 1.0 if layer_idx < 2 else 0.2
 
 # Short-sequence thresholds — below these lengths the sparsity schedule is
 # relaxed to avoid losing too much context.
@@ -89,7 +95,7 @@ def generate_exact_k_schedule(
     torch.Tensor
         Budget schedule — ``(num_blocks,)`` or ``(num_heads, num_blocks)``.
     """
-    keep_ratio = _DEFAULT_LAYER_KEEP_RATIOS[layer_idx]
+    keep_ratio = _default_layer_keep_ratio(layer_idx)
     per_head_ratios = [keep_ratio] * (num_heads or 1)
 
     def _build_single_schedule(k_val: int, n: int) -> torch.Tensor:
