@@ -22,6 +22,7 @@
 </p>
 
 ## 📣最新进展
+- [26/07/29] 我们开源了 **AngelSpec**——torch-native、训推分离的投机采样**训练框架**，支持多种 draft 方法，以 **DFly** 与 **MTP + TTT** 为代表，并发布了 **Hy3-A21B** 的 **MTP** 与 **DFly** drafter 权重：DFly 相较 AR 平均端到端加速最高 **2.40×**，**D-cut** 在高并发下额外带来最高 **+15.7%** 吞吐。[[论文]](https://arxiv.org/abs/2607.25852) | [[GitHub]](https://github.com/Tencent/AngelSpec) | [[文档]](https://angelspec.readthedocs.io/) | [[Hugging Face]](https://huggingface.co/collections/AngelSlim/angelspec) 🔥🔥🔥
 - [26/07/20] 我们支持了基于 Megatron-Core 的 Qwen3-MoE 和 Hy3 **量化感知蒸馏**，训练时仅更新量化 scale，并支持 TP/EP/CP/SP 分布式训练。[[文档]](docs/source/features/qad/mcore_qad.md)
 - [26/07/06] 我们支持了 **Hy3**（MoE A21B）模型的 FP8-Static 量化，SmoothQuant 量化. [[文档]](https://github.com/Tencent/AngelSlim/tree/main/scripts/ptq)
 - [26/06/04] 我们发布了 **Stem**，一种稀疏注意力算法，通过在 block 粒度动态选择 top-k 关键块执行 block-sparse attention，加速长上下文 LLM 的 **Prefill** 阶段，在大幅降低延迟的同时实现几乎无损的生成质量。[[文档]](https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/stem.html)
@@ -240,23 +241,50 @@ pip install angelslim
 cd AngelSlim && python setup.py install
 ```
 
+> **注意：** AngelSlim 以 git submodule 形式集成了投机采样**训练**框架 [AngelSpec](https://github.com/Tencent/AngelSpec)（位于 `AngelSpec/`）。克隆时请加 `--recursive` 拉取，或在已克隆的仓库中初始化：
+>
+> ```shell
+> # 克隆时同时拉取 submodule
+> git clone --recursive https://github.com/Tencent/AngelSlim.git
+> # 或者，在已克隆的仓库中执行
+> git submodule update --init --recursive
+> ```
+
 更详细的安装说明以及不同平台的安装指引，可参考[安装文档](https://angelslim.readthedocs.io/zh-cn/latest/getting_started/installation.html)。
 
 ### 2、快速开始
 
 #### 2.1 投机采样
-完成安装`AngelSlim`后，您可以通过以下脚本快速开始`Eagle3`训练：
+
+AngelSlim 的投机采样训练由 **[AngelSpec](https://github.com/Tencent/AngelSpec)** 提供（git submodule，位于 `AngelSpec/`）——一个用于**训练**投机解码 draft 模型的 torch-native 框架，基于 [TorchSpec](https://github.com/lightseekorg/TorchSpec) 构建，并扩展了更多 draft 架构、target 模型支持与生产级训练能力，支持多种 draft 方法，以 **DFly** 与 **MTP + TTT** 为代表。
+
+框架采用**训推分离**设计：推理引擎运行冻结的 target 模型并抽取多层隐状态，经 [Mooncake](https://github.com/kvcache-ai/Mooncake) store 通过 RDMA 直接流式传输（不落盘）至 FSDP2 训练进程，由 controller 负责批处理、背压与评估。推理与训练运行在独立的 GPU 资源池上，可独立扩缩。
+
+**核心能力：**
+
+- **多推理后端** —— vLLM（一等支持）、SGLang、HuggingFace。
+- **长序列训练** —— Ulysses 序列并行（USP），支持 128k+ 上下文。
+- **文档感知序列 packing** —— 严格的跨文档注意力隔离。
+- **在线评估** —— 训练过程中直接测量投机解码接受率。
+- **多机** —— 大型 MoE target 模型跨节点分布，经 Mooncake RDMA 互联。
+- **词表裁剪** —— 在训练或转换阶段将 draft `lm_head` 裁剪到更小的 token 集。
+
+<!-- TODO: 补充 AngelSpec 框架总览图至 docs/source/assets/speculative_decoding/ 后在此嵌入 -->
 
 ```shell
-# 启动vLLM server
-bash scripts/speculative/run_vllm_server.sh
-# 生成训练数据
-bash scripts/speculative/generate_data_for_target_model.sh
-# 进行Eagle3模型的在线训练
-bash scripts/speculative/train_eagle3_online.sh
+# 初始化 submodule（参见上文安装章节）
+git submodule update --init --recursive
+cd AngelSpec
+# 安装 AngelSpec 及 vLLM 后端
+pip install -e ".[vllm]"
+# Hidden-state 传输（extras 未自动拉取，需单独安装）
+pip install mooncake-transfer-engine
+# 单机快速开始（默认 4 GPU：2 推理 + 2 训练）
+./examples/qwen3-8b-single-node/run.sh
 ```
 
-全模态大模型的 Eagle3 训练与部署指南可参考：[LLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/eagle.html) | [VLM](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/vlm_eagle.html) | [Audio(ASR)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_asr_eagle.html) | [Audio(TTS)](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/audio_tts_eagle.html).
+更多细节请参考[技术报告](https://arxiv.org/abs/2607.25852)、[AngelSpec 文档](https://angelspec.readthedocs.io/)、[`AngelSpec/README.md`](AngelSpec/README.md) 与 [Hugging Face 权重](https://huggingface.co/collections/AngelSlim/angelspec)。
+
 #### 2.2 LLM/VLM模型量化
 完成安装`AngelSlim`后，您可以通过以下脚本快速开始，完成`Qwen3-1.7B`模型的静态`FP8`量化：
 
@@ -401,408 +429,318 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
 
 ### 1、投机采样
 
-我们使用vLLM在代码、数学、指令跟随、文本生成、多模态理解等任务上评测了AngelSlim所训练的Eagle3模型，设置num_speculative_tokens=2 or 4 下我们所训的模型加速和接收长度表现如下所示，接收长度在1.8-3.5，最高加速可达1.4-1.9倍。
+下列结果来自 **[AngelSpec](https://github.com/Tencent/AngelSpec)**——一个 torch-native、训推分离投机采样训练框架（基于 TorchSpec，经 Mooncake RDMA 解耦 target 推理与 draft 训练），由 AngelSlim 以 git submodule 形式集成（详见 2.1 节），支持多种 draft 方法，以 **DFly** 与 **MTP + TTT** 为代表。[[论文]](https://arxiv.org/abs/2607.25852) | [[文档]](https://angelspec.readthedocs.io/) | [[Hugging Face]](https://huggingface.co/collections/AngelSlim/angelspec)
 
+**✨ 亮点**
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./docs/source/assets/speculative_decoding/eagle3_speedup_and_accepted_length.png">
-    <img alt="AngelSlim" src="./docs/source/assets/speculative_decoding/eagle3_speedup_and_accepted_length.png" width=100%>
-  </picture>
-</p>
+- **🧩 训练框架全开源** —— 支持多种 draft 方法，以 **DFly** 与 **MTP + TTT** 为代表；开源 Hy3-A21B 的 **MTP** 与 **DFly** drafter 权重与训练代码。
+- **🚀 各并发档位均最快** —— DFly 在全部并发档位（c4–c64）均取得最高平均吞吐：相较 AR 加速 **1.98×–2.40×**（代码类单项最高 **2.86×**），比 DFlash 快 **10.5%–11.8%**。
+- **📈 最佳起草质量** —— DFly 在 Hy3-A21B 上平均接受长度达 **4.79**，较 DFlash（3.69）**+30%**、较 MTP（3.00）约 **1.6×**，HumanEval 上高达 **5.52**。
+- **⚡ D-cut 应对高负载** —— 自适应验证深度裁剪在高并发线上流量下额外带来最高 **+15.7%** 吞吐，且几乎无损（接受长度 2.50 → 2.46）。
+- **💬 MTP + TTT 搞定对话** —— 修复高熵对话的训练-推理不一致：平均接受率 **52.8% → 66.4%**，接受长度 **2.58 → 2.99**。
 
-#### 1.1 Qwen3系列模型
+#### 1.1 🏆 Drafter 大比拼：DFly 领跑
 
-我们使用vLLM(v0.11.2)评测了Qwen3系列Eagle3模型在**MT-bench**、 **HumanEval**、 **GSM8K**、**Alpaca**等数据集上的接收长度和吞吐。全部结果都是在单张GPU上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=2, batch_size=1, output_len=1024**。
+**起草质量：平均接受长度。** 在 **Qwen3-8B** 与 **Hy3-A21B** 上、覆盖数学/代码/对话基准测得（temperature = 1，no thinking）；**粗体**表示每个目标模型在对应基准上的最优 drafter。**DFly** 平均领先——Qwen3-8B 达 **5.41**、Hy3-A21B 达 **4.79**，并在几乎所有基准上夺魁，明显甩开 DFlash 与 MTP。
 
 <table>
   <thead>
     <tr>
-      <th>Model</th>
-      <th>Method</th>
-      <th colspan="2" style="text-align:center;">GSM8K</th>
-      <th colspan="2" style="text-align:center;">Alpaca</th>
-      <th colspan="2" style="text-align:center;">HumanEval</th>
-      <th colspan="2" style="text-align:center;">MT-bench</th>
-      <th colspan="2" style="text-align:center;">Mean</th>
+      <th rowspan="2">Target Model</th>
+      <th rowspan="2">Drafter</th>
+      <th colspan="2" style="text-align:center;">Math</th>
+      <th colspan="3" style="text-align:center;">Code</th>
+      <th style="text-align:center;">Chat</th>
+      <th rowspan="2">Avg.</th>
     </tr>
     <tr>
-      <th></th><th></th>
-      <th>throughput (tokens/s)</th><th>accept length</th>
-      <th>throughput (tokens/s)</th><th>accept length</th>
-      <th>throughput (tokens/s)</th><th>accept length</th>
-      <th>throughput (tokens/s)</th><th>accept length</th>
-      <th>throughput (tokens/s)</th><th>accept length</th>
+      <th>Math500</th><th>GSM8K</th>
+      <th>HumanEval</th><th>MBPP</th><th>LiveCodeBench</th>
+      <th>MT-Bench</th>
     </tr>
   </thead>
-
   <tbody>
-    <!-- Qwen3-1.7B -->
-    <tr>
-      <td rowspan="2">Qwen3-1.7B</td>
-      <td>Vanilla</td>
-      <td>376.42</td><td>1</td>
-      <td>378.86</td><td>1</td>
-      <td>378.38</td><td>1</td>
-      <td>390.53</td><td>1</td>
-      <td>381.05</td><td>1</td>
-    </tr>
-    <tr>
-      <td><a href="https://huggingface.co/AngelSlim/Qwen3-1.7B_eagle3">Eagle3</a></td>
-      <td>616.9</td><td>2.13</td>
-      <td>653.29</td><td>2.19</td>
-      <td>680.1</td><td>2.2</td>
-      <td>621.44</td><td>2.17</td>
-      <td>642.93</td><td>2.17</td>
-    </tr>
-    <!-- Qwen3-4B -->
-    <tr>
-      <td rowspan="2">Qwen3-4B</td>
-      <td>Vanilla</td>
-      <td>229.05</td><td>1</td>
-      <td>235.29</td><td>1</td>
-      <td>234.66</td><td>1</td>
-      <td>234.04</td><td>1</td>
-      <td>233.26</td><td>1</td>
-    </tr>
-    <tr>
-      <td><a href="https://huggingface.co/AngelSlim/Qwen3-4B_eagle3">Eagle3</a></td>
-      <td>389.35</td><td>2.07</td>
-      <td>395.97</td><td>2.1</td>
-      <td>377.84</td><td>2.08</td>
-      <td>384.6</td><td>2.07</td>
-      <td>386.94</td><td>2.08</td>
-    </tr>
     <!-- Qwen3-8B -->
     <tr>
-      <td rowspan="2">Qwen3-8B</td>
-      <td>Vanilla</td>
-      <td>149.63</td><td>1</td>
-      <td>149.93</td><td>1</td>
-      <td>153.85</td><td>1</td>
-      <td>153.81</td><td>1</td>
-      <td>151.81</td><td>1</td>
+      <td rowspan="4">Qwen3-8B</td>
+      <td>MTP</td>
+      <td>3.53</td><td>3.56</td><td>3.33</td><td>3.22</td><td>3.25</td><td>2.57</td><td>3.24</td>
     </tr>
     <tr>
-      <td><a href="https://huggingface.co/AngelSlim/Qwen3-8B_eagle3">Eagle3</a></td>
-      <td>257.32</td><td>2</td>
-      <td>266.69</td><td>2.02</td>
-      <td>244.89</td><td>1.97</td>
-      <td>258.2</td><td>1.97</td>
-      <td>257.52</td><td>1.99</td>
-    </tr>
-    <!-- Qwen3-14B -->
-    <tr>
-      <td rowspan="2">Qwen3-14B</td>
-      <td>Vanilla</td>
-      <td>92.97</td><td>1</td>
-      <td>92.66</td><td>1</td>
-      <td>92.94</td><td>1</td>
-      <td>94.46</td><td>1</td>
-      <td>93.26</td><td>1</td>
+      <td>DFlash</td>
+      <td>4.97</td><td>5.54</td><td>4.77</td><td>4.50</td><td>4.46</td><td>3.16</td><td>4.57</td>
     </tr>
     <tr>
-      <td><a href="https://huggingface.co/AngelSlim/Qwen3-14B_eagle3">Eagle3</a></td>
-      <td>153.72</td><td>1.87</td>
-      <td>140.46</td><td>1.78</td>
-      <td>144.68</td><td>1.76</td>
-      <td>142.45</td><td>1.74</td>
-      <td>145.33</td><td>1.79</td>
-    </tr>
-    <!-- Qwen3-32B -->
-    <tr>
-      <td rowspan="2">Qwen3-32B</td>
-      <td>Vanilla</td>
-      <td>43.49</td><td>1</td>
-      <td>43.38</td><td>1</td>
-      <td>43.19</td><td>1</td>
-      <td>43.3</td><td>1</td>
-      <td>43.32</td><td>1</td>
+      <td>DSpark</td>
+      <td>5.87</td><td>6.25</td><td>5.56</td><td>5.25</td><td>5.20</td><td><b>3.77</b></td><td>5.32</td>
     </tr>
     <tr>
-      <td><a href="https://huggingface.co/AngelSlim/Qwen3-32B_eagle3">Eagle3</a></td>
-      <td>80.43</td><td>2.01</td>
-      <td>72.49</td><td>1.9</td>
-      <td>71.57</td><td>1.86</td>
-      <td>74.1</td><td>1.86</td>
-      <td>74.1</td><td>1.91</td>
+      <td><b>DFly</b></td>
+      <td><b>6.06</b></td><td><b>6.42</b></td><td><b>5.60</b></td><td><b>5.34</b></td><td><b>5.36</b></td><td>3.67</td><td><b>5.41</b></td>
     </tr>
-    <!-- Qwen3-30B-A3B -->
+    <!-- Hy3-A21B -->
     <tr>
-      <td rowspan="2">Qwen3-30B-A3B</td>
-      <td>Vanilla</td>
-      <td>311.84</td><td>1</td>
-      <td>320.43</td><td>1</td>
-      <td>325.77</td><td>1</td>
-      <td>325.42</td><td>1</td>
-      <td>320.87</td><td>1</td>
+      <td rowspan="3">Hy3-A21B</td>
+      <td>MTP</td>
+      <td>3.30</td><td>3.30</td><td>3.13</td><td>3.04</td><td>2.84</td><td>2.40</td><td>3.00</td>
     </tr>
     <tr>
-      <td><a href="https://huggingface.co/AngelSlim/Qwen3-a3B_eagle3">Eagle3</a></td>
-      <td>453.97</td><td>2.1</td>
-      <td>432.45</td><td>2.04</td>
-      <td>428.81</td><td>2.02</td>
-      <td>437.06</td><td>2.01</td>
-      <td>438.07</td><td>2.04</td>
+      <td>DFlash</td>
+      <td>4.01</td><td>4.23</td><td>4.36</td><td>4.05</td><td>3.10</td><td>2.38</td><td>3.69</td>
     </tr>
-
+    <tr>
+      <td><b>DFly</b></td>
+      <td><b>5.23</b></td><td><b>5.53</b></td><td><b>5.52</b></td><td><b>5.41</b></td><td><b>4.07</b></td><td><b>2.96</b></td><td><b>4.79</b></td>
+    </tr>
   </tbody>
 </table>
 
-#### 1.2 多模态理解模型
+**端到端吞吐：Hy3-295B-A21B。** 相对 AR 基线的输出 token 吞吐（Tok/s）与加速比（Spd.）（TP=8，temperature 1，并发 c4–c64；每格为 3×120s 窗口）。**粗体**表示每个基准在对应并发下的最优加速比；`MTP-3` 使用 3 个投机 token，`DFlash-8` / `DFly-8` 使用 block 长度 8。**DFly-8** 在每个并发档位都拿下最高平均加速——相较 AR **1.98×–2.40×**，HumanEval 上峰值达 **2.86×**。
 
-##### 1.2.1 Qwen3-VL系列模型
-
-我们使用(v0.12.0)评测了Qwen3-VL系列Eagle3模型在语言理解任务和多模态理解任务上的接收长度和吞吐。全部结果都是在单张GPU上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
-
-<table><thead>
-  <tr>
-    <th>Model</th>
-    <th>Method</th>
-    <th colspan="2" style="text-align:center;">GSM8K</th>
-    <th colspan="2" style="text-align:center;">Alpaca</th>
-    <th colspan="2" style="text-align:center;">HumanEval</th>
-    <th colspan="2" style="text-align:center;">MT-bench</th>
-    <th colspan="2" style="text-align:center;">MATH-500</th>
-    <th colspan="2" style="text-align:center;">MMMU</th>
-    <th colspan="2" style="text-align:center;">MMStar</th>
-    <th colspan="2" style="text-align:center;">Mean</th>
-  <tr>
-    <td></td>
-    <td></td>
-    <th>throughput (tokens/s)</th>
-    <th>accept length</th>
-    <th>throughput (tokens/s)</th>
-    <th>accept length</th>
-    <th>throughput (tokens/s)</th>
-    <th>accept length</th>
-    <th>throughput (tokens/s)</th>
-    <th>accept length</th>
-    <th>throughput (tokens/s)</th>
-    <th>accept length</th>
-    <th>throughput (tokens/s)</th>
-    <th>accept length</th>
-    <th>throughput (tokens/s)</th>
-    <th>accept length</th>
-    <th>throughput (tokens/s)</th>
-    <th>accept length</th>
-  </tr>
-  </tr></thead>
-<tbody>
-  <tr>
-    <td rowspan="2">Qwen3-VL-2B-Instruct</td>
-    <td>Vanilla</td>
-    <td>348.55</td>
-    <td>1</td>
-    <td>350.9</td>
-    <td>1</td>
-    <td>346.07</td>
-    <td>1</td>
-    <td>346.31</td>
-    <td>1</td>
-    <td>82.96</td>
-    <td>1</td>
-    <td>83.27</td>
-    <td>1</td>
-    <td>81.63</td>
-    <td>1</td>
-    <td>234.24</td>
-    <td>1</td>
-  </tr>
-  <tr>
-    <td><a href="https://huggingface.co/AngelSlim/Qwen3-VL-2B-Instruct_eagle3">Eagle3</a></td>
-    <td>511.52</td>
-    <td>2.11</td>
-    <td>560.55</td>
-    <td>2.26</td>
-    <td>826.01</td>
-    <td>3.39</td>
-    <td>555.22</td>
-    <td>2.29</td>
-    <td>163.09</td>
-    <td>2.57</td>
-    <td>154.18</td>
-    <td>2.55</td>
-    <td>139.73</td>
-    <td>2.31</td>
-    <td>415.76</td>
-    <td>2.5</td>
-  </tr>
-  <tr>
-    <td rowspan="2">Qwen3-VL-4B-Instruct</td>
-    <td>Vanilla</td>
-    <td>212.87</td>
-    <td>1</td>
-    <td>213.24</td>
-    <td>1</td>
-    <td>211.69</td>
-    <td>1</td>
-    <td>212.1</td>
-    <td>1</td>
-    <td>67.96</td>
-    <td>1</td>
-    <td>65.88</td>
-    <td>1</td>
-    <td>67.75</td>
-    <td>1</td>
-    <td>150.21</td>
-    <td>1</td>
-  </tr>
-  <tr>
-    <td><a href="https://huggingface.co/AngelSlim/Qwen3-VL-4B-Instruct_eagle3">Eagle3</a></td>
-    <td>415.29</td>
-    <td>2.57</td>
-    <td>372.89</td>
-    <td>2.26</td>
-    <td>459.37</td>
-    <td>2.82</td>
-    <td>382.33</td>
-    <td>2.34</td>
-    <td>141.87</td>
-    <td>2.72</td>
-    <td>104.44</td>
-    <td>2.05</td>
-    <td>107.07</td>
-    <td>2.1</td>
-    <td>283.32</td>
-    <td>2.41</td>
-  </tr>
-  <tr>
-    <td rowspan="2">Qwen3-VL-30B-A3B-Instruct</td>
-    <td>Vanilla</td>
-    <td>179.94</td>
-    <td>1</td>
-    <td>184.6</td>
-    <td>1</td>
-    <td>168.68</td>
-    <td>1</td>
-    <td>180.57</td>
-    <td>1</td>
-    <td>31.08</td>
-    <td>1</td>
-    <td>31.51</td>
-    <td>1</td>
-    <td>30.93</td>
-    <td>1</td>
-    <td>115.33</td>
-    <td>1</td>
-  </tr>
-  <tr>
-    <td><a href="https://huggingface.co/AngelSlim/Qwen3-VL-30B-A3B-Instruct_eagle3">Eagle3</a></td>
-    <td>281.93</td>
-    <td>2.82</td>
-    <td>241.42</td>
-    <td>2.13</td>
-    <td>223.05</td>
-    <td>2.57</td>
-    <td>240.47</td>
-    <td>2.19</td>
-    <td>75.31</td>
-    <td>2.79</td>
-    <td>48.47</td>
-    <td>1.78</td>
-    <td>52.57</td>
-    <td>1.94</td>
-    <td>166.17</td>
-    <td>2.32</td>
-  </tr>
-</tbody></table>
-
-##### 1.2.2 HunyuanOCR模型
-
-我们使用(v0.13.0)评测了HunyuanOCR Eagle3模型在[OmniDocBench](https://huggingface.co/datasets/opendatalab/OmniDocBench)上的接收长度和吞吐。结果是在单张GPU上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
-
-<table><thead>
-  <tr>
-    <th>Model</th>
-    <th>Method</th>
-    <th colspan="2" style="text-align:center;">OmniDocBench</th>
-  <tr>
-    <td></td>
-    <td></td>
-    <th>throughput (tokens/s)</th>
-    <th>accept length</th>
-  </tr>
-  </tr></thead>
-<tbody>
-  <tr>
-    <td rowspan="2">Hunyuan-OCR</td>
-    <td>Vanilla</td>
-    <td>70.12</td>
-    <td>1</td>
-  </tr>
-  <tr>
-    <td><a href="https://huggingface.co/AngelSlim/HunyuanOCR_eagle3">Eagle3</a></td>
-    <td>108.1</td>
-    <td>2.08</td>
-  </tr>
-</tbody>
+<table>
+  <thead>
+    <tr>
+      <th rowspan="2">Conc.</th>
+      <th rowspan="2">Method</th>
+      <th colspan="2" style="text-align:center;">GSM8K</th>
+      <th colspan="2" style="text-align:center;">Math500</th>
+      <th colspan="2" style="text-align:center;">HumanEval</th>
+      <th colspan="2" style="text-align:center;">MBPP</th>
+      <th colspan="2" style="text-align:center;">LiveCodeBench</th>
+      <th colspan="2" style="text-align:center;">MT-Bench</th>
+      <th colspan="2" style="text-align:center;">Avg.</th>
+    </tr>
+    <tr>
+      <th>Tok/s</th><th>Spd.</th>
+      <th>Tok/s</th><th>Spd.</th>
+      <th>Tok/s</th><th>Spd.</th>
+      <th>Tok/s</th><th>Spd.</th>
+      <th>Tok/s</th><th>Spd.</th>
+      <th>Tok/s</th><th>Spd.</th>
+      <th>Tok/s</th><th>Spd.</th>
+    </tr>
+  </thead>
+  <tbody>
+    <!-- c4 -->
+    <tr>
+      <td rowspan="4">c4</td>
+      <td>AR</td>
+      <td>287.9</td><td>1.00×</td>
+      <td>293.9</td><td>1.00×</td>
+      <td>279.7</td><td>1.00×</td>
+      <td>294.4</td><td>1.00×</td>
+      <td>284.5</td><td>1.00×</td>
+      <td>290.0</td><td>1.00×</td>
+      <td>288.4</td><td>1.00×</td>
+    </tr>
+    <tr>
+      <td>MTP-3</td>
+      <td>495.5</td><td>1.72×</td>
+      <td>517.0</td><td>1.76×</td>
+      <td>473.6</td><td>1.69×</td>
+      <td>476.7</td><td>1.62×</td>
+      <td>414.0</td><td>1.46×</td>
+      <td>384.5</td><td><b>1.33×</b></td>
+      <td>460.2</td><td>1.60×</td>
+    </tr>
+    <tr>
+      <td>DFlash-8</td>
+      <td>569.5</td><td>1.98×</td>
+      <td>587.9</td><td>2.00×</td>
+      <td>588.1</td><td>2.10×</td>
+      <td>575.7</td><td>1.96×</td>
+      <td>408.4</td><td>1.44×</td>
+      <td>371.6</td><td>1.28×</td>
+      <td>516.9</td><td>1.79×</td>
+    </tr>
+    <tr>
+      <td><b>DFly-8</b></td>
+      <td>635.4</td><td><b>2.21×</b></td>
+      <td>643.9</td><td><b>2.19×</b></td>
+      <td>647.2</td><td><b>2.31×</b></td>
+      <td>661.5</td><td><b>2.25×</b></td>
+      <td>455.2</td><td><b>1.60×</b></td>
+      <td>384.0</td><td>1.32×</td>
+      <td>571.2</td><td><b>1.98×</b></td>
+    </tr>
+    <!-- c8 -->
+    <tr>
+      <td rowspan="4">c8</td>
+      <td>AR</td>
+      <td>426.3</td><td>1.00×</td>
+      <td>435.7</td><td>1.00×</td>
+      <td>400.3</td><td>1.00×</td>
+      <td>433.7</td><td>1.00×</td>
+      <td>413.4</td><td>1.00×</td>
+      <td>421.8</td><td>1.00×</td>
+      <td>421.8</td><td>1.00×</td>
+    </tr>
+    <tr>
+      <td>MTP-3</td>
+      <td>756.9</td><td>1.78×</td>
+      <td>791.5</td><td>1.82×</td>
+      <td>717.4</td><td>1.79×</td>
+      <td>729.1</td><td>1.68×</td>
+      <td>620.8</td><td>1.50×</td>
+      <td>590.1</td><td><b>1.40×</b></td>
+      <td>701.0</td><td>1.66×</td>
+    </tr>
+    <tr>
+      <td>DFlash-8</td>
+      <td>857.0</td><td>2.01×</td>
+      <td>860.1</td><td>1.97×</td>
+      <td>866.2</td><td>2.16×</td>
+      <td>866.2</td><td>2.00×</td>
+      <td>609.1</td><td>1.47×</td>
+      <td>545.5</td><td>1.29×</td>
+      <td>767.4</td><td>1.82×</td>
+    </tr>
+    <tr>
+      <td><b>DFly-8</b></td>
+      <td>964.8</td><td><b>2.26×</b></td>
+      <td>959.5</td><td><b>2.20×</b></td>
+      <td>974.1</td><td><b>2.43×</b></td>
+      <td>1001.5</td><td><b>2.31×</b></td>
+      <td>641.3</td><td><b>1.55×</b></td>
+      <td>565.8</td><td>1.34×</td>
+      <td>851.2</td><td><b>2.02×</b></td>
+    </tr>
+    <!-- c16 -->
+    <tr>
+      <td rowspan="4">c16</td>
+      <td>AR</td>
+      <td>650.7</td><td>1.00×</td>
+      <td>670.6</td><td>1.00×</td>
+      <td>594.8</td><td>1.00×</td>
+      <td>667.9</td><td>1.00×</td>
+      <td>617.2</td><td>1.00×</td>
+      <td>628.1</td><td>1.00×</td>
+      <td>638.2</td><td>1.00×</td>
+    </tr>
+    <tr>
+      <td>MTP-3</td>
+      <td>1146.6</td><td>1.76×</td>
+      <td>1174.0</td><td>1.75×</td>
+      <td>1076.1</td><td>1.81×</td>
+      <td>1103.3</td><td>1.65×</td>
+      <td>893.5</td><td>1.45×</td>
+      <td>876.6</td><td>1.40×</td>
+      <td>1045.0</td><td>1.64×</td>
+    </tr>
+    <tr>
+      <td>DFlash-8</td>
+      <td>1446.1</td><td>2.22×</td>
+      <td>1430.4</td><td>2.13×</td>
+      <td>1433.3</td><td>2.41×</td>
+      <td>1440.4</td><td>2.16×</td>
+      <td>970.5</td><td>1.57×</td>
+      <td>901.0</td><td>1.43×</td>
+      <td>1270.3</td><td>1.99×</td>
+    </tr>
+    <tr>
+      <td><b>DFly-8</b></td>
+      <td>1623.8</td><td><b>2.50×</b></td>
+      <td>1607.5</td><td><b>2.40×</b></td>
+      <td>1595.4</td><td><b>2.68×</b></td>
+      <td>1677.8</td><td><b>2.51×</b></td>
+      <td>1046.7</td><td><b>1.70×</b></td>
+      <td>961.5</td><td><b>1.53×</b></td>
+      <td>1418.8</td><td><b>2.22×</b></td>
+    </tr>
+    <!-- c32 -->
+    <tr>
+      <td rowspan="4">c32</td>
+      <td>AR</td>
+      <td>918.6</td><td>1.00×</td>
+      <td>1000.8</td><td>1.00×</td>
+      <td>850.8</td><td>1.00×</td>
+      <td>1018.7</td><td>1.00×</td>
+      <td>893.2</td><td>1.00×</td>
+      <td>921.1</td><td>1.00×</td>
+      <td>933.9</td><td>1.00×</td>
+    </tr>
+    <tr>
+      <td>MTP-3</td>
+      <td>1923.8</td><td>2.09×</td>
+      <td>1989.8</td><td>1.99×</td>
+      <td>1780.7</td><td>2.09×</td>
+      <td>1863.6</td><td>1.83×</td>
+      <td>1394.2</td><td>1.56×</td>
+      <td>1469.4</td><td>1.60×</td>
+      <td>1736.9</td><td>1.86×</td>
+    </tr>
+    <tr>
+      <td>DFlash-8</td>
+      <td>2261.8</td><td>2.46×</td>
+      <td>2334.3</td><td>2.33×</td>
+      <td>2170.6</td><td>2.55×</td>
+      <td>2339.3</td><td>2.30×</td>
+      <td>1489.9</td><td>1.67×</td>
+      <td>1453.4</td><td>1.58×</td>
+      <td>2008.2</td><td>2.15×</td>
+    </tr>
+    <tr>
+      <td><b>DFly-8</b></td>
+      <td>2527.4</td><td><b>2.75×</b></td>
+      <td>2608.9</td><td><b>2.61×</b></td>
+      <td>2429.1</td><td><b>2.86×</b></td>
+      <td>2741.3</td><td><b>2.69×</b></td>
+      <td>1602.6</td><td><b>1.79×</b></td>
+      <td>1549.4</td><td><b>1.68×</b></td>
+      <td>2243.1</td><td><b>2.40×</b></td>
+    </tr>
+    <!-- c64 -->
+    <tr>
+      <td rowspan="4">c64</td>
+      <td>AR</td>
+      <td>1156.9</td><td>1.00×</td>
+      <td>1381.3</td><td>1.00×</td>
+      <td>1197.6</td><td>1.00×</td>
+      <td>1513.9</td><td>1.00×</td>
+      <td>1229.6</td><td>1.00×</td>
+      <td>1306.9</td><td>1.00×</td>
+      <td>1297.7</td><td>1.00×</td>
+    </tr>
+    <tr>
+      <td>MTP-3</td>
+      <td>2932.0</td><td><b>2.53×</b></td>
+      <td>3170.0</td><td>2.29×</td>
+      <td>2639.6</td><td>2.20×</td>
+      <td>3011.3</td><td>1.99×</td>
+      <td>2050.4</td><td>1.67×</td>
+      <td>2350.0</td><td><b>1.80×</b></td>
+      <td>2692.2</td><td>2.08×</td>
+    </tr>
+    <tr>
+      <td>DFlash-8</td>
+      <td>2523.4</td><td>2.18×</td>
+      <td>2947.1</td><td>2.13×</td>
+      <td>2655.2</td><td>2.22×</td>
+      <td>2671.8</td><td>1.76×</td>
+      <td>2015.8</td><td>1.64×</td>
+      <td>1815.8</td><td>1.39×</td>
+      <td>2438.2</td><td>1.89×</td>
+    </tr>
+    <tr>
+      <td><b>DFly-8</b></td>
+      <td>2827.8</td><td>2.44×</td>
+      <td>3301.8</td><td><b>2.39×</b></td>
+      <td>2965.0</td><td><b>2.48×</b></td>
+      <td>3130.9</td><td><b>2.07×</b></td>
+      <td>2195.0</td><td><b>1.79×</b></td>
+      <td>1936.6</td><td>1.48×</td>
+      <td>2726.2</td><td><b>2.11×</b></td>
+    </tr>
+  </tbody>
 </table>
 
-#### 1.3 语音模型
+#### 1.2 ⚡ D-cut：突破高并发吞吐天花板
 
-##### 1.3.1 Qwen2-Audio模型
+并发一高，target 验证就成了瓶颈，被拒绝的 draft 后缀白白占用 batch 容量。**D-cut** 把验证当作 batch 级的共享预算——按「期望收益/成本」对各请求的验证深度全局排序，空闲时自动加深 draft，繁忙时主动裁剪。优势恰好出现在 DFly 触顶之处：并发 48 之后 DFly 吞吐饱和，而 D-cut 仍在把负载转化为吞吐，相较 DFly 最高 **+15.7%**，且几乎无损（平均接受长度 2.50 → 2.46）。
 
-我们使用(v0.12.0)评测了Qwen2-Audio Eagle3模型在[LibriSpeech](https://www.openslr.org/12)数据集上的接收长度和吞吐。结果是在单张GPU上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
-
-<table><thead>
-  <tr>
-    <th>Model</th>
-    <th>Method</th>
-   <th colspan="2" style="text-align:center;">LibriSpeech</th>
-  <tr>
-    <td></td>
-    <td></td>
-    <th>throughput (tokens/s)</th>
-    <th>accept length</th>
-  </tr>
-  </tr></thead>
-<tbody>
-  <tr>
-    <td rowspan="2">Qwen2-Audio</td>
-    <td>Vanilla</td>
-    <td>78.76</td>
-    <td>1</td>
-  </tr>
-  <tr>
-    <td><a href="https://huggingface.co/AngelSlim/Qwen2-Audio-7B-Instruct_eagle3">Eagle3</a></td>
-    <td>146.66</td>
-    <td>3.51</td>
-  </tr>
-</tbody>
-</table>
-
-##### 1.3.2 Fun-CosyVoice3模型
-我们评测了Fun-CosyVoice3 Eagle3模型在[LibriTTS](https://www.openslr.org/60/)数据集上的接收长度。结果是在单张GPU上用以下设置测得：**tp=1, ep=1, num_speculative_tokens=4, batch_size=1, output_len=1024**。
-
-<table><thead>
-  <tr>
-    <th>Model</th>
-    <th>Method</th>
-    <th colspan="2" style="text-align:center;">LibriTTS</th>
-  <tr>
-    <td></td>
-    <td></td>
-    <th>throughput (tokens/s)</th>
-    <th>accept length</th>
-  </tr>
-  </tr></thead>
-<tbody>
-  <tr>
-    <td rowspan="2">Fun-CosyVoice3</td>
-    <td>Vanilla</td>
-    <td>-</td>
-    <td>1</td>
-  </tr>
-  <tr>
-    <td><a href="https://huggingface.co/AngelSlim/Fun-CosyVoice3-0.5B-2512_eagle3">Eagle3</a></td>
-    <td>-</td>
-    <td>1.96</td>
-  </tr>
-</tbody>
-</table>
-
-> Adapted for Transformers backend inference, only displays accept length. vLLM speedup ~1.6×, estimated from baseline LLM speedup.
+<p align="center">
+  <img alt="D-cut 在 Hy3-295B-A21B 线上流量上的表现" src="./docs/source/assets/speculative_decoding/dcut_live_traffic.jpg" width=100%>
+</p>
 
 ### 2、量化
 
