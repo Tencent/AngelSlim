@@ -26,6 +26,17 @@ def get_args():
     parser.add_argument("--input-prompt", type=str, default=None)
     parser.add_argument("-c", "--config", type=str, default=None)
     parser.add_argument("--save-path", type=str, default="./output/")
+    parser.add_argument(
+        "--output-file",
+        type=str,
+        default=None,
+        help="If set, also write the generated text to this file.",
+    )
+    parser.add_argument(
+        "--print-full",
+        action="store_true",
+        help="Print prompt + generated text instead of only the new tokens.",
+    )
 
     args = parser.parse_args()
     return args
@@ -47,6 +58,42 @@ def merge_config(config, args):
         config.global_config.save_path,
         get_yaml_prefix_simple(args.config),
     )
+
+
+def _report_generation(slim_engine, prompt, output_ids, args):
+    """Decode ``output_ids`` and print (and optionally save) the result.
+
+    ``InferEngine.generate`` returns HF ``generate`` token ids, which INCLUDE the
+    prompt tokens. We decode the full sequence, then derive the newly generated
+    text by re-tokenizing the prompt and dropping that many leading tokens (robust
+    to batch dim). Falls back to printing the full decoded text if anything about
+    the slicing is unexpected.
+    """
+    tokenizer = getattr(slim_engine.slim_model, "tokenizer", None)
+    if tokenizer is None or output_ids is None:
+        print("[infer] no tokenizer / no generation output to decode.")
+        return None
+
+    seq = output_ids[0] if hasattr(output_ids, "ndim") and output_ids.ndim > 1 else output_ids
+    full_text = tokenizer.decode(seq, skip_special_tokens=True)
+
+    # New tokens = generated sequence minus the prompt prefix.
+    prompt_len = tokenizer(prompt, return_tensors="pt").input_ids.shape[-1]
+    try:
+        new_ids = seq[prompt_len:]
+        new_text = tokenizer.decode(new_ids, skip_special_tokens=True)
+    except Exception:  # noqa: BLE001 — decoding must never crash the CLI
+        new_text = full_text
+
+    to_print = full_text if args.print_full else new_text
+    print("=== generated ===")
+    print(to_print)
+
+    if args.output_file:
+        with open(args.output_file, "w") as f:
+            f.write(to_print)
+        print(f"[infer] wrote generation to {args.output_file}")
+    return to_print
 
 
 def infer(config, args):
@@ -75,21 +122,40 @@ def infer(config, args):
             use_cache=model_config.use_cache,
             cache_dir=model_config.cache_dir,
             deploy_backend=global_config.deploy_backend,
+            attn_implementation=getattr(model_config, "attn_implementation", "default"),
         )
 
-        # Step 4: Initialize compressor
+        # Step 3: Initialize compressor
         slim_engine.prepare_compressor(
             compress_name=compress_config.name,
             compress_config=compress_config,
             global_config=global_config,
         )
+
+        # Step 4: For Sparsity, apply the attention patch here — convert() ->
+        # patcher is what actually swaps the attention forward; without it
+        # `compression.name: Sparsity` would load a DENSE model and silently
+        # ignore the sparse config. This is gated on Sparsity ONLY: PTQ / QAT /
+        # QAD / Distill must NOT auto-run calibration/convert from an inference
+        # entrypoint (that would need a dataset and mutate the model), matching
+        # the pre-sparse infer.py behavior for those methods. The compress name
+        # may be a str or a list (the parser yields e.g. ['Sparsity']).
+        _cname = getattr(compress_config, "name", None)
+        _cnames = _cname if isinstance(_cname, (list, tuple)) else [_cname]
+        if "Sparsity" in _cnames:
+            slim_engine.run()  # no-op for sparse (no calibration), kept for parity
+            slim_engine.convert()  # patches the attention forward
     else:
         slim_engine.from_pretrained(model_path=args.model_path)
 
     if config and infer_config:
-        _ = slim_engine.generate(args.input_prompt, **infer_config.__dict__)
+        output_ids = slim_engine.generate(args.input_prompt, **infer_config.__dict__)
     else:
-        _ = slim_engine.generate(args.input_prompt)
+        output_ids = slim_engine.generate(args.input_prompt)
+
+    # Decode + surface the result: a bare `_ = generate(...)` made the CLI look
+    # like it "ran but produced nothing" for community users.
+    return _report_generation(slim_engine, args.input_prompt, output_ids, args)
 
 
 if __name__ == "__main__":

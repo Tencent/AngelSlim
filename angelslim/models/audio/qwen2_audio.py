@@ -52,13 +52,21 @@ class Qwen2_Audio(BaseLLMModel):
         low_cpu_mem_usage=True,
         use_cache=False,
         using_multi_nodes=False,
+        attn_implementation="default",
+        **kwargs,
     ):
+        attn_kw = (
+            {}
+            if attn_implementation == "default"
+            else {"attn_implementation": attn_implementation}
+        )
         self.model = Qwen2AudioForConditionalGeneration.from_pretrained(
             model_path,
             torch_dtype=torch_dtype,
             device_map=device_map,
             trust_remote_code=trust_remote_code,
             low_cpu_mem_usage=low_cpu_mem_usage,
+            **attn_kw,
         )
 
         # Load tokenizer

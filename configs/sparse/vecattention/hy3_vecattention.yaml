@@ -1,0 +1,52 @@
+# VecAttention per-head MinP column-sparse attention (Hunyuan-V3 / hy_v3).
+# VecAttention — the framework migration of the standalone
+# compressor/sparsity/vecattention/ subsystem.
+# Per query-block it average-pools the queries, then keeps the key columns whose
+# mean-query logit clears a per-head MinP threshold (gap = -log(threshold); keep
+# key j iff qk[j] + gap >= max_j qk), plus an attention-sink (initial) block and a
+# local band. `threshold` is the sole sparsity knob: threshold -> 0 keeps
+# everything (== dense), larger is sparser.
+#
+# The selected-column attention runs on `vllm_flash_attn.sparse_attn_func`, an
+# EXTERNAL optional compiled vLLM-flash-attention fork — installed into the env
+# (`pip install vllm_flash_attn`), NOT vendored in-repo and NOT a git submodule.
+# When installed, Hunyuan-V3 head_dim 128 routes to the kernel; head_dim 256
+# (Qwen3.5) always routes to the torch reference — set
+# allow_pseudo_sparse. See angelslim/compressor/sparsity/algorithms/vecattention/NOTICE.
+# NOTE: the full Hunyuan-V3 checkpoint (~80 layers) does not fit on one GPU;
+#   `device_map: auto` shards it across every visible GPU. Point `model_path`
+#   at your local checkpoint if `tencent/Hy3` is not cached.
+# Run:  python tools/run.py -c configs/sparse/vecattention/hy3_vecattention.yaml
+
+global:
+  save_path: ./output
+
+model:
+  name: HYV3MoE
+  model_path: tencent/Hy3
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+  attn_implementation: flash_attention_2
+
+compression:
+  name: Sparsity
+  sparsity:
+    name: vecattention
+    # Shipped TRUE because the vllm_flash_attn fork this kernel needs is NOT
+    # publicly installable (see the NOTICE "Distribution note": vecattention is
+    # REFERENCE-ONLY for external users until the fork is republished). With it
+    # false, an external user running this config out of the box hits
+    # KernelMissingError. Set it false ONLY in an env where the fork is built —
+    # you then get the fast kernel path (Hunyuan-V3 head_dim 128; head_dim 256
+    # still routes to the reference).
+    allow_pseudo_sparse: true
+    attn_kwargs:
+      threshold: 0.1                # MinP factor (sole sparsity knob; 0 == dense,
+                                    # larger = sparser)
+      block_size_q: 64              # query pooling block (must be 64 or 128)
+      block_size_k: 16              # key local block size
+      group_k_block: 16             # k-blocks processed together (kernel tiling)
+      chunk_size: 65536             # prefill chunk (must be a multiple of block_size_q)

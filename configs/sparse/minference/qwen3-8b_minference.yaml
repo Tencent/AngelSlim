@@ -1,0 +1,31 @@
+# MInference sparse-attention (Qwen3-8B), vertical-and-slash variant.
+# The `minference` family maps three names (minference / a_shape /
+# tri_shape) onto one algorithm class. This YAML selects `minference`
+# (per-head vertical-and-slash); see the sibling files for a_shape / tri_shape.
+# Run:  python tools/run.py -c configs/sparse/minference/qwen3-8b_minference.yaml
+
+global:
+  save_path: ./output
+
+model:
+  name: Qwen
+  model_path: Qwen/Qwen3-8B
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+  # q3 default: decode runs flash-attention-2; sparse prefill bypasses it.
+  attn_implementation: flash_attention_2
+
+compression:
+  name: Sparsity
+  sparsity:
+    name: minference
+    allow_pseudo_sparse: false      # real Triton + CUDA kernel (JIT-built); set
+                                    # true only to force the slow torch reference
+    attn_kwargs:
+      # pattern_path: omitted => dense per-head fallback (1000, 6096).
+      #   Vendor-time is_search populates a per-head pattern JSON;
+      #   point pattern_path at it for searched (faster) budgets.
+      # pattern_path: angelslim/compressor/sparsity/algorithms/minference/patterns/qwen3-8b.json

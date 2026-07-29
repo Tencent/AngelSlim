@@ -1,0 +1,38 @@
+# Stem sparse-attention (Hunyuan-V3 / hy_v3), torch backend.
+# Hunyuan-V3 attention is a structural twin of Qwen3 (q_norm/k_norm, standard
+# RoPE, GQA, ungated); the MoE lives only in the MLP tower. Stem therefore
+# drives it through the shared `build_hy3_forward` template unchanged.
+# NOTE: the full Hunyuan-V3 checkpoint (~80 layers) does not fit on one GPU;
+#   `device_map: auto` shards it across every visible GPU. Point `model_path`
+#   at your local checkpoint if `tencent/Hy3` is not cached.
+# Run:  python tools/run.py -c configs/sparse/stem/hy3_stem_torch.yaml
+
+global:
+  save_path: ./output
+
+model:
+  name: HYV3MoE
+  model_path: tencent/Hy3
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+  # Decode runs the model's configured attention; sparse prefill bypasses it.
+  attn_implementation: flash_attention_2
+
+compression:
+  name: Sparsity
+  sparsity:
+    name: stem
+    allow_pseudo_sparse: false      # hard-fail if kernel missing
+    attn_kwargs:
+      backend: torch                # one of: torch | hpc
+      block_size: 128
+      stride: 8
+      chunk_size: 2048
+      stem_alpha: 0.7
+      initial_blocks: 4             # sink blocks always kept
+      window_size: 4                # sliding-window blocks always kept
+      # layer_keep_ratios: omitted => interpolated onto num_hidden_layers
+      #   (provide an explicit per-layer list for production use).

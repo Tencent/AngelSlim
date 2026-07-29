@@ -60,6 +60,76 @@ class BaseLLMModel(metaclass=ABCMeta):
         self.observer_layer_classes = [torch.nn.Linear]
         # Store original forward methods for restoration
         self._original_attn_forwards = {}
+        # Per-module SINGLE-SLOT patch registry.
+        # key = id(attn_module), value = (label, original_forward).
+        #
+        # Why single-slot, not a LIFO stack: sparse refuses to compose
+        # with ANY other attention patch (the patcher's quant/fp8 guards hard-fail
+        # if a patch is already present), so a module carries AT MOST ONE patch.
+        # A stack that supported stacking multiple patches on one module was
+        # modelling a state that cannot occur; the single slot matches the real
+        # invariant and makes "no stacking" structurally impossible (a second
+        # push to the same module raises). This is separate from the legacy
+        # ``_original_attn_forwards`` dict (FP8-QAT / HYV3 KV-obs paths), which is
+        # untouched here and still read by the collision guard.
+        self._attn_forward_patches = {}
+
+    def push_attn_forward(self, label, attn_module, new_forward):
+        """Replace ``attn_module.forward`` with ``new_forward``, tracked for restore.
+
+        The pre-patch ``forward`` is remembered so
+        :meth:`pop_attn_forward` can restore it. ``label`` identifies the patcher
+        (e.g. ``"sparse"``, ``"qwen_fp8"``) and is used by composition guards
+        (the FP8-attn collision check looks for a ``"qwen_fp8"``
+        label).
+
+        A module may hold only ONE patch at a time (sparse does not stack).
+        Pushing onto an already-patched module raises ``RuntimeError`` — the "no
+        stacking" invariant enforced at the API layer, not just by the patcher's
+        guards.
+        """
+        if not hasattr(self, "_attn_forward_patches"):
+            self._attn_forward_patches = {}
+        key = id(attn_module)
+        if key in self._attn_forward_patches:
+            existing = self._attn_forward_patches[key][0]
+            raise RuntimeError(
+                f"push_attn_forward: module already patched with {existing!r}; "
+                f"sparse does not stack attention patches. Unpatch "
+                f"first, or remove the colliding transform."
+            )
+        self._attn_forward_patches[key] = (label, attn_module.forward)
+        attn_module.forward = new_forward
+
+    def pop_attn_forward(self, attn_module, expected_label=None):
+        """Restore ``attn_module.forward`` to its pre-patch value.
+
+        Raises ``RuntimeError`` if there is no patch on the stack for this
+        module, or if ``expected_label`` is given and does not match the
+        recorded label (a patch-ownership violation).
+        """
+        if not hasattr(self, "_attn_forward_patches"):
+            self._attn_forward_patches = {}
+        key = id(attn_module)
+        if key not in self._attn_forward_patches:
+            raise RuntimeError(
+                "pop_attn_forward: no patch on stack for the given attention module."
+            )
+        label, original = self._attn_forward_patches[key]
+        if expected_label is not None and label != expected_label:
+            raise RuntimeError(
+                f"pop_attn_forward: expected label {expected_label!r} for this "
+                f"module, found {label!r}. Patch-ownership mismatch."
+            )
+        attn_module.forward = original
+        del self._attn_forward_patches[key]
+
+    def attn_forward_labels(self):
+        """Return the set of patch labels currently active.
+
+        Used by composition guards (e.g. FP8-attn collision detection).
+        """
+        return {label for (label, _orig) in getattr(self, "_attn_forward_patches", {}).values()}
 
     def from_pretrained(
         self,
@@ -71,6 +141,7 @@ class BaseLLMModel(metaclass=ABCMeta):
         use_cache=False,
         using_multi_nodes=False,
         attn_implementation="default",
+        **kwargs,
     ):
         # DeepSpeed ZeRO-3 path: build an empty sharded model on every rank
         # via deepspeed.zero.Init, linearize fused MoE experts, then stream

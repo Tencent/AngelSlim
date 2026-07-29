@@ -12,7 +12,40 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .stem import StemInference  # noqa: F401
-from .vecattention import VecAttentionInference  # noqa: F401
+"""Sparse-attention subsystem.
 
-__all__ = ["StemInference", "VecAttentionInference"]
+Imports are LAZY. Eagerly importing an algorithm whose optional
+kernel is unbuilt used to crash the whole subsystem (and anything that touched
+it). PEP 562 module-level ``__getattr__`` defers each import until the symbol is
+actually accessed, so ``import angelslim.compressor.sparsity`` stays cheap and
+never depends on an optional kernel being present.
+
+The legacy standalone entry points (``StemInference`` / ``VecAttentionInference``
++ their ``*_patch`` / config classes) were removed once every algorithm became a
+first-class registered ``SparsityAlgorithm``. Construct algorithms through
+``angelslim.compressor.sparsity.registry.SparsityAlgorithmRegistry`` instead.
+"""
+
+from __future__ import annotations
+
+__all__ = ["Sparsity"]
+
+# Map public symbol -> (submodule, attribute). Imported on first access only.
+_LAZY = {
+    "Sparsity": (".sparsity", "Sparsity"),
+}
+
+
+def __getattr__(name: str):
+    target = _LAZY.get(name)
+    if target is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    import importlib
+
+    submodule, attr = target
+    mod = importlib.import_module(submodule, __name__)
+    return getattr(mod, attr)
+
+
+def __dir__():
+    return sorted(__all__)

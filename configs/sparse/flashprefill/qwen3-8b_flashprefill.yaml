@@ -1,0 +1,41 @@
+# FlashPrefill max-based dynamic-threshold sparse attention (Qwen3-8B).
+# FlashPrefill (Fan et al., arXiv:2603.06199) keeps, per
+# query-block, the key-blocks whose block-approximate energy clears a Max-based
+# Dynamic Threshold `alpha * peak` (no Top-k sort, no Top-p cumsum), plus an
+# attention sink + a local window. `alpha` is the sole hyperparameter: alpha=0
+# keeps everything (== dense), larger is sparser.
+#
+# CLEAN-ROOM: the upstream repo (qhfan/FlashPrefill) is unlicensed, so the
+# license fail-open policy forbids vendoring its code. This algorithm implements
+# the *method* from the paper (original AngelSlim code) and runs the selected-
+# block attention on block_sparse_attn (the same BSD-3-Clause kernel Stem / xattention
+# use). head_dim in {16,32,64,128} (Qwen3 hd128 OK); head_dim 256 (Qwen3.5)
+# miscomputes on block_sparse_attn -> torch reference (set allow_pseudo_sparse).
+# Run:  python tools/run.py -c configs/sparse/flashprefill/qwen3-8b_flashprefill.yaml
+
+global:
+  save_path: ./output
+
+model:
+  name: Qwen
+  model_path: Qwen/Qwen3-8B
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+  attn_implementation: flash_attention_2
+
+compression:
+  name: Sparsity
+  sparsity:
+    name: flashprefill
+    allow_pseudo_sparse: false      # real block_sparse_attn path; set true only
+                                    # to force the slow torch reference (head_dim 256)
+    attn_kwargs:
+      alpha: 0.2                    # max-based dynamic threshold factor (sole
+                                    # hyperparameter; 0 == dense, larger = sparser)
+      block_size: 128               # uniform block size (paper §4)
+      sink: 256                     # attention-sink tokens always retained
+      window: 512                   # local-window tokens always retained
+      last_n_block_full: 2          # last N query-blocks attend every causal block

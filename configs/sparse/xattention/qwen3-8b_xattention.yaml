@@ -1,0 +1,35 @@
+# XAttention antidiagonal-strided block-sparse attention (Qwen3-8B).
+# XAttention (MInference family, MIT; method from
+# mit-han-lab/x-attention) keeps, per head, the smallest set of key-blocks whose
+# cumulative attention mass covers `threshold` (estimated from an antidiagonal-
+# strided sub-sample, controlled by `stride`), then runs the selected-block
+# attention through block_sparse_attn (the same kernel Stem uses). head_dim in
+# {16,32,64,128} (Qwen3 hd128 OK); head_dim 256 (Qwen3.5) miscomputes on
+# block_sparse_attn -> torch reference (set allow_pseudo_sparse: true).
+# Run:  python tools/run.py -c configs/sparse/xattention/qwen3-8b_xattention.yaml
+
+global:
+  save_path: ./output
+
+model:
+  name: Qwen
+  model_path: Qwen/Qwen3-8B
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+  attn_implementation: flash_attention_2
+
+compression:
+  name: Sparsity
+  sparsity:
+    name: xattention
+    allow_pseudo_sparse: false      # real block_sparse_attn path; set true only
+                                    # to force the slow torch reference (head_dim 256)
+    attn_kwargs:
+      stride: 8                     # antidiagonal sub-sample stride for the estimate
+      norm: 1                       # softmax normalization order
+      threshold: 0.9                # cumulative attention-mass coverage target
+      block_size: 128               # upstream asserts block_size == 128
+      chunk_size: 2048              # estimation chunk size

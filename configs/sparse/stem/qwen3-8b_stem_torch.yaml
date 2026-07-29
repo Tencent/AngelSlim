@@ -1,0 +1,33 @@
+# Stem sparse-attention (Qwen3-8B), torch backend.
+# Sparse config mirrors the PTQ/QAT YAML shape; compression.name = Sparsity.
+# Run:  python tools/run.py -c configs/sparse/stem/qwen3-8b_stem_torch.yaml
+
+global:
+  save_path: ./output
+
+model:
+  name: Qwen
+  model_path: Qwen/Qwen3-8B
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+  # q3 default: decode runs flash-attention-2; sparse prefill bypasses it.
+  attn_implementation: flash_attention_2
+
+compression:
+  name: Sparsity
+  sparsity:
+    name: stem
+    allow_pseudo_sparse: false      # hard-fail if kernel missing
+    attn_kwargs:
+      backend: torch                # one of: torch | hpc
+      block_size: 128
+      stride: 8
+      chunk_size: 2048
+      stem_alpha: 0.7
+      initial_blocks: 4             # sink blocks always kept
+      window_size: 4                # sliding-window blocks always kept
+      # layer_keep_ratios: omitted => interpolated onto num_hidden_layers
+      #   (provide an explicit per-layer list for production use).

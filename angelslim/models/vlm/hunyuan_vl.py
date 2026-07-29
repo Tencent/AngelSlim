@@ -48,11 +48,16 @@ class HunyuanVL(BaseLLMModel):
         low_cpu_mem_usage=True,
         use_cache=False,
         using_multi_nodes=False,
+        attn_implementation="default",
+        **kwargs,
     ):
         use_flash_attn = False
         use_sdpa_attn = False
         init_kwargs = {}
-        if use_flash_attn:
+        if attn_implementation not in (None, "default"):
+            # Caller explicitly requested a backend (e.g. sparse compress run).
+            init_kwargs["attn_implementation"] = attn_implementation
+        elif use_flash_attn:
             init_kwargs["attn_implementation"] = "flash_attention_2"
         elif use_sdpa_attn:
             init_kwargs["attn_implementation"] = "sdpa"
