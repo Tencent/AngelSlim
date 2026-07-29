@@ -1,3 +1,6 @@
 [submodule "angelslim/compressor/sparsity/vecattention/ops/vllm-flash-attention"]
 	path = angelslim/compressor/sparsity/vecattention/ops/vllm-flash-attention
 	url = git@github.com:anminliu/vllm-flash-attention.git
+[submodule "AngelSpec"]
+	path = AngelSpec
+	url = https://github.com/Tencent/AngelSpec.git
