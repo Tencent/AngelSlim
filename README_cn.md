@@ -96,9 +96,13 @@
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
+          <li><a href="https://app.readthedocs.org/">DFly</a></li>
+          <li><a href="https://app.readthedocs.org/">DFlare</a></li>
+          <li><a href="https://app.readthedocs.org/">DFlash</a></li>
+          <li><a href="https://app.readthedocs.org/">DSpark</a></li>
+          <li><a href="https://app.readthedocs.org/">MTP</a></li>
           <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html">Eagle3</a></li>
           <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html">SpecExit</a></li>
-          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/dflare.html">DFlare</a></li>
         </ul>
       </td>
       <td>
@@ -256,7 +260,7 @@ cd AngelSlim && python setup.py install
 
 #### 2.1 投机采样
 
-AngelSlim 的投机采样训练由 **[AngelSpec](https://github.com/Tencent/AngelSpec)** 提供（git submodule，位于 `AngelSpec/`）——一个用于**训练**投机解码 draft 模型的 torch-native 框架，基于 [TorchSpec](https://github.com/lightseekorg/TorchSpec) 构建，并扩展了更多 draft 架构、target 模型支持与生产级训练能力，支持多种 draft 方法，以 **DFly** 与 **MTP + TTT** 为代表。
+AngelSlim 的投机采样训练由 **[AngelSpec](https://github.com/Tencent/AngelSpec)** 提供（git submodule，位于 `AngelSpec/`）——一个用于**训练**投机解码 draft 模型的 torch-native 框架，提供丰富的 draft 架构、target 模型支持与生产级训练能力，支持多种 draft 方法，以 **DFly** 与 **MTP + TTT** 为代表。
 
 框架采用**训推分离**设计：推理引擎运行冻结的 target 模型并抽取多层隐状态，经 [Mooncake](https://github.com/kvcache-ai/Mooncake) store 通过 RDMA 直接流式传输（不落盘）至 FSDP2 训练进程，由 controller 负责批处理、背压与评估。推理与训练运行在独立的 GPU 资源池上，可独立扩缩。
 
@@ -429,15 +433,14 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
 
 ### 1、投机采样
 
-下列结果来自 **[AngelSpec](https://github.com/Tencent/AngelSpec)**——一个 torch-native、训推分离投机采样训练框架（基于 TorchSpec，经 Mooncake RDMA 解耦 target 推理与 draft 训练），由 AngelSlim 以 git submodule 形式集成（详见 2.1 节），支持多种 draft 方法，以 **DFly** 与 **MTP + TTT** 为代表。[[论文]](https://arxiv.org/abs/2607.25852) | [[文档]](https://angelspec.readthedocs.io/) | [[Hugging Face]](https://huggingface.co/collections/AngelSlim/angelspec)
+下列结果来自 **[AngelSpec](https://github.com/Tencent/AngelSpec)**——一个 torch-native、训推分离投机采样训练框架，由 AngelSlim 以 git submodule 形式集成（详见 2.1 节），支持多种 draft 方法，以 **DFly** 与 **MTP + TTT** 为代表。[[论文]](https://arxiv.org/abs/2607.25852) | [[文档]](https://angelspec.readthedocs.io/) | [[Hugging Face]](https://huggingface.co/collections/AngelSlim/angelspec)
 
-**✨ 亮点**
-
-- **🧩 训练框架全开源** —— 支持多种 draft 方法，以 **DFly** 与 **MTP + TTT** 为代表；开源 Hy3-A21B 的 **MTP** 与 **DFly** drafter 权重与训练代码。
-- **🚀 各并发档位均最快** —— DFly 在全部并发档位（c4–c64）均取得最高平均吞吐：相较 AR 加速 **1.98×–2.40×**（代码类单项最高 **2.86×**），比 DFlash 快 **10.5%–11.8%**。
-- **📈 最佳起草质量** —— DFly 在 Hy3-A21B 上平均接受长度达 **4.79**，较 DFlash（3.69）**+30%**、较 MTP（3.00）约 **1.6×**，HumanEval 上高达 **5.52**。
-- **⚡ D-cut 应对高负载** —— 自适应验证深度裁剪在高并发线上流量下额外带来最高 **+15.7%** 吞吐，且几乎无损（接受长度 2.50 → 2.46）。
-- **💬 MTP + TTT 搞定对话** —— 修复高熵对话的训练-推理不一致：平均接受率 **52.8% → 66.4%**，接受长度 **2.58 → 2.99**。
+**✨ 核心亮点**
+- **🏗️ 全链路开源**：AngelSpec 训练框架 + Hy3-A21B 的 MTP / DFly drafter 权重与训练代码，一次性放出。
+- **🚀 DFly 全面领先**：在 Hy3-A21B 上，DFly 于 4–64 全部并发档位、六个 benchmark 均取得最高吞吐——相较 AR 基线平均加速 **1.98–2.40×**（代码 / 数学单项峰值 **2.86×**），并比 DFlash 快 **10.5–11.8%**。
+- **📈 接受长度大幅提升**：DFly 平均接受长度达 **4.79**，较 DFlash（3.69）**+30%**、较 MTP（3.00）约 **1.6×**，HumanEval 高达 **5.52**。
+- **⚡ D-cut 榨干高并发**：在 295B 模型线上真实流量中，高并发区间额外带来最高 **+15.7%** 吞吐，且几乎无损（平均接受长度 2.50 → 2.46）。
+- **💬 MTP + TTT 攻克对话**：修复训练-推理不一致，平均接受率 **52.8% → 66.4%**，平均接受长度 **2.58 → 2.99**。
 
 #### 1.1 🏆 Drafter 大比拼：DFly 领跑
 

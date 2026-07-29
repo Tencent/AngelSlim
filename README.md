@@ -95,9 +95,13 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
+          <li><a href="https://app.readthedocs.org/">DFly</a></li>
+          <li><a href="https://app.readthedocs.org/">DFlare</a></li>
+          <li><a href="https://app.readthedocs.org/">DFlash</a></li>
+          <li><a href="https://app.readthedocs.org/">DSpark</a></li>
+          <li><a href="https://app.readthedocs.org/">MTP</a></li>
           <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html">Eagle3</a></li>
           <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html">SpecExit</a></li>
-          <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/dflare.html">DFlare</a></li>
         </ul>
       </td>
       <td>
@@ -254,7 +258,7 @@ For more detailed installation instructions and platform-specific guidance, plea
 
 #### 2.1 Speculative Decoding
 
-AngelSlim's speculative-decoding training is powered by **[AngelSpec](https://github.com/Tencent/AngelSpec)** (git submodule under `AngelSpec/`) — a torch-native framework for **training** speculative-decoding draft models, built on [TorchSpec](https://github.com/lightseekorg/TorchSpec) and extended with additional draft architectures, target-model support, and production-scale training. It supports a variety of draft methods, led by **DFly** and **MTP + TTT**.
+AngelSlim's speculative-decoding training is powered by **[AngelSpec](https://github.com/Tencent/AngelSpec)** (git submodule under `AngelSpec/`) — a torch-native framework for **training** speculative-decoding draft models, featuring a rich set of draft architectures, target-model support, and production-scale training. It supports a variety of draft methods, led by **DFly** and **MTP + TTT**.
 
 It follows a **disaggregated design**: inference engines run the frozen target model and extract multi-layer hidden states, which a [Mooncake](https://github.com/kvcache-ai/Mooncake) store streams over RDMA (no disk staging) to the FSDP2 training workers, while a controller handles batching, backpressure, and evaluation. Inference and training run on separate GPU pools and scale independently.
 
@@ -426,15 +430,15 @@ For more detaileds, please refer to the [Deployment Documentation](https://angel
 
 ### 1. Speculative Decoding
 
-The results below come from **[AngelSpec](https://github.com/Tencent/AngelSpec)** — a torch-native, disaggregated speculative-decoding training framework (built on TorchSpec, with target inference and draft training connected via Mooncake RDMA), integrated into AngelSlim as a git submodule (see §2.1), with support for a variety of draft methods, led by **DFly** and **MTP + TTT**. [[Paper]](https://arxiv.org/abs/2607.25852) | [[Docs]](https://angelspec.readthedocs.io/) | [[Hugging Face]](https://huggingface.co/collections/AngelSlim/angelspec)
+The results below come from **[AngelSpec](https://github.com/Tencent/AngelSpec)** — a torch-native, disaggregated speculative-decoding training framework, integrated into AngelSlim as a git submodule (see §2.1), with support for a variety of draft methods, led by **DFly** and **MTP + TTT**. [[Paper]](https://arxiv.org/abs/2607.25852) | [[Docs]](https://angelspec.readthedocs.io/) | [[Hugging Face]](https://huggingface.co/collections/AngelSlim/angelspec)
 
 **✨ Highlights**
 
-- **🧩 Training framework, fully open** — support for a variety of draft methods, led by **DFly** and **MTP + TTT**; Hy3-A21B **MTP** & **DFly** drafter weights and training code released.
-- **🚀 Fastest at every concurrency** — DFly leads average end-to-end throughput at all concurrency levels (c4–c64): **1.98×–2.40×** over the AR baseline (up to **2.86×** on code), and **10.5%–11.8%** faster than DFlash.
-- **📈 Best draft quality** — DFly mean accepted length **4.79** on Hy3-A21B — **+30%** over DFlash (3.69) and **~1.6×** over MTP (3.00) — reaching **5.52** on HumanEval.
-- **⚡ D-cut for heavy load** — adaptive verification-depth pruning adds up to **+15.7%** throughput at high concurrency on live traffic, at near-zero quality cost (accepted length 2.50 → 2.46).
-- **💬 MTP + TTT for chat** — closes the train/inference gap on high-entropy dialogue: acceptance rate **52.8% → 66.4%**, accepted length **2.58 → 2.99**.
+- **🏗️ Full-stack open source** — the AngelSpec training framework plus Hy3-A21B **MTP** / **DFly** drafter weights and training code, all released at once.
+- **🚀 DFly leads across the board** — on Hy3-A21B, DFly delivers the highest throughput across all concurrency levels (4–64) and all six benchmarks — **1.98–2.40×** average speedup over the AR baseline (peak **2.86×** on code / math), and **10.5–11.8%** faster than DFlash.
+- **📈 Substantially higher accepted length** — DFly reaches a mean accepted length of **4.79** — **+30%** over DFlash (3.69) and **~1.6×** over MTP (3.00) — up to **5.52** on HumanEval.
+- **⚡ D-cut squeezes high concurrency** — on live traffic of a 295B model, it adds up to **+15.7%** throughput in the high-concurrency regime at near-zero cost (mean accepted length 2.50 → 2.46).
+- **💬 MTP + TTT cracks chat** — fixes the train/inference mismatch: mean acceptance rate **52.8% → 66.4%**, mean accepted length **2.58 → 2.99**.
 
 #### 1.1 🏆 Drafter Showdown — DFly Leads the Pack
 
