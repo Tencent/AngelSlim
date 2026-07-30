@@ -1,0 +1,117 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output_glm5_w8a8c8_2node
+
+# ===========================================================================
+# GLM-5 (GlmMoeDsaForCausalLM): W8A8C8 recipe on TWO NODES (16 GPUs).
+#
+# Recipe summary
+# --------------
+#   Weights  -> INT8 per-channel      (standard AngelSlim int8_dynamic W)
+#   Activ.   -> INT8 per-token dynamic (standard AngelSlim int8_dynamic A)
+#   KV cache -> INT8 (dynamic) on TWO streams:
+#                * MLA latent NoPE portion  : per-block-128 dynamic (4 blocks
+#                  of 128 over the 512-dim NoPE latent; RoPE tail [512:] stays
+#                  bf16 passthrough)
+#                * DSA indexer K stream      : per-token dynamic
+#              The KV path is DYNAMIC, so scales are NOT persisted to disk;
+#              they are recomputed at inference time.  The model adapter
+#              (angelslim/models/llm/glm5.py) hooks kv_a_proj_with_mqa and
+#              indexer.wk to apply the observers and to emit a rich
+#              kv_cache_scheme descriptor into config.json.
+#
+# TWO-NODE (16 GPUs) differences vs the single-node C16 low-memory recipe
+# ------------------------------------------------------------------------
+#   * low_memory: false  -- with 16 GPUs we have enough device memory to hold
+#     the model sharded; no need for the CPU-streaming low-memory path.
+#   * enable_expert_parallel: true -- tools/run.py relaunches under
+#     ``torchrun --multi-nodes`` and shards the 78 MoE layers / 256 routed
+#     experts across BOTH nodes.  Weight/activation scales are all_gathered
+#     before the QDQ convert step.
+#   * device_map: distributed -- torchrun / torch.distributed owns placement.
+#
+# Indexer note: under W8A8C8 the indexer linears wq_b / wk ARE quantized
+# (int8 per-channel W + int-token dynamic A); only the tiny helpers k_norm
+# and weights_proj stay bf16 (model class force-skips them).
+# ===========================================================================
+model:
+  name: GLM5
+  model_path: /apdcephfs_zwfy2/share_300532381/harviexu/chatglm5.2
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  # ZeRO-3 pre-shard: with zero3: true, tools/run.py registers a ZeRO-3
+  # deepspeed config BEFORE model load, so BaseLLMModel.from_pretrained takes
+  # the zero3_empty_model_from_pretrained path.  Each rank then holds only
+  # 1/N of every parameter (model sharded across the 16 GPUs), and
+  # stream_load_weights fills the shards in from disk -- NO full model is ever
+  # materialised on CPU or any single GPU, so the OOM from device_map=auto
+  # multi-process loading is avoided.  GLM-5's fused MoE experts are empty-
+  # defused into GlmMoeDsaSplitMoe inside the deepspeed.zero.Init context.
+  # NOTE: device_map is ignored on the ZeRO-3 path; kept for the non-ZeRO-3
+  # fallback only.
+  device_map: auto
+  # Enable two-node expert-parallel calibration.  tools/run.py auto-relaunches
+  # with torchrun --multi-nodes when this is True.
+  enable_expert_parallel: true
+  # Pure Expert-Parallel path (no DeepSpeed).
+  # ---------------------------------------------------------------------
+  # ``zero3: false`` -- do NOT activate deepspeed.zero.Init.  On H20 96GB the
+  # zero.Init hook wraps torch.empty and forces the fused 12GB gate_up_proj
+  # onto CUDA before partitioning, which OOMs at expert construction time.
+  # Instead ``base_model.from_pretrained`` builds the skeleton on
+  # ``accelerate.init_empty_weights`` (meta -- zero bytes), then
+  # ``_defuse_moe_experts_empty`` shards the fused MoE into per-rank EP
+  # ``GlmMoeDsaSplitMoe`` (each rank keeps only its local 1/N experts),
+  # and ``stream_load_weights`` fills CPU memory (shared layers full ~10GB,
+  # experts local ~11GB) so INT8 ``low_memory_run`` can then stream one
+  # transformer block at a time onto GPU (per-rank GPU peak ~13GB << 96GB).
+  zero3: false
+
+# W8A8C8 = INT8 weight + INT8 activation + INT8 KV cache (dynamic).
+# We declare ``kv_cache`` under ``quant_method`` so that ``QuantConfig``
+# installs a KV observer and ``core/hook.py`` calls
+# ``apply_kvcache_observers`` (which hooks the MLA latent + indexer K
+# streams for GLM-5).  The scheme is dynamic, so no static KV scales are
+# persisted -- see the model adapter for the rich kv_cache_scheme output.
+compression:
+  name: PTQ
+  quantization:
+    name: int8_dynamic
+    bits: 8
+    low_memory: true            # H20 96GB: block-streamed CPU->GPU INT8 PTQ (per-rank GPU peak ~13GB)
+    quant_method:
+      weight: "per-channel"     # int8 per-channel weight
+      activation: "per-token"    # int8 per-token dynamic activation (no static scale)
+      kv_cache: "per-tensor"    # enables KV observer wiring + apply_kvcache_observers
+    quant_helpers:
+      - "smooth"                # SmoothQuant pre-processing (a la msmodelslim's flex_smooth_quant)
+    smooth_alpha: 0.5
+    # The GLM-5 adapter hard-skips lm_head / embed_tokens / mlp.gate.* /
+    # eh_proj / .indexer.k_norm by default.  Layers listed below are
+    # ADDITIONALLY skipped (substring match against the fully-qualified
+    # layer name).  For the historical W8A8C8 recipe we keep the MLA
+    # ``kv_b_proj`` in bf16 (accuracy-sensitive latent-to-heads projection)
+    # and the DSA ``indexer.weights_proj`` per-head gating scalars in bf16
+    # (tiny weight, quantizing wrecks top-k ranking).  The two big indexer
+    # linears ``wq_b`` / ``wk`` DO participate in INT8 quantization here.
+    ignore_layers:
+      - "lm_head"
+      - "embed_tokens"
+      - "kv_b_proj"                 # MLA latent-to-heads (accuracy-sensitive)
+      - ".indexer.weights_proj"     # DSA per-head gating (tiny; top-k stability)
+
+# Small calibration set (~64 short prompts, pre-templated as applied_message
+# so TextDataset takes the fast path: it just tokenizes the string, no
+# chat-template / assistant-turn required -- exactly what PTQ needs
+# (forward-only, no loss/labels).
+#/apdcephfs_sgfd2/share_300532381/harviexu/AngelSlim/dataset/qa/question_calib.jsonl
+#/apdcephfs_sgfd2/share_300532381/harviexu/AngelSlim/dataset/gsm8k/question.jsonl, 
+# /apdcephfs_sgfd2/share_300532381/harviexu/AngelSlim/dataset/alpaca/question.jsonl 
+# 3合一
+dataset:
+  name: TextDataset
+  data_path: /apdcephfs_sgfd2/share_300532381/harviexu/AngelSlim/dataset/merge3.jsonl
+  max_seq_length: 2048
+  num_samples: 240
+  batch_size: 1
