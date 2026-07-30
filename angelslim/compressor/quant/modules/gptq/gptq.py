@@ -57,6 +57,9 @@ def _extract_hidden_states(output):
 
 __all__ = ["GPTQ"]
 
+# Model types requiring saved-config compatibility patches for serving.
+SERVING_CONFIG_PATCH_MODEL_TYPES = ("hy_v3", "glm_moe_dsa")
+
 
 class GPTQ:
     def __init__(self, model, seq_length=2048, hidden_size=2560, sym=True, actorder=True):
@@ -825,7 +828,7 @@ class GPTQ:
         with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
 
-        if config.get("model_type") not in ("hy_v3", "glm_moe_dsa"):
+        if config.get("model_type") not in SERVING_CONFIG_PATCH_MODEL_TYPES:
             return
 
         rope_parameters = config.get("rope_parameters")

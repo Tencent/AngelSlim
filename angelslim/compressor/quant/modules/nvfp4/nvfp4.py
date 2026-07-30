@@ -79,10 +79,7 @@ class NVFP4:
         per_block_amax = weight.abs().amax(dim=-1).float()
         # Get per-block-scale
         per_block_scale = per_block_amax / 6.0
-        # Quantize per_block_scale to FP8
-        # weights_scxaling_factor_2 may live on a different device than the weight
-        # (e.g. when cpu_convert moves the layer to CPU while the amax was computed
-        # on GPU), so align devices before the division.
+        # Align devices before the division.
         if weights_scaling_factor_2 is not None:
             weights_scaling_factor_2 = weights_scaling_factor_2.to(per_block_scale.device)
         q_per_block_scale = per_block_scale / weights_scaling_factor_2
