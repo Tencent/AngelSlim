@@ -34,7 +34,7 @@
 # ===========================================================================
 
 global:
-  save_path: ./output_glm5_w8a8_kunlun
+  save_path: ./output_glm5_w8a8_kunlun_fixed
 
 model:
   name: GLM5
@@ -74,7 +74,7 @@ compression:
 
 dataset:
   name: TextDataset
-  data_path: /apdcephfs_sgfd2/share_300532381/harviexu/AngelSlim/dataset/sharegpt_gpt4/sharegpt_gpt4_256.jsonl
+  data_path: /apdcephfs_sgfd2/share_300532381/harviexu/AngelSlim/dataset/merge3.jsonl
   max_seq_length: 4096
-  num_samples: 64 # 256
+  num_samples: 480 # 256
   batch_size: 1

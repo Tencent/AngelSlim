@@ -924,33 +924,89 @@ class GLM5(BaseLLMModel):
         return observer_layers_dict
 
     # ------------------------------------------------------------------
-    # SmoothQuant mapping — must reflect MLA, not q/k/v_proj
+    # SmoothQuant mapping — must reflect MLA + DSA indexer topology
     # ------------------------------------------------------------------
     def get_smooth_mapping_layers(self, smooth_config, mappings=None):
         """Return the ``{norm_layer: (norm, [linear, ...])}`` mapping used by
         SmoothQuant.
 
-        For GLM-5 MLA the two smoothable groups are:
+        SmoothQuant applies the transform  x' = x / s,  W' = W * s  on every
+        (norm, downstream-linear) pair that share the same input tensor.  It
+        is a **mathematical equivalence**: EVERY linear that consumes a given
+        norm's output MUST be in that norm's balance list, otherwise the
+        forward-pass output changes.  Missing a consumer is a correctness
+        bug, not a precision knob — this holds even when the missing linear
+        is left in bf16 (its weights still have to be multiplied by s to
+        cancel the norm-side division).
 
-          * ``input_layernorm`` -> [``q_a_proj``, ``kv_a_proj_with_mqa``]
-            (the first attention linears that consume the norm output;
-            ``q_b_proj`` / ``kv_b_proj`` are behind their own ``q_a_layernorm`` /
-            ``kv_a_layernorm`` and are not directly smoothable here.)
+        GLM-5 MLA + DSA topology (see ``modeling_glm_moe_dsa.py``):
 
-          * ``post_attention_layernorm`` -> [``gate_proj``, ``up_proj``]
-            for dense MLP and every MoE ``experts.*`` / ``shared_experts.*``
-            block.  ``BaseLLMModel.get_smooth_mapping_layers`` walks
-            ``named_modules()`` with a longest-common-prefix rule, which
-            correctly picks up all expert copies.
+        ``input_layernorm(hidden) -> h`` is consumed by:
+              - ``self_attn.q_a_proj(h)``
+              - ``self_attn.kv_a_proj_with_mqa(h)``
+              - ``self_attn.indexer.wk(h)``            (DSA index key)
+              - ``self_attn.indexer.weights_proj(h)``  (DSA per-head gating)
+
+        ``q_a_layernorm(q_a_proj(h)) -> q_resid`` is consumed by:
+              - ``self_attn.q_b_proj(q_resid)``
+              - ``self_attn.indexer.wq_b(q_resid)``    (DSA index query)
+
+        ``kv_a_layernorm(k_compressed) -> k_lat`` is consumed by:
+              - ``self_attn.kv_b_proj(k_lat)``
+
+        ``post_attention_layernorm(x) -> m`` is consumed by:
+              - Dense MLP: ``mlp.gate_proj(m)`` / ``mlp.up_proj(m)``
+              - MoE routed: ``mlp.experts.<i>.{gate,up}_proj(m)`` for all i
+              - MoE shared: ``mlp.shared_experts.{gate,up}_proj(m)``
+            (all consume the SAME ``m``; the router does not gate the input).
+
+        ``BaseLLMModel.get_smooth_mapping_layers`` walks ``named_modules()``
+        with a longest-common-prefix rule that correctly picks up every
+        expert copy (routed + shared) and every indexer sub-linear.
+
+        On IndexShare layers (``config.indexer_types[l] == "shared"``) the
+        ``indexer.{wk,wq_b,weights_proj}`` modules exist as nn.Linear leaves
+        but their weights are random-init (never trained / never saved) and
+        the modeling forward SKIPS them (reuses the previous "full" layer's
+        topk).  Pulling them into the balance list stays mathematically safe
+        because:
+          * the transform ``W *= s`` on a never-used weight has no effect on
+            the forward pass;
+          * the balance-scale is per-layer (does not leak across layers),
+            and the "real" consumers (``q_a_proj``, ``kv_a_proj_with_mqa``)
+            dominate the per-input-channel weight amax by orders of
+            magnitude, so shared-layer noise cannot skew the smooth scale.
         """
         if mappings is None:
             mappings = [
-                (["q_a_proj", "kv_a_proj_with_mqa"], "input_layernorm"),
-                (["gate_proj", "up_proj"], "post_attention_layernorm"),
+                (
+                    [
+                        "q_a_proj",
+                        "kv_a_proj_with_mqa",
+                        "wk",              # indexer.wk         (DSA index key)
+                        "weights_proj",    # indexer.weights_proj (DSA gating)
+                    ],
+                    "input_layernorm",
+                ),
+                (
+                    [
+                        "q_b_proj",
+                        "wq_b",            # indexer.wq_b       (DSA index query)
+                    ],
+                    "q_a_layernorm",
+                ),
+                (
+                    ["kv_b_proj"],
+                    "kv_a_layernorm",
+                ),
+                (
+                    ["gate_proj", "up_proj"],
+                    "post_attention_layernorm",
+                ),
             ]
         print(f"[GLM5] smooth mappings={mappings}")
-        assert len(mappings) == 2
-        assert smooth_config.smooth_first_linears or smooth_config.smooth_last_linears
+        assert len(mappings) == 4
+        assert smooth_config.smooth_first_linears or smooth_config.smooth_second_linears
         return super().get_smooth_mapping_layers(smooth_config, mappings)
 
     # ------------------------------------------------------------------

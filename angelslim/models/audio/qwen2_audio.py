@@ -126,8 +126,8 @@ class Qwen2_Audio(BaseLLMModel):
             ]
         print(f"smooth mappings={mappings}")
         assert len(mappings) == 2
-        assert smooth_config.smooth_first_linears or smooth_config.smooth_last_linears
-        # TODO: support smooth_last_linears
+        assert smooth_config.smooth_first_linears or smooth_config.smooth_second_linears
+        # TODO: support smooth_second_linears
         return super().get_smooth_mapping_layers(smooth_config, mappings)
 
     def get_parent_dict(self, observer_layers_dict):
