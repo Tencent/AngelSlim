@@ -117,7 +117,7 @@ if [[ "${do_merge}" -eq 1 ]]; then
     echo "[pipeline] BF16_MODEL_PATH=${BF16_MODEL_PATH}"
     echo "[pipeline] OUTPUT_PATH=${OUTPUT_PATH}"
 
-    python3 tools/merge_hy3_nvfp4_c8.py \
+    python3 tools/hy3/merge_hy3_nvfp4_c8.py \
         --statistics_path "${STATISTICS_PATH}" \
         --nvfp4_w_path "${NVFP4_W_PATH}" \
         --bf16_model_path "${BF16_MODEL_PATH}" \

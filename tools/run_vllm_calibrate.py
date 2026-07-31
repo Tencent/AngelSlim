@@ -349,7 +349,7 @@ def parse_args():
         )
 
     if args.auto_detect_mtp:
-        from hy3_mtp_utils import detect_hy3_mtp
+        from hy3.hy3_mtp_utils import detect_hy3_mtp
 
         mtp_layout = detect_hy3_mtp(args.model_path)
         if mtp_layout.has_mtp:
