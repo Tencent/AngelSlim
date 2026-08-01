@@ -115,13 +115,14 @@ bash tools/vllm_patch/install.sh --help      # 查看完整用法
 
 ## 二、Hy3.0 系列脚本（Hunyuan-A20B 等 Hy3 模型）
 
-下面 6 个脚本共享同一套 vLLM 运行时环境（chunked prefill / FlashInfer attention / mp distributed executor / fused MoE 等），区别在于产出物不同。
+下面 7 个脚本共享同一套 vLLM 运行时环境（chunked prefill / FlashInfer attention / mp distributed executor / fused MoE 等），区别在于产出物不同。
 
 | 脚本 | 用途 | 入口 |
 | --- | --- | --- |
-| [`run_vllm_quant_for_HY3.sh`](./run_vllm_quant_for_HY3.sh) | ★ 推荐的"一键流水线"：校准 + 量化 | `tools/run_vllm_calibrate.py` + `tools/fp8_quant_with_vllm_activation.py` |
-| [`run_vllm_calibrate_for_HY3.sh`](./run_vllm_calibrate_for_HY3.sh) | 仅 W8A8C8 联合校准 | `tools/run_vllm_calibrate.py` |
-| [`run_kvcache_calibrate_for_HY3.sh`](./run_kvcache_calibrate_for_HY3.sh) | 仅 KV-cache 校准（轻量） | `tools/kvcache/run_kvcache_calibrate.py` |
+| [`run_vllm_quant_for_Hy3.sh`](./run_vllm_quant_for_Hy3.sh) | ★ FP8 一键流水线：校准 + 量化 | `tools/run_vllm_calibrate.py` + `tools/fp8_quant_with_vllm_activation.py` |
+| [`run_nvfp4_quant_for_Hy3.sh`](./run_nvfp4_quant_for_Hy3.sh) | ★ NVFP4 一键流水线：校准 + weight-only 量化 + 合并 | `tools/run_vllm_calibrate.py` + `tools/run.py` + `tools/hy3/merge_hy3_nvfp4_c8.py` |
+| [`run_vllm_calibrate_for_Hy3.sh`](./run_vllm_calibrate_for_Hy3.sh) | 仅 W8A8C8 联合校准 | `tools/run_vllm_calibrate.py` |
+| [`run_kvcache_calibrate_for_Hy3.sh`](./run_kvcache_calibrate_for_Hy3.sh) | 仅 KV-cache 校准（轻量） | `tools/kvcache/run_kvcache_calibrate.py` |
 | [`run_smooth_for_HY3.sh`](./run_smooth_for_HY3.sh) | SmoothQuant 一键流水线：统计收集 + 权重变换 | `tools/smooth/run_vllm_smooth.py` + `tools/smooth/convert_smooth_weights.py` |
 | [`run_smooth_calibrate_for_HY3.sh`](./run_smooth_calibrate_for_HY3.sh) | 仅 Smooth 统计收集（+ 可选 Alpha 搜索） | `tools/smooth/run_vllm_smooth.py` |
 | [`run_smooth_convert_for_HY3.sh`](./run_smooth_convert_for_HY3.sh) | 仅 Smooth 离线权重变换 | `tools/smooth/convert_smooth_weights.py` |
@@ -199,7 +200,57 @@ bash run_vllm_quant_for_Hy3.sh --help             # 打印用法
 
 ---
 
-### 2. `run_vllm_calibrate_for_Hy3.sh` — 一键脚本里的"阶段 1"独立版
+### 2. `run_nvfp4_quant_for_Hy3.sh` ★推荐的 NVFP4 "一键流水线"
+
+**功能**：bf16 模型 → vLLM 激活校准 → NVFP4 weight-only 量化 → NVFP4 + FP8 scale HF safetensors，全流程一次完成。
+
+#### 阶段 1：调用 `tools/run_vllm_calibrate.py`
+
+- 用 vLLM 加载 bf16 模型，在 PTQ 数据集上跑前向，注册 activation / MoE / KV-cache 钩子。
+- 脚本传入 `--auto-detect-mtp`：若 checkpoint 在 `num_hidden_layers` 之后还包含追加的 MTP 层，则自动开启 MTP draft model 校准；无 MTP 时保持原校准流程。
+- 输出到 `${STATISTICS_PATH}`：
+  - `activation_stats.json` — activation 与 KV-cache 统计
+  - `moe_expert_stats.json` — 每个 MoE expert 的输入激活统计
+  - `mtp_activation_stats.json` — 检测到 MTP 时生成的 MTP Linear / KV-cache 统计
+  - `mtp_moe_expert_stats.json` — 检测到 MTP MoE 时生成的 per-expert 统计
+
+#### 阶段 2：调用 `tools/run.py`
+
+- 读取 bf16 权重，对 MoE expert 权重执行 NVFP4 weight-only 量化。
+- 默认配置为 [`configs/Hy3/ptq/nvfp4_weight_only/hunyuan_a20b_nvfp4_weight_only.yaml`](../../configs/Hy3/ptq/nvfp4_weight_only/hunyuan_a20b_nvfp4_weight_only.yaml)。
+- 量化模型目录需与 `${NVFP4_W_PATH}` 保持一致，供阶段 3 读取。
+
+#### 阶段 3：调用 `tools/hy3/merge_hy3_nvfp4_c8.py`
+
+- 读取 `${STATISTICS_PATH}` 下的 `activation_stats.json` / `moe_expert_stats.json`、`${NVFP4_W_PATH}` 下的 NVFP4 权重及 `${BF16_MODEL_PATH}` 下的原始模型文件。
+- 把 NVFP4 expert 权重、bf16 非 expert 权重、expert input scale 和 KV-cache scale 合并到 `${OUTPUT_PATH}`。
+- 默认使用 `--mtp-fp8-mode auto`：检测到 MTP 时，从原始 bf16 checkpoint 重新读取 MTP 权重，并使用 `mtp_activation_stats.json` / `mtp_moe_expert_stats.json` 将支持的 MTP Linear 与 MoE GEMM 权重量化为静态 per-tensor FP8；norm、router 等非量化参数保持 bf16。
+- 含 MTP 的最终 `config.json` / `hf_quant_config.json` 使用 ModelOpt `MIXED_PRECISION`，通过 `quantized_layers` 标记主模型 expert 为 NVFP4、MTP 量化模块为 FP8；无 MTP 时保持原 NVFP4 配置。
+- 产出的 HuggingFace 模型包含 NVFP4 权重、对应 scale、KV-cache scale、`config.json` 和 tokenizer 文件。
+
+校准阶段默认使用 [`configs/Hy3/ptq/fp8/Hy3_vllm_ptq_per_tensor.yaml`](../../configs/Hy3/ptq/fp8/Hy3_vllm_ptq_per_tensor.yaml)，weight-only 阶段默认使用 [`configs/Hy3/ptq/nvfp4_weight_only/hunyuan_a20b_nvfp4_weight_only.yaml`](../../configs/Hy3/ptq/nvfp4_weight_only/hunyuan_a20b_nvfp4_weight_only.yaml)。运行前需要确认：
+
+- 校准 YAML 的 `model_path` / `output_dir` 与实际 bf16 模型、`${STATISTICS_PATH}` 一致。
+- NVFP4 YAML 的 `model.model_path` / `global.save_path` 与实际 bf16 模型、`${NVFP4_W_PATH}` 一致。
+- `${BF16_MODEL_PATH}` 指向原始 bf16 HuggingFace 模型；默认占位值 `/path/to/bf16_model` 必须替换。
+- `${BF16_MODEL_PATH}`、校准 YAML 的 `model_path` 和 NVFP4 YAML 的 `model.model_path` 必须指向同一个模型版本，否则 MTP 层检测、校准统计和权重名称可能无法对应。
+- `PTQ_CONFIG`、`NVFP4_CONFIG`、`WORK_DIR`、`STATISTICS_PATH`、`NVFP4_W_PATH`、`BF16_MODEL_PATH`、`OUTPUT_PATH` 和 `LOG_DIR` 均可通过环境变量覆盖。
+
+#### CLI 开关
+
+```bash
+bash run_nvfp4_quant_for_Hy3.sh                       # 三阶段都跑
+bash run_nvfp4_quant_for_Hy3.sh --skip-calibrate      # 复用已有校准统计
+bash run_nvfp4_quant_for_Hy3.sh --skip-weight-only    # 复用已有 NVFP4 权重
+bash run_nvfp4_quant_for_Hy3.sh --skip-merge          # 只运行校准和 weight-only 量化
+bash run_nvfp4_quant_for_Hy3.sh --help                # 打印用法
+```
+
+> 多个 `--skip-*` 开关可以组合。脚本开启 `set -euo pipefail`，任一阶段失败将立即中断。
+
+---
+
+### 3. `run_vllm_calibrate_for_Hy3.sh` — 一键脚本里的"阶段 1"独立版
 
 **功能**：只跑 W8A8C8 联合校准，不做量化。
 
@@ -226,7 +277,7 @@ bash run_vllm_quant_for_Hy3.sh --help             # 打印用法
 
 ---
 
-### 3. `run_kvcache_calibrate_for_Hy3.sh` — 仅校准 KV-cache（轻量）
+### 4. `run_kvcache_calibrate_for_Hy3.sh` — 仅校准 KV-cache（轻量）
 
 **功能**：只校准 KV-cache（K/V min/max），不做 weight / activation / MoE 统计。
 
@@ -248,7 +299,7 @@ bash run_vllm_quant_for_Hy3.sh --help             # 打印用法
 
 ---
 
-### 4. `tools/kvcache/replace_kv_scales.py` — KV scale 离线替换器
+### 5. `tools/kvcache/replace_kv_scales.py` — KV scale 离线替换器
 
 **功能**：把上述任一校准脚本产出的 `kv_cache_tuned_scales*.json` 写回到已量化 FP8 模型的 `kv_cache_scales.safetensors`，并同步更新该模型 `config.json` 中的 `attn_quant_config`。
 
