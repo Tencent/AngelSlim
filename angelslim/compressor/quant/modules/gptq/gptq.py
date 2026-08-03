@@ -30,8 +30,11 @@ from .....utils import (
     find_parent_layer_and_sub_name,
     print_info,
 )
+from ...core.quant_func import reduce_block_padding
+from ...core.save import copy_mtp_layers_if_present
 from ...modules.catcher import Catcher
 from ...modules.helper_layer import (
+    NVFP4_E2M1_MAX,
     GPTQQuantLinear,
     NVFP4QDQModule,
     compute_nvfp4_weight_scale_2,
@@ -53,6 +56,9 @@ def _extract_hidden_states(output):
 
 
 __all__ = ["GPTQ"]
+
+# Model types requiring saved-config compatibility patches for serving.
+SERVING_CONFIG_PATCH_MODEL_TYPES = ("hy_v3", "glm_moe_dsa")
 
 
 class GPTQ:
@@ -365,6 +371,32 @@ class GPTQ:
                 f"{shared_scale_2.item():.6g} across {len(names)} layers"
             )
 
+    def _rtn_nvfp4_scales(self, weight, weight_scale_2):
+        """Round-to-nearest NVFP4 scales for a weight that GPTQ skipped.
+
+        Args:
+            weight: fp32/bf16 weight [out, in]; ``in`` need not be block-aligned.
+            weight_scale_2: per-tensor level-2 scale (shared for fused gate/up).
+        Returns:
+            (block_scale_e4m3 [out, in/block_size] float8_e4m3fn,
+             weight_scale_2 [scalar] float32) both on CPU.
+        """
+        w = reduce_block_padding(weight.float(), block_sizes={-1: self.block_size})
+        w = w.view(*w.shape[:-1], -1, self.block_size)
+        per_block_amax = w.abs().amax(dim=-1).float()
+        per_block_scale = per_block_amax / NVFP4_E2M1_MAX
+        q_per_block_scale = per_block_scale / weight_scale_2
+        q_per_block_scale = torch.where(
+            per_block_scale > 0,
+            q_per_block_scale,
+            torch.ones_like(q_per_block_scale),
+        )
+        finfo = torch.finfo(torch.float8_e4m3fn)
+        block_scale_e4m3 = (
+            q_per_block_scale.clamp(min=finfo.min, max=finfo.max).to(torch.float8_e4m3fn).cpu()
+        )
+        return block_scale_e4m3, weight_scale_2.detach().float().cpu()
+
     @torch.no_grad()
     def run(self, dataloader):
         for model_module in self.layers:
@@ -499,10 +531,33 @@ class GPTQ:
                     and self._get_expert_idx_from_name(name) is not None
                     and self.gptq[name].nsamples == 0
                 ):
-                    print_info(
-                        f"Skip {name} because no calibration samples were "
-                        f"routed to this local expert layer."
-                    )
+                    quant_name = f"{self.layers_block_name}.{i}.{name}"
+                    if self.weight_format == "nvfp4":
+                        gptq_layer = self.gptq[name]
+                        weight_scale_2 = gptq_layer.weight_scale_2
+                        if weight_scale_2 is None:
+                            # Non-fused layer (e.g. down_proj): derive its own.
+                            weight_scale_2 = compute_nvfp4_weight_scale_2(
+                                gptq_layer.w.abs().amax()
+                            )
+                        block_scale_e4m3, weight_scale_2 = self._rtn_nvfp4_scales(
+                            gptq_layer.layer.weight.data, weight_scale_2
+                        )
+                        self.quantizers[quant_name] = (
+                            block_scale_e4m3,
+                            torch.zeros_like(block_scale_e4m3, dtype=torch.float32),
+                        )
+                        self.nvfp4_weight_scales_2[quant_name] = weight_scale_2
+                        print_info(
+                            f"RTN-pack {name} (no calibration samples routed): "
+                            f"NVFP4 round-to-nearest, weight left uncompensated."
+                        )
+                    else:
+                        print_info(
+                            f"Skip {name} because no calibration samples were "
+                            f"routed to this local expert layer; it stays bf16 "
+                            f"(int4 RTN fallback not implemented)."
+                        )
                     self.gptq[name].free()
                     continue
                 print_info(f"Quant {name} ,nsamples: {self.gptq[name].nsamples}...")
@@ -649,9 +704,26 @@ class GPTQ:
         print_info("Packing NVFP4 model...")
         layers = find_layers(model, layers=self.model.observer_layer_classes)
 
+        try:
+            import ctypes
+
+            _libc = ctypes.CDLL("libc.so.6")
+
+            def _malloc_trim():
+                try:
+                    _libc.malloc_trim(0)
+                except Exception:
+                    pass
+
+        except Exception:
+
+            def _malloc_trim():
+                pass
+
         with tctl.threadpool_limits(limits=1):
-            pbar = tqdm(self.quantizers.keys(), leave=True)
-            for name in pbar:
+            names = list(self.quantizers.keys())
+            pbar = tqdm(names, leave=True)
+            for step, name in enumerate(pbar):
                 pbar.set_description(f"Packing {name}...", refresh=True)
                 if name not in layers:
                     continue
@@ -669,6 +741,19 @@ class GPTQ:
                 )
                 parent_layer, sub_name = find_parent_layer_and_sub_name(model, name)
                 setattr(parent_layer, sub_name, qdq_module)
+
+                del sub_layer, block_scale_e4m3, _zero, weight_scale_2
+                layers.pop(name, None)
+                self.quantizers.pop(name, None)
+                self.nvfp4_weight_scales_2.pop(name, None)
+
+                # gc/trim are not free; run them periodically, not every layer.
+                if (step + 1) % 64 == 0:
+                    gc.collect()
+                    _malloc_trim()
+
+        gc.collect()
+        _malloc_trim()
         print_info("NVFP4 model packed.")
 
     def convert(self):
@@ -710,6 +795,31 @@ class GPTQ:
     def _drop_non_persistent_gptq_buffers(self, state_dict):
         return {k: v for k, v in state_dict.items() if not k.endswith(".g_idx")}
 
+    @staticmethod
+    def _sanitize_generation_config(generation_config):
+        """Enable do_sample when sampling params are set, so strict save-time
+        GenerationConfig validation passes (e.g. GLM-5 ships top_p without do_sample).
+        """
+        if generation_config is None:
+            return
+        do_sample = getattr(generation_config, "do_sample", False)
+        if do_sample:
+            return
+        top_p = getattr(generation_config, "top_p", None)
+        top_k = getattr(generation_config, "top_k", None)
+        temperature = getattr(generation_config, "temperature", None)
+        sampling_intent = (
+            (top_p is not None and top_p < 1.0)
+            or (top_k is not None and top_k != 0)
+            or (temperature is not None and temperature != 1.0)
+        )
+        if sampling_intent:
+            generation_config.do_sample = True
+            print_info(
+                "Set generation_config.do_sample=True to match sampling params "
+                "(top_p/top_k/temperature) for strict save-time validation."
+            )
+
     def _patch_saved_hyv3_config_for_serving(self, save_dir):
         config_path = os.path.join(save_dir, "config.json")
         if not os.path.exists(config_path):
@@ -718,7 +828,7 @@ class GPTQ:
         with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
 
-        if config.get("model_type") != "hy_v3":
+        if config.get("model_type") not in SERVING_CONFIG_PATCH_MODEL_TYPES:
             return
 
         rope_parameters = config.get("rope_parameters")
@@ -790,6 +900,7 @@ class GPTQ:
                 "true_sequential": True,
             }
         self.model.model.config.save_pretrained(save_dir, state_dict=EmptyModule().state_dict())
+        self._sanitize_generation_config(self.model.model.generation_config)
         self.model.model.generation_config.save_pretrained(save_dir)
 
         default_paths = [
@@ -810,6 +921,12 @@ class GPTQ:
         )
         self.model.model.config.to_json_file(os.path.join(save_dir, "config.json"))
         self._patch_saved_hyv3_config_for_serving(save_dir)
+
+        copy_mtp_layers_if_present(
+            ori_model_path=getattr(self.model.model.config, "_name_or_path", None),
+            save_path=save_dir,
+            num_hidden_layers=self.model.model.config.num_hidden_layers,
+        )
 
         if self.modal_type == "VLM" and self.model.processor is not None:
             self.model.processor.save_pretrained(save_dir)

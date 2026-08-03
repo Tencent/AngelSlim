@@ -1,0 +1,67 @@
+# Unified YAML for the GLM-5 MoE PTQ pipeline.
+# Consumed by BOTH stages of scripts/ptq/run_vllm_quant_for_glm5.sh:
+#   - tools/run_vllm_calibrate.py                   (stage 1: activation calibration)
+#   - tools/glm5_nvfp4_weight_only_blockwise.py     (stage 2: NVFP4 weight-only re-quant)
+#
+# Each stage's argparse picks up only the keys it knows about; unrelated
+# keys are warned-and-ignored.
+#
+# Goal of stage 1: collect MoE expert input activation statistics
+#                  (min/max -> moe_expert_stats.json). KV-cache calibration
+#                  is disabled to keep the run cheap.
+# Goal of stage 2: stream-quantize the FP8 source checkpoint to NVFP4
+#                  weight-only (dense layers re-quantized to FP8 ue8m0)
+#                  and inject per-expert input_scale from stage 1.
+#
+# Notes on the model:
+#   * model_path points to an FP8 GLM-5 checkpoint. vLLM loads it natively;
+#     the MoE forward still goes through FusedMoE, so the AngelSlim patch
+#     hook (collect_fused_moe_internal_stats) fires regardless of weight
+#     dtype. This is by design — we are using vLLM purely as a high-throughput
+#     inference engine to gather activation stats.
+#
+# Keys here use underscore form (matching argparse `dest`). Explicit CLI
+# flags still take final precedence over YAML values.
+
+# ============================================================================
+# Shared paths
+# ============================================================================
+model_path: /path/to/model
+ptq_data_path: /path/to/model/ptq_data_path # TODO: fill in calibration JSONL path
+output_dir: /path/to/statistics    # TODO: fill in stats output directory (must be on a shared FS when dp_size > 1 spans nodes)
+output_nvfp4_hf_path: /path/to/output/nvfp4_model  # TODO: fill in NVFP4 output dir
+
+# ============================================================================
+# Stage 1 — vLLM activation calibration (tools/run_vllm_calibrate.py)
+# ============================================================================
+
+# -------- Model loading / runtime --------
+tp_size: 16                              # TODO: fill in (e.g. 8 for single node, 16 for two-node Ray cluster)
+dp_size: 1
+batch_size: 4
+num_samples: 64
+max_length: 2048
+distributed_executor_backend: ray       # ray | mp
+skip_weight_loading: false              # true => dummy weights (debug only)
+
+# -------- MTP (Multi-Token Prediction) --------
+# GLM-5.1 ships with num_nextn_predict_layers=1 in its config, but MoE-only
+# calibration does not need to exercise the MTP draft path. Keep disabled.
+enable_mtp: false
+num_speculative_tokens: 1
+
+# ============================================================================
+# Stage 2 — NVFP4 weight-only quantization
+#            (tools/glm5_nvfp4_weight_only_blockwise.py)
+# ----------------------------------------------------------------------------
+# Path fallbacks applied by stage 2:
+#   * input_path       <- model_path                       (FP8 source ckpt)
+#   * output_path      <- output_nvfp4_hf_path             (NVFP4 destination)
+#   * moe_stats_json   <- ${output_dir}/moe_expert_stats.json
+# ============================================================================
+
+nvfp4_block_size: 16                    # NVFP4 group size along last dim
+fp8_block_size: 128                     # Dense FP8 ue8m0 block size
+num_workers: 8                          # Multiprocessing workers for shard streaming
+use_gpu: true                           # true => triton on GPU; false => CPU-only
+no_quantize_dense_fp8: false            # true => legacy: dequantize dense layers to BF16

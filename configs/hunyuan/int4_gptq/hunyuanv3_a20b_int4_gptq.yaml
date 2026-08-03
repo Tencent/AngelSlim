@@ -1,0 +1,47 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output
+
+# Simplified Configuration for LLM compression
+model:
+  name: HYV3MoE
+  model_path: tencent/Hy3-preview 
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: cpu
+  enable_expert_parallel: true
+
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    name: int4_gptq     # Supported: fp8_static, fp8_dynamic, int4_awq, int4_gptq
+    bits: 4
+    quant_method:
+      weight: "per-group"
+      group_size: 128
+      dequant_to_bf16: false  # produce packed int4 weights (qweight/qzeros/scales)
+      actorder: true
+    ignore_layers:         # Skip quantization for these layers
+      - "lm_head"
+      - "self_attn.q_proj"
+      - "self_attn.k_proj"
+      - "self_attn.v_proj"
+      - "self_attn.o_proj"
+      - "mlp.router.gate"
+      - "mlp.gate_proj"
+      - "mlp.up_proj"
+      - "mlp.down_proj"
+      - "mlp.shared_experts.gate_proj"
+      - "mlp.shared_experts.up_proj"
+      - "mlp.shared_experts.down_proj"
+
+# Dataset for calibration
+dataset:
+  name: TextDataset
+  data_path: ./dataset/sharegpt_gpt4/sharegpt_gpt4_256.jsonl
+  max_seq_length: 8192
+  num_samples: 128
+  batch_size: 1

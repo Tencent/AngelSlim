@@ -37,6 +37,154 @@ from .quant_func import Int8PerChannelQuantizer, fake_quant_dequant, weight_dequ
 __all__ = ["PTQvLLMSaveHF"]
 
 
+def sanitize_generation_config(generation_config):
+    """Enable do_sample when sampling params are set, so strict save-time
+    GenerationConfig validation passes (e.g. GLM-5 ships top_p without do_sample).
+    """
+    if generation_config is None:
+        return
+    if getattr(generation_config, "do_sample", False):
+        return
+    top_p = getattr(generation_config, "top_p", None)
+    top_k = getattr(generation_config, "top_k", None)
+    temperature = getattr(generation_config, "temperature", None)
+    sampling_intent = (
+        (top_p is not None and top_p < 1.0)
+        or (top_k is not None and top_k != 0)
+        or (temperature is not None and temperature != 1.0)
+    )
+    if sampling_intent:
+        generation_config.do_sample = True
+        print_info(
+            "Set generation_config.do_sample=True to match sampling params "
+            "(top_p/top_k/temperature) for strict save-time validation."
+        )
+
+
+def _load_source_weight_map(source_path):
+    """Return {weight_name: shard_file} for a source checkpoint."""
+    index_path = os.path.join(source_path, "model.safetensors.index.json")
+    if os.path.isfile(index_path):
+        with open(index_path, "r") as f:
+            return json.load(f)["weight_map"]
+
+    files = sorted(glob(os.path.join(source_path, "*.safetensors")))
+    if not files:
+        return None
+    weight_map = {}
+    for shard in files:
+        with safe_open(shard, framework="pt") as reader:
+            for key in reader.keys():
+                weight_map[key] = os.path.basename(shard)
+    return weight_map
+
+
+def _get_source_tensor(source_path, weight_name, shard_file, loaded_files):
+    """Fetch one tensor from a source shard, caching at most 4 open shards."""
+    if shard_file not in loaded_files:
+        loaded_files[shard_file] = load_file(os.path.join(source_path, shard_file), device="cpu")
+        if len(loaded_files) > 4:
+            oldest = next(iter(loaded_files))
+            del loaded_files[oldest]
+    return loaded_files[shard_file][weight_name]
+
+
+def copy_mtp_layers_if_present(
+    ori_model_path,
+    save_path,
+    num_hidden_layers,
+    shard_name="model-mtp.safetensors",
+    patch_exclude=True,
+):
+    """Copy MTP / multi-token-prediction layers into a quantized checkpoint."""
+    if not ori_model_path:
+        print_info("[MTP] no source model path available; skip MTP copy.")
+        return []
+
+    index_path = os.path.join(save_path, "model.safetensors.index.json")
+    if not os.path.isfile(index_path):
+        print_info("[MTP] output has no safetensors index (single-file save); skip MTP copy.")
+        return []
+
+    src_weight_map = _load_source_weight_map(ori_model_path)
+    if not src_weight_map:
+        print_info(f"[MTP] no source safetensors found under {ori_model_path}; skip MTP copy.")
+        return []
+
+    layer_re = re.compile(r"(?:^|\.)layers\.(\d+)\.")
+    mtp_keys = []
+    for name in src_weight_map:
+        match = layer_re.search(name)
+        if match and int(match.group(1)) >= num_hidden_layers:
+            mtp_keys.append(name)
+
+    if not mtp_keys:
+        print_info("[MTP] no MTP layers found in source checkpoint.")
+        return []
+
+    mtp_indices = sorted({int(layer_re.search(k).group(1)) for k in mtp_keys})
+    print_info(f"[MTP] found MTP layer(s) {mtp_indices}; copying {len(mtp_keys)} tensors.")
+
+    state_dict = {}
+    add_weight_map = {}
+    loaded_files = {}
+    for name in mtp_keys:
+        state_dict[name] = _get_source_tensor(
+            ori_model_path, name, src_weight_map[name], loaded_files
+        )
+        add_weight_map[name] = shard_name
+
+    safe_save(state_dict, os.path.join(save_path, shard_name))
+
+    with open(index_path, "r") as f:
+        index = json.load(f)
+    index.setdefault("weight_map", {}).update(add_weight_map)
+    metadata = index.get("metadata")
+    if isinstance(metadata, dict) and "total_size" in metadata:
+        metadata["total_size"] += sum(t.numel() * t.element_size() for t in state_dict.values())
+    with open(index_path, "w") as f:
+        json.dump(index, f, indent=2)
+
+    if patch_exclude:
+        _patch_mtp_exclude(save_path, mtp_indices)
+
+    print_info(f"[MTP] done: copied layers {mtp_indices} into {shard_name}.")
+    return mtp_indices
+
+
+def _patch_mtp_exclude(save_path, mtp_indices):
+    """Add MTP layers to the quantization exclude list of a saved checkpoint."""
+    mtp_names = [f"model.layers.{idx}" for idx in mtp_indices]
+
+    def _extend(target_list):
+        for name in mtp_names:
+            if name not in target_list:
+                target_list.append(name)
+
+    config_path = os.path.join(save_path, "config.json")
+    if os.path.isfile(config_path):
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = json.load(f)
+        quant_cfg = config.get("quantization_config")
+        if isinstance(quant_cfg, dict):
+            for field in ("ignore", "ignored_layers", "exclude_modules"):
+                if isinstance(quant_cfg.get(field), list):
+                    _extend(quant_cfg[field])
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+                f.write("\n")
+
+    hf_quant_path = os.path.join(save_path, "hf_quant_config.json")
+    if os.path.isfile(hf_quant_path):
+        with open(hf_quant_path, "r", encoding="utf-8") as f:
+            hf_quant = json.load(f)
+        exclude = hf_quant.get("quantization", {}).get("exclude_modules")
+        if isinstance(exclude, list):
+            _extend(exclude)
+            with open(hf_quant_path, "w", encoding="utf-8") as f:
+                json.dump(hf_quant, f, indent=4)
+
+
 class PTQSaveBase(metaclass=ABCMeta):
     def __init__(self, quant_model):
         self.quant_model = quant_model
@@ -294,7 +442,9 @@ class PTQSaveVllmHF(PTQSaveBase):
         print_info("Save quantization_config: {}".format(quant_dict))
 
         os.makedirs(save_path, exist_ok=True)
-        self.quant_model.get_model().save_pretrained(save_path, max_shard_size="5GB")
+        model_to_save = self.quant_model.get_model()
+        sanitize_generation_config(getattr(model_to_save, "generation_config", None))
+        model_to_save.save_pretrained(save_path, max_shard_size="5GB")
 
         with open(os.path.join(save_path, "hf_quant_config.json"), "w") as f:
             json.dump(trtllm_config, f, indent=4)
@@ -319,6 +469,14 @@ class PTQSaveVllmHF(PTQSaveBase):
             new_model_index["weight_map"].update(kv_scale_map)
             with open(os.path.join(save_path, "model.safetensors.index.json"), "w") as f:
                 json.dump(new_model_index, f, indent=2)
+
+        # Copy any MTP / multi-token-prediction layers the HF model class never
+        # built (source layer index >= num_hidden_layers) verbatim as bf16.
+        copy_mtp_layers_if_present(
+            ori_model_path=getattr(model_to_save.config, "_name_or_path", None),
+            save_path=save_path,
+            num_hidden_layers=model_to_save.config.num_hidden_layers,
+        )
 
 
 class PTQOnlyScaleSave(PTQSaveBase):

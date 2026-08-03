@@ -321,3 +321,350 @@ bash run_nvfp4_quant_for_Hy3.sh --help                # 打印用法
 
 - 已经量化好的 FP8 模型，只想刷一组新的 KV scale，不愿重跑 `fp8_quant_with_vllm_activation.py`。
 - A/B 对比不同搜索范围（multiplier / num_steps）下的 KV scale，对**同一个**底层 FP8 模型快速热替换。
+
+---
+
+## 三、GLM-5 系列脚本（GLM-5.1-MoE 等 GLM-5 模型）
+
+GLM-5 统一入口同时支持 **FP8-blockwise** 和 **BF16** 两种源模型。通过环境变量 `GLM5_SOURCE_FORMAT` 选择分支：
+
+- `fp8`（默认）：vLLM MoE 激活校准 → routed experts NVFP4 + dense FP8 ue8m0。
+- `bf16`：先执行 vLLM activation/MoE 校准，再通过 `BF16_QUANT_METHOD=weight_only|gptq` 生成一种 NVFP4 MoE 权重，最后与原 BF16 checkpoint 中的其他权重合并。
+
+| 脚本 | 用途 | 入口 |
+| --- | --- | --- |
+| [`run_vllm_quant_for_glm5.sh`](./run_vllm_quant_for_glm5.sh) | ★ GLM-5 统一量化流水线，支持 FP8 和 BF16 源模型 | `tools/run_vllm_calibrate.py` + `tools/glm5_nvfp4_weight_only_blockwise.py` + `tools/run.py` + `tools/merge_nvfp4.py` |
+
+---
+
+### 1. `run_vllm_quant_for_glm5.sh` ★推荐的"一键流水线"
+
+#### 选择源模型格式
+
+`GLM5_SOURCE_FORMAT` 是流水线的主分支变量，允许值为 `fp8` 或 `bf16`，默认保持原行为使用 `fp8`：
+
+```bash
+# FP8-blockwise 源模型，默认分支
+GLM5_SOURCE_FORMAT=fp8 \
+SOURCE_MODEL_PATH=/path/to/GLM-5.1-FP8 \
+bash scripts/ptq/run_vllm_quant_for_glm5.sh
+
+# BF16 源模型，选择 NVFP4 weight-only
+GLM5_SOURCE_FORMAT=bf16 \
+BF16_QUANT_METHOD=weight_only \
+SOURCE_MODEL_PATH=/path/to/GLM-5.1-BF16 \
+bash scripts/ptq/run_vllm_quant_for_glm5.sh
+
+# BF16 源模型，选择 NVFP4-GPTQ
+GLM5_SOURCE_FORMAT=bf16 \
+BF16_QUANT_METHOD=gptq \
+SOURCE_MODEL_PATH=/path/to/GLM-5.1-BF16 \
+bash scripts/ptq/run_vllm_quant_for_glm5.sh
+```
+
+`SOURCE_MODEL_PATH` 是可选覆盖项；未设置时，每个分支从对应 YAML 的 `model_path` 读取源模型。FP8 流式转换要求源 checkpoint 是本地目录。BF16 的校准/量化阶段可以使用 Hugging Face model ID，但 Stage 3 合并必须通过 `BF16_MODEL_PATH` 提供本地 BF16 checkpoint；当 `SOURCE_MODEL_PATH` 本身是本地目录时，脚本会默认将它同时用作 `BF16_MODEL_PATH`。
+
+---
+
+### 2. FP8 源模型分支
+
+#### 前置条件
+
+- 输入必须是 FP8-blockwise GLM-5 checkpoint，`config.json` 中应满足 `quantization_config.quant_method == "fp8"`。
+- FP8 权重必须以 `weight` + `weight_scale_inv` 的 128×128 blockwise scale 形式存储。
+- 校准阶段依赖打过 AngelSlim patch 的 vLLM；按第一节完成 Ray 集群和补丁安装。
+
+#### FP8 Stage 1：MoE 激活校准
+
+`tools/run_vllm_calibrate.py` 通过 vLLM 采集：
+
+- `model.layers.{L}.mlp.experts.gate_up_proj.scale_amax`
+- `model.layers.{L}.mlp.experts.down_proj.scale_amax`
+
+FP8 scale-only 模式不会注册普通 Linear/KV hooks，因而只生成流水线需要的 `moe_expert_stats.json`，不会生成 `activation_stats.json`。MTP 校准默认关闭。
+
+#### FP8 Stage 2：NVFP4 + FP8 ue8m0 转换
+
+`tools/glm5_nvfp4_weight_only_blockwise.py` 逐 shard 处理 checkpoint：
+
+| 层类型 | 输出格式 |
+| --- | --- |
+| routed experts 的 `gate_proj` / `up_proj` / `down_proj` | packed NVFP4 `weight` + `weight_scale` + `weight_scale_2` + 校准得到的 `input_scale` |
+| Attention、dense MLP、shared experts、indexer、MTP | FP8 E4M3 `weight` + ue8m0 block `scale` |
+| Router、LayerNorm、embedding、lm_head 等 | 原 BF16/FP32 权重 |
+
+默认统一配置：
+
+```bash
+configs/glm5/ptq/nvfp4/glm5_vllm_ptq_moe_fp8.yaml
+```
+
+可通过以下环境变量覆盖：
+
+| 变量 | 作用 |
+| --- | --- |
+| `FP8_PTQ_CONFIG` | 同时驱动校准和转换的 YAML |
+| `FP8_STATISTICS_PATH` | 覆盖校准统计目录，同时作为 Stage 2 的统计输入目录 |
+| `FP8_OUTPUT_PATH` | 覆盖最终 NVFP4 + FP8 ue8m0 输出目录 |
+
+常用命令：
+
+```bash
+# 两阶段都执行
+GLM5_SOURCE_FORMAT=fp8 bash scripts/ptq/run_vllm_quant_for_glm5.sh
+
+# 复用已有 moe_expert_stats.json，只执行转换
+GLM5_SOURCE_FORMAT=fp8 bash scripts/ptq/run_vllm_quant_for_glm5.sh --skip-calibrate
+
+# 只执行校准
+GLM5_SOURCE_FORMAT=fp8 bash scripts/ptq/run_vllm_quant_for_glm5.sh --skip-quantize
+
+# 只跳过 FP8 转换
+GLM5_SOURCE_FORMAT=fp8 bash scripts/ptq/run_vllm_quant_for_glm5.sh --skip-fp8-quantize
+```
+
+---
+
+### 3. BF16 源模型分支
+
+BF16 分支包含三个阶段：
+
+1. 使用 vLLM 收集 BF16 主模型的 Linear activation 和 routed-MoE expert 统计。
+2. 通过 `BF16_QUANT_METHOD` 在两种量化方法中选择一种，生成一份量化模型。
+3. 使用 `tools/merge_nvfp4.py` 把 NVFP4 MoE 权重、expert input scale 和 BF16 其他权重合并成最终 Hugging Face checkpoint。
+
+```bash
+BF16_QUANT_METHOD=weight_only  # 默认
+BF16_QUANT_METHOD=gptq
+```
+
+#### BF16 Stage 1：vLLM activation/MoE 校准
+
+入口和默认配置：
+
+```text
+tools/run_vllm_calibrate.py
+configs/glm5/ptq/nvfp4/glm5_vllm_calibrate_bf16.yaml
+```
+
+默认配置会：
+
+- 用 vLLM 加载 BF16 GLM-5.1。
+- 注册普通 Linear activation hooks。
+- 注册 routed-MoE 的 gate/up/down 输入统计 hooks。
+- 设置 `kv_granularity: none`，默认不采集 KV-cache。
+- 设置 `enable_mtp: false`，默认不执行 MTP draft model 校准。
+- 使用 `num_samples=64`、`max_length=2048` 进行校准。
+
+默认统计目录为：
+
+```text
+output/glm5_bf16/statistics
+```
+
+主要产物：
+
+```text
+activation_stats.json
+moe_expert_stats.json
+```
+
+Stage 2 的 NVFP4 weight-only 和 NVFP4-GPTQ 不直接读取这两个 vLLM JSON：weight-only 的 scale 从权重计算，GPTQ 使用自己的校准数据构建 Hessian。Stage 3 会读取 `moe_expert_stats.json`，计算并注入每个 expert projection 的 `input_scale`。
+
+可通过以下变量覆盖：
+
+| 变量 | 默认值 | 作用 |
+| --- | --- | --- |
+| `BF16_CALIB_CONFIG` | `configs/glm5/ptq/nvfp4/glm5_vllm_calibrate_bf16.yaml` | BF16 vLLM 校准配置 |
+| `BF16_STATISTICS_PATH` | `${BF16_WORK_DIR}/statistics` | BF16 校准统计输出目录 |
+
+跳过 BF16 vLLM 校准：
+
+```bash
+GLM5_SOURCE_FORMAT=bf16 \
+BF16_QUANT_METHOD=weight_only \
+bash scripts/ptq/run_vllm_quant_for_glm5.sh --skip-calibrate
+```
+
+只执行 BF16 vLLM 校准、不执行量化和合并：
+
+```bash
+GLM5_SOURCE_FORMAT=bf16 \
+BF16_QUANT_METHOD=weight_only \
+bash scripts/ptq/run_vllm_quant_for_glm5.sh --skip-quantize --skip-merge
+```
+
+#### BF16 Stage 2 方法一：NVFP4 weight-only
+
+入口和默认配置：
+
+```text
+tools/run.py
+configs/glm5/ptq/nvfp4/glm5_1_nvfp4_weight_only.yaml
+```
+
+- 数据无关，scale 直接从权重计算。
+- 只量化 routed experts。
+- Attention、router、shared experts、前置 dense MLP 和 `lm_head` 由 `ignore_layers` 排除。
+- 默认 group size 为 16。
+
+#### BF16 Stage 2 方法二：NVFP4-GPTQ
+
+入口和默认配置：
+
+```text
+tools/run.py
+configs/glm5/ptq/nvfp4/glm5_1_nvfp4_gptq.yaml
+```
+
+- 使用 GPTQ 配置中的校准数据集重新执行前向、构建 Hessian，并对 routed experts 执行 GPTQ；它不使用 Stage 1 的 vLLM JSON。
+- 默认校准参数为 `max_seq_length=2048`、`num_samples=128`、`batch_size=1`。
+- 配置启用了 expert parallel；`tools/run.py` 会根据可见 GPU 自动通过 torchrun 启动。
+- GPTQ 直接读取原始 BF16 checkpoint，不会读取或叠加在 weight-only checkpoint 上。
+
+#### BF16 Stage 3：合并 NVFP4 MoE 和 BF16 权重
+
+入口：
+
+```text
+tools/merge_nvfp4.py
+```
+
+流水线等价调用：
+
+```bash
+python3 tools/merge_nvfp4.py \
+    --statistics_path "${BF16_STATISTICS_PATH}" \
+    --nvfp4_modelpath "${BF16_NVFP4_MODEL_PATH}" \
+    --bf16_modelpath "${BF16_MODEL_PATH}" \
+    --output_path "${BF16_MERGED_OUTPUT_PATH}" \
+    --num_workers "${BF16_MERGE_NUM_WORKERS}"
+```
+
+Stage 3 会：
+
+- 从 `${BF16_STATISTICS_PATH}/moe_expert_stats.json` 计算 expert `input_scale`。
+- 读取 Stage 2 生成的 NVFP4 expert 权重和 scale。
+- 使用原 BF16 模型配置作为最终模型配置基础。
+- 从 BF16 checkpoint 补齐 Stage 2 中缺失的 MTP 层。
+- 复制 tokenizer、generation config 和建模代码等辅助文件。
+- 写出最终 `model.safetensors.index.json`、`config.json` 和 `hf_quant_config.json`。
+
+默认 Stage 2 输入路径由所选量化配置和 save root 自动推导：
+
+```text
+weight_only:
+  output/glm5_bf16/nvfp4_weight_only/glm5_1_nvfp4_weight_only
+
+gptq:
+  output/glm5_bf16/nvfp4_gptq/glm5_1_nvfp4_gptq
+```
+
+默认最终输出目录：
+
+```text
+weight_only:
+  output/glm5_bf16/merged_weight_only
+
+gptq:
+  output/glm5_bf16/merged_gptq
+```
+
+Stage 3 要求：
+
+- `BF16_MODEL_PATH` 必须是本地 BF16 checkpoint 目录，不能是 Hugging Face model ID。
+- `${BF16_STATISTICS_PATH}/moe_expert_stats.json` 必须存在。
+- `BF16_NVFP4_MODEL_PATH` 必须指向已经生成的 Stage 2 checkpoint。
+
+常用命令：
+
+```bash
+# 生成 NVFP4 weight-only（BF16_QUANT_METHOD 默认值）
+GLM5_SOURCE_FORMAT=bf16 \
+SOURCE_MODEL_PATH=/path/to/GLM-5.1-BF16 \
+bash scripts/ptq/run_vllm_quant_for_glm5.sh
+
+# 显式选择 NVFP4 weight-only
+GLM5_SOURCE_FORMAT=bf16 \
+BF16_QUANT_METHOD=weight_only \
+SOURCE_MODEL_PATH=/path/to/GLM-5.1-BF16 \
+bash scripts/ptq/run_vllm_quant_for_glm5.sh
+
+# 选择 NVFP4-GPTQ
+GLM5_SOURCE_FORMAT=bf16 \
+BF16_QUANT_METHOD=gptq \
+SOURCE_MODEL_PATH=/path/to/GLM-5.1-BF16 \
+bash scripts/ptq/run_vllm_quant_for_glm5.sh
+
+# 复用已有 Stage 2 checkpoint，只执行校准和合并
+GLM5_SOURCE_FORMAT=bf16 \
+BF16_NVFP4_MODEL_PATH=/path/to/existing/nvfp4_model \
+BF16_MODEL_PATH=/path/to/GLM-5.1-BF16 \
+bash scripts/ptq/run_vllm_quant_for_glm5.sh --skip-quantize
+
+# 复用已有统计，只执行所选量化和合并
+GLM5_SOURCE_FORMAT=bf16 \
+BF16_QUANT_METHOD=gptq \
+BF16_STATISTICS_PATH=/path/to/existing/statistics \
+BF16_MODEL_PATH=/path/to/GLM-5.1-BF16 \
+bash scripts/ptq/run_vllm_quant_for_glm5.sh --skip-calibrate
+
+# 只执行校准和量化，不合并
+GLM5_SOURCE_FORMAT=bf16 \
+BF16_QUANT_METHOD=weight_only \
+bash scripts/ptq/run_vllm_quant_for_glm5.sh --skip-merge
+```
+
+BF16 分支可配置变量：
+
+| 变量 | 默认值 | 作用 |
+| --- | --- | --- |
+| `BF16_QUANT_METHOD` | `weight_only` | BF16 量化方法：`weight_only` 或 `gptq` |
+| `BF16_CALIB_CONFIG` | `configs/glm5/ptq/nvfp4/glm5_vllm_calibrate_bf16.yaml` | BF16 vLLM 校准配置 |
+| `BF16_STATISTICS_PATH` | `${BF16_WORK_DIR}/statistics` | BF16 vLLM 校准统计目录 |
+| `BF16_MODEL_PATH` | `${SOURCE_MODEL_PATH}` | Stage 3 使用的本地 BF16 checkpoint |
+| `NVFP4_WEIGHT_ONLY_CONFIG` | `configs/glm5/ptq/nvfp4/glm5_1_nvfp4_weight_only.yaml` | weight-only 配置 |
+| `NVFP4_GPTQ_CONFIG` | `configs/glm5/ptq/nvfp4/glm5_1_nvfp4_gptq.yaml` | GPTQ 配置，包括校准数据集 |
+| `BF16_WORK_DIR` | `output/glm5_bf16` | BF16 输出工作根目录 |
+| `BF16_WEIGHT_ONLY_SAVE_ROOT` | `${BF16_WORK_DIR}/nvfp4_weight_only` | 传给 weight-only 的 `--save-path` |
+| `BF16_GPTQ_SAVE_ROOT` | `${BF16_WORK_DIR}/nvfp4_gptq` | 传给 GPTQ 的 `--save-path` |
+| `BF16_NVFP4_MODEL_PATH` | 根据所选配置和 save root 自动推导 | Stage 3 读取的 NVFP4 checkpoint |
+| `BF16_MERGED_OUTPUT_PATH` | `${BF16_WORK_DIR}/merged_${BF16_QUANT_METHOD}` | 最终合并模型目录 |
+| `BF16_MERGE_NUM_WORKERS` | `8` | Stage 3 shard 合并进程数 |
+
+`tools/run.py` 会在所选方法的 `--save-path` 后追加 YAML 文件名，因此默认实际输出目录分别为：
+
+```text
+output/glm5_bf16/nvfp4_weight_only/glm5_1_nvfp4_weight_only
+output/glm5_bf16/nvfp4_gptq/glm5_1_nvfp4_gptq
+```
+
+运行前务必检查 GPTQ YAML 中的：
+
+```yaml
+dataset:
+  data_path: ./dataset/sharegpt_gpt4/sharegpt_gpt4_256.jsonl
+```
+
+确保校准数据文件存在，或通过自定义 `NVFP4_GPTQ_CONFIG` 指向另一份配置。
+
+---
+
+### 4. 通用变量和开关
+
+| 变量/开关 | 适用分支 | 说明 |
+| --- | --- | --- |
+| `GLM5_SOURCE_FORMAT=fp8\|bf16` | 全部 | 选择源模型格式，默认 `fp8` |
+| `BF16_QUANT_METHOD=weight_only\|gptq` | BF16 | 选择唯一执行的 BF16 量化方法，默认 `weight_only` |
+| `SOURCE_MODEL_PATH` | 全部 | 覆盖所选 YAML 中的源模型路径 |
+| `LOG_DIR` | 全部 | 日志目录，默认 `logs` |
+| `--skip-calibrate` | 全部 | 跳过当前源模型分支的 vLLM 校准 |
+| `--skip-fp8-quantize` | FP8 | 跳过 FP8 checkpoint 转换 |
+| `--skip-quantize` | 全部 | 跳过当前分支已选择的量化阶段；BF16 可继续复用已有 Stage 2 checkpoint 做合并 |
+| `--skip-merge` | BF16 | 跳过 NVFP4/BF16 最终合并 |
+
+```bash
+bash scripts/ptq/run_vllm_quant_for_glm5.sh --help
+```
+
+脚本开启 `set -euo pipefail`，任一实际执行的阶段失败都会立即中断。

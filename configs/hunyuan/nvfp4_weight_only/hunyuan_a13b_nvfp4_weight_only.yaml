@@ -1,0 +1,38 @@
+# Global configuration of pipeline
+global:
+  save_path: ./output
+
+# Simplified Configuration for LLM compression
+model:
+  name: HYV3MoE
+  model_path: tencent/Hy3-preview
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+
+# Compression configuration
+compression:
+  name: PTQ
+  quantization:
+    name: nvfp4_weight_only
+    bits: 4
+    cpu_convert: true
+    quant_method:
+      weight: "per-group"
+      group_size: 16
+      dequant_to_bf16: false
+    ignore_layers:         # Skip quantization for these layers
+      - "lm_head"
+      - "self_attn.q_proj"
+      - "self_attn.k_proj"
+      - "self_attn.v_proj"
+      - "self_attn.o_proj"
+      - "mlp.router.gate"
+      - "mlp.gate_proj"
+      - "mlp.up_proj"
+      - "mlp.down_proj"
+      - "mlp.shared_mlp.gate_proj"
+      - "mlp.shared_mlp.up_proj"
+      - "mlp.shared_mlp.down_proj"

@@ -79,7 +79,9 @@ class NVFP4:
         per_block_amax = weight.abs().amax(dim=-1).float()
         # Get per-block-scale
         per_block_scale = per_block_amax / 6.0
-        # Quantize per_block_scale to FP8
+        # Align devices before the division.
+        if weights_scaling_factor_2 is not None:
+            weights_scaling_factor_2 = weights_scaling_factor_2.to(per_block_scale.device)
         q_per_block_scale = per_block_scale / weights_scaling_factor_2
         # Set all zero values in scale to 1.0
         q_per_block_scale[per_block_scale == 0] = 1.0

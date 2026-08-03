@@ -114,8 +114,7 @@ class GPTQModule:
         # weights before any per-block scale. GPTQ compensation does not change
         # the amax magnitude, so this stays valid for the whole layer.
         #
-        # If ``self.weight_scale_2``
-        # was already set externally (e.g. a shared
+        # If ``self.weight_scale_2`` was already set externally (e.g. a shared
         # gate/up or qkv level-2 scale injected by GPTQ.run so fused-GEMM
         # deployment uses one per-tensor scale across the group), keep it and do
         # NOT recompute from this layer's amax alone.
