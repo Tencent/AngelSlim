@@ -68,7 +68,14 @@ class DeepSeek(BaseLLMModel):
         low_cpu_mem_usage=True,
         use_cache=False,
         using_multi_nodes=False,
+        attn_implementation="default",
+        **kwargs,
     ):
+        attn_kw = (
+            {}
+            if attn_implementation == "default"
+            else {"attn_implementation": attn_implementation}
+        )
         if torch_dtype == "fp8":
             print_info("[Slim] Loading DeepSeek with fp8")
             config = DeepseekV3Config.from_pretrained(model_path)
@@ -76,6 +83,11 @@ class DeepSeek(BaseLLMModel):
                 delattr(config, "quantization_config")
             if hasattr(config, "use_cache"):
                 config.use_cache = use_cache
+            # NB: the custom DeepseekV3ForCausalLM.from_pretrained does not take
+            # attn_implementation; DeepSeek is never a sparse target so a
+            # non-default impl is not expected here. Carry it on the config.
+            if attn_implementation not in (None, "default"):
+                config._attn_implementation = attn_implementation
             self.model = DeepseekV3ForCausalLM.from_pretrained(
                 model_path,
                 config=config,
@@ -93,6 +105,7 @@ class DeepSeek(BaseLLMModel):
                 trust_remote_code=trust_remote_code,
                 low_cpu_mem_usage=low_cpu_mem_usage,
                 use_cache=use_cache,
+                **attn_kw,
             )
 
         # Load tokenizer

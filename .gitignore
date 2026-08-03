@@ -22,3 +22,14 @@ wandb/
 tools/results/
 __pycache__/outputs/
 __pycache__/
+
+# VecAttention's vllm_flash_attn kernel is an EXTERNAL optional CUDA dependency,
+# not vendored in-tree (it is a 440MB compiled fork: vLLM-FA Apache + Dao
+# FlashAttention BSD-3 + CUTLASS BSD-3). It is consumed as an environment-
+# installed package (`pip install vllm_flash_attn`, or a local editable build of
+# the fork). The directories below may exist on a contributor's disk as a local
+# build but must never be tracked — see algorithms/vecattention/NOTICE. Both the
+# current (algorithms/) layout and the pre-refactor (sparsity/vecattention/ops/)
+# layout are ignored, since a fork clone may linger at the old path on disk.
+angelslim/compressor/sparsity/algorithms/vecattention/ops/vllm-flash-attention/
+angelslim/compressor/sparsity/vecattention/ops/vllm-flash-attention/

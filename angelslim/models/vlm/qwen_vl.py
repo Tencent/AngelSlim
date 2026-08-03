@@ -57,7 +57,14 @@ class QwenVL(BaseLLMModel):
         low_cpu_mem_usage=True,
         use_cache=False,
         using_multi_nodes=False,
+        attn_implementation="default",
+        **kwargs,
     ):
+        attn_kw = (
+            {}
+            if attn_implementation == "default"
+            else {"attn_implementation": attn_implementation}
+        )
         self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             model_path,
             torch_dtype=torch_dtype,
@@ -65,6 +72,7 @@ class QwenVL(BaseLLMModel):
             trust_remote_code=trust_remote_code,
             low_cpu_mem_usage=low_cpu_mem_usage,
             use_cache=use_cache,
+            **attn_kw,
         )
 
         # Load tokenizer

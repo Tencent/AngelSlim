@@ -120,7 +120,7 @@ bash tools/vllm_patch/install.sh --help      # 查看完整用法
 | 脚本 | 用途 | 入口 |
 | --- | --- | --- |
 | [`run_vllm_quant_for_Hy3.sh`](./run_vllm_quant_for_Hy3.sh) | ★ FP8 一键流水线：校准 + 量化 | `tools/run_vllm_calibrate.py` + `tools/fp8_quant_with_vllm_activation.py` |
-| [`run_nvfp4_quant_for_Hy3.sh`](./run_nvfp4_quant_for_Hy3.sh) | ★ NVFP4 一键流水线：校准 + weight-only 量化 + 合并 | `tools/run_vllm_calibrate.py` + `tools/run.py` + `tools/merge_hy3_nvfp4_c8.py` |
+| [`run_nvfp4_quant_for_Hy3.sh`](./run_nvfp4_quant_for_Hy3.sh) | ★ NVFP4 一键流水线：校准 + weight-only 量化 + 合并 | `tools/run_vllm_calibrate.py` + `tools/run.py` + `tools/hy3/merge_hy3_nvfp4_c8.py` |
 | [`run_vllm_calibrate_for_Hy3.sh`](./run_vllm_calibrate_for_Hy3.sh) | 仅 W8A8C8 联合校准 | `tools/run_vllm_calibrate.py` |
 | [`run_kvcache_calibrate_for_Hy3.sh`](./run_kvcache_calibrate_for_Hy3.sh) | 仅 KV-cache 校准（轻量） | `tools/kvcache/run_kvcache_calibrate.py` |
 | [`run_smooth_for_HY3.sh`](./run_smooth_for_HY3.sh) | SmoothQuant 一键流水线：统计收集 + 权重变换 | `tools/smooth/run_vllm_smooth.py` + `tools/smooth/convert_smooth_weights.py` |
@@ -220,7 +220,7 @@ bash run_vllm_quant_for_Hy3.sh --help             # 打印用法
 - 默认配置为 [`configs/Hy3/ptq/nvfp4_weight_only/hunyuan_a20b_nvfp4_weight_only.yaml`](../../configs/Hy3/ptq/nvfp4_weight_only/hunyuan_a20b_nvfp4_weight_only.yaml)。
 - 量化模型目录需与 `${NVFP4_W_PATH}` 保持一致，供阶段 3 读取。
 
-#### 阶段 3：调用 `tools/merge_hy3_nvfp4_c8.py`
+#### 阶段 3：调用 `tools/hy3/merge_hy3_nvfp4_c8.py`
 
 - 读取 `${STATISTICS_PATH}` 下的 `activation_stats.json` / `moe_expert_stats.json`、`${NVFP4_W_PATH}` 下的 NVFP4 权重及 `${BF16_MODEL_PATH}` 下的原始模型文件。
 - 把 NVFP4 expert 权重、bf16 非 expert 权重、expert input scale 和 KV-cache scale 合并到 `${OUTPUT_PATH}`。

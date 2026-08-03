@@ -1,0 +1,32 @@
+# Optional dependencies for the sparse-attention subsystem.
+# Install with: pip install angelslim[sparse]
+#
+# transformers version policy:
+#   - The main requirements pin transformers (currently >=5.6.0) with a <6.0
+#     ceiling on the sparse extra (the <6.0 ceiling protects ALL paths from the
+#     6.0 removal of config._attn_implementation).
+#   - The sparse extra raises the FLOOR to 5.8.0 because Qwen3.5 / Qwen3.5-MoE
+#     modeling code (gated attention, interleaved layer_types) only exists in
+#     recent transformers. PTQ/QAT users on the lower main floor are not forced up.
+transformers>=5.8.0,<6.0
+triton>=3.1; sys_platform != 'win32'
+# Accuracy benchmark (evaluation/longbench_lmeval.py) runs the native lm-evaluation-
+# harness `longbench` task group. Its scorers (lm-eval's metrics.py) hard-import
+# `jieba` + `fuzzywuzzy`, both GPL — so they are an EVAL-ONLY manual install
+# (`pip install jieba fuzzywuzzy python-Levenshtein`), deliberately NOT declared
+# here and never imported by the sparse runtime, keeping the shipped extra
+# GPL-free. lm-eval itself is the only added eval dep:
+lm_eval>=0.4.10
+# Kernel sourcing:
+#   - Stem: block_sparse_attn is NOT vendored and NOT installed by this extra.
+#     The torch backend runs WITHOUT it when allow_pseudo_sparse=true (slow
+#     pure-torch fallback); to use the fast kernel install it separately
+#     (`pip install block_sparse_attn`).
+#   - MInference (minference / a_shape / tri_shape): kernels are vendored in-repo
+#     under angelslim/compressor/sparsity/algorithms/minference/kernels/ (MIT,
+#     from microsoft/MInference a4eb395). a_shape/tri_shape are pure Triton. The
+#     `minference` variant also needs a small CUDA index extension
+#     (convert_vertical_slash_indexes); it is JIT-compiled on first use via
+#     torch.utils.cpp_extension.load, so a CUDA toolkit (nvcc / CUDA_HOME) must be
+#     present at runtime for that variant.
+#   - xattention / flexprefill / flashprefill kernels: vendored in-repo.

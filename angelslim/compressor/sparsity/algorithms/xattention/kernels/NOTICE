@@ -1,0 +1,58 @@
+AngelSlim — XAttention vendored kernel NOTICE
+=============================================
+
+The files in this directory are vendored from MInference
+(https://github.com/microsoft/MInference) at revision a4eb395, licensed under
+The MIT License, Copyright (c) Microsoft Corporation. Each file's per-file
+copyright line is preserved VERBATIM from upstream (xattention.py: "(c) 2025
+Microsoft"; xattn_utils.py: "(c) 2026 Microsoft" — these are upstream's own
+years at a4eb395, kept unaltered as MIT requires). XAttention itself refers to
+the method in https://github.com/mit-han-lab/x-attention:
+
+  * xattention.py
+        <- minference/modules/xattention.py
+  * xattn_utils.py
+        <- minference/ops/op_utils/xattn_utils.py
+
+Local modifications (see each file header):
+  - xattention.py: the cross-module import of the two Triton helpers
+    (`from ..ops.xattention_fa import flat_group_gemm_fuse_reshape,
+    softmax_fuse_block_sum`) is repointed to the co-vendored `xattn_utils`,
+    where those functions are actually DEFINED. Upstream `xattention_fa` only
+    re-exported them while also importing the heavy
+    `pit_sparse_flash_attention_v3` / `vertical_slash_utils` chain that the
+    `Xattention_prefill` entry never calls — vendoring two files instead of five
+    keeps the footprint minimal and self-contained (xattn_utils imports only
+    torch + triton).
+  - xattn_utils.py: vendored whole, reformatted to repo style (black/isort),
+    logic unchanged (header note only).
+
+No algorithmic change was made: the block-selection (`find_blocks_chunked`), the
+strided estimate (`xattn_estimate`), and the `block_sparse_attn`-backed prefill
+(`Xattention_prefill`) keep their exact upstream behavior; the vendored files
+were reformatted to this repo's style (black/isort, line length 99) with logic
+unchanged. Numerics match flash dense on a real Qwen3-8B layer (rel ~0.0005 @
+threshold=0.98, verified in this environment). The selected-block attention runs
+on `block_sparse_attn` (the same kernel Stem uses); head_dim 256 is gated to the
+torch reference because block_sparse_attn miscomputes at 256.
+
+MIT License
+-----------
+Copyright (c) Microsoft Corporation.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

@@ -270,13 +270,19 @@ class HYV3MoE(BaseLLMModel):
         low_cpu_mem_usage=True,
         use_cache=False,
         using_multi_nodes=False,
+        attn_implementation="default",
+        **kwargs,
     ):
-        # Attention implementation. Default "eager" so KV-cache / activation
-        # calibration can hook the explicit attention weights. For weight-only
-        # GPTQ (no attention hooks) "eager" materializes a [heads, seq, seq]
-        # fp32 matrix (16 GiB at seq=8192) and OOMs; set ANGELSLIM_ATTN_IMPL=sdpa
-        # to use the flash-style SDPA path that never materializes it.
-        attn_implementation = os.environ.get("ANGELSLIM_ATTN_IMPL", "eager")
+        # Attention implementation. An explicit non-default request from the
+        # caller wins (e.g. sparse attention selecting a specific impl). Absent
+        # that, fall back to ANGELSLIM_ATTN_IMPL, defaulting to "eager" so
+        # KV-cache / activation calibration can hook the explicit attention
+        # weights. For weight-only GPTQ (no attention hooks) "eager"
+        # materializes a [heads, seq, seq] fp32 matrix (16 GiB at seq=8192) and
+        # OOMs; set ANGELSLIM_ATTN_IMPL=sdpa to use the flash-style SDPA path
+        # that never materializes it.
+        if attn_implementation in (None, "default"):
+            attn_implementation = os.environ.get("ANGELSLIM_ATTN_IMPL", "eager")
         torch_dtype = torch.bfloat16
         if is_deepspeed_zero3_enabled():
             _patch_hyv3_router_for_zero3()

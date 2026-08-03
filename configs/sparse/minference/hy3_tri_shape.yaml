@@ -1,0 +1,32 @@
+# MInference Tri-shape sparse-attention (Hunyuan-V3 / hy_v3).
+# `tri_shape` = a_shape (sink + sliding window) on all but the last
+# n_last queries, plus full-causal attention for the last n_last queries.
+# NOTE: the full Hunyuan-V3 checkpoint (~80 layers) does not fit on one GPU;
+#   `device_map: auto` shards it across every visible GPU. Point `model_path`
+#   at your local checkpoint if `tencent/Hy3` is not cached.
+# Run:  python tools/run.py -c configs/sparse/minference/hy3_tri_shape.yaml
+
+global:
+  save_path: ./output
+
+model:
+  name: HYV3MoE
+  model_path: tencent/Hy3
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+  # Decode runs the model's configured attention; sparse prefill bypasses it.
+  attn_implementation: flash_attention_2
+
+compression:
+  name: Sparsity
+  sparsity:
+    name: tri_shape
+    allow_pseudo_sparse: false      # real Triton streaming kernel; set true only
+                                    # to force the slow torch reference
+    attn_kwargs:
+      n_init: 128                   # attention-sink keys
+      n_local: 3968                 # sliding-window keys
+      n_last: 100                   # last-query block that attends fully (causal)

@@ -13,14 +13,24 @@
 # limitations under the License.
 
 import json
+import os
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 import yaml
 
-from ..compressor.transform.rotation.spin import SpinConfig
 from .utils import get_hf_config, get_hf_model_path
+
+# NOTE: ``SpinConfig`` is imported lazily inside the two functions that build it
+# (below), NOT at module top. A top-level ``from ..compressor... import
+# SpinConfig`` makes this module pull in the ``angelslim.compressor`` package
+# during its own import; ``compressor.__init__`` in turn needs
+# ``angelslim.utils.print_info``, so if ``config_parser`` is the first thing that
+# touches ``angelslim.utils`` (before the package is otherwise warmed) the two
+# initialize in a cycle and ``print_info`` is not yet bound. Deferring the import
+# to call time breaks that cycle with no behavioral change (SpinConfig is only
+# used inside these functions, never at module load).
 
 
 class CompressionMethod(str, Enum):
@@ -32,6 +42,7 @@ class CompressionMethod(str, Enum):
     QAD = "QAD"
     MCORE_QAD = "MCoreQAD"
     DISTILL = "Distill"
+    SPARSITY = "Sparsity"
     SPECULATIVE_DECODING = "speculative_decoding"
     PTQ_WEIGHT_ONLY = "PTQWeightOnly"
 
@@ -90,6 +101,18 @@ class GlobalConfig:
     hidden_size: int = field(default=4096)
     model_arch_type: str = field(default=None)
     absolute_model_path: str = field(default=None)
+    # The real checkpoint dir at load time. InferEngine.from_pretrained
+    # sets this so the sparse pattern_path resolver can anchor relative paths to
+    # <checkpoint>/sparse_patterns/ (Engine.save sanitizes model_path in the
+    # serialized JSON). Declared as a real field rather than a dynamically-set
+    # attribute so it survives if GlobalConfig ever gains slots/frozen/strict
+    # serialization.
+    model_path: str = field(default=None)
+    # Directory containing the parsed YAML config. Set by SlimConfigParser.parse
+    # so a relative sparse ``pattern_path`` in the YAML resolves against the
+    # config file's own location (not the process CWD) — the natural UX when a
+    # user runs ``tools/run.py -c /elsewhere/foo.yaml`` from a different dir.
+    config_dir: str = field(default=None)
     deploy_backend: str = field(default="vllm")
 
     def update(self, model_path: str = None, max_seq_length: int = None):
@@ -455,6 +478,26 @@ class MCoreQADTrainingConfig:
 
 
 @dataclass
+class SparsityConfig:
+    """Configuration for sparse-attention compression.
+
+    Attributes:
+        name: Sparse algorithm name (e.g. "stem", "minference", "a_shape",
+            "tri_shape", "xattention", "flexprefill", "flashprefill").
+        attn_kwargs: Algorithm-specific keyword arguments (backend, block_size,
+            layer_keep_ratios, pattern_path, ...).
+        allow_pseudo_sparse: Opt into the slow pseudo-sparse fallback when the
+            real kernel is missing. Default False => hard-fail.
+        benchmark: Optional eager/fa2/sparse latency-benchmark settings.
+    """
+
+    name: str
+    attn_kwargs: Dict[str, Any] = field(default_factory=dict)
+    allow_pseudo_sparse: bool = False
+    benchmark: Optional[Dict[str, Any]] = None
+
+
+@dataclass
 class CompressionConfig:
     """
     Compression configurations container for LLM.
@@ -473,6 +516,7 @@ class CompressionConfig:
     QAD: Optional[QADTrainingConfig] = None
     MCoreQAD: Optional[MCoreQADTrainingConfig] = None
     Distill: Optional[DistillTrainingConfig] = None
+    sparsity: Optional["SparsityConfig"] = None
     # speculative_decoding: Optional[SpeculativeDecodingConfig] = None
 
     @property
@@ -579,6 +623,11 @@ class InferenceConfig:
         num_inference_steps: Number of inference steps
         max_sequence_length: Maximum sequence length for the model
         seed: Random seed for reproducibility
+        max_new_tokens: (LLM) max tokens to generate
+        do_sample: (LLM) sample vs greedy decode
+        temperature: (LLM) sampling temperature
+        top_p: (LLM) nucleus sampling cutoff
+        top_k: (LLM) top-k sampling cutoff
     """
 
     height: Optional[int]
@@ -587,6 +636,16 @@ class InferenceConfig:
     num_inference_steps: Optional[int]
     max_sequence_length: Optional[float]
     seed: Optional[int]
+    # LLM text-generation knobs. Defaulted to None so existing diffusion infer
+    # YAMLs (which omit them) still construct, while an LLM infer YAML can now
+    # actually set them — previously they were absent from the schema, so
+    # config-driven LLM inference could not control generation at all (the
+    # engine's _NON_GENERATE_KEYS filter passes these through to generate()).
+    max_new_tokens: Optional[int] = None
+    do_sample: Optional[bool] = None
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    top_k: Optional[int] = None
 
 
 @dataclass
@@ -647,9 +706,11 @@ class SlimConfigParser:
             print(f"Warning: Config file '{yaml_path}' not found. Using defaults.")
             return self.get_default_config()
 
-        return self._get_configs(config_dict)
+        return self._get_configs(
+            config_dict, config_dir=os.path.dirname(os.path.abspath(yaml_path))
+        )
 
-    def _get_configs(self, config_dict: dict) -> FullConfig:
+    def _get_configs(self, config_dict: dict, config_dir: str = None) -> FullConfig:
         # Parse base configurations
         model_dict = config_dict.get("model", {})
         if not model_dict:
@@ -712,6 +773,57 @@ class SlimConfigParser:
                     )
                 compression_conf.Distill = DistillTrainingConfig(**distill_dict)
 
+            # Parse the sparse-attention sub-config.
+            sparsity_dict = compression_dict.get("sparsity", None)
+            if CompressionMethod.SPARSITY.value in compress_names:
+                if not sparsity_dict:
+                    raise ValueError(
+                        "Sparsity compression requires a 'compression.sparsity' section."
+                    )
+                compression_conf.sparsity = SparsityConfig(**sparsity_dict)
+
+                # Scope decision (2026/06): sparse attention is a
+                # standalone transform — it does NOT combine with
+                # quantization. Reject a pipeline that lists Sparsity alongside
+                # any quantization method, at parse time, with an actionable
+                # message (the runtime patcher enforces the same policy on an
+                # already-quantized model via _guard_quantization_collision).
+                #
+                # The quant-method set is DERIVED from CompressionMethod so a
+                # new method (e.g. PTQWeightOnly, which the old hard-coded
+                # {PTQ,QAT,QAD} set missed) is covered automatically. Sparse is
+                # standalone, so we refuse it in ANY multi-method pipeline — not
+                # only with quantizers — which also forecloses Sparsity+Distill
+                # and is robust to future enum additions.
+                _non_quant = {
+                    CompressionMethod.SPARSITY.value,
+                    CompressionMethod.CACHE.value,
+                    CompressionMethod.SPECULATIVE_DECODING.value,
+                }
+                _quant_methods = (
+                    {m.value for m in CompressionMethod}
+                    - _non_quant
+                    - {CompressionMethod.DISTILL.value}
+                )
+                _also_quant = _quant_methods.intersection(compress_names)
+                _others = [n for n in compress_names if n != CompressionMethod.SPARSITY.value]
+                if _also_quant:
+                    raise ValueError(
+                        "Sparsity cannot be combined with quantization "
+                        f"({sorted(_also_quant)}) in the same compression "
+                        "pipeline. In the current stage sparse attention is a "
+                        "standalone transform: run Sparsity in its own config "
+                        "(compression.name: Sparsity), separate from any "
+                        "PTQ/PTQWeightOnly/QAT/QAD quantization run."
+                    )
+                if _others:
+                    raise ValueError(
+                        "Sparsity is a standalone transform and cannot be "
+                        f"combined with other compression methods ({sorted(_others)}) "
+                        "in the same pipeline. Use compression.name: Sparsity on "
+                        "its own."
+                    )
+
             # Parse method-specific configurations for each specified method
             for method_name in compress_names:
                 requires_quantization = method_name in ["PTQ", "QAT", "QAD"]
@@ -746,6 +858,9 @@ class SlimConfigParser:
                     pass
                 elif method_name == CompressionMethod.MCORE_QAD.value:
                     pass
+                elif method_name == CompressionMethod.SPARSITY.value:
+                    # sparsity sub-config already parsed above.
+                    pass
                 elif method_name == CompressionMethod.CACHE.value:
                     # Parse cache configuration (only set if not already set)
                     cache_dict = compression_dict.get("cache", {})
@@ -770,6 +885,10 @@ class SlimConfigParser:
 
         # Global properties
         global_config = self._get_global_config(config_dict, model_conf, dataset_conf)
+        # Record the config file's directory so a relative sparse pattern_path
+        # anchors to the YAML location rather than the process CWD.
+        if config_dir:
+            global_config.config_dir = config_dir
 
         # Inference configuration
         inference_conf = None
@@ -802,6 +921,8 @@ class SlimConfigParser:
             spin_dict = transform_dict.pop("spin_config", None)
             transform_conf = TransformConfig(**transform_dict)
             if spin_dict is not None:
+                from ..compressor.transform.rotation.spin import SpinConfig
+
                 transform_conf.spin_config = SpinConfig(**spin_dict)
 
         return FullConfig(
@@ -892,12 +1013,17 @@ def parse_json_compression_config_section(compress_config: dict) -> CompressionC
     if mcore_qad_data:
         mcore_qad = MCoreQADTrainingConfig(**mcore_qad_data)
 
+    # Parse sparsity configuration (must survive the round-trip).
+    sparsity_data = compress_config.get("sparsity")
+    sparsity = SparsityConfig(**sparsity_data) if sparsity_data else None
+
     # Create and return the CompressionConfig instance
     return CompressionConfig(
         name=comp_names,
         quantization=quantization,
         cache=cache,
         MCoreQAD=mcore_qad,
+        sparsity=sparsity,
     )
 
 
@@ -970,6 +1096,8 @@ def parse_json_full_config(json_file_path: str) -> FullConfig:
         spin_data = transform_data.pop("spin_config", None)
         transform_config = TransformConfig(**transform_data)
         if spin_data is not None:
+            from ..compressor.transform.rotation.spin import SpinConfig
+
             transform_config.spin_config = SpinConfig(**spin_data)
 
     return FullConfig(

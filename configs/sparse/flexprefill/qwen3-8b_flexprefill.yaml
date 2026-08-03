@@ -1,0 +1,30 @@
+# FlexPrefill adaptive sparse-attention (Qwen3-8B).
+# FlexPrefill (MInference family, MIT) keeps, per head,
+# the smallest set of key-blocks whose cumulative attention mass covers `gamma`
+# (estimated from the last query block); `tau` decides block-sparse degradation.
+# Pure-Triton kernel (no CUDA ext); head_dim in {16,32,64,128} (Qwen3 hd128 OK).
+# Run:  python tools/run.py -c configs/sparse/flexprefill/qwen3-8b_flexprefill.yaml
+
+global:
+  save_path: ./output
+
+model:
+  name: Qwen
+  model_path: Qwen/Qwen3-8B
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+  attn_implementation: flash_attention_2
+
+compression:
+  name: Sparsity
+  sparsity:
+    name: flexprefill
+    allow_pseudo_sparse: false      # real Triton kernel; set true only to force
+                                    # the slow torch reference (e.g. head_dim 256)
+    attn_kwargs:
+      gamma: 0.9                    # cumulative attention-mass coverage target
+      tau: 0.1                      # block-sparse degradation threshold
+      block_size: 128

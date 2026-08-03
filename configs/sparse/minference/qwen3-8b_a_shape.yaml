@@ -1,0 +1,27 @@
+# MInference A-shape (StreamingLLM) sparse-attention (Qwen3-8B).
+# `a_shape` = attention sink (first n_init keys) + sliding window
+# (last n_local keys). No pattern JSON needed — fully static.
+# Run:  python tools/run.py -c configs/sparse/minference/qwen3-8b_a_shape.yaml
+
+global:
+  save_path: ./output
+
+model:
+  name: Qwen
+  model_path: Qwen/Qwen3-8B
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+  attn_implementation: flash_attention_2
+
+compression:
+  name: Sparsity
+  sparsity:
+    name: a_shape
+    allow_pseudo_sparse: false      # real Triton streaming kernel; set true only
+                                    # to force the slow torch reference
+    attn_kwargs:
+      n_init: 128                   # attention-sink keys (always kept)
+      n_local: 3968                 # sliding-window keys (most recent)

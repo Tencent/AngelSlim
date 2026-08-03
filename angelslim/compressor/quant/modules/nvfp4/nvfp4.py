@@ -104,7 +104,10 @@ class NVFP4:
                 sub_layer, name
             )
 
-        weight_scale_2 = self.get_weights_scaling_factor_2(weight_observer_amax)
+        weight_device = sub_layer.weight.device
+        weight_scale_2 = self.get_weights_scaling_factor_2(weight_observer_amax).to(
+            device=weight_device
+        )
         self.model.weight_scales_dict_2[name] = weight_scale_2
 
         weight_scale = self.get_weights_scaling_factor(
@@ -115,5 +118,7 @@ class NVFP4:
         self.model.weight_scales_dict[name] = weight_scale
 
         if not self.weight_only:
-            input_scale = self.get_activation_scaling_factor(input_observer_amax)
+            input_scale = self.get_activation_scaling_factor(input_observer_amax).to(
+                device=weight_device
+            )
             self.model.act_scales_dict[name] = input_scale
