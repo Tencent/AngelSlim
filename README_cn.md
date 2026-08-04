@@ -250,7 +250,7 @@ pip install angelslim
 cd AngelSlim && python setup.py install
 ```
 
-> **注意：** AngelSlim 以 git submodule 形式集成了投机采样**训练**框架 [AngelSpec](https://github.com/Tencent/AngelSpec)（位于 `AngelSpec/`）。克隆时请加 `--recursive` 拉取，或在已克隆的仓库中初始化：
+> **注意：** AngelSlim 以 git submodule 形式集成了投机采样**训练**框架 [AngelSpec](https://github.com/Tencent/AngelSpec)（位于 `third_party/AngelSpec/`）。克隆时请加 `--recursive` 拉取，或在已克隆的仓库中初始化：
 >
 > ```shell
 > # 克隆时同时拉取 submodule
@@ -265,7 +265,7 @@ cd AngelSlim && python setup.py install
 
 #### 2.1 投机采样
 
-AngelSlim 的投机采样训练由 **[AngelSpec](https://github.com/Tencent/AngelSpec)** 提供（git submodule，位于 `AngelSpec/`）——一个用于**训练**投机解码 draft 模型的 torch-native 框架，提供丰富的 draft 架构、target 模型支持与生产级训练能力，支持多种 draft 方法，以 **DFly** 与 **MTP + TTT** 为代表。
+AngelSlim 的投机采样训练由 **[AngelSpec](https://github.com/Tencent/AngelSpec)** 提供（git submodule，位于 `third_party/AngelSpec/`）——一个用于**训练**投机解码 draft 模型的 torch-native 框架，提供丰富的 draft 架构、target 模型支持与生产级训练能力，支持多种 draft 方法，以 **DFly** 与 **MTP + TTT** 为代表。
 
 框架采用**训推分离**设计：推理引擎运行冻结的 target 模型并抽取多层隐状态，经 [Mooncake](https://github.com/kvcache-ai/Mooncake) store 通过 RDMA 直接流式传输（不落盘）至 FSDP2 训练进程，由 controller 负责批处理、背压与评估。推理与训练运行在独立的 GPU 资源池上，可独立扩缩。
 
@@ -283,7 +283,7 @@ AngelSlim 的投机采样训练由 **[AngelSpec](https://github.com/Tencent/Ange
 ```shell
 # 初始化 submodule（参见上文安装章节）
 git submodule update --init --recursive
-cd AngelSpec
+cd third_party/AngelSpec
 # 安装 AngelSpec 及 vLLM 后端
 pip install -e ".[vllm]"
 # Hidden-state 传输（extras 未自动拉取，需单独安装）
@@ -292,7 +292,7 @@ pip install mooncake-transfer-engine
 ./examples/qwen3-8b-single-node/run.sh
 ```
 
-更多细节请参考[技术报告](https://arxiv.org/abs/2607.25852)、[AngelSpec 文档](https://angelspec.readthedocs.io/)、[`AngelSpec/README.md`](AngelSpec/README.md) 与 [Hugging Face 权重](https://huggingface.co/collections/AngelSlim/angelspec)。
+更多细节请参考[技术报告](https://arxiv.org/abs/2607.25852)、[AngelSpec 文档](https://angelspec.readthedocs.io/)、[AngelSpec README](https://github.com/Tencent/AngelSpec/blob/main/README.md) 与 [Hugging Face 权重](https://huggingface.co/collections/AngelSlim/angelspec)。
 
 #### 2.2 LLM/VLM模型量化
 完成安装`AngelSlim`后，您可以通过以下脚本快速开始，完成`Qwen3-1.7B`模型的静态`FP8`量化：
