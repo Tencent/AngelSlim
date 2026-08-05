@@ -1,5 +1,3 @@
-(focus-fp4)=
-
 # FOCUS：面向 FP4 的端到端 Scale 优化
 
 FOCUS（**FP4 Optimization via Coupled-Relaxation and Dual-Granularity
