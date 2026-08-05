@@ -28,7 +28,11 @@ from ...utils import (
 from ..compressor_factory import CompressorFactory
 from ..quant.modules.helper_layer import QDQModule
 from ..quant.modules.mxfp4 import MXFP4_GROUP_SIZE, mxfp4_quantize_pack
-from ..quant.modules.nvfp4 import NVFP4_BLOCK_SIZE, nvfp4_quantize_pack
+from ..quant.modules.nvfp4 import (
+    NVFP4_BLOCK_SIZE,
+    harmonize_nvfp4_fused_scales,
+    nvfp4_quantize_pack,
+)
 from .export import FocusMXFP4SaveVllmHF, FocusNVFP4SaveVllmHF
 from .modules.quantizer import QuantLinear
 from .plugins.plugin_manager import PluginManager
@@ -142,8 +146,8 @@ class QAT:
                 "FOCUS fake checkpoints contain baked fake-quantized weights and "
                 "cannot be passed to direct `save_format: real` export without "
                 "quantizing the weights a second time. Use "
-                "`tools/export_focus_mxfp4.py` or "
-                "`tools/export_focus_nvfp4.py` with the frozen base model instead."
+                "`tools/focus_fp4/export_focus_mxfp4.py` or "
+                "`tools/focus_fp4/export_focus_nvfp4.py` with the frozen base model instead."
             )
 
     @staticmethod
@@ -357,9 +361,11 @@ class QAT:
                     full_key = f"{module_name}.{buffer_name}" if module_name else buffer_name
                     if full_key not in self._rank0_state_dict:
                         self._rank0_state_dict[full_key] = buffer.detach().cpu().clone()
+            self._focus_nvfp4_fusion_summary = harmonize_nvfp4_fused_scales(self._rank0_state_dict)
             print_info(
                 "[FOCUS NVFP4] convert done: rank0 state_dict has "
-                f"{len(self._rank0_state_dict)} tensors."
+                f"{len(self._rank0_state_dict)} tensors; fused scale harmonization: "
+                f"{self._focus_nvfp4_fusion_summary}."
             )
 
     def convert(self):

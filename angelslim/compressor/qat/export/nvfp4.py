@@ -26,7 +26,11 @@ from safetensors import safe_open
 
 from ....utils import print_info
 from ....utils.zero3_io import iter_safetensors_shards, resolve_safetensors_model_path
-from ...quant.modules.nvfp4 import NVFP4_BLOCK_SIZE, nvfp4_quantize_pack
+from ...quant.modules.nvfp4 import (
+    NVFP4_BLOCK_SIZE,
+    harmonize_nvfp4_fused_scales,
+    nvfp4_quantize_pack,
+)
 from .common import copy_model_metadata, load_focus_checkpoint, weight_key_from_scale
 
 
@@ -171,6 +175,10 @@ def export_focus_nvfp4_checkpoint(
             f"{missing_weights[:5]}"
         )
 
+    fusion_summary = harmonize_nvfp4_fused_scales(exported_state)
+    if fusion_summary["fused_group_count"]:
+        print_info(f"Harmonized FOCUS NVFP4 fused scales: {fusion_summary}")
+
     quantization_config = build_nvfp4_quantization_config(ignored_layers)
     copy_model_metadata(resolved_model_path, output_path, quantization_config)
     save_torch_state_dict(
@@ -188,6 +196,7 @@ def export_focus_nvfp4_checkpoint(
         "output_path": str(output_path.resolve()),
         "exported_layer_count": len(exported_layers),
         "subgroup_layer_count": len(subgroup_by_weight),
+        "fusion_scale_harmonization": fusion_summary,
         "exported_layers": sorted(exported_layers),
     }
     with (output_path / "focus_nvfp4_export.json").open("w", encoding="utf-8") as handle:

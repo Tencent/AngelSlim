@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Export a FOCUS NVFP4 fake checkpoint for vLLM compressed-tensors."""
+"""Export a FOCUS MXFP4 fake checkpoint for vLLM compressed-tensors."""
 
 from __future__ import annotations
 
@@ -22,8 +22,8 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from angelslim.compressor.qat.export import export_focus_nvfp4_checkpoint  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from angelslim.compressor.qat.export import export_focus_mxfp4_checkpoint  # noqa: E402
 
 
 def parse_args():
@@ -43,7 +43,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    summary = export_focus_nvfp4_checkpoint(
+    summary = export_focus_mxfp4_checkpoint(
         checkpoint_path=args.checkpoint,
         model_path=args.model_path,
         output_path=args.output_path,

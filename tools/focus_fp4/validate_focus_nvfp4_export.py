@@ -25,10 +25,12 @@ from pathlib import Path
 import torch
 from safetensors import safe_open
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from angelslim.compressor.qat.export.common import load_focus_checkpoint  # noqa: E402
 from angelslim.compressor.quant.modules.nvfp4 import (  # noqa: E402
     NVFP4_BLOCK_SIZE,
+    harmonize_nvfp4_fused_scales,
+    nvfp4_fusion_groups,
     nvfp4_quantize_pack,
 )
 from angelslim.utils.zero3_io import resolve_safetensors_model_path  # noqa: E402
@@ -70,6 +72,25 @@ def _sample_evenly(values: list[str], limit: int) -> list[str]:
     if limit == 1:
         return [values[len(values) // 2]]
     return [values[round(index * (len(values) - 1) / (limit - 1))] for index in range(limit)]
+
+
+def _validate_fused_scale_contract(
+    export_path: Path,
+    export_map: dict[str, str],
+    prefixes: list[str],
+) -> list[tuple[str, str, list[str]]]:
+    groups = nvfp4_fusion_groups(prefixes)
+    for group_prefix, group, members in groups:
+        for suffix in ("weight_global_scale", "input_global_scale"):
+            values = [
+                _load_tensor(export_path, export_map, f"{prefix}.{suffix}") for prefix in members
+            ]
+            if any(not torch.equal(values[0], value) for value in values[1:]):
+                raise ValueError(
+                    f"NVFP4 {group} fusion group '{group_prefix}*' has mismatched "
+                    f"{suffix} values"
+                )
+    return groups
 
 
 def validate_export(
@@ -173,38 +194,71 @@ def validate_export(
             }
         )
 
+    fusion_groups = _validate_fused_scale_contract(export_path, export_map, prefixes)
+    fusion_members = {member: members for _, _, members in fusion_groups for member in members}
+
     samples = []
     if focus_state is not None:
-        for weight_key in _sample_evenly(weight_keys, max_weights):
+        sampled_weight_keys = _sample_evenly(weight_keys, max_weights)
+        expected_prefixes = set()
+        for weight_key in sampled_weight_keys:
             prefix = weight_key[: -len(".weight")]
-            expected = nvfp4_quantize_pack(
+            expected_prefixes.update(fusion_members.get(prefix, [prefix]))
+
+        expected_state = {}
+        for prefix in sorted(expected_prefixes):
+            weight_key = f"{prefix}.weight"
+            packed, local_scale, weight_global = nvfp4_quantize_pack(
                 _load_tensor(base_path, base_map, weight_key),
                 focus_state[f"{prefix}{scale_suffix}"],
                 focus_state[f"{prefix}.weight_quantizer.scale_2"],
                 quant_max_scale=focus_state.get(f"{prefix}.weight_quantizer.quant_max_scale"),
             )
+            expected_state[f"{prefix}.weight_packed"] = packed
+            expected_state[f"{prefix}.weight_scale"] = local_scale
+            expected_state[f"{prefix}.weight_global_scale"] = weight_global
+            expected_state[f"{prefix}.input_global_scale"] = (
+                1.0 / focus_state[f"{prefix}.act_quantizer.scale_2"].float()
+            ).reshape(1)
+        harmonize_nvfp4_fused_scales(expected_state)
+
+        for weight_key in sampled_weight_keys:
+            prefix = weight_key[: -len(".weight")]
             actual = (
                 _load_tensor(export_path, export_map, f"{prefix}.weight_packed"),
                 _load_tensor(export_path, export_map, f"{prefix}.weight_scale"),
                 _load_tensor(export_path, export_map, f"{prefix}.weight_global_scale"),
             )
+            expected = (
+                expected_state[f"{prefix}.weight_packed"],
+                expected_state[f"{prefix}.weight_scale"],
+                expected_state[f"{prefix}.weight_global_scale"],
+            )
             if any(not torch.equal(left, right) for left, right in zip(actual, expected)):
                 raise ValueError(f"NVFP4 packed tensors mismatch for {prefix}")
-            expected_input_global = (
-                1.0 / focus_state[f"{prefix}.act_quantizer.scale_2"].float()
-            ).reshape(1)
             actual_input_global = _load_tensor(
                 export_path, export_map, f"{prefix}.input_global_scale"
             )
-            if not torch.equal(actual_input_global, expected_input_global):
+            if not torch.equal(
+                actual_input_global,
+                expected_state[f"{prefix}.input_global_scale"],
+            ):
                 raise ValueError(f"NVFP4 input global scale mismatch for {prefix}")
-            samples.append({"layer": prefix, "bit_exact_match": True})
+            samples.append(
+                {
+                    "layer": prefix,
+                    "bit_exact_match": True,
+                    "packed_code_exact_match": True,
+                    "fused_scale_exact_match": True,
+                }
+            )
 
     return {
         "export_path": str(export_path.resolve()),
         "format": "nvfp4-pack-quantized",
         "validation_mode": validation_mode,
         "validated_layer_count": len(layer_results),
+        "validated_fusion_group_count": len(fusion_groups),
         "samples": samples,
         "status": "PASS",
     }

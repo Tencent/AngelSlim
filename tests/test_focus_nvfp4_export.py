@@ -15,6 +15,7 @@
 import json
 from types import SimpleNamespace
 
+import pytest
 import torch
 from safetensors import safe_open
 from safetensors.torch import save_file
@@ -23,6 +24,7 @@ from angelslim.compressor.qat.export import export_focus_nvfp4_checkpoint
 from angelslim.compressor.qat.modules.quantizer import Quantizer, QuantLinear
 from angelslim.compressor.qat.qat import QAT
 from angelslim.compressor.quant.modules.nvfp4 import (
+    harmonize_nvfp4_fused_scales,
     nvfp4_quantize_pack,
     nvfp4_unpack_dequantize,
 )
@@ -59,6 +61,81 @@ def _nvfp4_config(use_subgroup=False):
             "dynamic": True,
         },
     }
+
+
+def _fused_scale_state(input_global_scale=500.0):
+    tensor_scales = {
+        "model.layers.0.self_attn.q_proj": 0.30,
+        "model.layers.0.self_attn.k_proj": 0.55,
+        "model.layers.0.self_attn.v_proj": 1.00,
+        "model.layers.0.mlp.gate_proj": 0.45,
+        "model.layers.0.mlp.up_proj": 0.90,
+    }
+    local_scale = torch.tensor([[0.5, 1.25], [2.5, 4.0]]).to(torch.float8_e4m3fn)
+    state = {}
+    for index, (prefix, tensor_scale) in enumerate(tensor_scales.items()):
+        state[f"{prefix}.weight_packed"] = torch.full((2, 16), index, dtype=torch.uint8)
+        state[f"{prefix}.weight_scale"] = local_scale.clone()
+        state[f"{prefix}.weight_global_scale"] = torch.tensor([1.0 / tensor_scale])
+        state[f"{prefix}.input_global_scale"] = torch.tensor([input_global_scale])
+    return state
+
+
+def test_harmonize_nvfp4_fused_scales_preserves_codes_and_effective_scales():
+    state = _fused_scale_state()
+    packed_before = {
+        key: value.clone() for key, value in state.items() if key.endswith(".weight_packed")
+    }
+    effective_before = {
+        prefix: state[f"{prefix}.weight_scale"].float() / state[f"{prefix}.weight_global_scale"]
+        for prefix in (
+            key[: -len(".weight_packed")] for key in state if key.endswith(".weight_packed")
+        )
+    }
+
+    summary = harmonize_nvfp4_fused_scales(state)
+
+    assert summary["fused_group_count"] == 2
+    assert summary["fused_layer_count"] == 5
+    assert summary["max_global_scale_ratio"] > 3.0
+    for key, packed in packed_before.items():
+        torch.testing.assert_close(state[key], packed, rtol=0, atol=0)
+
+    for members in (
+        ("q_proj", "k_proj", "v_proj"),
+        ("gate_proj", "up_proj"),
+    ):
+        kind = "self_attn" if len(members) == 3 else "mlp"
+        prefixes = [f"model.layers.0.{kind}.{member}" for member in members]
+        globals_after = [state[f"{prefix}.weight_global_scale"] for prefix in prefixes]
+        assert all(torch.equal(globals_after[0], value) for value in globals_after[1:])
+        for prefix in prefixes:
+            effective_after = (
+                state[f"{prefix}.weight_scale"].float() / state[f"{prefix}.weight_global_scale"]
+            )
+            torch.testing.assert_close(
+                effective_after,
+                effective_before[prefix],
+                rtol=0.063,
+                atol=0,
+            )
+
+
+def test_harmonize_nvfp4_fused_scales_rejects_mismatched_input_scale():
+    state = _fused_scale_state()
+    state["model.layers.0.self_attn.k_proj.input_global_scale"] = torch.tensor([400.0])
+
+    with pytest.raises(ValueError, match="mismatched input_global_scale"):
+        harmonize_nvfp4_fused_scales(state)
+
+
+def test_harmonize_nvfp4_fused_scales_rejects_block_scale_underflow():
+    state = _fused_scale_state()
+    key = "model.layers.0.self_attn.q_proj.weight_scale"
+    state[key] = torch.full_like(state[key], torch.finfo(torch.float8_e4m3fn).tiny)
+
+    with pytest.raises(ValueError, match="exceed the supported E4M3 range"):
+        harmonize_nvfp4_fused_scales(state)
 
 
 def test_nvfp4_packed_dequant_matches_focus_fake_quantizer():
@@ -182,6 +259,84 @@ def test_nvfp4_fake_checkpoint_exports_compressed_tensors_schema(tmp_path):
     assert group["input_activations"]["dynamic"] == "local"
 
 
+def test_nvfp4_fake_checkpoint_harmonizes_qkv_fused_scales(tmp_path):
+    model_path = tmp_path / "base"
+    output_path = tmp_path / "exported"
+    model_path.mkdir()
+    prefixes = [
+        "model.layers.0.self_attn.q_proj",
+        "model.layers.0.self_attn.k_proj",
+        "model.layers.0.self_attn.v_proj",
+    ]
+    base_weights = {
+        f"{prefix}.weight": (torch.linspace(-1.0, 1.0, 32).reshape(2, 16) * (index + 1))
+        for index, prefix in enumerate(prefixes)
+    }
+    save_file(
+        {
+            **base_weights,
+            "model.embed_tokens.weight": torch.ones(4, 8, dtype=torch.bfloat16),
+        },
+        model_path / "model.safetensors",
+    )
+    (model_path / "config.json").write_text(
+        json.dumps({"model_type": "qwen3", "torch_dtype": "bfloat16"}),
+        encoding="utf-8",
+    )
+
+    checkpoint_path = tmp_path / "focus_fake.pt"
+    checkpoint = {}
+    input_scale_2 = torch.tensor([0.002])
+    expected_state = {}
+    raw_packed = {}
+    for index, prefix in enumerate(prefixes):
+        weight = base_weights[f"{prefix}.weight"]
+        max_scale = torch.tensor([[0.75 + index * 0.1], [1.25 - index * 0.1]])
+        scale_2 = weight.abs().amax().reshape(1) / (6.0 * 448.0)
+        checkpoint.update(
+            {
+                f"{prefix}.weight": torch.zeros_like(weight),
+                f"{prefix}.weight_quantizer.max_scale": max_scale,
+                f"{prefix}.weight_quantizer.scale_2": scale_2,
+                f"{prefix}.act_quantizer.scale_2": input_scale_2,
+            }
+        )
+        packed, local_scale, weight_global = nvfp4_quantize_pack(weight, max_scale, scale_2)
+        expected_state[f"{prefix}.weight_packed"] = packed
+        expected_state[f"{prefix}.weight_scale"] = local_scale
+        expected_state[f"{prefix}.weight_global_scale"] = weight_global
+        expected_state[f"{prefix}.input_global_scale"] = 1.0 / input_scale_2
+        raw_packed[prefix] = packed.clone()
+    torch.save(checkpoint, checkpoint_path)
+    expected_summary = harmonize_nvfp4_fused_scales(expected_state)
+
+    summary = export_focus_nvfp4_checkpoint(
+        checkpoint_path, model_path, output_path, max_shard_size="1GB"
+    )
+
+    assert summary["fusion_scale_harmonization"] == expected_summary
+    assert summary["fusion_scale_harmonization"]["fused_group_count"] == 1
+    with safe_open(output_path / "model.safetensors", framework="pt", device="cpu") as reader:
+        for prefix in prefixes:
+            torch.testing.assert_close(
+                reader.get_tensor(f"{prefix}.weight_packed"),
+                raw_packed[prefix],
+                rtol=0,
+                atol=0,
+            )
+            for suffix in (
+                "weight_scale",
+                "weight_global_scale",
+                "input_global_scale",
+            ):
+                torch.testing.assert_close(
+                    reader.get_tensor(f"{prefix}.{suffix}"),
+                    expected_state[f"{prefix}.{suffix}"],
+                    rtol=0,
+                    atol=0,
+                )
+
+
 def test_qat_nvfp4_real_convert_builds_deployment_state_dict():
     quant_linear = QuantLinear(
         torch.nn.Linear(64, 3, bias=False),
@@ -206,3 +361,67 @@ def test_qat_nvfp4_real_convert_builds_deployment_state_dict():
         "0.weight_scale",
     }
     assert all("quant_max_scale" not in key for key in qat._rank0_state_dict)
+
+
+def test_qat_nvfp4_real_convert_matches_offline_fusion_harmonization():
+    class ToyModel(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.self_attn = torch.nn.Module()
+            self.mlp = torch.nn.Module()
+            generator = torch.Generator().manual_seed(20260726)
+            for parent, members in (
+                (self.self_attn, ("q_proj", "k_proj", "v_proj")),
+                (self.mlp, ("gate_proj", "up_proj")),
+            ):
+                for index, name in enumerate(members):
+                    linear = torch.nn.Linear(64, 3 + index, bias=False)
+                    with torch.no_grad():
+                        linear.weight.copy_(
+                            torch.randn(
+                                linear.weight.shape,
+                                generator=generator,
+                                dtype=linear.weight.dtype,
+                            )
+                            * (index + 1)
+                        )
+                    quant_linear = QuantLinear(
+                        linear,
+                        _nvfp4_config(),
+                        _quant_info(),
+                        use_weight_quant=True,
+                        use_act_quant=True,
+                    )
+                    quant_linear.act_quantizer.scale_2.copy_(torch.tensor([0.002]))
+                    quant_linear.act_quantizer.init = True
+                    setattr(parent, name, quant_linear)
+
+    model = ToyModel()
+    expected_state = {}
+    for prefix, module in model.named_modules():
+        if not isinstance(module, QuantLinear):
+            continue
+        packed, local_scale, weight_global = nvfp4_quantize_pack(
+            module.weight,
+            module.weight_quantizer.max_scale,
+            module.weight_quantizer.scale_2,
+        )
+        expected_state[f"{prefix}.weight_packed"] = packed
+        expected_state[f"{prefix}.weight_scale"] = local_scale
+        expected_state[f"{prefix}.weight_global_scale"] = weight_global
+        expected_state[f"{prefix}.input_global_scale"] = (
+            1.0 / module.act_quantizer.scale_2.float()
+        ).reshape(1)
+    expected_summary = harmonize_nvfp4_fused_scales(expected_state)
+
+    qat = QAT.__new__(QAT)
+    qat.save_fmt = "real"
+    qat.plugin_config = {"quant_config": {"weight": {"qtype": "nvfp4"}}}
+    qat.quant_model = SimpleNamespace(model=model)
+    qat._rank0_state_dict = None
+    qat.convert()
+
+    assert qat._focus_nvfp4_fusion_summary == expected_summary
+    assert qat._focus_nvfp4_fusion_summary["fused_group_count"] == 2
+    for key, expected in expected_state.items():
+        torch.testing.assert_close(qat._rank0_state_dict[key], expected, rtol=0, atol=0)

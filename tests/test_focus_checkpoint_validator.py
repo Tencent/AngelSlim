@@ -20,7 +20,7 @@ import torch
 from safetensors.torch import save_file
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_VALIDATOR_PATH = _REPO_ROOT / "tools" / "validate_focus_fp4_checkpoint.py"
+_VALIDATOR_PATH = _REPO_ROOT / "tools" / "focus_fp4" / "validate_focus_fp4_checkpoint.py"
 _WEIGHT_KEY = "model.layers.0.self_attn.q_proj.weight"
 _PREFIX = _WEIGHT_KEY[: -len(".weight")]
 

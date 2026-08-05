@@ -25,7 +25,7 @@ from pathlib import Path
 import torch
 from safetensors import safe_open
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from angelslim.compressor.qat.export.common import load_focus_checkpoint  # noqa: E402
 from angelslim.compressor.quant.modules.mxfp4 import (  # noqa: E402
     MXFP4_GROUP_SIZE,
