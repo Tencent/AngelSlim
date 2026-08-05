@@ -184,6 +184,7 @@
 <li class="toctree-l2"><a class="reference internal" href="fp8_lepto.html">FP8_LEPTO量化</a></li>
 <li class="toctree-l2"><a class="reference internal" href="qat.html">QAT 量化感知训练</a></li>
 <li class="toctree-l2"><a class="reference internal" href="qat_zero3.html">QAT + DeepSpeed ZeRO-3</a></li>
+<li class="toctree-l2"><a class="reference internal" href="focus_fp4.html">FOCUS：面向 FP4 的端到端 Scale 优化</a></li>
 <li class="toctree-l2"><a class="reference internal" href="daq.html">DAQ量化</a></li>
 </ul>
 </details></li>
@@ -425,7 +426,7 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="awq">
+  <section class="tex2jax_ignore mathjax_ignore" id="awq">
 <span id="id1"></span><h1>AWQ量化<a class="headerlink" href="#awq" title="Link to this heading">#</a></h1>
 <p>本项目使用<a class="reference external" href="https://arxiv.org/abs/2306.00978">AWQ</a> 算法来实现Int4-weight-only量化。算法通过少量校准数据（无需训练）统计激活值的幅度，对每个权重通道计算一个缩放系数s，放大重要权重的数值范围，使其在量化时保留更多信息。流程无需重新训练模型，仅需少量校准数据即可确定缩放系数，适合快速部署。</p>
 <p>您可以量化<code class="docutils literal notranslate"><span class="pre">AngelSlim/configs</span></code>下面带有awq字段的模型类型，你也可以直接下载我们量化完成的开源模型使用：#TODO [hflink]</p>

@@ -184,6 +184,7 @@
 <li class="toctree-l2 current active"><a class="current reference internal" href="#">FP8_LEPTO量化</a></li>
 <li class="toctree-l2"><a class="reference internal" href="qat.html">QAT 量化感知训练</a></li>
 <li class="toctree-l2"><a class="reference internal" href="qat_zero3.html">QAT + DeepSpeed ZeRO-3</a></li>
+<li class="toctree-l2"><a class="reference internal" href="focus_fp4.html">FOCUS：面向 FP4 的端到端 Scale 优化</a></li>
 <li class="toctree-l2"><a class="reference internal" href="daq.html">DAQ量化</a></li>
 </ul>
 </details></li>
@@ -424,7 +425,7 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="fp8-lepto">
+  <section class="tex2jax_ignore mathjax_ignore" id="fp8-lepto">
 <span id="id1"></span><h1>FP8_LEPTO量化<a class="headerlink" href="#fp8-lepto" title="Link to this heading">#</a></h1>
 <p>通常情况下PTQ统计Activation和Weight的abs Max值作为量化缩放系数。通过观察FP8 PTQ量化后有损的模型的数值分布发现，相较于量化无损模型会出现激活值分布方差过大的情况，这种数值分布会使得量化数值落在FP8难以表达的量化范围，导致模型在一些数学难题或文本格式要求严格的任务上损失过大。</p>
 <p>通过观察原始精度数值分布发现，该权重整体数值集中分布为尖峰分布，存在明显的outlier且大部分数据集中在0点附近，数值之间的相对距离较小导致计算过程中对于数值的精度要求更高。FP8 QDQ量化后的权重分布如右图所示，可以发现量化后的分布对比原始精度较为平滑。由于FP8-E4M3的数值表达在越靠近零点可表示的数值越多，趋近于正态分布的下的原始精度权重Worigin，通过传统FP8量化会导致原本数值较密集的数被平滑到了表达能力较差的FP8精度范围，导致精度表达能力下降带来效果损失。</p>

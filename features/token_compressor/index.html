@@ -53,6 +53,8 @@
     <script src="../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'features/token_compressor/index';</script>
     <script src="../../_static/custom.js"></script>
     <link rel="icon" href="../../_static/angelslim_icon.png"/>
@@ -410,7 +412,7 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="token">
+  <section class="tex2jax_ignore mathjax_ignore" id="token">
 <h1>Token 压缩<a class="headerlink" href="#token" title="Link to this heading">#</a></h1>
 <p>Token 压缩（Token Compressor）是 AngelSlim 针对多模态大模型（MLLM）开发的高效压缩模块。其核心目标是在推理过程中动态减少视觉 Token 数量，从而显著降低 KV Cache 的显存占用，并大幅加速 Prefill 与 Decoding 阶段。</p>
 <p>本工具包提供了一套基于元数据驱动的通用适配架构，支持一键式部署多种剪枝（Pruning）与合并（Merging）算法。本工具的核心特点在于实现了压缩算法逻辑与模型底层代码的高度解耦：研究人员无需深入关注特定模型复杂的内部实现，只需专注于开发高效的剪枝或合并策略，即可实现跨模型的快速迁移、部署与算法验证。</p>

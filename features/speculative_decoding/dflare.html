@@ -428,7 +428,7 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="dflare">
+  <section class="tex2jax_ignore mathjax_ignore" id="dflare">
 <h1>DFlare<a class="headerlink" href="#dflare" title="Link to this heading">#</a></h1>
 <p><strong>DFlare</strong> is a block-diffusion speculative decoding framework that accelerates large language model inference by predicting an entire block of tokens in one shot for the target model to verify in parallel. It removes the narrow conditioning bottleneck of the prior state-of-the-art DFlash through a lightweight <strong>layer-wise fusion</strong> mechanism: each draft layer attends to its own learnable combination of a broad set of target layers at negligible overhead, simultaneously injecting richer target knowledge and giving every draft layer a distinct input. Combined with training-data scaling, this enhanced per-layer expressiveness allows the draft model to scale to deeper architectures with consistent gains, achieving up to <strong>5.52× end-to-end speedup</strong> without compromising output quality.</p>
 <p>This repository contains the official implementation and resources for the paper: <strong>DFLARE: Scaling Up Draft Capacity for Block Diffusion Speculative Decoding</strong>.</p>

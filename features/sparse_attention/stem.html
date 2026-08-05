@@ -53,6 +53,8 @@
     <script src="../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'features/sparse_attention/stem';</script>
     <script src="../../_static/custom.js"></script>
     <link rel="icon" href="../../_static/angelslim_icon.png"/>
@@ -434,7 +436,7 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="stem-rethinking-causal-information-flow-in-sparse-attention">
+  <section class="tex2jax_ignore mathjax_ignore" id="stem-rethinking-causal-information-flow-in-sparse-attention">
 <h1>Stem: Rethinking Causal Information Flow in Sparse Attention<a class="headerlink" href="#stem-rethinking-causal-information-flow-in-sparse-attention" title="Link to this heading">#</a></h1>
 <p><strong>Stem</strong> 是 AngelSlim 的稀疏注意力算法，用于加速长上下文 LLM 的 <strong>Prefill</strong> 阶段。它通过在 block 粒度上估计注意力重要性，动态选择 top-k 关键块执行 block-sparse attention，在保持生成质量的同时大幅降低 Prefill 延迟。</p>
 <section id="id1">
@@ -452,8 +454,9 @@ document.write(`
 <section id="block-level-scoring">
 <h3>2.1 Block-Level Scoring<a class="headerlink" href="#block-level-scoring" title="Link to this heading">#</a></h3>
 <p>使用 <strong>Triton 加速的 strided group GEMM</strong> 计算下采样的 Q·K^T 分数矩阵，并结合 value-norm bonus 项，得到每个 query-block 对每个 key-block 的重要性估计：</p>
-<p>$$\text{score}(Q_i, K_j) = \frac{Q_i \cdot K_j^T}{\sqrt{d} \cdot s \cdot n} + \lambda \cdot \text{ReLU}(\bar{v}_j)$$</p>
-<p>其中 $s$ 为 stride 因子，$n$ 为归一化系数，$\bar{v}_j$ 为 value-norm 的标准化对数值。</p>
+<div class="math notranslate nohighlight">
+\[\text{score}(Q_i, K_j) = \frac{Q_i \cdot K_j^T}{\sqrt{d} \cdot s \cdot n} + \lambda \cdot \text{ReLU}(\bar{v}_j)\]</div>
+<p>其中 <span class="math notranslate nohighlight">\(s\)</span> 为 stride 因子，<span class="math notranslate nohighlight">\(n\)</span> 为归一化系数，<span class="math notranslate nohighlight">\(\bar{v}_j\)</span> 为 value-norm 的标准化对数值。</p>
 </section>
 <section id="top-k-schedule">
 <h3>2.2 Top-k Schedule<a class="headerlink" href="#top-k-schedule" title="Link to this heading">#</a></h3>

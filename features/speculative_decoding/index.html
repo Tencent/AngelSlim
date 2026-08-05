@@ -53,6 +53,8 @@
     <script src="../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'features/speculative_decoding/index';</script>
     <script src="../../_static/custom.js"></script>
     <link rel="icon" href="../../_static/angelslim_icon.png"/>
@@ -410,7 +412,7 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="id1">
+  <section class="tex2jax_ignore mathjax_ignore" id="id1">
 <h1>投机采样<a class="headerlink" href="#id1" title="Link to this heading">#</a></h1>
 <p>投机采样是一种用于自回归大模型中进行并行解码的技术，可以在效果无损的前提下，有效加速大模型推理计算。</p>
 <div class="toctree-wrapper compound">

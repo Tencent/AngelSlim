@@ -53,6 +53,8 @@
     <script src="../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'features/token_compressor/idpruner';</script>
     <script src="../../_static/custom.js"></script>
     <link rel="icon" href="../../_static/angelslim_icon.png"/>
@@ -426,7 +428,7 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="idpruner">
+  <section class="tex2jax_ignore mathjax_ignore" id="idpruner">
 <h1>IDPruner (核心自研算法)<a class="headerlink" href="#idpruner" title="Link to this heading">#</a></h1>
 <p><strong>IDPruner (Importance and Diversity Pruner)</strong> 是 AngelSlim 的核心视觉 Token 剪枝算法。它通过引入信息检索领域的重排序机制，解决了 MLLM 在极高压缩比下精度大幅退化的问题。</p>
 <section id="id1">
@@ -445,7 +447,7 @@ document.write(`
 <li><p><strong>重要性度量 (Importance Source)</strong>：采用经过端到端训练的轻量化 <strong>Scorer（评分器）</strong>，预测每个 Token 对最终语义生成的贡献度。</p></li>
 <li><p><strong>相似性度量 (Similarity Source)</strong>：利用模型自身的<strong>视觉隐藏层特征向量</strong>，在特征空间计算 Token 间的<strong>余弦相似度</strong>以识别冗余。</p></li>
 <li><p><strong>MMR 选择机制 (Maximal Marginal Relevance)</strong>：采用贪心策略迭代选择 Token，目标是最大化以下函数：
-$$v^* = \arg \max_{v_i \in V \setminus S} [\lambda \cdot \text{Imp}(v_i) - (1 - \lambda) \cdot \max_{v_j \in S} \text{Sim}(v_i, v_j)]$$
+$<span class="math notranslate nohighlight">\(v^* = \arg \max_{v_i \in V \setminus S} [\lambda \cdot \text{Imp}(v_i) - (1 - \lambda) \cdot \max_{v_j \in S} \text{Sim}(v_i, v_j)]\)</span>$
 通过动态惩罚与已选集合高度相似的候选 Token，确保最终集合在保留高价值信息的同时，具备最优的语义覆盖面。</p></li>
 </ol>
 </section>

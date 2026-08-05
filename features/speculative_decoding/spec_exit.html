@@ -53,6 +53,8 @@
     <script src="../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'features/speculative_decoding/spec_exit';</script>
     <script src="../../_static/custom.js"></script>
     <link rel="icon" href="../../_static/angelslim_icon.png"/>
@@ -427,7 +429,7 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="specexit">
+  <section class="tex2jax_ignore mathjax_ignore" id="specexit">
 <h1>SpecExit<a class="headerlink" href="#specexit" title="Link to this heading">#</a></h1>
 <p><strong>SpecExit</strong> is a novel framework that accelerates large reasoning models (LRMs) by integrating an efficient early-exit mechanism with speculative decoding. It addresses the “overthinking” problem in LRMs, where models produce unnecessarily long outputs, leading to high inference latency.</p>
 <p>Our method trains a lightweight draft model to predict not only future tokens but also an early-exit signal directly from its hidden states. This unique design eliminates the probing overhead found in other early-exit methods, achieving significant speedups without compromising task accuracy.</p>
@@ -443,7 +445,7 @@ document.write(`
 <ul class="simple">
 <li><p><strong>Signals Extracted for Early Exit</strong>: We derive early-exit signals from hidden features and integrate them into speculative decoding, enabling reliable early exit for efficient reasoning.</p></li>
 <li><p><strong>General and Practical Framework</strong>: We implement SpecExit, a reasoning-aware early-exit framework, in both PyTorch and vLLM, making it easy to deploy across diverse inference environments.</p></li>
-<li><p><strong>Substantial End-to-End Performance Gains</strong>: SpecExit reduces reasoning length by 66% and achieves up to 2.5$\times$ lower latency than speculative decoding while maintaining accuracy.</p></li>
+<li><p><strong>Substantial End-to-End Performance Gains</strong>: SpecExit reduces reasoning length by 66% and achieves up to 2.5<span class="math notranslate nohighlight">\(\times\)</span> lower latency than speculative decoding while maintaining accuracy.</p></li>
 </ul>
 </section>
 <section id="quick-start">

@@ -423,7 +423,7 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="quantization-aware-distillation">
+  <section class="tex2jax_ignore mathjax_ignore" id="quantization-aware-distillation">
 <h1>Quantization-Aware Distillation<a class="headerlink" href="#quantization-aware-distillation" title="Link to this heading">#</a></h1>
 <p>QAD trains a quantized student with an independent full-precision teacher. It is the bridge between the QAT and Distill paths: QAD reuses QAT quantization modules, learnable-scale plugins, conversion, and save logic, while sharing the Distill trainer and distillation losses.</p>
 <p>Use <code class="docutils literal notranslate"><span class="pre">Distill</span></code> for full-precision students. Use <code class="docutils literal notranslate"><span class="pre">QAD</span></code> when the student should be quantized during training.</p>
