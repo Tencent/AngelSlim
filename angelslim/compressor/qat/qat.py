@@ -18,6 +18,7 @@ import torch
 from safetensors.torch import save_file
 
 from ...utils import (
+    consolidated_state_dict,
     gathered_param_if_zero3,
     model_has_zero3_params,
     print_info,
@@ -26,6 +27,13 @@ from ...utils import (
 )
 from ..compressor_factory import CompressorFactory
 from ..quant.modules.helper_layer import QDQModule
+from ..quant.modules.mxfp4 import MXFP4_GROUP_SIZE, mxfp4_quantize_pack
+from ..quant.modules.nvfp4 import (
+    NVFP4_BLOCK_SIZE,
+    harmonize_nvfp4_fused_scales,
+    nvfp4_quantize_pack,
+)
+from .export import FocusMXFP4SaveVllmHF, FocusNVFP4SaveVllmHF
 from .modules.quantizer import QuantLinear
 from .plugins.plugin_manager import PluginManager
 from .trainers.trainer_factory import TrainerFactory
@@ -110,8 +118,266 @@ class QAT:
         with gathered_param_if_zero3(tensor):
             return tensor.detach().cpu().clone()
 
+    def _is_focus_mxfp4_export(self):
+        weight_config = self.plugin_config.get("quant_config", {}).get("weight", {})
+        return (
+            self.save_fmt in ("real", "real_and_kvcache")
+            and "mxfp4" in str(weight_config.get("qtype", "")).lower()
+        )
+
+    def _is_focus_nvfp4_export(self):
+        weight_config = self.plugin_config.get("quant_config", {}).get("weight", {})
+        return (
+            self.save_fmt in ("real", "real_and_kvcache")
+            and "nvfp4" in str(weight_config.get("qtype", "")).lower()
+        )
+
+    def _validate_focus_real_export_source(self):
+        """Reject baked fake checkpoints as input to direct real export."""
+        if not (self._is_focus_mxfp4_export() or self._is_focus_nvfp4_export()):
+            return
+        try:
+            qat_config = self.config["compress_config"].QAT
+        except (AttributeError, KeyError, TypeError):
+            return
+        resume_ckpt_dir = getattr(qat_config, "resume_ckpt_dir", None)
+        if resume_ckpt_dir is not None:
+            raise RuntimeError(
+                "FOCUS fake checkpoints contain baked fake-quantized weights and "
+                "cannot be passed to direct `save_format: real` export without "
+                "quantizing the weights a second time. Use "
+                "`tools/focus_fp4/export_focus_mxfp4.py` or "
+                "`tools/focus_fp4/export_focus_nvfp4.py` with the frozen base model instead."
+            )
+
+    @staticmethod
+    def _validate_focus_scale(name, tensor, *, positive=True):
+        value = tensor.detach().float()
+        if not torch.isfinite(value).all():
+            raise ValueError(f"{name} must contain only finite values")
+        if positive and not (value > 0).all():
+            raise ValueError(f"{name} must contain only positive values")
+
+    def _convert_focus_mxfp4(self):
+        """Build a rank-0 compressed-tensors MXFP4 state dict."""
+        rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
+        self._rank0_state_dict = {}
+        quant_linear_modules = [
+            (name, module)
+            for name, module in self.quant_model.model.named_modules()
+            if isinstance(module, QuantLinear)
+        ]
+        consumed_prefixes = {name for name, _ in quant_linear_modules}
+
+        print_info(
+            f"[rank{rank}] Start FOCUS MXFP4 real convert: "
+            f"{len(quant_linear_modules)} QuantLinear modules."
+        )
+        for name, module in quant_linear_modules:
+            quantizer = module.weight_quantizer
+            if quantizer.group_size != MXFP4_GROUP_SIZE:
+                raise ValueError(
+                    "vLLM compressed-tensors MXFP4 requires weight group_size=32, "
+                    f"got {quantizer.group_size} for {name}"
+                )
+            weight = self._sym_gather_clone(module.weight)
+            max_scale = self._sym_gather_clone(quantizer.max_scale)
+            quant_max_scale = (
+                self._sym_gather_clone(quantizer.quant_max_scale)
+                if getattr(quantizer, "use_subgroup_scale", False)
+                else None
+            )
+            bias = self._sym_gather_clone(getattr(module, "bias", None))
+            self._validate_focus_scale(f"{name}.max_scale", max_scale)
+            if quant_max_scale is not None:
+                self._validate_focus_scale(
+                    f"{name}.quant_max_scale", quant_max_scale, positive=False
+                )
+            if weight.ndim != 2 or weight.shape[-1] % quantizer.group_size:
+                raise ValueError(
+                    f"{name}.weight must be 2D with width divisible by "
+                    f"{quantizer.group_size}, got {tuple(weight.shape)}"
+                )
+            if rank != 0:
+                del weight, max_scale, quant_max_scale, bias
+                continue
+
+            packed, encoded_scale = mxfp4_quantize_pack(
+                weight,
+                max_scale,
+                group_size=quantizer.group_size,
+                quant_max_scale=quant_max_scale,
+                num_sub=quantizer.num_sub,
+            )
+            self._rank0_state_dict[f"{name}.weight_packed"] = packed
+            self._rank0_state_dict[f"{name}.weight_scale"] = encoded_scale
+            if bias is not None:
+                self._rank0_state_dict[f"{name}.bias"] = bias
+            del weight, max_scale, quant_max_scale, bias, packed, encoded_scale
+
+        # Gather parameters outside QuantLinear (embedding, norms, lm_head, ...).
+        for pname, param in self.quant_model.model.named_parameters():
+            if any(pname.startswith(prefix + ".") for prefix in consumed_prefixes):
+                continue
+            with gathered_param_if_zero3(param):
+                if rank == 0:
+                    self._rank0_state_dict[pname] = param.detach().cpu().clone()
+
+        if rank == 0:
+            for module_name, module in self.quant_model.model.named_modules():
+                if any(
+                    module_name == prefix or module_name.startswith(prefix + ".")
+                    for prefix in consumed_prefixes
+                ):
+                    continue
+                for buffer_name, buffer in module.named_buffers(recurse=False):
+                    if buffer is None or buffer_name in module._non_persistent_buffers_set:
+                        continue
+                    full_key = f"{module_name}.{buffer_name}" if module_name else buffer_name
+                    if full_key not in self._rank0_state_dict:
+                        self._rank0_state_dict[full_key] = buffer.detach().cpu().clone()
+            print_info(
+                "[FOCUS MXFP4] convert done: rank0 state_dict has "
+                f"{len(self._rank0_state_dict)} tensors."
+            )
+
+    def _convert_focus_nvfp4(self):
+        """Build a rank-0 compressed-tensors NVFP4 state dict."""
+        rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
+        self._rank0_state_dict = {}
+        quant_linear_modules = [
+            (name, module)
+            for name, module in self.quant_model.model.named_modules()
+            if isinstance(module, QuantLinear)
+        ]
+        consumed_prefixes = {name for name, _ in quant_linear_modules}
+
+        print_info(
+            f"[rank{rank}] Start FOCUS NVFP4 real convert: "
+            f"{len(quant_linear_modules)} QuantLinear modules."
+        )
+        for name, module in quant_linear_modules:
+            quantizer = module.weight_quantizer
+            if quantizer.group_size != NVFP4_BLOCK_SIZE:
+                raise ValueError(
+                    "vLLM compressed-tensors NVFP4 requires weight group_size=16, "
+                    f"got {quantizer.group_size} for {name}"
+                )
+            if not module.use_act_quant or not hasattr(module, "act_quantizer"):
+                raise RuntimeError(
+                    f"FOCUS NVFP4 W4A4 export requires activation quantization for {name}"
+                )
+            act_quantizer = module.act_quantizer
+            if getattr(quantizer, "scale_2", None) is None:
+                raise RuntimeError(f"NVFP4 weight scale_2 is not initialized for {name}")
+            if getattr(act_quantizer, "scale_2", None) is None:
+                raise RuntimeError(f"NVFP4 activation scale_2 is not initialized for {name}")
+
+            weight = self._sym_gather_clone(module.weight)
+            max_scale = self._sym_gather_clone(quantizer.max_scale)
+            weight_scale_2 = self._sym_gather_clone(quantizer.scale_2)
+            input_scale_2 = self._sym_gather_clone(act_quantizer.scale_2)
+            quant_max_scale = (
+                self._sym_gather_clone(quantizer.quant_max_scale)
+                if getattr(quantizer, "use_subgroup_scale", False)
+                else None
+            )
+            bias = self._sym_gather_clone(getattr(module, "bias", None))
+            self._validate_focus_scale(f"{name}.max_scale", max_scale)
+            self._validate_focus_scale(f"{name}.weight_scale_2", weight_scale_2)
+            self._validate_focus_scale(f"{name}.input_scale_2", input_scale_2)
+            if quant_max_scale is not None:
+                self._validate_focus_scale(
+                    f"{name}.quant_max_scale", quant_max_scale, positive=False
+                )
+            if weight.ndim != 2 or weight.shape[-1] % quantizer.group_size:
+                raise ValueError(
+                    f"{name}.weight must be 2D with width divisible by "
+                    f"{quantizer.group_size}, got {tuple(weight.shape)}"
+                )
+            if rank != 0:
+                del (
+                    weight,
+                    max_scale,
+                    weight_scale_2,
+                    input_scale_2,
+                    quant_max_scale,
+                    bias,
+                )
+                continue
+
+            packed, local_scale, weight_global_scale = nvfp4_quantize_pack(
+                weight,
+                max_scale,
+                weight_scale_2,
+                block_size=quantizer.group_size,
+                quant_max_scale=quant_max_scale,
+                num_sub=quantizer.num_sub,
+            )
+            input_scale_2 = input_scale_2.float().reshape(-1)
+            if (
+                input_scale_2.numel() != 1
+                or not torch.isfinite(input_scale_2).all()
+                or not (input_scale_2 > 0).all()
+            ):
+                raise ValueError(f"Invalid NVFP4 activation scale_2 for {name}: {input_scale_2}")
+            self._rank0_state_dict[f"{name}.weight_packed"] = packed
+            self._rank0_state_dict[f"{name}.weight_scale"] = local_scale
+            self._rank0_state_dict[f"{name}.weight_global_scale"] = (
+                weight_global_scale.float().reshape(1)
+            )
+            self._rank0_state_dict[f"{name}.input_global_scale"] = (1.0 / input_scale_2).reshape(1)
+            if bias is not None:
+                self._rank0_state_dict[f"{name}.bias"] = bias
+            del (
+                weight,
+                max_scale,
+                weight_scale_2,
+                input_scale_2,
+                quant_max_scale,
+                bias,
+                packed,
+                local_scale,
+                weight_global_scale,
+            )
+
+        for pname, param in self.quant_model.model.named_parameters():
+            if any(pname.startswith(prefix + ".") for prefix in consumed_prefixes):
+                continue
+            with gathered_param_if_zero3(param):
+                if rank == 0:
+                    self._rank0_state_dict[pname] = param.detach().cpu().clone()
+
+        if rank == 0:
+            for module_name, module in self.quant_model.model.named_modules():
+                if any(
+                    module_name == prefix or module_name.startswith(prefix + ".")
+                    for prefix in consumed_prefixes
+                ):
+                    continue
+                for buffer_name, buffer in module.named_buffers(recurse=False):
+                    if buffer is None or buffer_name in module._non_persistent_buffers_set:
+                        continue
+                    full_key = f"{module_name}.{buffer_name}" if module_name else buffer_name
+                    if full_key not in self._rank0_state_dict:
+                        self._rank0_state_dict[full_key] = buffer.detach().cpu().clone()
+            self._focus_nvfp4_fusion_summary = harmonize_nvfp4_fused_scales(self._rank0_state_dict)
+            print_info(
+                "[FOCUS NVFP4] convert done: rank0 state_dict has "
+                f"{len(self._rank0_state_dict)} tensors; fused scale harmonization: "
+                f"{self._focus_nvfp4_fusion_summary}."
+            )
+
     def convert(self):
         if self.save_fmt not in ("real", "real_and_kvcache"):
+            return
+
+        self._validate_focus_real_export_source()
+        if self._is_focus_mxfp4_export():
+            self._convert_focus_mxfp4()
+            return
+        if self._is_focus_nvfp4_export():
+            self._convert_focus_nvfp4()
             return
 
         zero3 = model_has_zero3_params(self.quant_model.model)
@@ -273,18 +539,31 @@ class QAT:
         print_info(f"Saved {len(kv_scales)} KV cache scales to: {out_file}")
 
     def save(self, save_path: str):
-        # "fake": save fake-quant state_dict (NOTE: only supports non-distributed / single-GPU)
+        # "fake": save fake-quant state_dict.
         if self.save_fmt == "fake":
             parts = save_path.rsplit("/")
             save_path = os.path.join("/".join(parts[:-1]), parts[-1] + "_fake_quant_model.pt")
             print_info(f"Start save QAT fake ckpt to: {save_path}")
 
-            cpu_state = self.trainer.external_trainer.model.state_dict()
-            torch.save(cpu_state, save_path)
+            if model_has_zero3_params(self.quant_model.model):
+                rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
+                cpu_state = consolidated_state_dict(self.quant_model.model)
+                if rank == 0:
+                    torch.save(cpu_state, save_path)
+                if torch.distributed.is_available() and torch.distributed.is_initialized():
+                    torch.distributed.barrier()
+            else:
+                cpu_state = self.trainer.external_trainer.model.state_dict()
+                torch.save(cpu_state, save_path)
 
         # "real": save real-quant model via model-specific save function
         elif self.save_fmt == "real":
-            save_func = self.quant_model.get_save_func()(self.quant_model)
+            if self._is_focus_mxfp4_export():
+                save_func = FocusMXFP4SaveVllmHF(self.quant_model)
+            elif self._is_focus_nvfp4_export():
+                save_func = FocusNVFP4SaveVllmHF(self.quant_model)
+            else:
+                save_func = self.quant_model.get_save_func()(self.quant_model)
             save_via_model_save_func(
                 self.quant_model,
                 save_func,
@@ -298,7 +577,12 @@ class QAT:
 
         # "real_and_kvcache": save real-quant model AND KV cache scales
         elif self.save_fmt == "real_and_kvcache":
-            save_func = self.quant_model.get_save_func()(self.quant_model)
+            if self._is_focus_mxfp4_export():
+                save_func = FocusMXFP4SaveVllmHF(self.quant_model)
+            elif self._is_focus_nvfp4_export():
+                save_func = FocusNVFP4SaveVllmHF(self.quant_model)
+            else:
+                save_func = self.quant_model.get_save_func()(self.quant_model)
             save_via_model_save_func(
                 self.quant_model,
                 save_func,

@@ -16,13 +16,14 @@ import torch
 from tqdm import tqdm
 
 from ....utils import (
+    gathered_param_if_zero3,
     gathered_params_if_zero3,
     is_deepspeed_zero3_enabled,
     print_info,
     set_op_by_name,
     stream_load_scales,
 )
-from ..modules.quantizer import QuantLinear
+from ..modules.quantizer import FP8_E4M3_QMAX, QuantLinear
 from .base_plugin import BasePlugin
 from .plugin_manager import PluginManager
 
@@ -31,6 +32,42 @@ _QKV_PROJ_MAP = {
     "k_proj": "k",
     "v_proj": "v",
 }
+
+
+@torch.no_grad()
+def initialize_nvfp4_weight_scale_2(model):
+    """Initialize NVFP4 weight global scales from complete weight tensors.
+
+    Under ZeRO-3, ``Quantizer.__init__`` cannot inspect the sharded weight and
+    leaves ``scale_2`` uninitialized. Do the data-dependent initialization in
+    an explicit gather before the first forward so it never depends on
+    DeepSpeed's module-hook timing.
+    """
+    for name, module in model.named_modules():
+        if not isinstance(module, QuantLinear):
+            continue
+        quantizer = getattr(module, "weight_quantizer", None)
+        if (
+            quantizer is None
+            or getattr(quantizer, "dtype", None) != "nvfp4"
+            or getattr(quantizer, "init", False)
+        ):
+            continue
+
+        with gathered_param_if_zero3(module.weight):
+            if module.weight.numel() == 0:
+                raise RuntimeError(f"Cannot initialize NVFP4 scale_2 from empty weight for {name}")
+            global_amax = module.weight.detach().abs().amax().float()
+            if not torch.isfinite(global_amax):
+                raise ValueError(f"Non-finite NVFP4 weight amax for {name}")
+            init_val = global_amax.clamp(min=1e-12) / quantizer.nvfp4_max_norm / FP8_E4M3_QMAX
+            quantizer.scale_2.copy_(
+                init_val.reshape_as(quantizer.scale_2).to(
+                    device=quantizer.scale_2.device,
+                    dtype=quantizer.scale_2.dtype,
+                )
+            )
+        quantizer.init = True
 
 
 @PluginManager.plugin("learnable_scale")
@@ -63,13 +100,32 @@ class LearnableScalePlugin(BasePlugin):
         self.learn_kv_scale = learnable_cfg.get("kv_scale", False)
         self.learn_norm = learnable_cfg.get("norm", False)
 
+    def _zero3_needs_no_warmstart(self):
+        """Return whether configured quantizers need no data calibration.
+
+        FOCUS MXFP/NVFP weight scales are constant-initialized and learned,
+        while their effective block scales are recomputed during forward.
+        Dynamic or disabled activation quantization likewise needs no static
+        calibration checkpoint.
+        """
+        weight_cfg = self.config.get("weight", {}) or {}
+        act_cfg = self.config.get("activation", {}) or {}
+        weight_qtype = str(weight_cfg.get("qtype", "")).lower()
+        weight_ok = (not self.use_weight_quant) or (
+            "mxfp" in weight_qtype or "nvfp" in weight_qtype
+        )
+        act_ok = (not self.use_activation_quant) or bool(act_cfg.get("dynamic", False))
+        return weight_ok and act_ok
+
     def before_train(self, **kwargs):
         zero3 = is_deepspeed_zero3_enabled()
-        if zero3 and not self.from_ptq_ckpt_dir:
+        if zero3 and not self.from_ptq_ckpt_dir and not self._zero3_needs_no_warmstart():
             raise ValueError(
                 "DeepSpeed ZeRO-3 QAT requires `compression.QAT.from_ptq_ckpt` "
                 "to warm-start scales (lazy_init via forward is impossible "
-                "on sharded weights)."
+                "on sharded weights). This requirement is waived for FOCUS-style "
+                "quantizers (MXFP/NVFP weight with constant-initialized learnable "
+                "scale + dynamic/no activation quant), which need no calibration."
             )
 
         # Retrieve KV head count from model config for per-head quantization
@@ -102,6 +158,9 @@ class LearnableScalePlugin(BasePlugin):
                     qkv_config=qkv_cfg,
                 )
                 set_op_by_name(self.quant_model.model, name, q_linear)
+
+        if zero3:
+            initialize_nvfp4_weight_scale_2(self.quant_model.model)
 
         # FP8 attention simulation — delegate to model (model-specific override)
         if self.fp8_attn:
@@ -150,19 +209,40 @@ class LearnableScalePlugin(BasePlugin):
             f"act_scale={self.learn_act_scale}, "
             f"weight_scale={self.learn_weight_scale}, "
             f"kv_scale={self.learn_kv_scale}, "
-            f"norm={self.learn_norm}",
-            f"lwc={self.learn_lwc}",
+            f"norm={self.learn_norm}, "
+            f"lwc={self.learn_lwc}"
         )
         print_info(
             f"Learnable config ({learnable_summary}): "
             f"{sum(1 for p in model.parameters() if p.requires_grad)} trainable params"
         )
 
-    def after_train(self):
-        if self.use_weight_quant:
+    def after_train(self, skip_weight_bake=False):
+        if self.use_weight_quant and not skip_weight_bake:
             quant_inplace(self.quant_model.model)
-            set_quant_state(
-                self.quant_model.model, weight_quant=False, act_quant=self.use_activation_quant
+        if skip_weight_bake:
+            _mark_nvfp4_quantizers_initialized(self.quant_model.model)
+        set_quant_state(
+            self.quant_model.model, weight_quant=False, act_quant=self.use_activation_quant
+        )
+        if self.use_activation_quant:
+            quant_modules = [
+                (name, module)
+                for name, module in self.quant_model.model.named_modules()
+                if isinstance(module, QuantLinear)
+            ]
+            disabled = [
+                name
+                for name, module in quant_modules
+                if not module.use_act_quant or not hasattr(module, "act_quantizer")
+            ]
+            if disabled:
+                raise RuntimeError(
+                    "Activation quantization must remain enabled for FOCUS evaluation; "
+                    f"disabled modules: {disabled[:5]}"
+                )
+            print_info(
+                f"Activation quantization enabled for {len(quant_modules)} QuantLinear modules."
             )
 
     def _lazy_init(self, **kwargs):
@@ -226,6 +306,19 @@ def set_quant_state(model, weight_quant=False, act_quant=False, qkv_quant=None):
             module.set_quant_state(
                 weight_quant=weight_quant, act_quant=act_quant, qkv_quant=qkv_quant
             )
+
+
+def _mark_nvfp4_quantizers_initialized(model):
+    """Preserve loaded NVFP4 ``scale_2`` buffers on the first eval forward."""
+    for module in model.modules():
+        if not isinstance(module, QuantLinear):
+            continue
+        for attr in ("weight_quantizer", "act_quantizer", "qkv_quantizer"):
+            quantizer = getattr(module, attr, None)
+            if getattr(quantizer, "dtype", None) == "nvfp4" and isinstance(
+                getattr(quantizer, "scale_2", None), torch.Tensor
+            ):
+                quantizer.init = True
 
 
 def set_quant_parameters(model, requires_grad):
@@ -325,11 +418,11 @@ def quant_inplace(model):
     for _, module in model.named_modules():
         if not isinstance(module, QuantLinear):
             continue
-        # Gather the weight together with all weight_quantizer Parameters
-        # (scale / zero_point / optional LWC clip factors) so the
-        # fake-quant runs on the full materialised tensor under ZeRO-3.
-        params = [module.weight]
-        if hasattr(module, "weight_quantizer"):
-            params.extend(module.weight_quantizer.parameters(recurse=True))
-        with gathered_params_if_zero3(params, modifier_rank=None):
-            module.weight.data = module.weight_quantizer(module.weight.data)
+        # Quantizer parameters are read-only here, while the weight is
+        # modified. DeepSpeed requires ``modifier_rank`` for modified gathered
+        # parameters; otherwise it repartitions the old ``ds_tensor`` and
+        # silently discards the fake-quantized full weight.
+        quantizer_params = list(module.weight_quantizer.parameters(recurse=True))
+        with gathered_params_if_zero3(quantizer_params, modifier_rank=None):
+            with gathered_param_if_zero3(module.weight, modifier_rank=0):
+                module.weight.copy_(module.weight_quantizer(module.weight))

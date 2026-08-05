@@ -12,18 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .fusion import (
-    harmonize_nvfp4_fused_scales,
-    nvfp4_fusion_groups,
-    nvfp4_scale_2_group_key,
+from .mxfp4 import (
+    MXFP4_E2M1_MAX,
+    MXFP4_GROUP_SIZE,
+    compute_mxfp4_scale,
+    decode_e8m0_scale,
+    encode_e8m0_scale,
+    mxfp4_cast_to_e2m1,
+    mxfp4_dequantize_e2m1,
+    mxfp4_quantize_pack,
+    mxfp4_unpack_dequantize,
 )
-from .packing import NVFP4_BLOCK_SIZE, nvfp4_quantize_pack, nvfp4_unpack_dequantize
 
 __all__ = [
-    "NVFP4_BLOCK_SIZE",
-    "harmonize_nvfp4_fused_scales",
-    "nvfp4_fusion_groups",
-    "nvfp4_quantize_pack",
-    "nvfp4_scale_2_group_key",
-    "nvfp4_unpack_dequantize",
+    "MXFP4_E2M1_MAX",
+    "MXFP4_GROUP_SIZE",
+    "compute_mxfp4_scale",
+    "decode_e8m0_scale",
+    "encode_e8m0_scale",
+    "mxfp4_cast_to_e2m1",
+    "mxfp4_dequantize_e2m1",
+    "mxfp4_quantize_pack",
+    "mxfp4_unpack_dequantize",
 ]

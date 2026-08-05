@@ -39,6 +39,7 @@ from ...modules.helper_layer import (
     NVFP4QDQModule,
     compute_nvfp4_weight_scale_2,
 )
+from ..nvfp4 import nvfp4_scale_2_group_key
 from .gptaq_module import GPTAQModule
 from .gptq_module import GPTQModule
 
@@ -312,27 +313,7 @@ class GPTQ:
             )
         return filtered_subset
 
-    @staticmethod
-    def _nvfp4_scale_2_group_key(name):
-        """Group key for layers that must share one NVFP4 per-tensor scale_2.
-
-        Deployment fuses each expert's gate_proj+up_proj (and attention's
-        q/k/v) into a single GEMM that can apply only one per-tensor (level-2)
-        scale across the fused weight. GPTQ must therefore quantize every member
-        of such a group against the *same* weight_scale_2, otherwise the half of
-        the fused weight whose scale_2 was overwritten at deploy time is
-        dequantized with the wrong per-tensor scale -> a systematic multiplicative
-        bias that occasionally flips a token.
-
-        Returns (group_prefix, member_tag) for fusible layers, else None.
-        """
-        for suffix in ("gate_proj", "up_proj"):
-            if name.endswith(suffix):
-                return name[: -len(suffix)], "gate_up"
-        for suffix in ("q_proj", "k_proj", "v_proj"):
-            if name.endswith(suffix):
-                return name[: -len(suffix)], "qkv"
-        return None
+    _nvfp4_scale_2_group_key = staticmethod(nvfp4_scale_2_group_key)
 
     def _assign_shared_nvfp4_weight_scale_2(self):
         """Pre-pass: give fused gate/up (and q/k/v) groups one shared scale_2.
