@@ -248,7 +248,7 @@ Alternatively, you can clone the repository and install from source in editable 
 cd AngelSlim && python setup.py install
 ```
 
-> **Note:** AngelSlim integrates the speculative-decoding training framework [AngelSpec](https://github.com/Tencent/AngelSpec) as a git submodule (under `AngelSpec/`). Clone with `--recursive`, or initialize in an existing clone:
+> **Note:** AngelSlim integrates the speculative-decoding training framework [AngelSpec](https://github.com/Tencent/AngelSpec) as a git submodule (under `third_party/AngelSpec/`). Clone with `--recursive`, or initialize in an existing clone:
 >
 > ```shell
 > # Clone with submodules
@@ -263,7 +263,7 @@ For more detailed installation instructions and platform-specific guidance, plea
 
 #### 2.1 Speculative Decoding
 
-AngelSlim's speculative-decoding training is powered by **[AngelSpec](https://github.com/Tencent/AngelSpec)** (git submodule under `AngelSpec/`) — a torch-native framework for **training** speculative-decoding draft models, featuring a rich set of draft architectures, target-model support, and production-scale training. It supports a variety of draft methods, led by **DFly** and **MTP + TTT**.
+AngelSlim's speculative-decoding training is powered by **[AngelSpec](https://github.com/Tencent/AngelSpec)** (git submodule under `third_party/AngelSpec/`) — a torch-native framework for **training** speculative-decoding draft models, featuring a rich set of draft architectures, target-model support, and production-scale training. It supports a variety of draft methods, led by **DFly** and **MTP + TTT**.
 
 It follows a **disaggregated design**: inference engines run the frozen target model and extract multi-layer hidden states, which a [Mooncake](https://github.com/kvcache-ai/Mooncake) store streams over RDMA (no disk staging) to the FSDP2 training workers, while a controller handles batching, backpressure, and evaluation. Inference and training run on separate GPU pools and scale independently.
 
@@ -281,7 +281,7 @@ It follows a **disaggregated design**: inference engines run the frozen target m
 ```shell
 # Initialize the submodule (see Install section above)
 git submodule update --init --recursive
-cd AngelSpec
+cd third_party/AngelSpec
 # Install AngelSpec + the vLLM backend
 pip install -e ".[vllm]"
 # Hidden-state transport (not pulled in by the extras; install separately)
@@ -290,7 +290,7 @@ pip install mooncake-transfer-engine
 ./examples/qwen3-8b-single-node/run.sh
 ```
 
-For more details, see the [technical report](https://arxiv.org/abs/2607.25852), [AngelSpec docs](https://angelspec.readthedocs.io/), [`AngelSpec/README.md`](AngelSpec/README.md), and [Hugging Face weights](https://huggingface.co/collections/AngelSlim/angelspec).
+For more details, see the [technical report](https://arxiv.org/abs/2607.25852), [AngelSpec docs](https://angelspec.readthedocs.io/), [AngelSpec README](https://github.com/Tencent/AngelSpec/blob/main/README.md), and [Hugging Face weights](https://huggingface.co/collections/AngelSlim/angelspec).
 
 #### 2.2 LLM/VLM/Audio Model Quantization
 
