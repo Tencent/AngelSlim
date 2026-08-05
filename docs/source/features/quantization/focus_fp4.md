@@ -7,10 +7,8 @@ Scaling**）是一种面向 MXFP4 和 NVFP4 W4A4 的后训练量化方法。它�
 模型权重，仅通过端到端优化量化 scale 来恢复 FP4 精度，部署时仍输出标准
 硬件格式，不引入额外推理开销。
 
-:::{tip}
-论文：[FOCUS: FP4 Optimization via Coupled-Relaxation and Dual-Granularity
-Scaling](https://arxiv.org/abs/2608.01847)
-:::
+> **论文：** [FOCUS: FP4 Optimization via Coupled-Relaxation and
+> Dual-Granularity Scaling](https://arxiv.org/abs/2608.01847)
 
 当前实现提供：
 
@@ -24,12 +22,12 @@ Scaling](https://arxiv.org/abs/2608.01847)
 
 标准 FP4 量化通常让量化 scale 与反量化 scale 完全相同：
 
-```{math}
+$$
 \bar{\mathbf{W}}_i =
 \mathcal{Q}_{\mathrm{E2M1}}\left(\mathbf{W}_i / S_i\right),
 \qquad
 \hat{\mathbf{W}}_i = \bar{\mathbf{W}}_i \cdot S_i .
-```
+$$
 
 但量化 scale 只在离线生成 FP4 code 时使用，并不会保存到部署模型中；真正受
 硬件格式约束的只有反量化 scale。FOCUS 利用这一差异，从精度和粒度两个维度
@@ -37,10 +35,10 @@ Scaling](https://arxiv.org/abs/2608.01847)
 
 ### Coupled-Relaxation Scaling（CRS）
 
-CRS 为每个 block 引入可学习的全精度系数 \(c_i\)，放松量化与反量化 scale
+CRS 为每个 block 引入可学习的全精度系数 $c_i$，放松量化与反量化 scale
 之间的耦合：
 
-```{math}
+$$
 S_i^{q}=S_i^{dq}\cdot c_i,
 \qquad
 \bar{\mathbf{W}}_i =
@@ -48,24 +46,24 @@ S_i^{q}=S_i^{dq}\cdot c_i,
 \left(\mathbf{W}_i / S_i^{q}\right),
 \qquad
 \hat{\mathbf{W}}_i = \bar{\mathbf{W}}_i \cdot S_i^{dq}.
-```
+$$
 
-其中 \(S_i^{dq}\) 始终满足 E8M0 或 E4M3 等硬件约束，而 \(c_i\) 只参与离线
+其中 $S_i^{dq}$ 始终满足 E8M0 或 E4M3 等硬件约束，而 $c_i$ 只参与离线
 优化并在导出时丢弃。
 
 ### Dual-Granularity Scaling（DGS）
 
 DGS 进一步把每个硬件 block 划分为多个 8 元素 sub-block，并为每个
-sub-block 分配独立系数 \(c_i^k\)。反量化 scale 仍保持原硬件粒度，因此不会
+sub-block 分配独立系数 $c_i^k$。反量化 scale 仍保持原硬件粒度，因此不会
 改变部署格式：
 
-```{math}
+$$
 \bar{\mathbf{W}}_i^k =
 \mathcal{Q}_{\mathrm{E2M1}}
 \left(\mathbf{W}_i^k / (S_i^{dq}\cdot c_i^k)\right),
 \qquad
 \hat{\mathbf{W}}_i^k = \bar{\mathbf{W}}_i^k \cdot S_i^{dq}.
-```
+$$
 
 | 格式 | 硬件 block | Scale 格式 | Sub-block | `num_sub` |
 |------|------------|------------|-----------|-----------|
@@ -229,11 +227,9 @@ python tools/focus_fp4/export_focus_nvfp4.py \
   --output-path ./output/focus-nvfp4-packed
 ```
 
-:::{note}
-Fake checkpoint 中的权重已经完成 fake quant。离线导出必须使用冻结的 BF16
-基础权重与 checkpoint 中学习到的 scale 重新打包，不能直接对 fake 权重进行
-第二次量化。
-:::
+> **说明：** Fake checkpoint 中的权重已经完成 fake quant。离线导出必须使用
+> 冻结的 BF16 基础权重与 checkpoint 中学习到的 scale 重新打包，不能直接对
+> fake 权重进行第二次量化。
 
 对于 NVFP4，导出器会在保持 FP4 code 不变的前提下，将 QKV 与 gate/up
 各分支的 global-scale 比例折入 FP8 block scale，并为融合 GEMM 写入共享的
