@@ -31,7 +31,15 @@ _logger = logging.getLogger(__name__)
 # others — but the swallowed exception is LOGGED (WARNING) rather than silently
 # dropped, so a genuine syntax/import bug surfaces its real cause here instead of
 # a confusing "not registered" ValueError much later.
-for _name in ("stem", "minference", "flexprefill", "xattention", "flashprefill", "vecattention"):
+for _name in (
+    "stem",
+    "minference",
+    "flexprefill",
+    "xattention",
+    "flashprefill",
+    "vecattention",
+    "cosa",
+):
     try:
         importlib.import_module(f".{_name}", __name__)
     except Exception as _e:  # noqa: BLE001  pragma: no cover - defensive
