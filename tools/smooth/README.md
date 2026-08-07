@@ -325,10 +325,10 @@ alpha_smooth_search_mode: default              # 搜索模式
 
 ```yaml
 # configs/Hy3/ptq/fp8/Hy3_smooth.yaml
-model_path: /apdcephfs_zwfy14/share_300532381/gavinlee/share_model/one-agent/hunyuan/yonewu/.../ckpt/global_step_hf
-ptq_data_path: /cfs_cloud_code/gavinlee/work/code-RL/data/0521-oneagent/sampled_3000_for_quant_shuf.jsonl
-output_dir: /apdcephfs_zwfy14/share_300532381/.../ckpt/stat_debug
-save_path: /apdcephfs_zwfy14/share_300532381/.../ckpt/smooth_model_debug2
+model_path: /path/ckpt/global_step_hf
+ptq_data_path: /path/sampled_3000_for_quant_shuf.jsonl
+output_dir: /path/ckpt/stat_debug
+save_path: /path/ckpt/smooth_model_debug2
 
 tp_size: 16
 batch_size: 4
