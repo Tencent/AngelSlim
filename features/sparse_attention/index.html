@@ -457,6 +457,10 @@ document.write(`
 <td><p>仅参考实现</p></td>
 <td><p>快速 kernel 依赖尚未公开发布的 vLLM-flash-attention fork；外部用户默认走 torch 参考路径（<code class="docutils literal notranslate"><span class="pre">allow_pseudo_sparse:</span> <span class="pre">true</span></code>）。</p></td>
 </tr>
+<tr class="row-even"><td><p>CoSA</p></td>
+<td><p>实验性</p></td>
+<td><p>proxy 为内置 Triton；attention 依赖内部 <code class="docutils literal notranslate"><span class="pre">hpc</span></code> 扩展（非公开可安装）。</p></td>
+</tr>
 </tbody>
 </table>
 </div>
