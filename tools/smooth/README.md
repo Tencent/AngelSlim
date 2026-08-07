@@ -94,8 +94,9 @@ bash scripts/ptq/run_smooth_for_HY3.sh --skip-calibrate
 - `smooth_alpha_search.json`（可选）— 每层搜索得到的最优 alpha
 
 **关键文件**：
-- `angelslim/compressor/quant/core/vllm_calibrate_utils/hooks.py` — 统计钩子
-- `angelslim/compressor/quant/core/vllm_calibrate_utils/search.py` — Alpha 搜索实现
+- `angelslim/compressor/transform/smooth/vllm` — 统计钩子
+- `angelslim/compressor/transform/smooth/core` — Alpha 搜索实现等核心统计函数
+- `angelslim/compressor/transform/smooth/convert` - 权重转换
 
 ### 阶段 2：离线权重变换
 
