@@ -26,7 +26,6 @@ from tqdm import tqdm
 FP8_MAX = torch.finfo(torch.float8_e4m3fn).max
 FP8_MIN = torch.finfo(torch.float8_e4m3fn).min
 
-BLOCK_SIZE = 32
 
 # All linear weight prefixes that should be MXFP8 quantized in GLM-5.2
 FP8_PATTERNS = [
@@ -35,8 +34,7 @@ FP8_PATTERNS = [
     r"model\.layers\.(\d+)\.self_attn\.q_a_proj$",
     r"model\.layers\.(\d+)\.self_attn\.q_b_proj$",
     r"model\.layers\.(\d+)\.self_attn\.o_proj$",
-    # H20 vllm镜像目前不支持fused wk_weights_proj的mxfp8
-    # r"model\.layers\.(\d+)\.self_attn\.indexer\.wk$",
+    r"model\.layers\.(\d+)\.self_attn\.indexer\.wk$",
     r"model\.layers\.(\d+)\.self_attn\.indexer\.wq_b$",
     r"model\.layers\.(\d+)\.mlp\.(?:gate_proj|up_proj|down_proj)$",
     r"model\.layers\.(\d+)\.mlp\.shared_experts\.(?:gate_proj|up_proj|down_proj)$",
@@ -52,19 +50,18 @@ def match_fp8_pattern(prefix):
     return False
 
 
-def mxfp8_quantize(weight):
+def mxfp8_quantize(weight, block_size=32):
     """Quantize a 2D weight (out_dim, in_dim) to MXFP8 with ue8m0 scale"""
     out_dim, in_dim = weight.shape
 
-    pad_cols = (BLOCK_SIZE - in_dim % BLOCK_SIZE) % BLOCK_SIZE
+    pad_cols = (block_size - in_dim % block_size) % block_size
     if pad_cols > 0:
         weight = torch.nn.functional.pad(weight, (0, pad_cols))
 
     padded_in_dim = weight.shape[1]
-    num_blocks = padded_in_dim // BLOCK_SIZE
+    num_blocks = padded_in_dim // block_size
 
-    # Reshape to (out_dim, num_blocks, 32)
-    weight_blocks = weight.float().reshape(out_dim, num_blocks, BLOCK_SIZE)
+    weight_blocks = weight.float().reshape(out_dim, num_blocks, block_size)
 
     # Compute max abs per block -> (out_dim, num_blocks)
     max_abs = weight_blocks.abs().amax(dim=-1)
@@ -89,7 +86,9 @@ def mxfp8_quantize(weight):
     return quantized, scale_ue8m0
 
 
-def process_shard(rank, file_names, input_path, output_path, return_dict, ignore_dict):
+def process_shard(
+    rank, file_names, input_path, output_path, return_dict, ignore_dict, block_size=32
+):
     world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
     device = f"cuda:{rank % world_size}" if torch.cuda.is_available() else "cpu"
 
@@ -109,7 +108,7 @@ def process_shard(rank, file_names, input_path, output_path, return_dict, ignore
 
                     if match_fp8_pattern(prefix):
                         w = tensor.to(device)
-                        quant_w, scale_ue8m0 = mxfp8_quantize(w)
+                        quant_w, scale_ue8m0 = mxfp8_quantize(w, block_size=block_size)
                         state_dict[weight_name] = quant_w.cpu()
                         state_dict[f"{prefix}.weight_scale"] = scale_ue8m0.cpu()
                         index[weight_name] = file_name
@@ -137,6 +136,19 @@ def main():
     parser.add_argument("--input_path", type=str, required=True)
     parser.add_argument("--output_path", type=str, required=True)
     parser.add_argument("--num_workers", type=int, default=8)
+    parser.add_argument(
+        "--block_size",
+        type=int,
+        default=32,
+        help="Block size for MXFP8 quantization (default: 32)",
+    )
+    parser.add_argument(
+        "--quant_config_type",
+        type=str,
+        default="modelopt_mxfp8",
+        choices=["mxfp8", "modelopt_mxfp8"],
+        help="Config format: 'mxfp8' or 'modelopt_mxfp8' (default: modelopt_mxfp8)",
+    )
     args = parser.parse_args()
     print(args)
 
@@ -172,7 +184,15 @@ def main():
     for i in range(num_workers):
         p = mp.Process(
             target=process_shard,
-            args=(i, file_subsets[i], input_path, output_path, return_dict, ignore_dict),
+            args=(
+                i,
+                file_subsets[i],
+                input_path,
+                output_path,
+                return_dict,
+                ignore_dict,
+                args.block_size,
+            ),
         )
         p.start()
         processes.append(p)
@@ -198,12 +218,22 @@ def main():
     print("Saved model.safetensors.index.json")
 
     out_config = dict(config)
-    out_config["quantization_config"] = {
-        "quant_method": "mxfp8",
-        "activation_scheme": "dynamic",
-        "weight_block_size": [1, 32],
-        "ignored_layers": ignored_layers,
-    }
+    if args.quant_config_type == "mxfp8":
+        out_config["quantization_config"] = {
+            "quant_method": "mxfp8",
+            "activation_scheme": "dynamic",
+            "weight_block_size": [1, args.block_size],
+            "ignored_layers": ignored_layers,
+        }
+    elif args.quant_config_type == "modelopt_mxfp8":
+        out_config["quantization_config"] = {
+            "quant_method": "modelopt",
+            "quantization": {
+                "quant_algo": "MXFP8",
+                "kv_cache_quant_algo": None,
+                "exclude_modules": ignored_layers,
+            },
+        }
     with open(os.path.join(output_path, "config.json"), "w") as f:
         json.dump(out_config, f, indent=4)
     print("Saved config.json")
