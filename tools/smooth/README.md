@@ -325,10 +325,10 @@ alpha_smooth_search_mode: default              # 搜索模式
 
 ```yaml
 # configs/Hy3/ptq/fp8/Hy3_smooth.yaml
-model_path: /path/ckpt/global_step_hf
+model_path: /path/ckpt/
 ptq_data_path: /path/sampled_3000_for_quant_shuf.jsonl
 output_dir: /path/ckpt/stat_debug
-save_path: /path/ckpt/smooth_model_debug2
+save_path: /path/ckpt/smooth_model
 
 tp_size: 16
 batch_size: 4
