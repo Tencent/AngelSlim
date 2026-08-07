@@ -1,0 +1,31 @@
+# CoSA ordered block-sparse prefill (Hunyuan-V3 / hy_v3).
+# Triton proxy selects key-blocks by topp mass coverage; hpc walks the
+# priority-ordered list and threshold-skips via skipsoftmax_threshold.
+# Hard deps: triton + internal hpc; bf16, head_dim 128, block_size 128, batch=1.
+# NOTE: full Hunyuan-V3 (~80 layers) needs device_map: auto across visible GPUs.
+# Run:  python tools/run.py -c configs/sparse/cosa/hy3_cosa.yaml
+
+global:
+  save_path: ./output
+
+model:
+  name: HYV3MoE
+  model_path: tencent/Hy3
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+  attn_implementation: flash_attention_2
+
+compression:
+  name: Sparsity
+  sparsity:
+    name: cosa
+    allow_pseudo_sparse: false      # CoSA has no torch reference; true is rejected
+    attn_kwargs:
+      stride: 8                     # proxy sub-sample stride
+      topp: 0.95                    # mass coverage in (0, 1]; 1.0 = keep all
+      block_size: 128               # hpc is dim128/block128 only
+      chunk_size: 2048              # proxy chunk; multiple of stride*128
+      skipsoftmax_threshold: 1000        # runtime skip; < 0 disables

@@ -1,0 +1,28 @@
+# CoSA ordered block-sparse prefill (Qwen3-8B).
+# Run:  python tools/run.py -c configs/sparse/cosa/qwen3-8b_cosa.yaml
+
+global:
+  save_path: ./output
+
+model:
+  name: Qwen
+  model_path: Qwen/Qwen3-8B
+  trust_remote_code: true
+  low_cpu_mem_usage: true
+  use_cache: false
+  torch_dtype: auto
+  device_map: auto
+  # q3 default: decode runs flash-attention-2; sparse prefill bypasses it.
+  attn_implementation: flash_attention_2
+
+compression:
+  name: Sparsity
+  sparsity:
+    name: cosa
+    allow_pseudo_sparse: false      # CoSA has no torch reference; true is rejected
+    attn_kwargs:
+      stride: 8                     # proxy sub-sample stride
+      topp: 0.95                    # mass coverage in (0, 1]; 1.0 = keep all
+      block_size: 128               # hpc is dim128/block128 only
+      chunk_size: 2048              # proxy chunk; multiple of stride*128
+      skipsoftmax_threshold: 1000   # runtime skip; < 0 disables

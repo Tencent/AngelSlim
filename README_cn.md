@@ -116,6 +116,7 @@
               <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/index.html">XAttention</a></li>
               <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/index.html">FlashPrefill</a></li>
               <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/index.html">VecAttention</a></li>
+              <li><a href="https://arxiv.org/pdf/2607.25291">CoSA</a></li>
             </ul>
           </li>
           <li>

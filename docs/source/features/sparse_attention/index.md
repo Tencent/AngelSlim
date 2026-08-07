@@ -14,6 +14,7 @@
 | XAttention | 实验性 | 内置 kernel（MIT 来源）；head_dim 256 走 torch 参考。 |
 | FlashPrefill | 实验性 | clean-room 实现；`alpha<=0` dense 路径需要 `flash_attn`。 |
 | VecAttention | 仅参考实现 | 快速 kernel 依赖尚未公开发布的 vLLM-flash-attention fork；外部用户默认走 torch 参考路径（`allow_pseudo_sparse: true`）。 |
+| CoSA | 实验性 | proxy 为内置 Triton；attention 依赖内部 `hpc` 扩展（非公开可安装）。 |
 
 通用约束（所有算法）：不支持 padding mask（请用 batch=1 或无 padding 输入）、部分 kernel 要求 batch=1、prefix-cache / chunked prefill 会自动回退到 dense（稀疏仅在真正首填 `k_len==q_len` 时生效）、不支持 sliding-window 层、不支持多卡 / TP（`WORLD_SIZE>1` 会被拒绝）、稀疏 prefill 不支持 `output_attentions=True`、**不能与量化组合**。`allow_pseudo_sparse` 是正确性 / 调试回退路径，不是性能路径。
 
