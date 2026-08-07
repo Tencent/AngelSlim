@@ -94,8 +94,9 @@ bash scripts/ptq/run_smooth_for_HY3.sh --skip-calibrate
 - `smooth_alpha_search.json`（可选）— 每层搜索得到的最优 alpha
 
 **关键文件**：
-- `angelslim/compressor/quant/core/vllm_calibrate_utils/hooks.py` — 统计钩子
-- `angelslim/compressor/quant/core/vllm_calibrate_utils/search.py` — Alpha 搜索实现
+- `angelslim/compressor/transform/smooth/vllm` — 统计钩子
+- `angelslim/compressor/transform/smooth/core` — Alpha 搜索实现等核心统计函数
+- `angelslim/compressor/transform/smooth/convert` - 权重转换
 
 ### 阶段 2：离线权重变换
 
@@ -325,10 +326,10 @@ alpha_smooth_search_mode: default              # 搜索模式
 
 ```yaml
 # configs/Hy3/ptq/fp8/Hy3_smooth.yaml
-model_path: /apdcephfs_zwfy14/share_300532381/gavinlee/share_model/one-agent/hunyuan/yonewu/.../ckpt/global_step_hf
-ptq_data_path: /cfs_cloud_code/gavinlee/work/code-RL/data/0521-oneagent/sampled_3000_for_quant_shuf.jsonl
-output_dir: /apdcephfs_zwfy14/share_300532381/.../ckpt/stat_debug
-save_path: /apdcephfs_zwfy14/share_300532381/.../ckpt/smooth_model_debug2
+model_path: /path/ckpt/
+ptq_data_path: /path/sampled_3000_for_quant_shuf.jsonl
+output_dir: /path/ckpt/stat_debug
+save_path: /path/ckpt/smooth_model
 
 tp_size: 16
 batch_size: 4
