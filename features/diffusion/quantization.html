@@ -513,7 +513,7 @@ document.write(`
 python<span class="w"> </span>scripts/diffusion/run_diffusion.py<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--model-name-or-path<span class="w"> </span>black-forest-labs/FLUX.1-schnell<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--quant-type<span class="w"> </span>fp8-per-tensor<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--prompt<span class="w"> </span><span class="s2">&quot;A cat holding a sign that says hello world&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--prompt<span class="w"> </span><span class="s2">"A cat holding a sign that says hello world"</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--height<span class="w"> </span><span class="m">1024</span><span class="w"> </span>--width<span class="w"> </span><span class="m">1024</span><span class="w"> </span>--steps<span class="w"> </span><span class="m">4</span><span class="w"> </span>--guidance<span class="w"> </span><span class="m">0</span>.0<span class="w"> </span>--seed<span class="w"> </span><span class="m">0</span>
 </pre></div>
 </div>
@@ -529,7 +529,7 @@ python<span class="w"> </span>scripts/diffusion/run_diffusion.py<span class="w">
 <span class="w">  </span>--model-name-or-path<span class="w"> </span>black-forest-labs/FLUX.1-schnell<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--fp8-model-load-path<span class="w"> </span>/path/to/quantized_model<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--quant-type<span class="w"> </span>fp8-per-tensor<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--prompt<span class="w"> </span><span class="s2">&quot;A cat holding a sign that says hello world&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--prompt<span class="w"> </span><span class="s2">"A cat holding a sign that says hello world"</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--height<span class="w"> </span><span class="m">1024</span><span class="w"> </span>--width<span class="w"> </span><span class="m">1024</span><span class="w"> </span>--steps<span class="w"> </span><span class="m">4</span><span class="w"> </span>--guidance<span class="w"> </span><span class="m">0</span>.0<span class="w"> </span>--seed<span class="w"> </span><span class="m">0</span>
 </pre></div>
 </div>
@@ -542,18 +542,18 @@ python<span class="w"> </span>scripts/diffusion/run_diffusion.py<span class="w">
 <span class="kn">from</span><span class="w"> </span><span class="nn">diffusers</span><span class="w"> </span><span class="kn">import</span> <span class="n">FluxPipeline</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">angelslim.compressor.diffusion</span><span class="w"> </span><span class="kn">import</span> <span class="n">DynamicDiTQuantizer</span>
 
-<span class="n">pipe</span> <span class="o">=</span> <span class="n">FluxPipeline</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;black-forest-labs/FLUX.1-schnell&quot;</span><span class="p">,</span> <span class="n">torch_dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">)</span>
-<span class="n">quantizer</span> <span class="o">=</span> <span class="n">DynamicDiTQuantizer</span><span class="p">(</span><span class="n">quant_type</span><span class="o">=</span><span class="s2">&quot;fp8-per-tensor&quot;</span><span class="p">)</span>
+<span class="n">pipe</span> <span class="o">=</span> <span class="n">FluxPipeline</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">"black-forest-labs/FLUX.1-schnell"</span><span class="p">,</span> <span class="n">torch_dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">)</span>
+<span class="n">quantizer</span> <span class="o">=</span> <span class="n">DynamicDiTQuantizer</span><span class="p">(</span><span class="n">quant_type</span><span class="o">=</span><span class="s2">"fp8-per-tensor"</span><span class="p">)</span>
 <span class="n">quantizer</span><span class="o">.</span><span class="n">convert_linear</span><span class="p">(</span><span class="n">pipe</span><span class="o">.</span><span class="n">transformer</span><span class="p">)</span>
-<span class="n">pipe</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span>
+<span class="n">pipe</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">"cuda"</span><span class="p">)</span>
 
 <span class="n">image</span> <span class="o">=</span> <span class="n">pipe</span><span class="p">(</span>
-    <span class="s2">&quot;A cat holding a sign that says hello world&quot;</span><span class="p">,</span>
+    <span class="s2">"A cat holding a sign that says hello world"</span><span class="p">,</span>
     <span class="n">height</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span>
     <span class="n">guidance_scale</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">num_inference_steps</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">max_sequence_length</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span>
-    <span class="n">generator</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">Generator</span><span class="p">(</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">generator</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">Generator</span><span class="p">(</span><span class="s2">"cuda"</span><span class="p">)</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
 <span class="p">)</span><span class="o">.</span><span class="n">images</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-<span class="n">image</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;flux-schnell_fp8_per_tensor.png&quot;</span><span class="p">)</span>
+<span class="n">image</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">"flux-schnell_fp8_per_tensor.png"</span><span class="p">)</span>
 </pre></div>
 </div>
 </section>
@@ -565,23 +565,23 @@ python<span class="w"> </span>scripts/diffusion/run_diffusion.py<span class="w">
 <span class="kn">from</span><span class="w"> </span><span class="nn">safetensors.torch</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_file</span>
 
 <span class="c1"># 加载量化后的transformer和缩放因子</span>
-<span class="n">dit</span> <span class="o">=</span> <span class="n">FluxTransformer2DModel</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;/path/to/quantized_model/&quot;</span><span class="p">)</span>
-<span class="n">pipe</span> <span class="o">=</span> <span class="n">FluxPipeline</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;black-forest-labs/FLUX.1-schnell&quot;</span><span class="p">,</span> <span class="n">transformer</span><span class="o">=</span><span class="n">dit</span><span class="p">,</span> <span class="n">torch_dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">)</span>
-<span class="n">scale</span> <span class="o">=</span> <span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;/path/to/quantized_model/fp8_scales.safetensors&quot;</span><span class="p">)</span>
+<span class="n">dit</span> <span class="o">=</span> <span class="n">FluxTransformer2DModel</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">"/path/to/quantized_model/"</span><span class="p">)</span>
+<span class="n">pipe</span> <span class="o">=</span> <span class="n">FluxPipeline</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">"black-forest-labs/FLUX.1-schnell"</span><span class="p">,</span> <span class="n">transformer</span><span class="o">=</span><span class="n">dit</span><span class="p">,</span> <span class="n">torch_dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">)</span>
+<span class="n">scale</span> <span class="o">=</span> <span class="n">load_file</span><span class="p">(</span><span class="s2">"/path/to/quantized_model/fp8_scales.safetensors"</span><span class="p">)</span>
 
 <span class="c1"># 使用缩放因子进行量化</span>
-<span class="n">quantizer</span> <span class="o">=</span> <span class="n">DynamicDiTQuantizer</span><span class="p">(</span><span class="n">quant_type</span><span class="o">=</span><span class="s2">&quot;fp8-per-tensor&quot;</span><span class="p">)</span>
+<span class="n">quantizer</span> <span class="o">=</span> <span class="n">DynamicDiTQuantizer</span><span class="p">(</span><span class="n">quant_type</span><span class="o">=</span><span class="s2">"fp8-per-tensor"</span><span class="p">)</span>
 <span class="n">quantizer</span><span class="o">.</span><span class="n">convert_linear</span><span class="p">(</span><span class="n">pipe</span><span class="o">.</span><span class="n">transformer</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="n">scale</span><span class="p">)</span>
-<span class="n">pipe</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span>
+<span class="n">pipe</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">"cuda"</span><span class="p">)</span>
 
 <span class="c1"># 推理示例</span>
 <span class="n">image</span> <span class="o">=</span> <span class="n">pipe</span><span class="p">(</span>
-    <span class="s2">&quot;A cat holding a sign that says hello world&quot;</span><span class="p">,</span>
+    <span class="s2">"A cat holding a sign that says hello world"</span><span class="p">,</span>
     <span class="n">height</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span>
     <span class="n">guidance_scale</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">num_inference_steps</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">max_sequence_length</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span>
-    <span class="n">generator</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">Generator</span><span class="p">(</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">generator</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">Generator</span><span class="p">(</span><span class="s2">"cuda"</span><span class="p">)</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
 <span class="p">)</span><span class="o">.</span><span class="n">images</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-<span class="n">image</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;flux-schnell_fp8_per_tensor.png&quot;</span><span class="p">)</span>
+<span class="n">image</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">"flux-schnell_fp8_per_tensor.png"</span><span class="p">)</span>
 </pre></div>
 </div>
 </section>
@@ -592,23 +592,23 @@ python<span class="w"> </span>scripts/diffusion/run_diffusion.py<span class="w">
 
 <span class="c1"># 字符串匹配</span>
 <span class="n">quantizer</span> <span class="o">=</span> <span class="n">DynamicDiTQuantizer</span><span class="p">(</span>
-    <span class="n">quant_type</span><span class="o">=</span><span class="s2">&quot;fp8-per-tensor&quot;</span><span class="p">,</span>
-    <span class="n">include_patterns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;linear&quot;</span><span class="p">,</span> <span class="s2">&quot;attention&quot;</span><span class="p">],</span>
-    <span class="n">exclude_patterns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;embed&quot;</span><span class="p">,</span> <span class="s2">&quot;norm&quot;</span><span class="p">]</span>
+    <span class="n">quant_type</span><span class="o">=</span><span class="s2">"fp8-per-tensor"</span><span class="p">,</span>
+    <span class="n">include_patterns</span><span class="o">=</span><span class="p">[</span><span class="s2">"linear"</span><span class="p">,</span> <span class="s2">"attention"</span><span class="p">],</span>
+    <span class="n">exclude_patterns</span><span class="o">=</span><span class="p">[</span><span class="s2">"embed"</span><span class="p">,</span> <span class="s2">"norm"</span><span class="p">]</span>
 <span class="p">)</span>
 
 <span class="c1"># 正则表达式匹配</span>
 <span class="n">quantizer</span> <span class="o">=</span> <span class="n">DynamicDiTQuantizer</span><span class="p">(</span>
-    <span class="n">quant_type</span><span class="o">=</span><span class="s2">&quot;fp8-per-tensor&quot;</span><span class="p">,</span>
-    <span class="n">include_patterns</span><span class="o">=</span><span class="p">[</span><span class="sa">r</span><span class="s2">&quot;.*\.linear\d+&quot;</span><span class="p">,</span> <span class="sa">r</span><span class="s2">&quot;.*\.attn.*&quot;</span><span class="p">],</span>
-    <span class="n">exclude_patterns</span><span class="o">=</span><span class="p">[</span><span class="sa">r</span><span class="s2">&quot;.*embed.*&quot;</span><span class="p">]</span>
+    <span class="n">quant_type</span><span class="o">=</span><span class="s2">"fp8-per-tensor"</span><span class="p">,</span>
+    <span class="n">include_patterns</span><span class="o">=</span><span class="p">[</span><span class="sa">r</span><span class="s2">".*\.linear\d+"</span><span class="p">,</span> <span class="sa">r</span><span class="s2">".*\.attn.*"</span><span class="p">],</span>
+    <span class="n">exclude_patterns</span><span class="o">=</span><span class="p">[</span><span class="sa">r</span><span class="s2">".*embed.*"</span><span class="p">]</span>
 <span class="p">)</span>
 
 <span class="c1"># 字符串和正则混合使用</span>
 <span class="n">quantizer</span> <span class="o">=</span> <span class="n">DynamicDiTQuantizer</span><span class="p">(</span>
-    <span class="n">quant_type</span><span class="o">=</span><span class="s2">&quot;fp8-per-tensor&quot;</span><span class="p">,</span>
-    <span class="n">include_patterns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;linear&quot;</span><span class="p">,</span> <span class="sa">r</span><span class="s2">&quot;.*\.attn.*&quot;</span><span class="p">],</span>
-    <span class="n">exclude_patterns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;embed&quot;</span><span class="p">,</span> <span class="sa">r</span><span class="s2">&quot;.*norm.*&quot;</span><span class="p">]</span>
+    <span class="n">quant_type</span><span class="o">=</span><span class="s2">"fp8-per-tensor"</span><span class="p">,</span>
+    <span class="n">include_patterns</span><span class="o">=</span><span class="p">[</span><span class="s2">"linear"</span><span class="p">,</span> <span class="sa">r</span><span class="s2">".*\.attn.*"</span><span class="p">],</span>
+    <span class="n">exclude_patterns</span><span class="o">=</span><span class="p">[</span><span class="s2">"embed"</span><span class="p">,</span> <span class="sa">r</span><span class="s2">".*norm.*"</span><span class="p">]</span>
 <span class="p">)</span>
 </pre></div>
 </div>
@@ -622,11 +622,11 @@ python<span class="w"> </span>scripts/diffusion/run_diffusion.py<span class="w">
 <span class="kn">from</span><span class="w"> </span><span class="nn">diffusers</span><span class="w"> </span><span class="kn">import</span> <span class="n">FluxPipeline</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">angelslim.compressor.diffusion</span><span class="w"> </span><span class="kn">import</span> <span class="n">DynamicDiTQuantizer</span>
 
-<span class="n">pipe</span> <span class="o">=</span> <span class="n">FluxPipeline</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;black-forest-labs/FLUX.1-schnell&quot;</span><span class="p">,</span> <span class="n">torch_dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">)</span>
-<span class="n">quantizer</span> <span class="o">=</span> <span class="n">DynamicDiTQuantizer</span><span class="p">(</span><span class="n">quant_type</span><span class="o">=</span><span class="s2">&quot;fp8-per-tensor&quot;</span><span class="p">)</span>
+<span class="n">pipe</span> <span class="o">=</span> <span class="n">FluxPipeline</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">"black-forest-labs/FLUX.1-schnell"</span><span class="p">,</span> <span class="n">torch_dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">)</span>
+<span class="n">quantizer</span> <span class="o">=</span> <span class="n">DynamicDiTQuantizer</span><span class="p">(</span><span class="n">quant_type</span><span class="o">=</span><span class="s2">"fp8-per-tensor"</span><span class="p">)</span>
 
 <span class="c1"># 导出量化权重和缩放因子</span>
-<span class="n">quantizer</span><span class="o">.</span><span class="n">export_quantized_weight</span><span class="p">(</span><span class="n">pipe</span><span class="o">.</span><span class="n">transformer</span><span class="p">,</span> <span class="n">save_path</span><span class="o">=</span><span class="s2">&quot;/path/to/save/quantized_model/&quot;</span><span class="p">)</span>
+<span class="n">quantizer</span><span class="o">.</span><span class="n">export_quantized_weight</span><span class="p">(</span><span class="n">pipe</span><span class="o">.</span><span class="n">transformer</span><span class="p">,</span> <span class="n">save_path</span><span class="o">=</span><span class="s2">"/path/to/save/quantized_model/"</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>导出的模型目录将包含：</p>

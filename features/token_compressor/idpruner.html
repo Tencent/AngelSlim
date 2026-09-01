@@ -775,10 +775,10 @@ $<span class="math notranslate nohighlight">\(v^* = \arg \max_{v_i \in V \setmin
 <h2>4. 快速开始<a class="headerlink" href="#id3" title="Link to this heading">#</a></h2>
 <p>通过以下命令启动 IDPruner 的基准评测：</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/run_token_pruning_evaluation.py<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--model_path<span class="w"> </span><span class="s2">&quot;Qwen/Qwen2.5-VL-7B-Instruct&quot;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--configs<span class="w"> </span><span class="s2">&quot;configs/qwen2_5_vl/pruning/idpruner_r0.75.yaml&quot;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--tasks<span class="w"> </span><span class="s2">&quot;textvqa&quot;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--output_dir<span class="w"> </span><span class="s2">&quot;./results/idpruner_test&quot;</span>
+<span class="w">    </span>--model_path<span class="w"> </span><span class="s2">"Qwen/Qwen2.5-VL-7B-Instruct"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--configs<span class="w"> </span><span class="s2">"configs/qwen2_5_vl/pruning/idpruner_r0.75.yaml"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--tasks<span class="w"> </span><span class="s2">"textvqa"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output_dir<span class="w"> </span><span class="s2">"./results/idpruner_test"</span>
 </pre></div>
 </div>
 <section id="selector-path">
@@ -790,8 +790,8 @@ $<span class="math notranslate nohighlight">\(v^* = \arg \max_{v_i \in V \setmin
 <span class="w">    </span><span class="nt">parallel_k</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
 <span class="nt">model_related_params</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">selector_path</span><span class="p">:</span>
-<span class="w">        </span><span class="s">&quot;7b&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;AngelSlim/Qwen2.5-VL-7B-Instruct-Selector&quot;</span>
-<span class="w">        </span><span class="s">&quot;3b&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;AngelSlim/Qwen2.5-VL-3B-Instruct-Selector&quot;</span>
+<span class="w">        </span><span class="s">"7b"</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">"AngelSlim/Qwen2.5-VL-7B-Instruct-Selector"</span>
+<span class="w">        </span><span class="s">"3b"</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">"AngelSlim/Qwen2.5-VL-3B-Instruct-Selector"</span>
 </pre></div>
 </div>
 </section>

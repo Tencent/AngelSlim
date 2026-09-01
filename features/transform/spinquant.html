@@ -522,18 +522,18 @@ document.write(`
 <h3>旋转融合数据流<a class="headerlink" href="#id4" title="Link to this heading">#</a></h3>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>原始权重                           旋转后权重
 ───────────────────────────────────────────────────────────────────
-embed_tokens.weight  @ R1  →  embed_tokens.weight&#39;
-q/k/v_proj.weight    @ R1  →  q/k/v_proj.weight&#39;   (R1 input-side)
-attn_o.weight   R1.T @     →  attn_o.weight&#39;        (R1 output-side)
-up/gate_proj.weight  @ R1  →  up/gate_proj.weight&#39;  (R1 input-side)
-down_proj.weight     @ R1  →  down_proj.weight&#39;     (R1 output-side)
-lm_head.weight       @ R1  →  lm_head.weight&#39;       (R1 input-side)
+embed_tokens.weight  @ R1  →  embed_tokens.weight'
+q/k/v_proj.weight    @ R1  →  q/k/v_proj.weight'   (R1 input-side)
+attn_o.weight   R1.T @     →  attn_o.weight'        (R1 output-side)
+up/gate_proj.weight  @ R1  →  up/gate_proj.weight'  (R1 input-side)
+down_proj.weight     @ R1  →  down_proj.weight'     (R1 output-side)
+lm_head.weight       @ R1  →  lm_head.weight'       (R1 input-side)
 
-v_proj.weight   R2_v.T @   →  v_proj.weight&#39;        (R2 output-side, kv_heads 块对角)
-attn_o.weight    @ R2_o    →  attn_o.weight&#39;         (R2 input-side,  q_heads  块对角)
+v_proj.weight   R2_v.T @   →  v_proj.weight'        (R2 output-side, kv_heads 块对角)
+attn_o.weight    @ R2_o    →  attn_o.weight'         (R2 input-side,  q_heads  块对角)
 
 down_proj  (hook: x @ R4 at runtime)
-down_proj.weight     @ R4  →  down_proj.weight&#39;     (R4 fuse，与 hook 等价抵消)
+down_proj.weight     @ R4  →  down_proj.weight'     (R4 fuse，与 hook 等价抵消)
 </pre></div>
 </div>
 </section>
@@ -569,7 +569,7 @@ down_proj.weight     @ R4  →  down_proj.weight&#39;     (R4 fuse，与 hook �
 <span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SpinQuant</span>
 <span class="w">  </span><span class="nt">spin_config</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">had_dim</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">-1</span><span class="w">                 </span><span class="c1"># -1 表示全尺寸 Hadamard</span>
-<span class="w">    </span><span class="nt">rotation_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Hadamard</span><span class="w">     </span><span class="c1"># &quot;Hadamard&quot;（确定性）或 &quot;Random&quot;（随机正交）</span>
+<span class="w">    </span><span class="nt">rotation_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Hadamard</span><span class="w">     </span><span class="c1"># "Hadamard"（确定性）或 "Random"（随机正交）</span>
 <span class="w">    </span><span class="nt">rotation</span><span class="p">:</span>
 <span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">R1</span>
 <span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">R2</span>
@@ -667,10 +667,10 @@ python<span class="w"> </span>tools/run_transform_offline.py<span class="w"> </s
 <span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">fp8_static</span><span class="w">          </span><span class="c1"># 支持: fp8_static, fp8_dynamic, int4_awq, int4_gptq</span>
 <span class="w">    </span><span class="nt">bits</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span>
 <span class="w">    </span><span class="nt">quant_method</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">weight</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;per-tensor&quot;</span>
-<span class="w">      </span><span class="nt">activation</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;per-tensor&quot;</span>
+<span class="w">      </span><span class="nt">weight</span><span class="p">:</span><span class="w"> </span><span class="s">"per-tensor"</span>
+<span class="w">      </span><span class="nt">activation</span><span class="p">:</span><span class="w"> </span><span class="s">"per-tensor"</span>
 <span class="w">    </span><span class="nt">ignore_layers</span><span class="p">:</span>
-<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;lm_head&quot;</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"lm_head"</span>
 
 <span class="c1"># 校准数据集</span>
 <span class="nt">dataset</span><span class="p">:</span>
@@ -822,17 +822,17 @@ python<span class="w"> </span>tools/run.py<span class="w"> </span><span class="s
 
 <span class="c1"># slim_config 是包含 transform_config 和 global_config 的 dict</span>
 <span class="n">slim_config</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s2">&quot;transform_config&quot;</span><span class="p">:</span> <span class="n">TransformConfig</span><span class="p">(</span>
-        <span class="n">name</span><span class="o">=</span><span class="s2">&quot;SpinQuant&quot;</span><span class="p">,</span>
+    <span class="s2">"transform_config"</span><span class="p">:</span> <span class="n">TransformConfig</span><span class="p">(</span>
+        <span class="n">name</span><span class="o">=</span><span class="s2">"SpinQuant"</span><span class="p">,</span>
         <span class="n">spin_config</span><span class="o">=</span><span class="p">{</span>
-            <span class="s2">&quot;rotation_mode&quot;</span><span class="p">:</span> <span class="s2">&quot;Hadamard&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;rotation&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;R1&quot;</span><span class="p">,</span> <span class="s2">&quot;R2&quot;</span><span class="p">,</span> <span class="s2">&quot;R4&quot;</span><span class="p">],</span>
-            <span class="s2">&quot;had_dim&quot;</span><span class="p">:</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
-            <span class="s2">&quot;ignore_layers&quot;</span><span class="p">:</span> <span class="p">[],</span>
+            <span class="s2">"rotation_mode"</span><span class="p">:</span> <span class="s2">"Hadamard"</span><span class="p">,</span>
+            <span class="s2">"rotation"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"R1"</span><span class="p">,</span> <span class="s2">"R2"</span><span class="p">,</span> <span class="s2">"R4"</span><span class="p">],</span>
+            <span class="s2">"had_dim"</span><span class="p">:</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
+            <span class="s2">"ignore_layers"</span><span class="p">:</span> <span class="p">[],</span>
         <span class="p">},</span>
         <span class="n">output_log</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="p">),</span>
-    <span class="s2">&quot;global_config&quot;</span><span class="p">:</span> <span class="n">global_config</span><span class="p">,</span>
+    <span class="s2">"global_config"</span><span class="p">:</span> <span class="n">global_config</span><span class="p">,</span>
 <span class="p">}</span>
 
 <span class="n">transform</span> <span class="o">=</span> <span class="n">TransformFactory</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">slim_model</span><span class="p">,</span> <span class="n">slim_config</span><span class="p">)</span>
@@ -862,10 +862,10 @@ python<span class="w"> </span>tools/run.py<span class="w"> </span><span class="s
 <h3>获取旋转矩阵<a class="headerlink" href="#id10" title="Link to this heading">#</a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">rot</span> <span class="o">=</span> <span class="n">spin</span><span class="o">.</span><span class="n">get_rotation_mat</span><span class="p">()</span>
 <span class="c1"># 返回 dict：</span>
-<span class="c1"># rot[&quot;R1&quot;]: Tensor [hidden_size, hidden_size]</span>
-<span class="c1"># rot[&quot;R2&quot;]: Dict[layer_prefix -&gt; Tensor [head_dim, head_dim]]</span>
-<span class="c1"># rot[&quot;R3&quot;]: None（未实现）</span>
-<span class="c1"># rot[&quot;R4&quot;]: Tensor [intermediate_size, intermediate_size]</span>
+<span class="c1"># rot["R1"]: Tensor [hidden_size, hidden_size]</span>
+<span class="c1"># rot["R2"]: Dict[layer_prefix -&gt; Tensor [head_dim, head_dim]]</span>
+<span class="c1"># rot["R3"]: None（未实现）</span>
+<span class="c1"># rot["R4"]: Tensor [intermediate_size, intermediate_size]</span>
 </pre></div>
 </div>
 </section>
@@ -873,10 +873,10 @@ python<span class="w"> </span>tools/run.py<span class="w"> </span><span class="s
 <h3>获取受影响的线性层<a class="headerlink" href="#id11" title="Link to this heading">#</a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">linears</span> <span class="o">=</span> <span class="n">spin</span><span class="o">.</span><span class="n">get_linears</span><span class="p">()</span>
 <span class="c1"># 返回 dict：</span>
-<span class="c1"># linears[&quot;R1&quot;]: [R1_embed_linears, R1_linears, R1_inv_linears]</span>
-<span class="c1"># linears[&quot;R2&quot;]: [R2_linears, R2_inv_linears]</span>
-<span class="c1"># linears[&quot;R3&quot;]: [R3_linears]</span>
-<span class="c1"># linears[&quot;R4&quot;]: [R4_linears]</span>
+<span class="c1"># linears["R1"]: [R1_embed_linears, R1_linears, R1_inv_linears]</span>
+<span class="c1"># linears["R2"]: [R2_linears, R2_inv_linears]</span>
+<span class="c1"># linears["R3"]: [R3_linears]</span>
+<span class="c1"># linears["R4"]: [R4_linears]</span>
 </pre></div>
 </div>
 </section>
@@ -892,20 +892,20 @@ python<span class="w"> </span>tools/run.py<span class="w"> </span><span class="s
 <h2>7. 层名映射<a class="headerlink" href="#id12" title="Link to this heading">#</a></h2>
 <p>SpinQuant 通过 <code class="docutils literal notranslate"><span class="pre">mapping.py</span></code> 中的映射字典定位模型中的各类层。默认映射兼容 LLaMA / Qwen 架构：</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">linear_mapping</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
-    <span class="n">embedding</span><span class="o">=</span><span class="s2">&quot;embed_tokens&quot;</span><span class="p">,</span>
-    <span class="n">attn_q</span><span class="o">=</span><span class="s2">&quot;q_proj&quot;</span><span class="p">,</span>
-    <span class="n">attn_k</span><span class="o">=</span><span class="s2">&quot;k_proj&quot;</span><span class="p">,</span>
-    <span class="n">attn_v</span><span class="o">=</span><span class="s2">&quot;v_proj&quot;</span><span class="p">,</span>
-    <span class="n">attn_o</span><span class="o">=</span><span class="s2">&quot;o_proj&quot;</span><span class="p">,</span>
-    <span class="n">mlp_in</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;up_proj&quot;</span><span class="p">,</span> <span class="s2">&quot;gate_proj&quot;</span><span class="p">],</span>
-    <span class="n">mlp_out</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;down_proj&quot;</span><span class="p">],</span>
-    <span class="n">lm_head</span><span class="o">=</span><span class="s2">&quot;lm_head&quot;</span><span class="p">,</span>
+    <span class="n">embedding</span><span class="o">=</span><span class="s2">"embed_tokens"</span><span class="p">,</span>
+    <span class="n">attn_q</span><span class="o">=</span><span class="s2">"q_proj"</span><span class="p">,</span>
+    <span class="n">attn_k</span><span class="o">=</span><span class="s2">"k_proj"</span><span class="p">,</span>
+    <span class="n">attn_v</span><span class="o">=</span><span class="s2">"v_proj"</span><span class="p">,</span>
+    <span class="n">attn_o</span><span class="o">=</span><span class="s2">"o_proj"</span><span class="p">,</span>
+    <span class="n">mlp_in</span><span class="o">=</span><span class="p">[</span><span class="s2">"up_proj"</span><span class="p">,</span> <span class="s2">"gate_proj"</span><span class="p">],</span>
+    <span class="n">mlp_out</span><span class="o">=</span><span class="p">[</span><span class="s2">"down_proj"</span><span class="p">],</span>
+    <span class="n">lm_head</span><span class="o">=</span><span class="s2">"lm_head"</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">norm_mapping</span> <span class="o">=</span> <span class="p">[</span>
-    <span class="p">([</span><span class="s2">&quot;q_proj&quot;</span><span class="p">,</span> <span class="s2">&quot;k_proj&quot;</span><span class="p">,</span> <span class="s2">&quot;v_proj&quot;</span><span class="p">],</span> <span class="s2">&quot;input_layernorm&quot;</span><span class="p">),</span>
-    <span class="p">([</span><span class="s2">&quot;up_proj&quot;</span><span class="p">,</span> <span class="s2">&quot;gate_proj&quot;</span><span class="p">],</span> <span class="s2">&quot;post_attention_layernorm&quot;</span><span class="p">),</span>
-    <span class="p">([</span><span class="s2">&quot;lm_head&quot;</span><span class="p">],</span> <span class="s2">&quot;norm&quot;</span><span class="p">),</span>
+    <span class="p">([</span><span class="s2">"q_proj"</span><span class="p">,</span> <span class="s2">"k_proj"</span><span class="p">,</span> <span class="s2">"v_proj"</span><span class="p">],</span> <span class="s2">"input_layernorm"</span><span class="p">),</span>
+    <span class="p">([</span><span class="s2">"up_proj"</span><span class="p">,</span> <span class="s2">"gate_proj"</span><span class="p">],</span> <span class="s2">"post_attention_layernorm"</span><span class="p">),</span>
+    <span class="p">([</span><span class="s2">"lm_head"</span><span class="p">],</span> <span class="s2">"norm"</span><span class="p">),</span>
 <span class="p">]</span>
 </pre></div>
 </div>
@@ -917,19 +917,19 @@ python<span class="w"> </span>tools/run.py<span class="w"> </span><span class="s
 <p>当配置 <code class="docutils literal notranslate"><span class="pre">global.deploy_backend:</span> <span class="pre">vllm</span></code> 且启用 R4 旋转时，SpinQuant 会自动生成 <code class="docutils literal notranslate"><span class="pre">TransformConfig</span></code> 并写入模型的 <code class="docutils literal notranslate"><span class="pre">config.json</span></code>，vLLM 通过 <code class="docutils literal notranslate"><span class="pre">compressed_tensors</span></code> 标准流程重建在线旋转。</p>
 <p>生成的 transform_config 格式：</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">  </span><span class="nt">&quot;transform_config&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;config_groups&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">      </span><span class="nt">&quot;R4&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">        </span><span class="nt">&quot;apply&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span>
-<span class="w">          </span><span class="nt">&quot;ignore&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
-<span class="w">          </span><span class="nt">&quot;inverse&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
-<span class="w">          </span><span class="nt">&quot;location&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;input&quot;</span><span class="p">,</span>
-<span class="w">          </span><span class="nt">&quot;targets&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;re:.*down_proj$&quot;</span><span class="p">]</span>
+<span class="w">  </span><span class="nt">"transform_config"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"config_groups"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">"R4"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">"apply"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span>
+<span class="w">          </span><span class="nt">"ignore"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<span class="w">          </span><span class="nt">"inverse"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">          </span><span class="nt">"location"</span><span class="p">:</span><span class="w"> </span><span class="s2">"input"</span><span class="p">,</span>
+<span class="w">          </span><span class="nt">"targets"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"re:.*down_proj$"</span><span class="p">]</span>
 <span class="w">        </span><span class="p">}],</span>
-<span class="w">        </span><span class="nt">&quot;head_dim&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">-1</span><span class="p">,</span>
-<span class="w">        </span><span class="nt">&quot;randomize&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
-<span class="w">        </span><span class="nt">&quot;requires_grad&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
-<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hadamard&quot;</span>
+<span class="w">        </span><span class="nt">"head_dim"</span><span class="p">:</span><span class="w"> </span><span class="mi">-1</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">"randomize"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">"requires_grad"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"hadamard"</span>
 <span class="w">      </span><span class="p">}</span>
 <span class="w">    </span><span class="p">}</span>
 <span class="w">  </span><span class="p">}</span>
@@ -993,7 +993,7 @@ python<span class="w"> </span>tools/run.py<span class="w"> </span><span class="s
 <section id="r1-r2">
 <h3>示例 1：仅旋转（R1+R2），保存旋转后模型<a class="headerlink" href="#r1-r2" title="Link to this heading">#</a></h3>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 1. 准备配置文件 my_spin.yaml</span>
-cat<span class="w"> </span>&gt;<span class="w"> </span>my_spin.yaml<span class="w"> </span><span class="s">&lt;&lt; &#39;EOF&#39;</span>
+cat<span class="w"> </span>&gt;<span class="w"> </span>my_spin.yaml<span class="w"> </span><span class="s">&lt;&lt; 'EOF'</span>
 <span class="s">global:</span>
 <span class="s">  save_path: ./output/spin_only</span>
 
@@ -1057,7 +1057,7 @@ python<span class="w"> </span>tools/run_transform_offline.py<span class="w"> </s
 <section id="cpu">
 <h3>1. CPU 计算 + 设备回写<a class="headerlink" href="#cpu" title="Link to this heading">#</a></h3>
 <p>旋转矩阵的生成和权重融合计算统一在 CPU 上进行（<code class="docutils literal notranslate"><span class="pre">DEVICE='cpu'</span></code>），计算完成后将结果写回权重原始所在设备（GPU）。这一设计避免了大尺寸旋转矩阵（如 <code class="docutils literal notranslate"><span class="pre">[hidden_size,</span> <span class="pre">hidden_size]</span></code>）占用宝贵的 GPU 显存，对多卡 <code class="docutils literal notranslate"><span class="pre">device_map=auto</span></code> 场景尤其重要。</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">DEVICE</span> <span class="o">=</span> <span class="s1">&#39;cpu&#39;</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">DEVICE</span> <span class="o">=</span> <span class="s1">'cpu'</span>
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_apply_linear_fuse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">linear</span><span class="p">,</span> <span class="n">rotation</span><span class="p">,</span> <span class="n">fuse_input</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
     <span class="n">origin_device</span> <span class="o">=</span> <span class="n">linear</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">device</span>                         <span class="c1"># 记住原始设备</span>
@@ -1075,7 +1075,7 @@ python<span class="w"> </span>tools/run_transform_offline.py<span class="w"> </s
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">MAX_THREADS</span> <span class="o">=</span> <span class="mi">64</span>
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_parallel_apply</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tasks</span><span class="p">,</span> <span class="n">desc</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;并行执行 (fn, args, kwargs) 任务列表，每个任务操作独立的 linear 层，无写冲突。&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""并行执行 (fn, args, kwargs) 任务列表，每个任务操作独立的 linear 层，无写冲突。"""</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">tqdm</span><span class="w"> </span><span class="kn">import</span> <span class="n">tqdm</span>
     <span class="n">pbar</span> <span class="o">=</span> <span class="n">tqdm</span><span class="p">(</span><span class="n">total</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">tasks</span><span class="p">),</span> <span class="n">desc</span><span class="o">=</span><span class="n">desc</span><span class="p">,</span> <span class="n">leave</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_wrap</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">):</span>

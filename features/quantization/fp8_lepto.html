@@ -448,10 +448,10 @@ document.write(`
 <span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">fp8_lepto</span>
 <span class="w">    </span><span class="nt">bits</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span>
 <span class="w">    </span><span class="nt">quant_method</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">weight</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;per-tensor&quot;</span>
-<span class="w">      </span><span class="nt">activation</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;per-tensor&quot;</span>
+<span class="w">      </span><span class="nt">weight</span><span class="p">:</span><span class="w"> </span><span class="s">"per-tensor"</span>
+<span class="w">      </span><span class="nt">activation</span><span class="p">:</span><span class="w"> </span><span class="s">"per-tensor"</span>
 <span class="w">    </span><span class="nt">ignore_layers</span><span class="p">:</span><span class="w">         </span><span class="c1"># Skip quantization for these layers</span>
-<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;lm_head&quot;</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"lm_head"</span>
 </pre></div>
 </div>
 <p>激活静态量化需要指定校准数据集，例如使用<code class="docutils literal notranslate"><span class="pre">sharegpt</span></code>数据集：</p>

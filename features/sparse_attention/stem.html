@@ -639,10 +639,10 @@ tools/infer.py  -c configs/qwen3/sparse/stem/*.yaml   # 推理
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">angelslim.compressor.sparsity.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">SparsityAlgorithmRegistry</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">angelslim.compressor.sparsity.algorithms</span>  <span class="c1"># 触发注册</span>
 
-<span class="n">algo</span> <span class="o">=</span> <span class="n">SparsityAlgorithmRegistry</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="s2">&quot;stem&quot;</span><span class="p">,</span> <span class="n">attn_kwargs</span><span class="o">=</span><span class="p">{</span>
-    <span class="s2">&quot;backend&quot;</span><span class="p">:</span> <span class="s2">&quot;hpc&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;hpc_dtype&quot;</span><span class="p">:</span> <span class="s2">&quot;fp8&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;stem_alpha&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">5</span> <span class="o">+</span> <span class="p">[</span><span class="mf">0.7</span><span class="p">]</span> <span class="o">*</span> <span class="mi">31</span><span class="p">,</span>  <span class="c1"># 36 层 Qwen3-8B</span>
+<span class="n">algo</span> <span class="o">=</span> <span class="n">SparsityAlgorithmRegistry</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="s2">"stem"</span><span class="p">,</span> <span class="n">attn_kwargs</span><span class="o">=</span><span class="p">{</span>
+    <span class="s2">"backend"</span><span class="p">:</span> <span class="s2">"hpc"</span><span class="p">,</span>
+    <span class="s2">"hpc_dtype"</span><span class="p">:</span> <span class="s2">"fp8"</span><span class="p">,</span>
+    <span class="s2">"stem_alpha"</span><span class="p">:</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">5</span> <span class="o">+</span> <span class="p">[</span><span class="mf">0.7</span><span class="p">]</span> <span class="o">*</span> <span class="mi">31</span><span class="p">,</span>  <span class="c1"># 36 层 Qwen3-8B</span>
 <span class="p">})</span>
 <span class="n">algo</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>                 <span class="c1"># 按模型层数派生 per-instance 配置</span>
 <span class="c1"># 框架的 patcher 会对每个注意力模块调用 algo.build_attn_forward(...)</span>

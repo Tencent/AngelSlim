@@ -693,9 +693,9 @@ bash<span class="w"> </span>scripts/qat/run_qat_for_qwen_4b_zero3.sh
 </table>
 </div>
 <p>示例输出（30B-A3B，3 步训练）：</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s1">&#39;loss&#39;</span><span class="p">:</span> <span class="mf">2.08</span><span class="p">,</span> <span class="s1">&#39;grad_norm&#39;</span><span class="p">:</span> <span class="mf">43.1</span><span class="p">,</span> <span class="s1">&#39;learning_rate&#39;</span><span class="p">:</span> <span class="mf">1e-6</span><span class="p">,</span>
- <span class="s1">&#39;lm_loss&#39;</span><span class="p">:</span> <span class="mf">1.23</span><span class="p">,</span> <span class="s1">&#39;kd/cakld&#39;</span><span class="p">:</span> <span class="mf">0.0075</span><span class="p">,</span> <span class="s1">&#39;kd/forward_kl&#39;</span><span class="p">:</span> <span class="mf">0.0075</span><span class="p">,</span> <span class="s1">&#39;kd/backward_kl&#39;</span><span class="p">:</span> <span class="mf">0.0075</span><span class="p">,</span>
- <span class="s1">&#39;total_loss&#39;</span><span class="p">:</span> <span class="mf">1.24</span><span class="p">,</span> <span class="s1">&#39;epoch&#39;</span><span class="p">:</span> <span class="mf">0.03</span><span class="p">}</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s1">'loss'</span><span class="p">:</span> <span class="mf">2.08</span><span class="p">,</span> <span class="s1">'grad_norm'</span><span class="p">:</span> <span class="mf">43.1</span><span class="p">,</span> <span class="s1">'learning_rate'</span><span class="p">:</span> <span class="mf">1e-6</span><span class="p">,</span>
+ <span class="s1">'lm_loss'</span><span class="p">:</span> <span class="mf">1.23</span><span class="p">,</span> <span class="s1">'kd/cakld'</span><span class="p">:</span> <span class="mf">0.0075</span><span class="p">,</span> <span class="s1">'kd/forward_kl'</span><span class="p">:</span> <span class="mf">0.0075</span><span class="p">,</span> <span class="s1">'kd/backward_kl'</span><span class="p">:</span> <span class="mf">0.0075</span><span class="p">,</span>
+ <span class="s1">'total_loss'</span><span class="p">:</span> <span class="mf">1.24</span><span class="p">,</span> <span class="s1">'epoch'</span><span class="p">:</span> <span class="mf">0.03</span><span class="p">}</span>
 </pre></div>
 </div>
 </section>
@@ -713,17 +713,17 @@ bash<span class="w"> </span>scripts/qat/run_qat_for_qwen_4b_zero3.sh
 <h3>DeepSpeed 配置<a class="headerlink" href="#deepspeed" title="Link to this heading">#</a></h3>
 <p>参考 <code class="docutils literal notranslate"><span class="pre">configs/qwen3/qat/fp8_static/learn_scale/ds_config_zero3.json</span></code>。关键项：</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;bf16&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;auto&quot;</span><span class="p">},</span>
-<span class="w">    </span><span class="nt">&quot;zero_optimization&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">        </span><span class="nt">&quot;stage&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
-<span class="w">        </span><span class="nt">&quot;stage3_gather_16bit_weights_on_model_save&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-<span class="w">        </span><span class="nt">&quot;overlap_comm&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-<span class="w">        </span><span class="nt">&quot;contiguous_gradients&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<span class="w">    </span><span class="nt">"bf16"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"enabled"</span><span class="p">:</span><span class="w"> </span><span class="s2">"auto"</span><span class="p">},</span>
+<span class="w">    </span><span class="nt">"zero_optimization"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">"stage"</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">"stage3_gather_16bit_weights_on_model_save"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">"overlap_comm"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">"contiguous_gradients"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
 <span class="w">    </span><span class="p">},</span>
-<span class="w">    </span><span class="nt">&quot;gradient_accumulation_steps&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;gradient_clipping&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;train_batch_size&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;train_micro_batch_size_per_gpu&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;auto&quot;</span>
+<span class="w">    </span><span class="nt">"gradient_accumulation_steps"</span><span class="p">:</span><span class="w"> </span><span class="s2">"auto"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"gradient_clipping"</span><span class="p">:</span><span class="w"> </span><span class="s2">"auto"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"train_batch_size"</span><span class="p">:</span><span class="w"> </span><span class="s2">"auto"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"train_micro_batch_size_per_gpu"</span><span class="p">:</span><span class="w"> </span><span class="s2">"auto"</span>
 <span class="p">}</span>
 </pre></div>
 </div>
@@ -762,7 +762,7 @@ bash<span class="w"> </span>scripts/qat/run_qat_for_qwen_4b_zero3.sh
 <span class="w">    </span><span class="nt">quant_method</span><span class="p">:</span>
 <span class="w">      </span><span class="nt">weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">per-tensor</span>
 <span class="w">      </span><span class="nt">activation</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">per-tensor</span>
-<span class="w">    </span><span class="nt">ignore_layers</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;lm_head&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;embed_tokens&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;gate.weight&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">ignore_layers</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"lm_head"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"embed_tokens"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"gate.weight"</span><span class="p p-Indicator">]</span>
 <span class="w">  </span><span class="nt">QAT</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">hf_dataset</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span>
 <span class="w">    </span><span class="nt">from_ptq_ckpt</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./output_ptq_30b/qwen3-a3b_fp8_static</span>

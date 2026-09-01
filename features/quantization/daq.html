@@ -510,8 +510,8 @@ document.write(`
 <span class="w">    </span><span class="nt">bits</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span>
 <span class="w">    </span><span class="nt">base_model_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">deepseek-ai/DeepSeek-R1-Base</span><span class="w"> </span><span class="c1"># DAQ-specific: path to the base model</span>
 <span class="w">    </span><span class="nt">base_is_fp8</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"> </span><span class="c1"># Set to true if the base model is FP8 format</span>
-<span class="w">    </span><span class="nt">metric</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cosine</span><span class="w">    </span><span class="c1"># Optimization metric: &quot;sign&quot;，&quot;cosine&quot;，or &quot;mse&quot;</span>
-<span class="w">    </span><span class="nt">quantization_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">blockwise</span><span class="w"> </span><span class="c1"># Quantization method: &quot;blockwise&quot; or &quot;per_channel&quot;</span>
+<span class="w">    </span><span class="nt">metric</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cosine</span><span class="w">    </span><span class="c1"># Optimization metric: "sign"，"cosine"，or "mse"</span>
+<span class="w">    </span><span class="nt">quantization_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">blockwise</span><span class="w"> </span><span class="c1"># Quantization method: "blockwise" or "per_channel"</span>
 <span class="w">    </span><span class="c1"># Scale search hyper-parameters (optional, shown with defaults)</span>
 <span class="w">    </span><span class="nt">scale_search</span><span class="p">:</span>
 <span class="w">      </span><span class="nt">min_range</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.8</span>
@@ -521,10 +521,10 @@ document.write(`
 <span class="w">      </span><span class="nt">delta_threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0e-5</span>
 <span class="w">    </span><span class="c1"># Multi-process parallelism</span>
 <span class="w">    </span><span class="nt">num_workers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span>
-<span class="w">    </span><span class="nt">gpus</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0,1,2,3&quot;</span>
+<span class="w">    </span><span class="nt">gpus</span><span class="p">:</span><span class="w"> </span><span class="s">"0,1,2,3"</span>
 <span class="w">    </span><span class="c1"># Skip quantization for these layers</span>
 <span class="w">    </span><span class="nt">ignore_layers</span><span class="p">:</span>
-<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;lm_head&quot;</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"lm_head"</span>
 </pre></div>
 </div>
 </section>

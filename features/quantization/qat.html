@@ -512,7 +512,7 @@ angelslim/data/
                     │  prepare_compressor → run → save │
                     └───────────────┬──────────────────┘
                                     │
-                     CompressorFactory.create([&quot;QAT&quot;])
+                     CompressorFactory.create(["QAT"])
                                     │
                     ┌───────────────▼──────────────────┐
                     │           QAT (qat.py)           │
@@ -595,17 +595,17 @@ angelslim/data/
 <section id="compression">
 <h3>compression — 压缩配置<a class="headerlink" href="#compression" title="Link to this heading">#</a></h3>
 <div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">compression</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">QAT</span><span class="w">                         </span><span class="c1"># 压缩方法，QAT 固定填写 &quot;QAT&quot;</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">QAT</span><span class="w">                         </span><span class="c1"># 压缩方法，QAT 固定填写 "QAT"</span>
 <span class="w">  </span><span class="nt">quantization</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;w4a8_fp8&quot;</span><span class="w">                </span><span class="c1"># 量化算法名称,可选</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">"w4a8_fp8"</span><span class="w">                </span><span class="c1"># 量化算法名称,可选</span>
 <span class="w">    </span><span class="nt">bits</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span><span class="w">                         </span><span class="c1"># 量化位宽,可选</span>
 <span class="w">    </span><span class="nt">quant_method</span><span class="p">:</span><span class="w">                   </span><span class="c1"># 可选</span>
-<span class="w">      </span><span class="nt">weight</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;per-group&quot;</span><span class="w">           </span><span class="c1"># 权重量化粒度</span>
-<span class="w">      </span><span class="nt">activation</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;per-tensor&quot;</span><span class="w">      </span><span class="c1"># 激活量化粒度</span>
+<span class="w">      </span><span class="nt">weight</span><span class="p">:</span><span class="w"> </span><span class="s">"per-group"</span><span class="w">           </span><span class="c1"># 权重量化粒度</span>
+<span class="w">      </span><span class="nt">activation</span><span class="p">:</span><span class="w"> </span><span class="s">"per-tensor"</span><span class="w">      </span><span class="c1"># 激活量化粒度</span>
 <span class="w">      </span><span class="nt">group_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">128</span><span class="w">               </span><span class="c1"># 分组量化的组大小（per-group 时需要）</span>
 <span class="w">    </span><span class="nt">ignore_layers</span><span class="p">:</span><span class="w">                  </span><span class="c1"># 忽略量化的层列表</span>
-<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;lm_head&quot;</span>
-<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;embed_tokens&quot;</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"lm_head"</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"embed_tokens"</span>
 </pre></div>
 </div>
 <p><strong>量化算法名称说明</strong>：</p>
@@ -745,14 +745,14 @@ angelslim/data/
 <p>这是 QAT 的核心配置部分，统一嵌套在 <code class="docutils literal notranslate"><span class="pre">compression.QAT</span></code> 下：</p>
 <div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># 以下配置统一位于 compression.QAT 下</span>
 <span class="w">  </span><span class="c1"># ========== 基础配置 ==========</span>
-<span class="w">  </span><span class="nt">training_mode</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;end2end&quot;</span><span class="w">          </span><span class="c1"># 训练模式：&quot;end2end&quot; 或 &quot;blockwise&quot;</span>
-<span class="w">  </span><span class="nt">dist_mode</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;hf&quot;</span><span class="w">                   </span><span class="c1"># 分布式模式：&quot;hf&quot;（HuggingFace Trainer）</span>
+<span class="w">  </span><span class="nt">training_mode</span><span class="p">:</span><span class="w"> </span><span class="s">"end2end"</span><span class="w">          </span><span class="c1"># 训练模式："end2end" 或 "blockwise"</span>
+<span class="w">  </span><span class="nt">dist_mode</span><span class="p">:</span><span class="w"> </span><span class="s">"hf"</span><span class="w">                   </span><span class="c1"># 分布式模式："hf"（HuggingFace Trainer）</span>
 <span class="w">  </span><span class="nt">do_train</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">                    </span><span class="c1"># 是否执行训练</span>
-<span class="w">  </span><span class="nt">save_format</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;real&quot;</span><span class="w">               </span><span class="c1"># 保存格式（见下表），不设置表示跳过保存</span>
-<span class="w">  </span><span class="nt">resume_ckpt_dir</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="w">               </span><span class="c1"># checkpoint 恢复路径，用于加载 save_format 为 fake 的权重。不设置表示不使用 resume</span>
+<span class="w">  </span><span class="nt">save_format</span><span class="p">:</span><span class="w"> </span><span class="s">"real"</span><span class="w">               </span><span class="c1"># 保存格式（见下表），不设置表示跳过保存</span>
+<span class="w">  </span><span class="nt">resume_ckpt_dir</span><span class="p">:</span><span class="w"> </span><span class="s">""</span><span class="w">               </span><span class="c1"># checkpoint 恢复路径，用于加载 save_format 为 fake 的权重。不设置表示不使用 resume</span>
 
 <span class="w">  </span><span class="c1"># ========== 数据集配置 ==========</span>
-<span class="w">  </span><span class="nt">hf_dataset</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Salesforce/wikitext,wikitext-2-raw-v1&quot;</span><span class="w">  </span><span class="c1"># HuggingFace 数据集（可选，逗号分隔路径和子集名）</span>
+<span class="w">  </span><span class="nt">hf_dataset</span><span class="p">:</span><span class="w"> </span><span class="s">"Salesforce/wikitext,wikitext-2-raw-v1"</span><span class="w">  </span><span class="c1"># HuggingFace 数据集（可选，逗号分隔路径和子集名）</span>
 <span class="w">  </span><span class="nt">hf_cache_dir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/cache</span><span class="w">      </span><span class="c1"># HuggingFace 数据集缓存目录</span>
 
 <span class="w">  </span><span class="c1"># ========== 插件配置 ==========</span>
@@ -815,7 +815,7 @@ angelslim/data/
 <span class="w">  </span><span class="nt">quantization</span><span class="p">:</span>
 <span class="w">    </span><span class="c1"># ...量化配置...</span>
 <span class="w">  </span><span class="nt">QAT</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">training_mode</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;end2end&quot;</span>
+<span class="w">    </span><span class="nt">training_mode</span><span class="p">:</span><span class="w"> </span><span class="s">"end2end"</span>
 <span class="w">    </span><span class="nt">dist_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hf</span>
 <span class="w">    </span><span class="nt">loss_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">origin</span><span class="w">               </span><span class="c1"># origin | kl | rkl | mse | kd | kl_top[_K] | r_kl_top[_K]</span>
 <span class="w">    </span><span class="nt">loss_topk</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span><span class="w">                 </span><span class="c1"># 仅 top-k KL loss 使用；可覆盖 loss_type 中内联的 K</span>
@@ -875,7 +875,7 @@ angelslim/data/
 <span class="w">  </span><span class="nt">quantization</span><span class="p">:</span>
 <span class="w">    </span><span class="c1"># ...量化配置...</span>
 <span class="w">  </span><span class="nt">QAT</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">training_mode</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;blockwise&quot;</span>
+<span class="w">    </span><span class="nt">training_mode</span><span class="p">:</span><span class="w"> </span><span class="s">"blockwise"</span>
 <span class="w">    </span><span class="nt">block_wise_config</span><span class="p">:</span>
 <span class="w">      </span><span class="nt">epochs</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span><span class="w">                      </span><span class="c1"># 每个 block 的训练轮数（默认 20）</span>
 <span class="w">      </span><span class="nt">batch_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span><span class="w">                   </span><span class="c1"># 批量大小（默认 1）</span>
@@ -1118,7 +1118,7 @@ angelslim/data/
 </div>
 <p>详情参见 <a class="reference external" href="https://github.com/EleutherAI/lm-evaluation-harness">lm-evaluation-harness</a> 框架。</p>
 <p>运行示例：</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">python3</span> <span class="n">tools</span><span class="o">/</span><span class="n">run</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">c</span> <span class="s2">&quot;configs/qwen3/qat/int4_weight_only/learn_scale/qwen3-4b_int4_weight_only_end2end_learn_scale.yaml&quot;</span> <span class="o">--</span><span class="n">lm</span><span class="o">-</span><span class="nb">eval</span> <span class="o">--</span><span class="n">ppl</span><span class="o">-</span><span class="nb">eval</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">python3</span> <span class="n">tools</span><span class="o">/</span><span class="n">run</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">c</span> <span class="s2">"configs/qwen3/qat/int4_weight_only/learn_scale/qwen3-4b_int4_weight_only_end2end_learn_scale.yaml"</span> <span class="o">--</span><span class="n">lm</span><span class="o">-</span><span class="nb">eval</span> <span class="o">--</span><span class="n">ppl</span><span class="o">-</span><span class="nb">eval</span>
 </pre></div>
 </div>
 </section>
@@ -1136,7 +1136,7 @@ angelslim/data/
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">angelslim.compressor.qat.plugins.base_plugin</span><span class="w"> </span><span class="kn">import</span> <span class="n">BasePlugin</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">angelslim.compressor.qat.plugins.plugin_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">PluginManager</span>
 
-<span class="nd">@PluginManager</span><span class="o">.</span><span class="n">plugin</span><span class="p">(</span><span class="s2">&quot;my_custom_plugin&quot;</span><span class="p">)</span>
+<span class="nd">@PluginManager</span><span class="o">.</span><span class="n">plugin</span><span class="p">(</span><span class="s2">"my_custom_plugin"</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">MyPlugin</span><span class="p">(</span><span class="n">BasePlugin</span><span class="p">):</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
@@ -1163,7 +1163,7 @@ angelslim/data/
 <p>类似地，可通过 <code class="docutils literal notranslate"><span class="pre">TrainerFactory</span></code> 注册新的训练模式：</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">angelslim.compressor.qat.trainers.trainer_factory</span><span class="w"> </span><span class="kn">import</span> <span class="n">TrainerFactory</span>
 
-<span class="nd">@TrainerFactory</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s2">&quot;my_custom_trainer&quot;</span><span class="p">)</span>
+<span class="nd">@TrainerFactory</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s2">"my_custom_trainer"</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">MyTrainer</span><span class="p">:</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">quant_model</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">plugin_manager</span><span class="p">):</span>
         <span class="k">pass</span>

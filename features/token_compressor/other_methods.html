@@ -445,7 +445,7 @@ document.write(`
 <p>使用 <code class="docutils literal notranslate"><span class="pre">tools/test_token_pruning.py</span></code> 快速验证指定策略在模型上的适配性与单次推理逻辑：</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/test_token_pruning.py<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--config<span class="w"> </span>configs/qwen2_5_vl/pruning/scope_r0.75.yaml<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--model_path<span class="w"> </span><span class="s2">&quot;Qwen/Qwen2.5-VL-3B-Instruct&quot;</span>
+<span class="w">    </span>--model_path<span class="w"> </span><span class="s2">"Qwen/Qwen2.5-VL-3B-Instruct"</span>
 </pre></div>
 </div>
 <p><strong>Smoke Test 参数说明：</strong></p>
@@ -458,7 +458,7 @@ document.write(`
 <h3>2. 精度评测 (Evaluation)<a class="headerlink" href="#evaluation" title="Link to this heading">#</a></h3>
 <p>使用 <code class="docutils literal notranslate"><span class="pre">tools/run_token_pruning_evaluation.py</span></code> 在标准数据集上评估剪枝后的模型性能。以下示例演示如何使用 <strong>SCOPE</strong> 策略在 <strong>TextVQA</strong> 任务上运行评测：</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/run_token_pruning_evaluation.py<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--model_path<span class="w"> </span><span class="s2">&quot;Qwen/Qwen2.5-VL-3B-Instruct&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--model_path<span class="w"> </span><span class="s2">"Qwen/Qwen2.5-VL-3B-Instruct"</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--configs<span class="w"> </span>configs/qwen2_5_vl/pruning/scope_r0.75.yaml<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--tasks<span class="w"> </span>textvqa<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--batch_size<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>

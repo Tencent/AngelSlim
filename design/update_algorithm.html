@@ -431,7 +431,7 @@ document.write(`
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">model</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
         <span class="n">model_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-        <span class="n">deploy_backend</span><span class="o">=</span><span class="s2">&quot;vllm&quot;</span><span class="p">,</span>
+        <span class="n">deploy_backend</span><span class="o">=</span><span class="s2">"vllm"</span><span class="p">,</span>
     <span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
             <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
@@ -442,7 +442,7 @@ document.write(`
 </div>
 <p>在<code class="docutils literal notranslate"><span class="pre">SlimModelFactory</span></code>中会自动创建模型全局列表，调用时直接指定模型的Class名字即可，比如：<code class="docutils literal notranslate"><span class="pre">Qwen</span></code>，创建model如下所示：</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="bp">self</span><span class="o">.</span><span class="n">slim_model</span> <span class="o">=</span> <span class="n">SlimModelFactory</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
-   <span class="s2">&quot;Qwen&quot;</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">,</span> <span class="n">deploy_backend</span><span class="o">=</span><span class="n">deploy_backend</span>
+   <span class="s2">"Qwen"</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">,</span> <span class="n">deploy_backend</span><span class="o">=</span><span class="n">deploy_backend</span>
 <span class="p">)</span>
 </pre></div>
 </div>
@@ -459,11 +459,11 @@ document.write(`
 </div>
 <p>在<code class="docutils literal notranslate"><span class="pre">CompressorFactory</span></code>中会自动创建压缩算法全局列表，调用时直接指定压缩算法的Class名字即可，比如创建PTQ，如下所示：</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">slim_config</span> <span class="o">=</span> <span class="p">{</span>
-   <span class="s2">&quot;global_config&quot;</span><span class="p">:</span> <span class="n">global_config</span><span class="p">,</span>
-   <span class="s2">&quot;compress_config&quot;</span><span class="p">:</span> <span class="n">compress_config</span><span class="p">,</span>
+   <span class="s2">"global_config"</span><span class="p">:</span> <span class="n">global_config</span><span class="p">,</span>
+   <span class="s2">"compress_config"</span><span class="p">:</span> <span class="n">compress_config</span><span class="p">,</span>
 <span class="p">}</span>
 <span class="bp">self</span><span class="o">.</span><span class="n">compressor</span> <span class="o">=</span> <span class="n">CompressorFactory</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
-   <span class="s2">&quot;PTQ&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">slim_model</span><span class="p">,</span> <span class="n">slim_config</span><span class="o">=</span><span class="n">slim_config</span>
+   <span class="s2">"PTQ"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">slim_model</span><span class="p">,</span> <span class="n">slim_config</span><span class="o">=</span><span class="n">slim_config</span>
 <span class="p">)</span>
 
 </pre></div>

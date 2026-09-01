@@ -521,7 +521,7 @@ uv pip install -U triton-windows
 <span class="k">set</span> <span class="nv">INCLUDE</span><span class="p">=</span>
 <span class="k">set</span> <span class="nv">LIB</span><span class="p">=</span>
 <span class="k">set</span> <span class="nv">LIBPATH</span><span class="p">=</span>
-<span class="k">call</span> <span class="s2">&quot;C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat&quot;</span> x64
+<span class="k">call</span> <span class="s2">"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat"</span> x64
 
 <span class="p">:</span><span class="c1">: Configure CUDA environment</span>
 <span class="k">set</span> <span class="nv">CUDA_HOME</span><span class="p">=</span>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.8
@@ -536,7 +536,7 @@ uv pip install -U triton-windows
 python setup.py bdist_wheel
 
 <span class="p">:</span><span class="c1">: Verify FP8 Triton kernels are working</span>
-python -c <span class="s2">&quot;import torch; from angelslim.compressor.diffusion.kernels.python.quantizers import fp8_per_block_quant_triton; from angelslim.compressor.diffusion.kernels.python.gemm import fp8_gemm_triton_block; a,b=torch.randn(128,256,device=&#39;cuda&#39;),torch.randn(512,256,device=&#39;cuda&#39;); aq,a_s=fp8_per_block_quant_triton(a); bq,b_s=fp8_per_block_quant_triton(b); c=fp8_gemm_triton_block(aq,a_s,bq,b_s); print(f&#39;FP8 GEMM OK: {c.shape}, {c.dtype}&#39;)&quot;</span>
+python -c <span class="s2">"import torch; from angelslim.compressor.diffusion.kernels.python.quantizers import fp8_per_block_quant_triton; from angelslim.compressor.diffusion.kernels.python.gemm import fp8_gemm_triton_block; a,b=torch.randn(128,256,device='cuda'),torch.randn(512,256,device='cuda'); aq,a_s=fp8_per_block_quant_triton(a); bq,b_s=fp8_per_block_quant_triton(b); c=fp8_gemm_triton_block(aq,a_s,bq,b_s); print(f'FP8 GEMM OK: {c.shape}, {c.dtype}')"</span>
 </pre></div>
 </div>
 <p><strong>Requirements:</strong></p>

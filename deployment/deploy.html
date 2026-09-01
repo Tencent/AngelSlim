@@ -429,30 +429,30 @@ document.write(`
 <p>首先根据<a class="reference internal" href="../getting_started/quickstrat.html"><span class="std std-doc">快速开始文档</span></a>指引，完成量化并保存模型。量化相关配置会自动存入模型保存路径下的<code class="docutils literal notranslate"><span class="pre">config.json</span></code>文件，用于部署时正确加载量化模型。</p>
 <p>根据快速开始文档中的指引，存储的压缩模型路径下config.json文件中，增加以下配置，在部署过程中用于正确加载量化模型。</p>
 <p>以<code class="docutils literal notranslate"><span class="pre">fp8</span></code>静态量化为例，量化配置如下：</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="s2">&quot;quantization_config&quot;</span><span class="p">:</span> <span class="p">{</span>
-  <span class="s2">&quot;config_groups&quot;</span><span class="p">:</span> <span class="p">{</span>
-    <span class="s2">&quot;group_0&quot;</span><span class="p">:</span> <span class="p">{</span>
-      <span class="s2">&quot;targets&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;Linear&quot;</span><span class="p">],</span>
-      <span class="s2">&quot;input_activations&quot;</span><span class="p">:</span> <span class="p">{</span>
-        <span class="s2">&quot;num_bits&quot;</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span>
-        <span class="s2">&quot;strategy&quot;</span><span class="p">:</span> <span class="s2">&quot;tensor&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;dynamic&quot;</span><span class="p">:</span> <span class="n">false</span><span class="p">,</span>
-        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;float&quot;</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="s2">"quantization_config"</span><span class="p">:</span> <span class="p">{</span>
+  <span class="s2">"config_groups"</span><span class="p">:</span> <span class="p">{</span>
+    <span class="s2">"group_0"</span><span class="p">:</span> <span class="p">{</span>
+      <span class="s2">"targets"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"Linear"</span><span class="p">],</span>
+      <span class="s2">"input_activations"</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">"num_bits"</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span>
+        <span class="s2">"strategy"</span><span class="p">:</span> <span class="s2">"tensor"</span><span class="p">,</span>
+        <span class="s2">"dynamic"</span><span class="p">:</span> <span class="n">false</span><span class="p">,</span>
+        <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"float"</span>
       <span class="p">},</span>
-      <span class="s2">&quot;weights&quot;</span><span class="p">:</span> <span class="p">{</span>
-        <span class="s2">&quot;num_bits&quot;</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span>
-        <span class="s2">&quot;strategy&quot;</span><span class="p">:</span> <span class="s2">&quot;tensor&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;dynamic&quot;</span><span class="p">:</span> <span class="n">false</span><span class="p">,</span>
-        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;float&quot;</span>
+      <span class="s2">"weights"</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">"num_bits"</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span>
+        <span class="s2">"strategy"</span><span class="p">:</span> <span class="s2">"tensor"</span><span class="p">,</span>
+        <span class="s2">"dynamic"</span><span class="p">:</span> <span class="n">false</span><span class="p">,</span>
+        <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"float"</span>
       <span class="p">}</span>
     <span class="p">}</span>
   <span class="p">},</span>
-  <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;naive-quantized&quot;</span><span class="p">,</span>
-  <span class="s2">&quot;ignored_layers&quot;</span><span class="p">:</span> <span class="p">[</span>
-    <span class="s2">&quot;lm_head&quot;</span>
+  <span class="s2">"format"</span><span class="p">:</span> <span class="s2">"naive-quantized"</span><span class="p">,</span>
+  <span class="s2">"ignored_layers"</span><span class="p">:</span> <span class="p">[</span>
+    <span class="s2">"lm_head"</span>
   <span class="p">],</span>
-  <span class="s2">&quot;quant_method&quot;</span><span class="p">:</span> <span class="s2">&quot;compressed-tensors&quot;</span><span class="p">,</span>
-  <span class="s2">&quot;quantization_status&quot;</span><span class="p">:</span> <span class="s2">&quot;compressed&quot;</span>
+  <span class="s2">"quant_method"</span><span class="p">:</span> <span class="s2">"compressed-tensors"</span><span class="p">,</span>
+  <span class="s2">"quantization_status"</span><span class="p">:</span> <span class="s2">"compressed"</span>
 <span class="p">},</span>
 </pre></div>
 </div>
@@ -461,13 +461,13 @@ document.write(`
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForCausalLM</span><span class="p">,</span> <span class="n">AutoTokenizer</span>
 <span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span>
     <span class="n">model_path</span><span class="p">,</span>
-    <span class="n">device_map</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+    <span class="n">device_map</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span>
     <span class="n">trust_remote_code</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-    <span class="n">torch_dtype</span><span class="o">=</span><span class="s1">&#39;auto&#39;</span><span class="p">,</span>
+    <span class="n">torch_dtype</span><span class="o">=</span><span class="s1">'auto'</span><span class="p">,</span>
     <span class="n">low_cpu_mem_usage</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_path</span><span class="p">)</span>
-<span class="n">inputs</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="s2">&quot;Hello, my name is&quot;</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+<span class="n">inputs</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="s2">"Hello, my name is"</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">"pt"</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
 <span class="n">outputs</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="o">**</span><span class="n">inputs</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">outputs</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
 </pre></div>
@@ -480,7 +480,7 @@ document.write(`
 <ul>
 <li><p>环境配置：</p>
 <p>为保证vLLM环境的正常运行，请使用以下命令安装所需依赖：</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;vllm&gt;=0.8.5.post1&quot;</span>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"vllm&gt;=0.8.5.post1"</span>
 </pre></div>
 </div>
 </li>
@@ -547,7 +547,7 @@ document.write(`
 <h3>SGLang<a class="headerlink" href="#sglang" title="Link to this heading">#</a></h3>
 <ul>
 <li><p>环境配置：</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sglang[all]&gt;=0.4.6.post1&quot;</span>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"sglang[all]&gt;=0.4.6.post1"</span>
 </pre></div>
 </div>
 </li>
@@ -599,27 +599,27 @@ document.write(`
 </ul>
 <div class="sphinx-tabs docutils container">
 <div aria-label="Tabbed content" role="tablist"><button aria-controls="panel-1-1-0" aria-selected="true" class="sphinx-tabs-tab" id="tab-1-1-0" name="1-0" role="tab" tabindex="0">Shell</button><button aria-controls="panel-1-1-1" aria-selected="false" class="sphinx-tabs-tab" id="tab-1-1-1" name="1-1" role="tab" tabindex="-1">Python</button></div><div aria-labelledby="tab-1-1-0" class="sphinx-tabs-panel" id="panel-1-1-0" name="1-0" role="tabpanel" tabindex="0"><div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span>curl<span class="w"> </span>http://localhost:8080/v1/completions<span class="w"> </span><span class="se">\</span>
-<span class="linenos"> 2</span><span class="w">  </span>-H<span class="w"> </span><span class="s1">&#39;Content-Type: application/json&#39;</span><span class="w"> </span><span class="se">\</span>
-<span class="linenos"> 3</span><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
-<span class="linenos"> 4</span><span class="s1">    &quot;model&quot;: &quot;&#39;</span><span class="s2">&quot;</span><span class="nv">$MODEL_PATH</span><span class="s2">&quot;</span><span class="s1">&#39;&quot;,</span>
-<span class="linenos"> 5</span><span class="s1">    &quot;prompt&quot;: &quot;翻译为中文: Hello world&quot;,</span>
-<span class="linenos"> 6</span><span class="s1">    &quot;max_tokens&quot;: 100,</span>
-<span class="linenos"> 7</span><span class="s1">    &quot;temperature&quot;: 0.5,</span>
-<span class="linenos"> 8</span><span class="s1">    &quot;top_p&quot;: 0.9,</span>
-<span class="linenos"> 9</span><span class="s1">    &quot;top_k&quot;: 5</span>
-<span class="linenos">10</span><span class="s1">  }&#39;</span>
+<span class="linenos"> 2</span><span class="w">  </span>-H<span class="w"> </span><span class="s1">'Content-Type: application/json'</span><span class="w"> </span><span class="se">\</span>
+<span class="linenos"> 3</span><span class="w">  </span>-d<span class="w"> </span><span class="s1">'{</span>
+<span class="linenos"> 4</span><span class="s1">    "model": "'</span><span class="s2">"</span><span class="nv">$MODEL_PATH</span><span class="s2">"</span><span class="s1">'",</span>
+<span class="linenos"> 5</span><span class="s1">    "prompt": "翻译为中文: Hello world",</span>
+<span class="linenos"> 6</span><span class="s1">    "max_tokens": 100,</span>
+<span class="linenos"> 7</span><span class="s1">    "temperature": 0.5,</span>
+<span class="linenos"> 8</span><span class="s1">    "top_p": 0.9,</span>
+<span class="linenos"> 9</span><span class="s1">    "top_k": 5</span>
+<span class="linenos">10</span><span class="s1">  }'</span>
 </pre></div>
 </div>
 </div><div aria-labelledby="tab-1-1-1" class="sphinx-tabs-panel" hidden="true" id="panel-1-1-1" name="1-1" role="tabpanel" tabindex="0"><div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span><span class="kn">from</span><span class="w"> </span><span class="nn">openai</span><span class="w"> </span><span class="kn">import</span> <span class="n">OpenAI</span>
-<span class="linenos"> 2</span><span class="n">client</span> <span class="o">=</span> <span class="n">OpenAI</span><span class="p">(</span><span class="n">api_key</span><span class="o">=</span><span class="s2">&quot;EMPTY&quot;</span><span class="p">,</span> <span class="n">base_url</span><span class="o">=</span><span class="s2">&quot;http://localhost:8080/v1&quot;</span><span class="p">)</span>
+<span class="linenos"> 2</span><span class="n">client</span> <span class="o">=</span> <span class="n">OpenAI</span><span class="p">(</span><span class="n">api_key</span><span class="o">=</span><span class="s2">"EMPTY"</span><span class="p">,</span> <span class="n">base_url</span><span class="o">=</span><span class="s2">"http://localhost:8080/v1"</span><span class="p">)</span>
 <span class="linenos"> 3</span>
 <span class="linenos"> 4</span><span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
 <span class="linenos"> 5</span>    <span class="n">model</span><span class="o">=</span><span class="n">MODEL_PATH</span><span class="p">,</span>
-<span class="linenos"> 6</span>    <span class="n">prompt</span><span class="o">=</span><span class="s2">&quot;翻译为中文: Hello world&quot;</span><span class="p">,</span>
+<span class="linenos"> 6</span>    <span class="n">prompt</span><span class="o">=</span><span class="s2">"翻译为中文: Hello world"</span><span class="p">,</span>
 <span class="linenos"> 7</span>    <span class="n">max_tokens</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
 <span class="linenos"> 8</span>    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>
 <span class="linenos"> 9</span>    <span class="n">top_p</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>
-<span class="linenos">10</span>    <span class="n">extra_body</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;top_k&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">}</span>
+<span class="linenos">10</span>    <span class="n">extra_body</span><span class="o">=</span><span class="p">{</span><span class="s2">"top_k"</span><span class="p">:</span> <span class="mi">5</span><span class="p">}</span>
 <span class="linenos">11</span><span class="p">)</span>
 <span class="linenos">12</span><span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">choices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">text</span><span class="p">)</span>
 </pre></div>
@@ -632,25 +632,25 @@ document.write(`
 </ul>
 <div class="sphinx-tabs docutils container">
 <div aria-label="Tabbed content" role="tablist"><button aria-controls="panel-2-2-0" aria-selected="true" class="sphinx-tabs-tab" id="tab-2-2-0" name="2-0" role="tab" tabindex="0">Shell</button><button aria-controls="panel-2-2-1" aria-selected="false" class="sphinx-tabs-tab" id="tab-2-2-1" name="2-1" role="tab" tabindex="-1">Python</button></div><div aria-labelledby="tab-2-2-0" class="sphinx-tabs-panel" id="panel-2-2-0" name="2-0" role="tabpanel" tabindex="0"><div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="linenos">1</span>curl<span class="w"> </span>http://localhost:8080/v1/chat/completions<span class="w"> </span><span class="se">\</span>
-<span class="linenos">2</span><span class="w">  </span>-H<span class="w"> </span><span class="s1">&#39;Content-Type: application/json&#39;</span><span class="w"> </span><span class="se">\</span>
-<span class="linenos">3</span><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
-<span class="linenos">4</span><span class="s1">    &quot;model&quot;: &quot;&#39;</span><span class="s2">&quot;</span><span class="nv">$MODEL_PATH</span><span class="s2">&quot;</span><span class="s1">&#39;&quot;,</span>
-<span class="linenos">5</span><span class="s1">    &quot;messages&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;翻译为中文: Hello world&quot;}],</span>
-<span class="linenos">6</span><span class="s1">    &quot;temperature&quot;: 0.5,</span>
-<span class="linenos">7</span><span class="s1">    &quot;top_p&quot;: 0.9,</span>
-<span class="linenos">8</span><span class="s1">    &quot;top_k&quot;: 5</span>
-<span class="linenos">9</span><span class="s1">  }&#39;</span>
+<span class="linenos">2</span><span class="w">  </span>-H<span class="w"> </span><span class="s1">'Content-Type: application/json'</span><span class="w"> </span><span class="se">\</span>
+<span class="linenos">3</span><span class="w">  </span>-d<span class="w"> </span><span class="s1">'{</span>
+<span class="linenos">4</span><span class="s1">    "model": "'</span><span class="s2">"</span><span class="nv">$MODEL_PATH</span><span class="s2">"</span><span class="s1">'",</span>
+<span class="linenos">5</span><span class="s1">    "messages": [{"role": "user", "content": "翻译为中文: Hello world"}],</span>
+<span class="linenos">6</span><span class="s1">    "temperature": 0.5,</span>
+<span class="linenos">7</span><span class="s1">    "top_p": 0.9,</span>
+<span class="linenos">8</span><span class="s1">    "top_k": 5</span>
+<span class="linenos">9</span><span class="s1">  }'</span>
 </pre></div>
 </div>
 </div><div aria-labelledby="tab-2-2-1" class="sphinx-tabs-panel" hidden="true" id="panel-2-2-1" name="2-1" role="tabpanel" tabindex="0"><div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span><span class="kn">from</span><span class="w"> </span><span class="nn">openai</span><span class="w"> </span><span class="kn">import</span> <span class="n">OpenAI</span>
-<span class="linenos"> 2</span><span class="n">client</span> <span class="o">=</span> <span class="n">OpenAI</span><span class="p">(</span><span class="n">api_key</span><span class="o">=</span><span class="s2">&quot;EMPTY&quot;</span><span class="p">,</span> <span class="n">base_url</span><span class="o">=</span><span class="s2">&quot;http://localhost:8080/v1&quot;</span><span class="p">)</span>
+<span class="linenos"> 2</span><span class="n">client</span> <span class="o">=</span> <span class="n">OpenAI</span><span class="p">(</span><span class="n">api_key</span><span class="o">=</span><span class="s2">"EMPTY"</span><span class="p">,</span> <span class="n">base_url</span><span class="o">=</span><span class="s2">"http://localhost:8080/v1"</span><span class="p">)</span>
 <span class="linenos"> 3</span>
 <span class="linenos"> 4</span><span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
 <span class="linenos"> 5</span>    <span class="n">model</span><span class="o">=</span><span class="n">MODEL_PATH</span><span class="p">,</span>
-<span class="linenos"> 6</span>    <span class="n">messages</span><span class="o">=</span><span class="p">[{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="s2">&quot;翻译为中文: Hello world&quot;</span><span class="p">}],</span>
+<span class="linenos"> 6</span>    <span class="n">messages</span><span class="o">=</span><span class="p">[{</span><span class="s2">"role"</span><span class="p">:</span> <span class="s2">"user"</span><span class="p">,</span> <span class="s2">"content"</span><span class="p">:</span> <span class="s2">"翻译为中文: Hello world"</span><span class="p">}],</span>
 <span class="linenos"> 7</span>    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>
 <span class="linenos"> 8</span>    <span class="n">top_p</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>
-<span class="linenos"> 9</span>    <span class="n">extra_body</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;top_k&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">}</span>
+<span class="linenos"> 9</span>    <span class="n">extra_body</span><span class="o">=</span><span class="p">{</span><span class="s2">"top_k"</span><span class="p">:</span> <span class="mi">5</span><span class="p">}</span>
 <span class="linenos">10</span><span class="p">)</span>
 <span class="linenos">11</span><span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">choices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">message</span><span class="o">.</span><span class="n">content</span><span class="p">)</span>
 </pre></div>
@@ -663,31 +663,31 @@ document.write(`
 </ul>
 <div class="sphinx-tabs docutils container">
 <div aria-label="Tabbed content" role="tablist"><button aria-controls="panel-3-3-0" aria-selected="true" class="sphinx-tabs-tab" id="tab-3-3-0" name="3-0" role="tab" tabindex="0">Shell</button><button aria-controls="panel-3-3-1" aria-selected="false" class="sphinx-tabs-tab" id="tab-3-3-1" name="3-1" role="tab" tabindex="-1">Python</button></div><div aria-labelledby="tab-3-3-0" class="sphinx-tabs-panel" id="panel-3-3-0" name="3-0" role="tabpanel" tabindex="0"><div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span>curl<span class="w"> </span>http://localhost:8080/v1/chat/completions<span class="w"> </span><span class="se">\</span>
-<span class="linenos"> 2</span><span class="w">  </span>-H<span class="w"> </span><span class="s1">&#39;Content-Type: application/json&#39;</span><span class="w"> </span><span class="se">\</span>
-<span class="linenos"> 3</span><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
-<span class="linenos"> 4</span><span class="s1">    &quot;model&quot;: &quot;&#39;</span><span class="s2">&quot;</span><span class="nv">$MODEL_PATH</span><span class="s2">&quot;</span><span class="s1">&#39;&quot;,</span>
-<span class="linenos"> 5</span><span class="s1">    &quot;messages&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;写一个故事&quot;}],</span>
-<span class="linenos"> 6</span><span class="s1">    &quot;stream&quot;: true,</span>
-<span class="linenos"> 7</span><span class="s1">    &quot;temperature&quot;: 0.5,</span>
-<span class="linenos"> 8</span><span class="s1">    &quot;top_p&quot;: 0.9,</span>
-<span class="linenos"> 9</span><span class="s1">    &quot;top_k&quot;: 5</span>
-<span class="linenos">10</span><span class="s1">  }&#39;</span>
+<span class="linenos"> 2</span><span class="w">  </span>-H<span class="w"> </span><span class="s1">'Content-Type: application/json'</span><span class="w"> </span><span class="se">\</span>
+<span class="linenos"> 3</span><span class="w">  </span>-d<span class="w"> </span><span class="s1">'{</span>
+<span class="linenos"> 4</span><span class="s1">    "model": "'</span><span class="s2">"</span><span class="nv">$MODEL_PATH</span><span class="s2">"</span><span class="s1">'",</span>
+<span class="linenos"> 5</span><span class="s1">    "messages": [{"role": "user", "content": "写一个故事"}],</span>
+<span class="linenos"> 6</span><span class="s1">    "stream": true,</span>
+<span class="linenos"> 7</span><span class="s1">    "temperature": 0.5,</span>
+<span class="linenos"> 8</span><span class="s1">    "top_p": 0.9,</span>
+<span class="linenos"> 9</span><span class="s1">    "top_k": 5</span>
+<span class="linenos">10</span><span class="s1">  }'</span>
 </pre></div>
 </div>
 </div><div aria-labelledby="tab-3-3-1" class="sphinx-tabs-panel" hidden="true" id="panel-3-3-1" name="3-1" role="tabpanel" tabindex="0"><div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span><span class="kn">from</span><span class="w"> </span><span class="nn">openai</span><span class="w"> </span><span class="kn">import</span> <span class="n">OpenAI</span>
-<span class="linenos"> 2</span><span class="n">client</span> <span class="o">=</span> <span class="n">OpenAI</span><span class="p">(</span><span class="n">api_key</span><span class="o">=</span><span class="s2">&quot;EMPTY&quot;</span><span class="p">,</span> <span class="n">base_url</span><span class="o">=</span><span class="s2">&quot;http://localhost:8080/v1&quot;</span><span class="p">)</span>
+<span class="linenos"> 2</span><span class="n">client</span> <span class="o">=</span> <span class="n">OpenAI</span><span class="p">(</span><span class="n">api_key</span><span class="o">=</span><span class="s2">"EMPTY"</span><span class="p">,</span> <span class="n">base_url</span><span class="o">=</span><span class="s2">"http://localhost:8080/v1"</span><span class="p">)</span>
 <span class="linenos"> 3</span>
 <span class="linenos"> 4</span><span class="n">stream</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
 <span class="linenos"> 5</span>    <span class="n">model</span><span class="o">=</span><span class="n">MODEL_PATH</span><span class="p">,</span>
-<span class="linenos"> 6</span>    <span class="n">messages</span><span class="o">=</span><span class="p">[{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="s2">&quot;写一个故事&quot;</span><span class="p">}],</span>
+<span class="linenos"> 6</span>    <span class="n">messages</span><span class="o">=</span><span class="p">[{</span><span class="s2">"role"</span><span class="p">:</span> <span class="s2">"user"</span><span class="p">,</span> <span class="s2">"content"</span><span class="p">:</span> <span class="s2">"写一个故事"</span><span class="p">}],</span>
 <span class="linenos"> 7</span>    <span class="n">stream</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <span class="linenos"> 8</span>    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.6</span><span class="p">,</span>
 <span class="linenos"> 9</span>    <span class="n">top_p</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>
-<span class="linenos">10</span>    <span class="n">extra_body</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;top_k&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">}</span>
+<span class="linenos">10</span>    <span class="n">extra_body</span><span class="o">=</span><span class="p">{</span><span class="s2">"top_k"</span><span class="p">:</span> <span class="mi">5</span><span class="p">}</span>
 <span class="linenos">11</span><span class="p">)</span>
 <span class="linenos">12</span><span class="k">for</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="n">stream</span><span class="p">:</span>
 <span class="linenos">13</span>    <span class="k">if</span> <span class="n">content</span> <span class="o">:=</span> <span class="n">chunk</span><span class="o">.</span><span class="n">choices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">delta</span><span class="o">.</span><span class="n">content</span><span class="p">:</span>
-<span class="linenos">14</span>        <span class="nb">print</span><span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">flush</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="linenos">14</span>        <span class="nb">print</span><span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">flush</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
 </div>
 </div></div>

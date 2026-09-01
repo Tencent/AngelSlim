@@ -467,7 +467,7 @@ document.write(`
 <p>所有数据需保存在jsonl文件中，训练数据格式可参考:</p>
 <ul>
 <li><p>数据示例:</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;0&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;conversations&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;user&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;xxx&quot;</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;assistant&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;xxx&quot;</span><span class="p">}]}</span>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"0"</span><span class="p">,</span><span class="w"> </span><span class="nt">"conversations"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">"role"</span><span class="p">:</span><span class="w"> </span><span class="s2">"user"</span><span class="p">,</span><span class="w"> </span><span class="nt">"content"</span><span class="p">:</span><span class="w"> </span><span class="s2">"xxx"</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="nt">"role"</span><span class="p">:</span><span class="w"> </span><span class="s2">"assistant"</span><span class="p">,</span><span class="w"> </span><span class="nt">"content"</span><span class="p">:</span><span class="w"> </span><span class="s2">"xxx"</span><span class="p">}]}</span>
 </pre></div>
 </div>
 </li>
@@ -692,7 +692,7 @@ bash<span class="w"> </span>scripts/speculative/train_eagle3_vlm_offline.sh
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/vllm_spec_benchmark.py<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--target_model<span class="w"> </span><span class="si">${</span><span class="nv">TARGET_MODEL_PATH</span><span class="si">}</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--draft_model<span class="w"> </span><span class="si">${</span><span class="nv">EAGLE_MODEL_PATH</span><span class="si">}</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--dataset<span class="w"> </span><span class="s2">&quot;gsm8k&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--dataset<span class="w"> </span><span class="s2">"gsm8k"</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--output_file<span class="w"> </span><span class="si">${</span><span class="nv">OUTPUT_FILE</span><span class="si">}</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--method<span class="w"> </span>eagle3<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--output_len<span class="w"> </span><span class="m">1024</span><span class="w"> </span><span class="se">\</span>
@@ -748,7 +748,7 @@ bash<span class="w"> </span>scripts/speculative/train_eagle3_vlm_offline.sh
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/vllm_spec_benchmark.py<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--target_model<span class="w"> </span>/path/to/base/model<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--draft_model<span class="w"> </span>/path/to/eagle/model<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--dataset<span class="w"> </span><span class="s2">&quot;gsm8k&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--dataset<span class="w"> </span><span class="s2">"gsm8k"</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--output_file<span class="w"> </span>./results/benchmark_stats.jsonl<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--method<span class="w"> </span>eagle3<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--output_len<span class="w"> </span><span class="m">1024</span><span class="w"> </span><span class="se">\</span>
@@ -759,7 +759,7 @@ bash<span class="w"> </span>scripts/speculative/train_eagle3_vlm_offline.sh
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/vllm_spec_benchmark.py<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--target_model<span class="w"> </span>/path/to/base/model<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--draft_model<span class="w"> </span>/path/to/eagle/model<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--dataset<span class="w"> </span><span class="s2">&quot;mt_bench,gsm8k,/path/to/local/question.jsonl&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--dataset<span class="w"> </span><span class="s2">"mt_bench,gsm8k,/path/to/local/question.jsonl"</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--output_file<span class="w"> </span>./results/benchmark_stats.jsonl<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--method<span class="w"> </span>eagle3<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--output_len<span class="w"> </span><span class="m">1024</span><span class="w"> </span><span class="se">\</span>
@@ -769,7 +769,7 @@ bash<span class="w"> </span>scripts/speculative/train_eagle3_vlm_offline.sh
 <p><strong>使用基线模式（无投机采样）进行对比：</strong></p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/vllm_spec_benchmark.py<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--target_model<span class="w"> </span>/path/to/base/model<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--dataset<span class="w"> </span><span class="s2">&quot;gsm8k&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--dataset<span class="w"> </span><span class="s2">"gsm8k"</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--method<span class="w"> </span>ar<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--output_len<span class="w"> </span><span class="m">1024</span>
 </pre></div>
@@ -778,7 +778,7 @@ bash<span class="w"> </span>scripts/speculative/train_eagle3_vlm_offline.sh
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/vllm_spec_benchmark.py<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--target_model<span class="w"> </span>/path/to/base/model<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--draft_model<span class="w"> </span>/path/to/eagle/model<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--dataset<span class="w"> </span><span class="s2">&quot;gsm8k&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--dataset<span class="w"> </span><span class="s2">"gsm8k"</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--method<span class="w"> </span>eagle3<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--tp<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--output_len<span class="w"> </span><span class="m">1024</span>

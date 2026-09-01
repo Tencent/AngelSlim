@@ -522,7 +522,7 @@ document.write(`
 
 <span class="c1"># 创建 CacheHelper 并启用缓存</span>
 <span class="n">transformer</span> <span class="o">=</span> <span class="n">HunyuanVideo_1_5_DiffusionTransformer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span>
-    <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">cached_folder</span><span class="p">,</span> <span class="s2">&quot;transformer&quot;</span><span class="p">,</span> <span class="n">transformer_version</span><span class="p">),</span> <span class="n">torch_dtype</span><span class="o">=</span><span class="n">transformer_dtype</span><span class="p">,</span> 
+    <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">cached_folder</span><span class="p">,</span> <span class="s2">"transformer"</span><span class="p">,</span> <span class="n">transformer_version</span><span class="p">),</span> <span class="n">torch_dtype</span><span class="o">=</span><span class="n">transformer_dtype</span><span class="p">,</span> 
     <span class="n">low_cpu_mem_usage</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">transformer_init_device</span><span class="p">)</span>
 
@@ -530,25 +530,25 @@ document.write(`
 <span class="k">if</span> <span class="n">infer_state</span><span class="o">.</span><span class="n">enable_cache</span><span class="p">:</span>
     <span class="n">no_cache_steps</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">infer_state</span><span class="o">.</span><span class="n">cache_start_step</span><span class="p">))</span> <span class="o">+</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">infer_state</span><span class="o">.</span><span class="n">cache_start_step</span><span class="p">,</span> <span class="n">infer_state</span><span class="o">.</span><span class="n">cache_end_step</span><span class="p">,</span> <span class="n">infer_state</span><span class="o">.</span><span class="n">cache_step_interval</span><span class="p">))</span> <span class="o">+</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">infer_state</span><span class="o">.</span><span class="n">cache_end_step</span><span class="p">,</span> <span class="n">infer_state</span><span class="o">.</span><span class="n">total_steps</span><span class="p">))</span>
     <span class="n">cache_type</span> <span class="o">=</span> <span class="n">infer_state</span><span class="o">.</span><span class="n">cache_type</span>
-    <span class="k">if</span> <span class="n">cache_type</span> <span class="o">==</span> <span class="s1">&#39;deepcache&#39;</span><span class="p">:</span>
-        <span class="n">no_cache_block_id</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;double_blocks&quot;</span><span class="p">:</span><span class="n">infer_state</span><span class="o">.</span><span class="n">no_cache_block_id</span><span class="p">}</span>
+    <span class="k">if</span> <span class="n">cache_type</span> <span class="o">==</span> <span class="s1">'deepcache'</span><span class="p">:</span>
+        <span class="n">no_cache_block_id</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"double_blocks"</span><span class="p">:</span><span class="n">infer_state</span><span class="o">.</span><span class="n">no_cache_block_id</span><span class="p">}</span>
         <span class="n">cache_helper</span> <span class="o">=</span> <span class="n">DeepCacheHelper</span><span class="p">(</span>
             <span class="n">double_blocks</span><span class="o">=</span><span class="n">transformer</span><span class="o">.</span><span class="n">double_blocks</span><span class="p">,</span>
             <span class="n">no_cache_steps</span><span class="o">=</span><span class="n">no_cache_steps</span><span class="p">,</span>
             <span class="n">no_cache_block_id</span><span class="o">=</span><span class="n">no_cache_block_id</span><span class="p">,</span>
         <span class="p">)</span>
-    <span class="k">elif</span> <span class="n">cache_type</span> <span class="o">==</span> <span class="s1">&#39;teacache&#39;</span><span class="p">:</span>
+    <span class="k">elif</span> <span class="n">cache_type</span> <span class="o">==</span> <span class="s1">'teacache'</span><span class="p">:</span>
         <span class="n">cache_helper</span> <span class="o">=</span> <span class="n">TeaCacheHelper</span><span class="p">(</span>
             <span class="n">double_blocks</span><span class="o">=</span><span class="n">transformer</span><span class="o">.</span><span class="n">double_blocks</span><span class="p">,</span>
             <span class="n">no_cache_steps</span><span class="o">=</span><span class="n">no_cache_steps</span><span class="p">,</span>
         <span class="p">)</span>
-    <span class="k">elif</span> <span class="n">cache_type</span> <span class="o">==</span> <span class="s1">&#39;taylorcache&#39;</span><span class="p">:</span>
+    <span class="k">elif</span> <span class="n">cache_type</span> <span class="o">==</span> <span class="s1">'taylorcache'</span><span class="p">:</span>
         <span class="n">cache_helper</span> <span class="o">=</span> <span class="n">TaylorCacheHelper</span><span class="p">(</span>
             <span class="n">double_blocks</span><span class="o">=</span><span class="n">transformer</span><span class="o">.</span><span class="n">double_blocks</span><span class="p">,</span>
             <span class="n">no_cache_steps</span><span class="o">=</span><span class="n">no_cache_steps</span><span class="p">,</span>
         <span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown cache type: </span><span class="si">{</span><span class="n">cache_type</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unknown cache type: </span><span class="si">{</span><span class="n">cache_type</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="n">cache_helper</span><span class="o">.</span><span class="n">enable</span><span class="p">()</span>
 <span class="k">else</span><span class="p">:</span>
     <span class="n">cache_helper</span> <span class="o">=</span> <span class="kc">None</span>
@@ -562,7 +562,7 @@ document.write(`
         <span class="o">...</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">):</span>
-        <span class="n">cache_helper</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;cache_helper&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">cache_helper</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">'cache_helper'</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">cache_helper</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">cache_helper</span><span class="o">.</span><span class="n">clear_states</span><span class="p">()</span>
             <span class="k">assert</span> <span class="n">num_inference_steps</span> <span class="o">==</span> <span class="n">get_infer_state</span><span class="p">()</span><span class="o">.</span><span class="n">total_steps</span>
@@ -593,7 +593,7 @@ document.write(`
     <span class="n">video_length</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">video_length</span><span class="p">,</span>
     <span class="n">negative_prompt</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">negative_prompt</span><span class="p">,</span>
     <span class="n">seed</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">seed</span><span class="p">,</span>
-    <span class="n">output_type</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">,</span>
+    <span class="n">output_type</span><span class="o">=</span><span class="s2">"pt"</span><span class="p">,</span>
     <span class="n">prompt_rewrite</span><span class="o">=</span><span class="n">enable_rewrite</span><span class="p">,</span>
     <span class="n">return_pre_sr_video</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">save_pre_sr_video</span><span class="p">,</span>
     <span class="o">**</span><span class="n">extra_kwargs</span><span class="p">,</span>

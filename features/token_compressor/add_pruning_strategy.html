@@ -454,11 +454,11 @@ document.write(`
 <span class="p">)</span>
 
 <span class="k">def</span><span class="w"> </span><span class="nf">bottom_k_attention_pruning</span><span class="p">(</span><span class="n">context</span><span class="p">:</span> <span class="n">PruningContext</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    自定义策略实现：选取 Vision Encoder 指定层注意力最低的 Token。</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="c1"># 1. 提取超参数与元数据</span>
-    <span class="n">ratio</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ratio&quot;</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">)</span>  <span class="c1"># 剪枝比例</span>
+    <span class="n">ratio</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"ratio"</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">)</span>  <span class="c1"># 剪枝比例</span>
     <span class="n">target_layer</span> <span class="o">=</span> <span class="mi">5</span>                  <span class="c1"># 目标层索引</span>
     <span class="n">input_ids</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">input_ids</span>
     <span class="n">device</span> <span class="o">=</span> <span class="n">input_ids</span><span class="o">.</span><span class="n">device</span>
@@ -478,7 +478,7 @@ document.write(`
     <span class="n">k_tensor</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">vit_k</span><span class="p">[</span><span class="n">target_layer</span><span class="p">]</span>
     
     <span class="k">if</span> <span class="n">q_tensor</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">k_tensor</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Layer </span><span class="si">{</span><span class="n">target_layer</span><span class="si">}</span><span class="s2"> tensors not captured. Check requirements in YAML.&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Layer </span><span class="si">{</span><span class="n">target_layer</span><span class="si">}</span><span class="s2"> tensors not captured. Check requirements in YAML."</span><span class="p">)</span>
 
     <span class="c1"># 4. 重构注意力图</span>
     <span class="c1"># _recompute_attention_maps_for_all_images 会根据 Q/K 计算每张图的内部注意力分布</span>
@@ -520,8 +520,8 @@ document.write(`
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">.algorithm.my_custom_file</span><span class="w"> </span><span class="kn">import</span> <span class="n">bottom_k_attention_pruning</span>
 
 <span class="n">PRUNING_STRATEGIES</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Callable</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s2">&quot;idpruner&quot;</span><span class="p">:</span> <span class="n">idpruner</span><span class="p">,</span>
-    <span class="s2">&quot;bottom_k_attn&quot;</span><span class="p">:</span> <span class="n">bottom_k_attention_pruning</span><span class="p">,</span> <span class="c1"># 注册名，用于 YAML 配置</span>
+    <span class="s2">"idpruner"</span><span class="p">:</span> <span class="n">idpruner</span><span class="p">,</span>
+    <span class="s2">"bottom_k_attn"</span><span class="p">:</span> <span class="n">bottom_k_attention_pruning</span><span class="p">,</span> <span class="c1"># 注册名，用于 YAML 配置</span>
     <span class="o">...</span>
 <span class="p">}</span>
 </pre></div>
@@ -571,7 +571,7 @@ document.write(`
 <span class="w">    </span><span class="nt">vit_k_layers</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">5</span><span class="p p-Indicator">]</span><span class="w">  </span><span class="c1"># 捕获第 5 层 Key</span>
 <span class="w">  </span><span class="nt">strategies</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">global</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;bottom_k_attn&quot;</span><span class="w"> </span><span class="c1"># 使用注册的算法名</span>
+<span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">"bottom_k_attn"</span><span class="w"> </span><span class="c1"># 使用注册的算法名</span>
 <span class="w">      </span><span class="nt">params</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">ratio</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.75</span>
 </pre></div>
@@ -579,7 +579,7 @@ document.write(`
 <p><strong>运行单次推理验证：</strong></p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/test_token_pruning.py<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--config<span class="w"> </span>configs/qwen2_5_vl/pruning/bottom_k_test.yaml<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--model_path<span class="w"> </span><span class="s2">&quot;Qwen/Qwen2.5-VL-3B-Instruct&quot;</span>
+<span class="w">    </span>--model_path<span class="w"> </span><span class="s2">"Qwen/Qwen2.5-VL-3B-Instruct"</span>
 </pre></div>
 </div>
 </section>

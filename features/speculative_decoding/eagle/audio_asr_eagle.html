@@ -464,7 +464,7 @@ document.write(`
 <p>所有数据需保存在jsonl文件中，训练数据格式可参考:</p>
 <ul>
 <li><p>数据示例: AngelSlim/dataset/librispeech_test/librispeech_eval_10_test.jsonl</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="o">{</span><span class="s2">&quot;id&quot;</span>:<span class="w"> </span><span class="m">5910</span>,<span class="w"> </span><span class="s2">&quot;conversations&quot;</span>:<span class="w"> </span><span class="o">[{</span><span class="s2">&quot;role&quot;</span>:<span class="w"> </span><span class="s2">&quot;user&quot;</span>,<span class="w"> </span><span class="s2">&quot;content&quot;</span>:<span class="w"> </span><span class="o">[{</span><span class="s2">&quot;type&quot;</span>:<span class="w"> </span><span class="s2">&quot;audio&quot;</span>,<span class="w"> </span><span class="s2">&quot;audio&quot;</span>:<span class="w"> </span><span class="s2">&quot;./audios/1580-141083-0008.flac&quot;</span><span class="o">}</span>,<span class="w"> </span><span class="o">{</span><span class="s2">&quot;type&quot;</span>:<span class="w"> </span><span class="s2">&quot;text&quot;</span>,<span class="w"> </span><span class="s2">&quot;text&quot;</span>:<span class="w"> </span><span class="s2">&quot;Detect the language and recognize the speech: &lt;|en|&gt;&quot;</span><span class="o">}]}</span>,<span class="w"> </span><span class="o">{</span><span class="s2">&quot;role&quot;</span>:<span class="w"> </span><span class="s2">&quot;assistant&quot;</span>,<span class="w"> </span><span class="s2">&quot;content&quot;</span>:<span class="w"> </span><span class="o">[{</span><span class="s2">&quot;type&quot;</span>:<span class="w"> </span><span class="s2">&quot;text&quot;</span>,<span class="w"> </span><span class="s2">&quot;text&quot;</span>:<span class="w"> </span><span class="s2">&quot;THE PROOF WAS IN THREE LONG SLIPS I HAD LEFT THEM ALL TOGETHER&quot;</span><span class="o">}]}]}</span>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="o">{</span><span class="s2">"id"</span>:<span class="w"> </span><span class="m">5910</span>,<span class="w"> </span><span class="s2">"conversations"</span>:<span class="w"> </span><span class="o">[{</span><span class="s2">"role"</span>:<span class="w"> </span><span class="s2">"user"</span>,<span class="w"> </span><span class="s2">"content"</span>:<span class="w"> </span><span class="o">[{</span><span class="s2">"type"</span>:<span class="w"> </span><span class="s2">"audio"</span>,<span class="w"> </span><span class="s2">"audio"</span>:<span class="w"> </span><span class="s2">"./audios/1580-141083-0008.flac"</span><span class="o">}</span>,<span class="w"> </span><span class="o">{</span><span class="s2">"type"</span>:<span class="w"> </span><span class="s2">"text"</span>,<span class="w"> </span><span class="s2">"text"</span>:<span class="w"> </span><span class="s2">"Detect the language and recognize the speech: &lt;|en|&gt;"</span><span class="o">}]}</span>,<span class="w"> </span><span class="o">{</span><span class="s2">"role"</span>:<span class="w"> </span><span class="s2">"assistant"</span>,<span class="w"> </span><span class="s2">"content"</span>:<span class="w"> </span><span class="o">[{</span><span class="s2">"type"</span>:<span class="w"> </span><span class="s2">"text"</span>,<span class="w"> </span><span class="s2">"text"</span>:<span class="w"> </span><span class="s2">"THE PROOF WAS IN THREE LONG SLIPS I HAD LEFT THEM ALL TOGETHER"</span><span class="o">}]}]}</span>
 </pre></div>
 </div>
 </li>
@@ -607,14 +607,14 @@ document.write(`
 <p><strong>运行投机采样：</strong></p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/vllm_offline_eagle3_qwen2_audio_bench.py<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--target_model<span class="w"> </span>Qwen/Qwen2-Audio-7B-Instruct<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--draft_model<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$EAGLE_DIR</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--draft_model<span class="w"> </span><span class="s2">"</span><span class="nv">$EAGLE_DIR</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--use_eagle<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--num_spec_tokens<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--num_prompts<span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--temp<span class="w"> </span><span class="m">0</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--max_num_seqs<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--output_len<span class="w"> </span><span class="m">1024</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--output_file<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$OUTPUT_FILE</span><span class="s2">&quot;</span>
+<span class="w">    </span>--output_file<span class="w"> </span><span class="s2">"</span><span class="nv">$OUTPUT_FILE</span><span class="s2">"</span>
 </pre></div>
 </div>
 <p><strong>Baseline基准测试：</strong></p>
@@ -624,7 +624,7 @@ document.write(`
 <span class="w">    </span>--temp<span class="w"> </span><span class="m">0</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--max_num_seqs<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--output_len<span class="w"> </span><span class="m">1024</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--output_file<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$OUTPUT_FILE</span><span class="s2">&quot;</span>
+<span class="w">    </span>--output_file<span class="w"> </span><span class="s2">"</span><span class="nv">$OUTPUT_FILE</span><span class="s2">"</span>
 </pre></div>
 </div>
 </section>
