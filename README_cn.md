@@ -22,7 +22,7 @@
 </p>
 
 ## 📣最新进展
-- [26/07/29] 我们开源了 **AngelSpec**——torch-native、训推分离的投机采样**训练框架**，支持多种 draft 方法，以 **DFly** 与 **MTP + TTT** 为代表，并发布了 **Hy3-A21B** 的 **MTP** 与 **DFly** drafter 权重：DFly 相较 AR 平均端到端加速最高 **2.40×**，**D-cut** 在高并发下额外带来最高 **+15.7%** 吞吐。[[论文]](https://arxiv.org/abs/2607.25852) | [[GitHub]](https://github.com/Tencent/AngelSpec) | [[文档]](https://angelspec.readthedocs.io/) | [[Hugging Face]](https://huggingface.co/collections/AngelSlim/angelspec) 🔥🔥🔥
+- [26/07/29] 我们已发布 hy4 preview [MIX-STQ1_0 版本](https://huggingface.co/AngelSlim/Hy4-preview-GGUF)！模型从 1.5TB 压缩至 214 GiB，在 SWE-bench Pro 上的性能仅下降了 0.7%。借助 [Prima.cpp]，我们 在4090笔记本（32GB 内存，16GB 显存） 以及搭载 4 张 A4000（32GB 内存，每张 16GB 显存）的服务器 上成功运行了该模型，推理速度达到了 1.02 tokens/s。详情请见[博客](https://opencpil.github.io/prima.cpp/blog/hunyuan4-770b-local-devices)和[部署指南](docs/source/_extra/hy4_preview_gguf_guideline.md)！🔥🔥🔥
 - [26/07/20] 我们支持了基于 Megatron-Core 的 Qwen3-MoE 和 Hy3 **量化感知蒸馏**，训练时仅更新量化 scale，并支持 TP/EP/CP/SP 分布式训练。[[文档]](docs/source/features/qad/mcore_qad.md)
 - [26/07/06] 我们支持了 **Hy3**（MoE A21B）模型的 FP8-Static 量化，SmoothQuant 量化. [[文档]](https://github.com/Tencent/AngelSlim/tree/main/scripts/ptq)
 - [26/06/04] 我们发布了 **Stem**，一种稀疏注意力算法，通过在 block 粒度动态选择 top-k 关键块执行 block-sparse attention，加速长上下文 LLM 的 **Prefill** 阶段，在大幅降低延迟的同时实现几乎无损的生成质量。[[文档]](https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/stem.html)
