@@ -98,6 +98,13 @@ class OmniDataset(BaseDataset):
                                 "content": content,
                             }
                         )
+                    else:
+                        conversation.append(
+                            {
+                                "role": m["role"],
+                                "content": [{"type": "text", "text": m["content"]}],
+                            }
+                        )
                 self._process_and_append(conversation)
                 line_count += 1
 
