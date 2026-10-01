@@ -53,10 +53,6 @@ class TextDataset(BaseDataset):
     def _load_hf_dataset(self, data_path: str, num_samples: int, block_size: int = 2048):
         parts = data_path.split(",")
         dataset = load_dataset(*parts)["train"]
-        total_samples = (
-            min(num_samples, len(dataset["text"])) if num_samples > 0 else len(dataset["text"])
-        )
-
         concatenated = {}
         for sample in dataset:
             tokenized = self.processor(sample["text"])
@@ -65,6 +61,9 @@ class TextDataset(BaseDataset):
                     concatenated[key] = []
                 concatenated[key].extend(tokenized[key])
 
+        if not concatenated:
+            return
+
         total = len(concatenated["input_ids"])
         if total >= block_size:
             total = (total // block_size) * block_size
@@ -72,13 +71,18 @@ class TextDataset(BaseDataset):
             k: [t[i : i + block_size] for i in range(0, total, block_size)]
             for k, t in concatenated.items()
         }
+        total_samples = len(result["input_ids"])
+        if num_samples > 0:
+            total_samples = min(num_samples, total_samples)
         for i in range(total_samples):
             inputs = {
                 "input_ids": torch.tensor(result["input_ids"][i]).unsqueeze(0).to(self.device)
             }
             # HF CausalLM models shift labels internally; feed labels == input_ids.
             inputs["labels"] = inputs["input_ids"].clone()
-            inputs["attention_mask"] = torch.tensor(result["attention_mask"][i]).to(self.device)
+            inputs["attention_mask"] = (
+                torch.tensor(result["attention_mask"][i]).unsqueeze(0).to(self.device)
+            )
             self.data.append(inputs)
 
     def _load_parquet_data(self, data_path: str, num_samples: int):
