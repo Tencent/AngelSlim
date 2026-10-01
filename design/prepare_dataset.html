@@ -418,6 +418,7 @@ document.write(`
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#parquet">parquet文件</a></li>
 </ul>
 </li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#hugging-face">Hugging Face文本数据集</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data">DATA文件测试</a></li>
 </ul>
             </nav>
@@ -481,6 +482,11 @@ document.write(`
 </pre></div>
 </div>
 </section>
+</section>
+<section id="hugging-face">
+<h2>Hugging Face文本数据集<a class="headerlink" href="#hugging-face" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">TextDataset</span></code>也支持将<code class="docutils literal notranslate"><span class="pre">data_path</span></code>设置为Hugging Face数据集标识，例如<code class="docutils literal notranslate"><span class="pre">Salesforce/wikitext,wikitext-2-raw-v1</span></code>，数据集需包含<code class="docutils literal notranslate"><span class="pre">train</span></code>分区和<code class="docutils literal notranslate"><span class="pre">text</span></code>列。文本会先拼接并按2048个token分块，<code class="docutils literal notranslate"><span class="pre">num_samples</span></code>限制的是分块后的校准样本数量；非正数表示使用所有可用块。</p>
+<p>如果全部文本不足一个块，会保留这一个短样本；否则会丢弃最后不足一个块的尾部。空文本流不产生样本。</p>
 </section>
 <section id="data">
 <h2>DATA文件测试<a class="headerlink" href="#data" title="Link to this heading">#</a></h2>
@@ -562,6 +568,7 @@ document.write(`
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#parquet">parquet文件</a></li>
 </ul>
 </li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#hugging-face">Hugging Face文本数据集</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data">DATA文件测试</a></li>
 </ul>
   </nav></div>
