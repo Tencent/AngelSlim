@@ -668,3 +668,177 @@ bash scripts/ptq/run_vllm_quant_for_glm5.sh --help
 ```
 
 脚本开启 `set -euo pipefail`，任一实际执行的阶段失败都会立即中断。
+
+---
+
+## 四、Hy4 系列脚本（HYV4ForCausalLM / hy_v4_internal）
+
+### 1. 基本说明
+
+- **输入模型：BF16 Hy4 checkpoint**
+- **两阶段 RTN 流水线**（无需 Hessian，Hessian 只属于 GPTQ 链路）：
+  - **激活校准**：`tools/run_vllm_calibrate.py` 用 vLLM 前向采 MoE gate_up / down 输入 amax
+     → `moe_expert_stats.json`（主干）+ `mtp_moe_expert_stats.json`（MTP 头）
+  - **权重量化**：`tools/hy4_nvfp4_weight_only_blockwise.py` 消费 stage-1 产物，产出**混合精度**新 checkpoint：
+     - 路由 MoE 专家（**主干 + MTP**）→ **NVFP4 weight-only**（含 per-tensor `input_scale = amax / 2688`）
+     - 其余 Linear（attn QKV/O + `linear_gate`、dense layer 0 MLP、shared_experts、MTP linears）→ **FP8 128×128 blockwise**
+     - Router gate、layernorm、`learnable_sink`、`hc_*`、`embed_tokens`、`lm_head`、biases → **BF16 / FP32 透传**
+- **运行环境**：
+  - 校准阶段：内部 HPC fork 的 vLLM（例如 `0.20.1.dev4xx+g<hash>`），必须使用专用 patch（见 §0.1）
+  - 量化阶段：普通 CPU / GPU 均可（流式 shard-by-shard，不 `AutoModelForCausalLM.from_pretrained`），无需 vLLM patch
+
+| 脚本 | 用途 | 入口 |
+| --- | --- | --- |
+| [`run_hy4_nvfp4_quant.sh`](./run_hy4_nvfp4_quant.sh) | ★ 一键：校准 + RTN 权重量化，两阶段共用一份 YAML | `tools/run_vllm_calibrate.py` + `tools/hy4_nvfp4_weight_only_blockwise.py` |
+
+---
+
+### 2. 前置条件
+
+#### 2.1 vLLM patch
+
+安装依赖 `tools/vllm_patch_hpc/install.sh` （详见该目录下的 [`README.md`](../../tools/vllm_patch_hpc/README.md)）：
+
+- **不动** `<vllm>/envs.py`，**不动** `<vllm>/model_executor/layers/fused_moe/fused_moe.py`
+- **精确插桩** `<vllm>/model_executor/layers/fused_moe/experts/triton_moe.py` 的 `TritonExperts.apply()`：
+  第一处 kernel 调用前插 `stage="gate_up_proj"` 钩子，`moe_kernel_quantize_input(...)` 前插 `stage="down_proj"` 钩子
+  （后者捕获的是 swigluclamp 之后、down GEMM 量化之前的 **BF16 未量化激活**）
+- 拷贝 `angelslim/compressor/quant/core/vllm_calibrate_utils/` → `<vllm>/tools/vllm_calibrate_utils/`
+- 首次安装自动备份 `triton_moe.py` → `.bak`，`uninstall` 原样还原；反复 `install` 幂等
+- 钩子在 `VLLM_MOE_COLLECT_STATS != "1"` 时是 no-op，**打完 patch 不影响常规 serving 性能**
+
+```bash
+bash tools/vllm_patch_hpc/install.sh install     # 安装
+bash tools/vllm_patch_hpc/install.sh check       # 核对（只读）
+bash tools/vllm_patch_hpc/install.sh uninstall   # 还原
+```
+
+#### 2.2 Ray 集群拓扑
+
+Hy4 校准使用 **TP=32（4 节点 × 8 卡）**，跨节点 TP 必须走 vLLM 的 Ray distributed executor
+（`distributed_executor_backend: ray`）；serving 里的 `mp` 后端只能单机内用。
+
+拉起方式与[第一节 Hy3 的 Ray 准备](#1-准备-ray-集群2-节点--8-卡--16-卡)一致，把节点数从 2 改成 4：
+
+```bash
+# head 节点
+ray start --head --port=6379 ...
+# 其余 3 台 worker
+ray start --address=<head_ip>:6379 ...
+```
+
+拉起后 `ray status` 应显示 `Total GPUs = 32`。
+
+#### 2.3 运行前检查
+
+- BF16 Hy4 checkpoint 与校准数据集放在**所有节点同一路径**（共享 FS）
+- **每个节点**都跑一次 `bash tools/vllm_patch_hpc/install.sh install`（补丁只影响本机 vLLM）
+- 用 `bash tools/vllm_patch_hpc/install.sh check` 逐台核对
+
+---
+
+### 3. 一键流水线 `run_hy4_nvfp4_quant.sh` 
+
+**功能**：BF16 Hy4 → 校准 → 混合 NVFP4（主干 + MTP 路由专家）/ FP8-blockwise（其余 Linear）HuggingFace
+目录，一次完成。两阶段共用 [`configs/Hy4/ptq/nvfp4/Hy4_template.yaml`](../../configs/Hy4/ptq/nvfp4/Hy4_template.yaml)。
+
+#### 阶段 1：MoE 路由专家激活校准（`tools/run_vllm_calibrate.py`）
+
+产出 `${output_dir}/` 下：
+
+| 文件 | 内容 | 键名形态 |
+| --- | --- | --- |
+| `moe_expert_stats.json` | 主干每层 gate_up / down GEMM 的 BF16 输入 min/max，以及 `VLLM_MOE_COLLECT_PER_EXPERT_STATS=1` 时的 per-expert 条目 | `model.layers.{L}.mlp.experts[.{E}].{gate_up_proj\|down_proj}` |
+| `mtp_moe_expert_stats.json` | MTP 头的同类统计 | `model.layers.{num_hidden_layers}.mtp_block.mlp.experts[.{E}].{stage}` |
+
+⚠️ **MTP 统计需要两个条件同时满足**（模板里已经配好）：
+
+```yaml
+enable_mtp: true            # 加载并挂钩 MTP 头
+mtp_calib_max_tokens: 8     # drafter 只在 decode 的 propose 阶段跑
+```
+
+`mtp_calib_max_tokens` 默认是 `1`（HY3 流水线的既有行为），而 `max_tokens=1` 永远进不到 decode，
+drafter 不会被执行，`mtp_moe_expert_stats.json` 会是空的 —— 后续 MTP NVFP4 专家的 `input_scale`
+就会退化成 1.0。stage 1 和 stage 2 都会就此打印 `[warn]`。
+
+#### 阶段 2：混合精度权重量化（`tools/hy4_nvfp4_weight_only_blockwise.py`）
+
+流式 shard-by-shard 处理 `model_path` 指向的 BF16 checkpoint，产出写到 `output_nvfp4_hf_path`：
+
+- **路由专家 → NVFP4**（主干 `model.layers.*` 与 MTP `model.mtp_layers.*` 同一布局，等价于
+  `hy4_mtp_quant.py --mtp_format fp8_nvfp4`）：
+  `experts.gate_up_proj (E, 2*I, H)` 拆成 `experts.{e}.gate_proj` / `experts.{e}.up_proj`（各 `(I, H)`），
+  `experts.down_proj (E, H, I)` 拆成 `experts.{e}.down_proj`；每个专家 4 个 tensor：
+  - `.weight` — uint8 packed FP4 `(I, H/2)`
+  - `.weight_scale` — fp8 e4m3 per-block scale `(I, H/16)`
+  - `.weight_scale_2` — fp32 scalar `= weight_amax / (6 * 448)`（`gate_proj` / `up_proj` 共享同一值）
+  - `.input_scale` — fp32 scalar `= activation_amax / (6 * 448)`，层内所有 expert 共享；
+    主干取自 `moe_stats_json`，**MTP 取自 `mtp_moe_stats_json`**（两份文件键名体系不同，各有各的 loader）
+- **其余 Linear → FP8 128×128 blockwise**：`.weight` (fp8 e4m3) + `.scale` (ue8m0 uint8)
+- **不量化透传**：MoE router `mlp.gate.weight`（与 GLM-5.1-FP8 一致，保留 BF16 避免 top-k 路由误差）、
+  `e_score_correction_bias`、各 layernorm、`learnable_sink_param`、`hc_*`、`embed_tokens`、`lm_head`、`model.norm`
+- **config.json 改写**：写入 `quantization_config = { quant_method=fp8, fmt=e4m3, scale_fmt=ue8m0,
+  weight_block_size=[128,128], modules_to_not_convert=[…] }`，并按实际产物设置 `mtp_quant_algo`
+- **NVFP4 sidecar**：另写 `hf_quant_config.json.nvfp4`（modelopt 风格 `quant_algo=NVFP4 / group_size=16 /
+  exclude_modules=[…]`）。切 NVFP4 推理后端时 `mv hf_quant_config.json.nvfp4 hf_quant_config.json` 即可生效
+
+`modules_to_not_convert`、sidecar 的 `exclude_modules`、`mtp_quant_algo` **全部由实际产出的张量反推**，
+所以调整精度只需要改 `tools/hy4_nvfp4_weight_only_blockwise.py` 顶部的 `NVFP4_PATTERNS` / `FP8_PATTERNS`，
+config 不会和权重脱节。例如把 MTP 专家改回 per-expert FP8：把
+`r"model\.mtp_layers\.\d+\.mlp\.experts"` 从 `NVFP4_PATTERNS` 移回 `FP8_PATTERNS` 即可，
+此时 `mtp_moe_expert_stats.json` 也不再需要。
+
+#### 环境变量（脚本已内置）
+
+```bash
+# AngelSlim 校准钩子（仅 stage 1 生效）
+VLLM_MOE_COLLECT_STATS=1
+VLLM_MOE_COLLECT_PER_EXPERT_STATS=1
+VLLM_MOE_COLLECT_STATS_VERBOSE=0
+
+# HPC vLLM 引擎参数（与 serving 行为对齐）
+VLLM_ATTENTION_BACKEND=HPC_MLA            # Hy4 = MLA
+MOE_MODE=fused                            # HPC MoE 模式
+MAX_NUM_BATCHED_TOKENS=32768
+VLLM_ENABLE_CHUNKED_PREFILL=1
+ASYNC_SCHEDULING=1
+VLLM_ENABLE_PREFIX_CACHING=1
+
+# Ray / v1 engine
+VLLM_ALLOW_INSECURE_SERIALIZATION=1
+RAY_DEDUP_LOGS=0
+VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=3600   # 首个 forward 远慢于 serving，默认 300s 会超时
+```
+
+#### CLI 开关
+
+```bash
+# 完整流水线
+bash scripts/ptq/run_hy4_nvfp4_quant.sh
+
+# 已有校准产物，只跑量化
+bash scripts/ptq/run_hy4_nvfp4_quant.sh --skip-calibrate
+
+# 只跑校准，不落权重量化
+bash scripts/ptq/run_hy4_nvfp4_quant.sh --skip-quantize
+```
+
+也支持用环境变量覆盖 YAML 路径（CLI 优先级高于 YAML）：
+`MODEL_PATH` / `SRC_JSONL` / `OUTPUT_DIR`。
+
+日志分别 tee 到 `logs/run_hy4_nvfp4_quant-calibrate.log` / `logs/run_hy4_nvfp4_quant-quantize.log`。
+
+#### YAML 里的两阶段路径联动
+
+stage 2 自动复用 stage 1 已经填好的 `model_path` / `output_dir`，无需重复设置：
+
+| stage 2 argparse dest | 兜底来源 |
+| --- | --- |
+| `input_path` | ← YAML 的 `model_path` |
+| `output_path` | ← YAML 的 `output_nvfp4_hf_path` |
+| `moe_stats_json` | ← `${output_dir}/moe_expert_stats.json` |
+| `mtp_moe_stats_json` | ← `${output_dir}/mtp_moe_expert_stats.json` |
+| `channel_reorder_stats` | ← `${output_dir}/moe_down_proj_channel_stats.json`（存在才启用） |
+
+每个阶段的 argparse 只认自己的 key，不认的会 warned-and-ignored，所以一份 YAML 贯通两阶段。

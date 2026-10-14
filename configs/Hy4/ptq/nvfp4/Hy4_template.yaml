@@ -1,0 +1,63 @@
+# Unified YAML for the Hy4 RTN pipeline, driving both stages of
+# scripts/ptq/run_hy4_nvfp4_quant.sh:
+#   stage 1  tools/run_vllm_calibrate.py          (vLLM activation calibration)
+#   stage 2  tools/hy4_nvfp4_weight_only_blockwise.py  (mixed-precision requant)
+#
+# Each stage reads only its own keys and ignores the rest, so one file serves
+# both. Keys use argparse `dest` form (underscored); CLI flags take precedence.
+# `model_path` must already be BF16 (no FP8 dequant pass). Multi-node TP needs a
+# pre-started Ray cluster. See scripts/ptq/README.md for details.
+
+# ============================================================================
+# Shared paths (edit before running)
+# ============================================================================
+model_path: /path/to/model
+ptq_data_path: /path/to/data
+output_dir: /path/to/stats
+
+# Destination checkpoint (stage 2). Must be writable and != model_path.
+output_nvfp4_hf_path: /path/to/output
+
+# ============================================================================
+# Stage 1 — vLLM activation calibration
+# ============================================================================
+tp_size: 32                              # 4 nodes * 8 GPUs
+dp_size: 1
+batch_size: 4
+num_samples: 256
+max_length: 32768
+distributed_executor_backend: ray        # ray | mp; multi-node MUST be ray
+skip_weight_loading: false               # true => dummy weights (debug only)
+
+# -------- MTP (Multi-Token Prediction) --------
+# MTP routed experts are quantised in stage 2 and need a calibrated input_scale,
+# so the drafter must run here. Both flags are required: the drafter only runs
+# in a decode step's propose phase, so the default mtp_calib_max_tokens=1 never
+# reaches it (stats come out empty); 8 gives several drafter rounds.
+enable_mtp: true
+num_speculative_tokens: 1
+mtp_calib_max_tokens: 8
+
+# ============================================================================
+# Stage 2 — mixed-precision offline re-quantisation
+# ----------------------------------------------------------------------------
+# Routed MoE experts (trunk + MTP) -> NVFP4 weight-only, split into per-expert
+# HF keys. Every other linear -> FP8 128x128 blockwise. Router gate, layernorms,
+# learnable_sink, hc_*, embed_tokens, lm_head and biases pass through unchanged.
+# Precision assignment lives in NVFP4_PATTERNS / FP8_PATTERNS in the stage-2
+# script. Paths are reused: input_path<-model_path, output_path<-
+# output_nvfp4_hf_path, moe_stats_json<-${output_dir}/moe_expert_stats.json,
+# mtp_moe_stats_json<-${output_dir}/mtp_moe_expert_stats.json.
+# ============================================================================
+
+# NVFP4 group size along the last dim (modelopt default).
+nvfp4_block_size: 16
+
+# FP8 blockwise tile (rows cols); [-1, -1] falls back to tensor-wise.
+fp8_block_size: [128, 128]
+
+# Parallel shard workers; raise toward GPU count when use_gpu is true.
+num_workers: 8
+
+# true => one worker per CUDA device. false => CPU-only (slow, memory-cheap).
+use_gpu: true

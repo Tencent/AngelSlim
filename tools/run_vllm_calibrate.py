@@ -17,8 +17,20 @@ import argparse
 import json
 import os
 import platform
+import sys
+from functools import partial
 from types import SimpleNamespace
 
+# ---------------------------------------------------------------------------
+# ``llm.apply_model`` worker helpers, imported via the SAME module path the Ray
+# workers resolve them through after ``pickle.loads``.  Both vLLM patch
+# installers copy the calibrate-utils package to ``<vllm>/tools/``, so the
+# top-level name resolves identically on head and workers; the in-repo package
+# is the fallback for an unpatched (community) vLLM.  See
+# ``_setup_activation_hooks_worker`` in hooks.py for why a lambda cannot be
+# used here at all.
+# ---------------------------------------------------------------------------
+import vllm as _vllm_pkg
 from vllm import LLM, SamplingParams
 
 from angelslim.compressor.quant import (  # Per-head KV-cache pipeline
@@ -37,13 +49,11 @@ from angelslim.compressor.quant import (  # Per-head KV-cache pipeline
     get_mtp_moe_stats,
     print_activation_stats,
     print_kvcache_perhead_stats,
-    print_moe_stats,
     print_mtp_activation_stats,
     print_mtp_moe_stats,
     remove_kv_scale_search_hooks,
     remove_kvcache_perhead_hooks,
     remove_kvcache_perhead_value_hooks,
-    setup_activation_hooks,
     setup_kvcache_perhead_hooks,
     setup_kvcache_perhead_value_hooks,
     setup_kvcache_value_hooks,
@@ -54,6 +64,22 @@ from angelslim.utils import (
     run_vllm_calibration_with_dp,
     validate_vllm_calibration_dp_args,
 )
+
+_vllm_tools_dir = os.path.join(os.path.dirname(_vllm_pkg.__file__), "tools")
+if os.path.isdir(_vllm_tools_dir) and _vllm_tools_dir not in sys.path:
+    sys.path.insert(0, _vllm_tools_dir)
+try:
+    from vllm_calibrate_utils.hooks import (
+        _print_moe_stats_worker,
+        _probe_fp8_scale_only_worker,
+        _setup_activation_hooks_worker,
+    )
+except ImportError:
+    from angelslim.compressor.quant.core.vllm_calibrate_utils.hooks import (
+        _print_moe_stats_worker,
+        _probe_fp8_scale_only_worker,
+        _setup_activation_hooks_worker,
+    )
 
 # =============================================================================
 # Helper functions to access draft (MTP) model via collective_rpc
@@ -264,6 +290,16 @@ def parse_args():
         default=1,
         help="Number of speculative tokens for MTP "
         "(default: 1, only used when --enable-mtp is set)",
+    )
+    parser.add_argument(
+        "--mtp-calib-max-tokens",
+        type=int,
+        default=1,
+        help="Generation length used for MTP calibration (default: 1, the HY3 "
+        "pipeline's behaviour). The draft model only runs during a decode step's "
+        "propose phase, so 1 never reaches it and the MTP layers produce no "
+        "activations; set it > 1 (e.g. 8) when the draft model's own stats are "
+        "needed, as they are for NVFP4 MTP experts.",
     )
 
     # Debug options
@@ -580,7 +616,7 @@ def run_one_calibration(args, llm=None, return_llm: bool = False):
     print(f"Setting up activation hooks (kv_granularity={args.kv_granularity})...")
     print("=" * 80)
     hook_results = llm.apply_model(
-        lambda model: setup_activation_hooks(model, kv_granularity=args.kv_granularity)
+        partial(_setup_activation_hooks_worker, kv_granularity=args.kv_granularity)
     )
     for i, result in enumerate(hook_results):
         print(f"Worker {i}: {result}")
@@ -648,16 +684,19 @@ def run_one_calibration(args, llm=None, return_llm: bool = False):
         f"local_prompts={len(prompts)}"
     )
 
-    # Create sampling params (fixed values for calibration)
-    # Keep calibration generation at one token for both main-model and MTP
-    # calibration.  This is intentional for the current HY3 pipeline.
+    # Main-model calibration only needs the prefill, so one token is enough;
+    # MTP calibration needs decode steps (see --mtp-calib-max-tokens).
     calibration_max_tokens = 1
     if args.enable_mtp:
-        calibration_max_tokens = 1
-        print(
-            f"  MTP calibration: setting max_tokens={calibration_max_tokens} "
-            f"(pipeline default)"
-        )
+        calibration_max_tokens = max(1, args.mtp_calib_max_tokens)
+        print(f"  MTP calibration: setting max_tokens={calibration_max_tokens}")
+        if calibration_max_tokens == 1:
+            print(
+                "  [warn] max_tokens=1 never enters decode, so the MTP draft "
+                "model will not be exercised and mtp_*_stats.json will be "
+                "empty. Pass --mtp-calib-max-tokens 8 (or set "
+                "`mtp_calib_max_tokens: 8` in the YAML) if you need them."
+            )
 
     sampling_params = SamplingParams(
         temperature=0.8,
@@ -689,9 +728,7 @@ def run_one_calibration(args, llm=None, return_llm: bool = False):
     # never hooked, so ``activation_stats`` is empty and not worth printing
     # or saving.  Only the MoE ``*.scale_amax`` entries (recovered BF16
     # amax) are meaningful.
-    fp8_scale_only_flags = llm.apply_model(
-        lambda model: bool(getattr(model, "_angelslim_fp8_scale_only", False))
-    )
+    fp8_scale_only_flags = llm.apply_model(_probe_fp8_scale_only_worker)
     is_fp8_scale_only = bool(fp8_scale_only_flags and any(fp8_scale_only_flags))
     if is_fp8_scale_only:
         print(
@@ -705,7 +742,7 @@ def run_one_calibration(args, llm=None, return_llm: bool = False):
 
     # Print MoE expert statistics
     print("\nMoE Expert Statistics:")
-    llm.apply_model(lambda model: print_moe_stats(model, verbose=args.verbose))
+    llm.apply_model(partial(_print_moe_stats_worker, verbose=args.verbose))
 
     # Print MTP draft model statistics (if MTP is enabled)
     if args.enable_mtp:
