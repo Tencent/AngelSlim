@@ -41,8 +41,12 @@ import pytest
 import torch
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_INT8_PATH = os.path.join(_REPO_ROOT, "angelslim", "compressor", "quant", "modules", "int8", "int8.py")
-_AWQ_PATH = os.path.join(_REPO_ROOT, "angelslim", "compressor", "quant", "modules", "awq", "awq.py")
+_INT8_PATH = os.path.join(
+    _REPO_ROOT, "angelslim", "compressor", "quant", "modules", "int8", "int8.py"
+)
+_AWQ_PATH = os.path.join(
+    _REPO_ROOT, "angelslim", "compressor", "quant", "modules", "awq", "awq.py"
+)
 
 BATCHES = 3
 BATCH_SIZE = 8
@@ -163,7 +167,9 @@ def _install_stubs():
 
     for leaf in ("auto_clip", "auto_scale"):
         mod = types.ModuleType(f"angelslim.compressor.quant.modules.awq.{leaf}")
-        setattr(mod, "AutoLayerClip" if leaf == "auto_clip" else "AutoLayerScale", type("X", (), {}))
+        setattr(
+            mod, "AutoLayerClip" if leaf == "auto_clip" else "AutoLayerScale", type("X", (), {})
+        )
         sys.modules[f"angelslim.compressor.quant.modules.awq.{leaf}"] = mod
 
     for name in ("huggingface_hub", "tqdm"):
@@ -218,9 +224,9 @@ def test_int8_buffer_is_not_sized_by_batch_count():
     op, _ = _int8_instance(module)
     with pytest.raises(_StopAfterCapture):
         op.low_memory_run(_FakeDataloader())
-    assert op.inps.shape[0] != BATCHES, (
-        "the buffer must be sized for every sample, not one row per batch"
-    )
+    assert (
+        op.inps.shape[0] != BATCHES
+    ), "the buffer must be sized for every sample, not one row per batch"
 
 
 def test_awq_sizes_its_capture_buffer_for_every_sample():
