@@ -457,7 +457,7 @@ Qwen3VL系列模型的`BF16`、`FP8-Static`、`FP8-Dynamic`在`MMMU_VAL`、`DocV
    +---------------------------+------------------+----------+------------+--------------+
 ```
 
-FP8-Dynamic采用Block-wise的量化，启动命令：python3 tools/fp8_quant_blockwise.py --block_size --input_path --output_path
+FP8-Dynamic采用Block-wise的量化，启动命令：python3 tools/run.py -c configs/qwen3_5/fp8_blockwise/<model>_fp8_blockwise.yaml --model-path <input> --save-path <output>
 
 
 ## Qwen3-Omni

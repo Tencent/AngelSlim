@@ -297,7 +297,7 @@ def main(bf16_path, fp8_path, block_size, ac_json_data):
     # Auto-detect kv_head_repeat from the model's real num_key_value_heads
     # vs the per-head stats vector length collected by AngelSlim.
     #
-    # The new vllm_calibrate_utils.setup_kvcache_perhead_hooks already
+    # vllm_calib.kvcache.setup_kvcache_perhead_hooks already
     # all-reduces per-head stats to length == num_key_value_heads, so the
     # collected list is already de-duplicated and stride=1 is correct.
     # If a future / older calibration run produces a longer (replicated)
@@ -582,15 +582,11 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", type=str, default="", help=argparse.SUPPRESS)
     args = parser.parse_args()
 
-    # Lazy-import _yaml_args (sibling module in tools/). Done here instead of
-    # at module top so flake8 doesn't trip on a sys.path mutation between
-    # imports.
+    # This checkout's angelslim, not a pip-installed one (same as tools/run.py).
     import sys
 
-    _tools_dir = os.path.dirname(os.path.abspath(__file__))
-    if _tools_dir not in sys.path:
-        sys.path.insert(0, _tools_dir)
-    from _yaml_args import apply_yaml_config
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from angelslim.utils.yaml_args import apply_yaml_config
 
     apply_yaml_config(parser, args)
 

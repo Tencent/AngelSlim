@@ -1,0 +1,26 @@
+# W8A8 INT8 (per-channel weights, dynamic per-token activations), compressed-tensors.
+# Source may be BF16 or FP8 (FP8 weights are dequantized on read). Data-free:
+#   python3 tools/run.py -c <this> [--model-path ...] [--save-path ...]
+global:
+  save_path: ./output
+
+model:
+  name: DeepSeek
+  model_path: deepseek-ai/DeepSeek-R1
+
+compression:
+  name: PTQWeightOnly
+  quantization:
+    name: mixed
+    save_name: compressed-tensors
+    num_workers: 8
+    config_groups:
+      int8:
+        format: int8_channel
+        targets:
+          - 're:.*\.(?:gate_and_up_proj|gate_proj|up_proj|down_proj)$'
+          - 're:.*\.(?:q_a_proj|q_b_proj|kv_a_proj_with_mqa|kv_b_proj|qkv_proj|q_proj|k_proj|v_proj|o_proj)$'
+          - 're:.*\.indexer\.(?:wq_b|wk)$'
+          - 're:.*\.experts\.(?:gate_up_proj|down_proj)$'
+    ignore_layers:                       # "re:" = regex, otherwise substring; e.g. 'model.layers.77.'
+      - 're:.*lm_head$'

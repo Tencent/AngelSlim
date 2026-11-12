@@ -57,7 +57,7 @@ if [ "$SKIP_CALIBRATE" = false ]; then
     echo "[Phase 1] Smooth Stats Calibration"
     echo "========================================"
     mkdir -p logs
-    python3 tools/smooth/run_vllm_smooth.py -c "$CONFIG" \
+    python3 -m angelslim.compressor.transform.smooth.vllm.collect -c "$CONFIG" \
     2>&1 | tee logs/run_smooth_calibrate_Hy3.log
 fi
 
@@ -67,7 +67,7 @@ if [ "$SKIP_CONVERT" = false ]; then
     echo "[Phase 2] Offline Weight Conversion"
     echo "========================================"
     mkdir -p logs
-    python3 tools/smooth/convert_smooth_weights.py -c "$CONFIG" \
+    python3 -m angelslim.compressor.transform.smooth.convert.run -c "$CONFIG" \
     2>&1 | tee logs/run_smooth_convert_Hy3.log
 fi
 

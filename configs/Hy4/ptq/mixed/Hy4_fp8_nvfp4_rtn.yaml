@@ -1,0 +1,51 @@
+# Hy4 / Hy4-VL RTN: NVFP4 routed experts (trunk + MTP) + FP8 128x128 ue8m0 dense, compressed-tensors.
+# Stage 1: python3 -m angelslim.compressor.quant.vllm_calib.calibrate -c <this>  (MoE absmax)
+# Stage 2: python3 tools/run.py -c <this>          (or bash scripts/ptq/run_hy4_nvfp4_quant.sh)
+global:
+  save_path: /path/to/output
+
+model:
+  name: hy4
+  model_path: /path/to/model             # BF16 Hy4 checkpoint
+
+dataset:                                 # stage 1 only
+  name: TextDataset
+  data_path: /path/to/data
+  max_seq_length: 32768
+  num_samples: 256
+
+compression:
+  name: PTQWeightOnly
+  calibrate:
+    backend: vllm
+    tp_size: 32                          # 4 nodes x 8 GPUs, Ray cluster
+    max_num_seqs: 4
+    distributed_executor_backend: ray
+    stats_dir: /path/to/stats            # moe_expert_stats.json / mtp_moe_expert_stats.json
+    args:                                # vllm_calib.calibrate options
+      dp_size: 1
+      enable_mtp: true
+      num_speculative_tokens: 1
+      mtp_calib_max_tokens: 8            # the MTP drafter only runs after the first token
+  quantization:
+    name: mixed
+    save_name: compressed-tensors
+    algorithm: rtn
+    num_workers: 8
+    # mtp_file: /path/to/mtp_bf16.safetensors   # only when MTP is a separate file
+    config_groups:
+      nvfp4_moe:
+        format: nvfp4
+        targets:
+          - 're:model\.(?:layers|mtp_layers)\.\d+\.mlp\.experts\.(?:gate_up_proj|down_proj)$'
+      fp8_dense:
+        format: fp8_block
+        block_size: [128, 128]
+        scale_fmt: ue8m0
+        targets:
+          - 're:model\.(?:layers|mtp_layers)\.\d+\.self_attn\.(?:q_a_proj|q_b_proj|kv_a_proj_with_mqa|kv_b_proj|o_proj|linear_gate)$'
+          - 're:model\.(?:layers|mtp_layers)\.\d+\.self_attn\.indexer\.(?:wk|wq_b)$'
+          - 're:model\.(?:layers|mtp_layers)\.\d+\.mlp\.(?:shared_experts\.)?(?:gate_proj|up_proj|down_proj)$'
+    ignore_layers:                           # "re:" = regex, otherwise substring
+      - 're:(?:visual|vit)\..*'               # VL tower stays BF16
+      - 're:.*lm_head$'

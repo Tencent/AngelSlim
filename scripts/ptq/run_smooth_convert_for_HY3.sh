@@ -7,4 +7,4 @@ set -euo pipefail
 
 CONFIG="configs/Hy3/ptq/fp8/Hy3_smooth.yaml"
 
-python3 tools/smooth/convert_smooth_weights.py -c "$CONFIG" "$@"
+python3 -m angelslim.compressor.transform.smooth.convert.run -c "$CONFIG" "$@"

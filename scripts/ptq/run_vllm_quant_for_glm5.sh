@@ -6,15 +6,14 @@
 #
 #   GLM5_SOURCE_FORMAT=fp8 (default)
 #     Stage 1: vLLM MoE activation calibration
-#     Stage 2: FP8 blockwise -> routed-expert NVFP4 weight-only +
-#              dense FP8 ue8m0 re-quantization
+#     Stage 2: tools/run.py mixed RTN: routed-expert NVFP4 + dense FP8 ue8m0,
+#              exported as compressed-tensors
 #
 #   GLM5_SOURCE_FORMAT=bf16
-#     Stage 1: vLLM activation/MoE calibration
-#     Stage 2: select exactly one method with BF16_QUANT_METHOD:
-#       weight_only (default): routed-expert NVFP4 weight-only
-#       gptq:                  routed-expert NVFP4-GPTQ
-#     Stage 3: merge NVFP4 MoE weights/scales with the BF16 checkpoint
+#     Stage 1: vLLM calibration; gptq also collects Hessians
+#     Stage 2: tools/run.py mixed, routed-expert NVFP4 with input scales from
+#              stage 1 (compressed-tensors, final). Pick the algorithm with
+#              BF16_QUANT_METHOD: weight_only (default, RTN) or gptq.
 #
 # Common examples:
 #   bash scripts/ptq/run_vllm_quant_for_glm5.sh
@@ -47,30 +46,26 @@ Options:
   --skip-fp8-quantize          Skip FP8 -> NVFP4/FP8-ue8m0 conversion.
   --skip-quantize              Skip the selected quantization stage; calibration
                                still runs unless --skip-calibrate is also set.
-  --skip-merge                 Skip BF16 NVFP4/BF16 checkpoint merging.
   -h, --help                   Show this help.
 
 Important environment variables:
   SOURCE_MODEL_PATH            Override the source model path in the YAML.
-  FP8_PTQ_CONFIG               FP8 calibration/conversion YAML.
+  FP8_PTQ_CONFIG               Mixed YAML driving both FP8-source stages.
   FP8_STATISTICS_PATH          Override the FP8 calibration output directory.
   FP8_OUTPUT_PATH              Override the converted FP8-source output path.
-  BF16_CALIB_CONFIG            BF16 vLLM calibration YAML.
+  BF16_CALIB_CONFIG            BF16 vLLM calibration YAML (weight_only only).
   BF16_STATISTICS_PATH         BF16 vLLM calibration output directory.
-  BF16_MODEL_PATH              Local BF16 checkpoint used by merge_nvfp4.py.
-  NVFP4_WEIGHT_ONLY_CONFIG     BF16 NVFP4 weight-only YAML.
-  NVFP4_GPTQ_CONFIG            BF16 NVFP4-GPTQ YAML.
+  NVFP4_WEIGHT_ONLY_CONFIG     BF16 NVFP4 RTN mixed YAML.
+  NVFP4_GPTQ_CONFIG            BF16 NVFP4-GPTQ mixed YAML.
   BF16_WEIGHT_ONLY_SAVE_ROOT   Root passed to tools/run.py --save-path.
   BF16_GPTQ_SAVE_ROOT          Root passed to tools/run.py --save-path.
   BF16_NVFP4_MODEL_PATH        Override the selected Stage-2 checkpoint path.
-  BF16_MERGED_OUTPUT_PATH      Final merged Hugging Face checkpoint directory.
-  BF16_MERGE_NUM_WORKERS       Merge worker count (default: 8).
   LOG_DIR                      Pipeline log directory.
 
-For tools/run.py outputs, the YAML filename is appended to the configured save
-root, for example:
-  ${BF16_WEIGHT_ONLY_SAVE_ROOT}/glm5_1_nvfp4_weight_only
-  ${BF16_GPTQ_SAVE_ROOT}/glm5_1_nvfp4_gptq
+tools/run.py treats the save root as a run directory: weights go to out/ and the
+calibration products to stats/ hessian/ image_embeds/ beside them, for example:
+  ${BF16_WEIGHT_ONLY_SAVE_ROOT}/out
+  ${BF16_GPTQ_SAVE_ROOT}/out
 EOF
 }
 
@@ -80,7 +75,6 @@ EOF
 do_calibrate=1
 do_fp8_quantize=1
 do_bf16_quantize=1
-do_merge=1
 for arg in "$@"; do
     case "${arg}" in
         --skip-calibrate)    do_calibrate=0 ;;
@@ -89,7 +83,6 @@ for arg in "$@"; do
             do_fp8_quantize=0
             do_bf16_quantize=0
             ;;
-        --skip-merge) do_merge=0 ;;
         -h|--help)
             usage
             exit 0
@@ -130,22 +123,20 @@ BF16_QUANT_METHOD="${BF16_QUANT_METHOD:-weight_only}"
 BF16_QUANT_METHOD="${BF16_QUANT_METHOD,,}"
 SOURCE_MODEL_PATH="${SOURCE_MODEL_PATH:-}"
 
-FP8_PTQ_CONFIG="${FP8_PTQ_CONFIG:-configs/glm5/ptq/nvfp4/glm5_vllm_ptq_moe_fp8.yaml}"
+FP8_PTQ_CONFIG="${FP8_PTQ_CONFIG:-configs/glm5/ptq/mixed/glm5_fp8_nvfp4_rtn.yaml}"
 FP8_STATISTICS_PATH="${FP8_STATISTICS_PATH:-}"
 FP8_OUTPUT_PATH="${FP8_OUTPUT_PATH:-}"
 
-NVFP4_WEIGHT_ONLY_CONFIG="${NVFP4_WEIGHT_ONLY_CONFIG:-configs/glm5/ptq/nvfp4/glm5_1_nvfp4_weight_only.yaml}"
-NVFP4_GPTQ_CONFIG="${NVFP4_GPTQ_CONFIG:-configs/glm5/ptq/nvfp4/glm5_1_nvfp4_gptq.yaml}"
+NVFP4_WEIGHT_ONLY_CONFIG="${NVFP4_WEIGHT_ONLY_CONFIG:-configs/glm5/ptq/mixed/glm5_nvfp4_rtn.yaml}"
+NVFP4_GPTQ_CONFIG="${NVFP4_GPTQ_CONFIG:-configs/glm5/ptq/mixed/glm5_nvfp4_gptq.yaml}"
 
 BF16_WORK_DIR="${BF16_WORK_DIR:-output/glm5_bf16}"
 BF16_CALIB_CONFIG="${BF16_CALIB_CONFIG:-configs/glm5/ptq/nvfp4/glm5_vllm_calibrate_bf16.yaml}"
 BF16_STATISTICS_PATH="${BF16_STATISTICS_PATH:-${BF16_WORK_DIR}/statistics}"
-BF16_MODEL_PATH="${BF16_MODEL_PATH:-${SOURCE_MODEL_PATH}}"
+BF16_HESSIAN_PATH="${BF16_HESSIAN_PATH:-${BF16_STATISTICS_PATH}/hessian}"
 BF16_WEIGHT_ONLY_SAVE_ROOT="${BF16_WEIGHT_ONLY_SAVE_ROOT:-${BF16_WORK_DIR}/nvfp4_weight_only}"
 BF16_GPTQ_SAVE_ROOT="${BF16_GPTQ_SAVE_ROOT:-${BF16_WORK_DIR}/nvfp4_gptq}"
 BF16_NVFP4_MODEL_PATH="${BF16_NVFP4_MODEL_PATH:-}"
-BF16_MERGED_OUTPUT_PATH="${BF16_MERGED_OUTPUT_PATH:-${BF16_WORK_DIR}/merged_${BF16_QUANT_METHOD}}"
-BF16_MERGE_NUM_WORKERS="${BF16_MERGE_NUM_WORKERS:-8}"
 LOG_DIR="${LOG_DIR:-logs}"
 
 case "${GLM5_SOURCE_FORMAT}" in
@@ -169,13 +160,9 @@ fi
 mkdir -p "${LOG_DIR}"
 
 if [[ -n "${SOURCE_MODEL_PATH}" && ! -e "${SOURCE_MODEL_PATH}" ]]; then
-    if [[ "${GLM5_SOURCE_FORMAT}" == "fp8" ]]; then
-        echo "[pipeline] FP8 SOURCE_MODEL_PATH must be a local checkpoint directory: ${SOURCE_MODEL_PATH}" >&2
-        exit 2
-    fi
-    echo "[pipeline] WARNING: SOURCE_MODEL_PATH does not exist locally: ${SOURCE_MODEL_PATH}" >&2
-    echo "[pipeline] BF16 calibration/quantization accepts a Hugging Face model ID," >&2
-    echo "[pipeline] but Stage 3 still requires a local BF16_MODEL_PATH (or --skip-merge)." >&2
+    # tools/run.py mixed conversion reads the safetensors shards directly.
+    echo "[pipeline] SOURCE_MODEL_PATH must be a local checkpoint directory: ${SOURCE_MODEL_PATH}" >&2
+    exit 2
 fi
 
 echo "[pipeline] GLM5_SOURCE_FORMAT=${GLM5_SOURCE_FORMAT}"
@@ -196,21 +183,21 @@ if [[ "${GLM5_SOURCE_FORMAT}" == "fp8" ]]; then
     fp8_quantize_args=(-c "${FP8_PTQ_CONFIG}")
     if [[ -n "${SOURCE_MODEL_PATH}" ]]; then
         calibrate_args+=(--model-path "${SOURCE_MODEL_PATH}")
-        fp8_quantize_args+=(--input_path "${SOURCE_MODEL_PATH}")
+        fp8_quantize_args+=(--model-path "${SOURCE_MODEL_PATH}")
     fi
     if [[ -n "${FP8_STATISTICS_PATH}" ]]; then
         calibrate_args+=(--output-dir "${FP8_STATISTICS_PATH}")
-        fp8_quantize_args+=(--output-dir "${FP8_STATISTICS_PATH}")
+        fp8_quantize_args+=(--stats-dir "${FP8_STATISTICS_PATH}")
     fi
     if [[ -n "${FP8_OUTPUT_PATH}" ]]; then
-        fp8_quantize_args+=(--output_path "${FP8_OUTPUT_PATH}")
+        fp8_quantize_args+=(--save-path "${FP8_OUTPUT_PATH}")
     fi
 
     if [[ "${do_calibrate}" -eq 1 ]]; then
         echo "[pipeline] === FP8 Stage 1/2: vLLM MoE activation calibration ==="
         echo "[pipeline] FP8_PTQ_CONFIG=${FP8_PTQ_CONFIG}"
 
-        python3 tools/run_vllm_calibrate.py \
+        python3 -m angelslim.compressor.quant.vllm_calib.calibrate \
             "${calibrate_args[@]}" \
             2>&1 | tee "${LOG_DIR}/run_vllm_quant_glm5-fp8-calibrate.log"
 
@@ -223,7 +210,7 @@ if [[ "${GLM5_SOURCE_FORMAT}" == "fp8" ]]; then
         echo "[pipeline] === FP8 Stage 2/2: routed-expert NVFP4 + dense FP8 ue8m0 ==="
         echo "[pipeline] FP8_PTQ_CONFIG=${FP8_PTQ_CONFIG}"
 
-        python3 tools/glm5_nvfp4_weight_only_blockwise.py \
+        python3 tools/run.py \
             "${fp8_quantize_args[@]}" \
             2>&1 | tee "${LOG_DIR}/run_vllm_quant_glm5-fp8-quantize.log"
 
@@ -237,7 +224,7 @@ if [[ "${GLM5_SOURCE_FORMAT}" == "fp8" ]]; then
 fi
 
 # ============================================================================
-# BF16 source branch: calibrate, run one selected method, then merge.
+# BF16 source branch: calibrate, then convert with the selected algorithm.
 # ============================================================================
 case "${BF16_QUANT_METHOD}" in
     weight_only)
@@ -254,27 +241,36 @@ case "${BF16_QUANT_METHOD}" in
         ;;
 esac
 
-selected_config_name="$(basename "${selected_quant_config}")"
-selected_config_stem="${selected_config_name%.*}"
 if [[ -z "${BF16_NVFP4_MODEL_PATH}" ]]; then
-    BF16_NVFP4_MODEL_PATH="${selected_save_root}/${selected_config_stem}"
+    # ckpt_convert treats --save-path as the run root and writes weights to out/.
+    BF16_NVFP4_MODEL_PATH="${selected_save_root}/out"
 fi
 
-bf16_calibrate_args=(
-    -c "${BF16_CALIB_CONFIG}"
-    --output-dir "${BF16_STATISTICS_PATH}"
-)
+if [[ "${BF16_QUANT_METHOD}" == "gptq" ]]; then
+    # GPTQ needs Hessians as well as MoE absmax, so stage 1 runs through
+    # tools/run.py, which dispatches to vllm_calib.hessian_collect for a config with
+    # calibrate.hessian_dir.
+    bf16_calibrate_cmd=(python3 tools/run.py -c "${selected_quant_config}" --stage calib
+                        --stats-dir "${BF16_STATISTICS_PATH}"
+                        --hessian-dir "${BF16_HESSIAN_PATH}")
+else
+    bf16_calibrate_cmd=(python3 -m angelslim.compressor.quant.vllm_calib.calibrate
+                        -c "${BF16_CALIB_CONFIG}" --output-dir "${BF16_STATISTICS_PATH}")
+fi
 if [[ -n "${SOURCE_MODEL_PATH}" ]]; then
-    bf16_calibrate_args+=(--model-path "${SOURCE_MODEL_PATH}")
+    bf16_calibrate_cmd+=(--model-path "${SOURCE_MODEL_PATH}")
 fi
 
 if [[ "${do_calibrate}" -eq 1 ]]; then
-    echo "[pipeline] === BF16 Stage 1/3: vLLM activation/MoE calibration ==="
-    echo "[pipeline] BF16_CALIB_CONFIG=${BF16_CALIB_CONFIG}"
+    echo "[pipeline] === BF16 Stage 1: vLLM activation/MoE calibration ==="
     echo "[pipeline] BF16_STATISTICS_PATH=${BF16_STATISTICS_PATH}"
+    if [[ "${BF16_QUANT_METHOD}" == "gptq" ]]; then
+        echo "[pipeline] BF16_HESSIAN_PATH=${BF16_HESSIAN_PATH}"
+    else
+        echo "[pipeline] BF16_CALIB_CONFIG=${BF16_CALIB_CONFIG}"
+    fi
 
-    python3 tools/run_vllm_calibrate.py \
-        "${bf16_calibrate_args[@]}" \
+    "${bf16_calibrate_cmd[@]}" \
         2>&1 | tee "${LOG_DIR}/run_vllm_quant_glm5-bf16-calibrate.log"
 
     echo "[pipeline] BF16 vLLM calibration finished."
@@ -290,8 +286,12 @@ if [[ "${do_bf16_quantize}" -eq 1 ]]; then
     if [[ -n "${SOURCE_MODEL_PATH}" ]]; then
         quantize_args+=(--model-path "${SOURCE_MODEL_PATH}")
     fi
+    quantize_args+=(--stats-dir "${BF16_STATISTICS_PATH}")
+    if [[ "${BF16_QUANT_METHOD}" == "gptq" ]]; then
+        quantize_args+=(--hessian-dir "${BF16_HESSIAN_PATH}")
+    fi
 
-    echo "[pipeline] === BF16 Stage 2/3: ${selected_quant_label} quantization ==="
+    echo "[pipeline] === BF16 Stage 2: ${selected_quant_label} quantization ==="
     echo "[pipeline] SELECTED_QUANT_CONFIG=${selected_quant_config}"
     echo "[pipeline] SELECTED_SAVE_ROOT=${selected_save_root}"
     echo "[pipeline] Expected Stage-2 checkpoint=${BF16_NVFP4_MODEL_PATH}"
@@ -306,41 +306,6 @@ else
     echo "[pipeline]   ${BF16_NVFP4_MODEL_PATH}"
 fi
 
-if [[ "${do_merge}" -eq 1 ]]; then
-    if [[ ! -f "${BF16_STATISTICS_PATH}/moe_expert_stats.json" ]]; then
-        echo "[pipeline] Missing BF16 MoE calibration statistics:" >&2
-        echo "[pipeline]   ${BF16_STATISTICS_PATH}/moe_expert_stats.json" >&2
-        echo "[pipeline] Run Stage 1 or set BF16_STATISTICS_PATH to existing statistics." >&2
-        exit 2
-    fi
-    if [[ -z "${BF16_MODEL_PATH}" || ! -d "${BF16_MODEL_PATH}" ]]; then
-        echo "[pipeline] BF16_MODEL_PATH must be a local BF16 checkpoint directory for Stage 3." >&2
-        echo "[pipeline] Current value: ${BF16_MODEL_PATH@Q}" >&2
-        exit 2
-    fi
-    if [[ ! -d "${BF16_NVFP4_MODEL_PATH}" ]]; then
-        echo "[pipeline] Stage-2 NVFP4 checkpoint directory not found: ${BF16_NVFP4_MODEL_PATH}" >&2
-        echo "[pipeline] Set BF16_NVFP4_MODEL_PATH when reusing a custom/existing checkpoint." >&2
-        exit 2
-    fi
-
-    echo "[pipeline] === BF16 Stage 3/3: merge NVFP4 MoE and BF16 weights ==="
-    echo "[pipeline] BF16_STATISTICS_PATH=${BF16_STATISTICS_PATH}"
-    echo "[pipeline] BF16_NVFP4_MODEL_PATH=${BF16_NVFP4_MODEL_PATH}"
-    echo "[pipeline] BF16_MODEL_PATH=${BF16_MODEL_PATH}"
-    echo "[pipeline] BF16_MERGED_OUTPUT_PATH=${BF16_MERGED_OUTPUT_PATH}"
-
-    python3 tools/merge_nvfp4.py \
-        --statistics_path "${BF16_STATISTICS_PATH}" \
-        --nvfp4_modelpath "${BF16_NVFP4_MODEL_PATH}" \
-        --bf16_modelpath "${BF16_MODEL_PATH}" \
-        --output_path "${BF16_MERGED_OUTPUT_PATH}" \
-        --num_workers "${BF16_MERGE_NUM_WORKERS}" \
-        2>&1 | tee "${LOG_DIR}/run_vllm_quant_glm5-bf16-merge-${selected_log_name}.log"
-
-    echo "[pipeline] BF16 merged checkpoint finished."
-else
-    echo "[pipeline] --skip-merge set, skipping BF16 checkpoint merge."
-fi
+echo "[pipeline] Stage-2 output is final: ${BF16_NVFP4_MODEL_PATH}"
 
 echo "[pipeline] BF16 source branch completed successfully."

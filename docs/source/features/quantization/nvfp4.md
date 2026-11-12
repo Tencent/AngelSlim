@@ -114,7 +114,7 @@ bash scripts/ptq/run_vllm_calibrate_for_Hy3.sh
 
 2. **指定配置文件**：通过 `CONFIG` 变量指定校准用的 YAML 配置文件（需替换为您自己的配置路径）。
 
-3. **执行校准推理**：调用 `tools/run_vllm_calibrate.py`，利用 vLLM 引擎在校准数据集上做前向推理，收集：
+3. **执行校准推理**：调用 `angelslim.compressor.quant.vllm_calib.calibrate`，利用 vLLM 引擎在校准数据集上做前向推理，收集：
    - **activation_stats.json**：各层激活的 min/max 统计（用于计算 KV cache 的 FP8 缩放因子）
    - **moe_expert_stats.json**：每个 Expert 的 gate_up_proj / down_proj 激活 min/max（用于计算 Expert input_scale）
 

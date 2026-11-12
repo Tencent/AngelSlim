@@ -21,6 +21,6 @@ CONFIG=configs/Hy3/ptq/fp8/Hy3_kvcache_calibrate.yaml
 
 mkdir -p logs
 
-python3 tools/kvcache/run_kvcache_calibrate.py \
+python3 -m angelslim.compressor.quant.vllm_calib.calibrate --kv-only \
     -c $CONFIG \
     2>&1 | tee logs/run_kvcache_calibrate_Hy3.log

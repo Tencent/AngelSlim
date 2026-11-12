@@ -31,8 +31,7 @@ import re
 
 import torch
 
-from angelslim.compressor.quant.core.vllm_calibrate_utils._common import _get_dist_info
-
+from .....utils import rank_world
 from ..config import SmoothAlphaSearchConfig
 from ..core.stats_search import smooth_alpha_search_layer
 
@@ -107,7 +106,7 @@ class SmoothAlphaSearcher:
     def __call__(self, model):
         import torch.distributed as dist
 
-        rank, world_size = _get_dist_info()
+        rank, world_size = rank_world()
         smooth_stats = getattr(model, "_smooth_stats", {})
         alpha_values = getattr(model, "_alpha_search_values", {})
 

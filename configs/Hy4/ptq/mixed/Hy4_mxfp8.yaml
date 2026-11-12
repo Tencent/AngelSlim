@@ -1,0 +1,26 @@
+# Hy4 RTN: MXFP8 (W8A8, 32-wide power-of-two scales) for all linears incl. experts, trunk + MTP.
+# Data-free: python3 tools/run.py -c <this>
+global:
+  save_path: /path/to/output
+
+model:
+  name: hy4
+  model_path: /path/to/model             # BF16 Hy4 checkpoint
+
+compression:
+  name: PTQWeightOnly
+  quantization:
+    name: mixed
+    save_name: compressed-tensors
+    algorithm: rtn
+    num_workers: 8
+    config_groups:
+      mxfp8:
+        format: mxfp8
+        targets:
+          - 're:model\.(?:layers|mtp_layers)\.\d+\.self_attn\.(?:q_a_proj|q_b_proj|kv_a_proj_with_mqa|kv_b_proj|o_proj|linear_gate)$'
+          - 're:model\.(?:layers|mtp_layers)\.\d+\.self_attn\.indexer\.(?:wk|wq_b)$'
+          - 're:model\.(?:layers|mtp_layers)\.\d+\.mlp\.(?:shared_experts\.)?(?:gate_proj|up_proj|down_proj)$'
+          - 're:model\.(?:layers|mtp_layers)\.\d+\.mlp\.experts\.(?:gate_up_proj|down_proj)$'
+    ignore_layers:
+      - 're:.*lm_head$'

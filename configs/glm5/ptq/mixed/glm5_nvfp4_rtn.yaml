@@ -1,0 +1,29 @@
+# GLM-5 (BF16) RTN: NVFP4 routed experts only (MTP layer 78 and everything else stay BF16),
+# compressed-tensors. input_global_scale comes from the vLLM calibration stats.
+# Stage 1: python3 -m angelslim.compressor.quant.vllm_calib.calibrate \
+#            -c configs/glm5/ptq/nvfp4/glm5_vllm_calibrate_bf16.yaml
+# Stage 2: python3 tools/run.py -c <this> --stats-dir <stage-1 output_dir>
+#          (or GLM5_SOURCE_FORMAT=bf16 bash scripts/ptq/run_vllm_quant_for_glm5.sh)
+global:
+  save_path: ./output/glm5_bf16/nvfp4_weight_only
+
+model:
+  name: GLM5
+  model_path: /path/to/GLM-5.1           # local BF16 checkpoint
+
+compression:
+  name: PTQWeightOnly
+  calibrate:
+    stats_dir: ./output/glm5_bf16/statistics   # moe_expert_stats.json
+  quantization:
+    name: mixed
+    save_name: compressed-tensors
+    algorithm: rtn
+    num_workers: 8
+    config_groups:
+      nvfp4_moe:
+        format: nvfp4
+        targets:
+          - 're:model\.layers\.(?!78\.)\d+\.mlp\.experts\.\d+\.(?:gate_proj|up_proj|down_proj)$'
+    ignore_layers:
+      - 're:.*lm_head$'

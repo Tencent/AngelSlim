@@ -12,11 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""HuggingFace-side smooth pipeline (offline weight conversion).
-
-Re-exports the public API consumed by
-``tools/smooth/convert_smooth_weights.py`` (Phase 2 driver).
-"""
+"""HuggingFace-side smooth pipeline (offline weight conversion); CLI: ``...smooth.convert.run``."""
 
 from .apply_funcs import (
     apply_down_proj_smooth,

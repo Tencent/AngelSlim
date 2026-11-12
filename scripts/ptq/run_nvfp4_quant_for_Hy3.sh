@@ -81,7 +81,7 @@ if [[ "${do_calibrate}" -eq 1 ]]; then
     echo "[pipeline] === Stage 1/3: FP8 vLLM activation calibration ==="
     echo "[pipeline] PTQ_CONFIG=${PTQ_CONFIG}"
 
-    python3 tools/run_vllm_calibrate.py \
+    python3 -m angelslim.compressor.quant.vllm_calib.calibrate \
         -c "${PTQ_CONFIG}" \
         --auto-detect-mtp \
         2>&1 | tee "${LOG_DIR}/run_vllm_calibrate_Hy3.log"

@@ -35,14 +35,12 @@ python3 tools/run.py -c configs/qwen3/fp8_static/qwen3-1_7b_fp8_static.yaml
 from angelslim import engine
 engine.get_supported_compress_method()
 ```
-- fp8 block-wise量化可以使用并行GPU转化脚本，其中block_size是权重量化scale对应分块形状，`num_workers`是并行数
+- fp8 block-wise等只量化权重的格式可以不加载模型、直接逐 shard 转换 checkpoint，由 YAML 指定格式（`quant_method.block_size` 为 scale 分块形状，`num_workers` 为并行数）；多种格式混合（如 FP8 + NVFP4 / MXFP4 / MXFP8）见 `configs/*/ptq/mixed/`
 
 ```shell
-python3 tools/fp8_quant_blockwise.py \
-    --block_size 128 128 \
-    --num_workers 32 \
-    --input_path ${INPUT_PATH} \
-    --output_path ${OUTPUT_PATH}
+python3 tools/run.py -c configs/qwen3_5/fp8_blockwise/qwen3_5-9b_fp8_blockwise.yaml \
+    --model-path ${INPUT_PATH} \
+    --save-path ${OUTPUT_PATH}
 ```
 
 ### 投机采样
