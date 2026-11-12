@@ -26,6 +26,6 @@ CONFIG=configs/Hy3/ptq/fp8/Hy3_vllm_ptq_per_tensor.yaml
 
 mkdir -p logs
 
-python3 tools/run_vllm_calibrate.py \
+python3 -m angelslim.compressor.quant.vllm_calib.calibrate \
     -c $CONFIG \
     2>&1 | tee logs/run_vllm_calibrate_Hy3.log

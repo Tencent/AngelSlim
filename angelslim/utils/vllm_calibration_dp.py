@@ -55,6 +55,8 @@ def validate_vllm_calibration_dp_args(parser, args):
         parser.error("--tp-size must be >= 1")
     if args.dp_size < 1:
         parser.error("--dp-size must be >= 1")
+    if getattr(args, "dp_timeout", None) is not None and args.dp_timeout < 1:
+        parser.error("--dp-timeout must be >= 1")
 
     if args.dp_size > 1 and args.distributed_executor_backend != "ray":
         parser.error(
@@ -191,10 +193,19 @@ def _run_ray_actor_calibration_dp(args, worker_fn: Callable[[Any], Any]) -> list
 
         # Wait for all placement groups to be ready
         ready_refs = [pg.ready() for pg in placement_groups]
-        ray.wait(
+        ready, pending = ray.wait(
             ready_refs,
             num_returns=len(ready_refs),
+            timeout=getattr(args, "dp_timeout", None),
         )
+        if pending:
+            raise TimeoutError(
+                "Timed out waiting for calibration DP placement groups: "
+                f"ready={len(ready)}, pending={len(pending)}, "
+                f"timeout={getattr(args, 'dp_timeout', None)}s. "
+                "Check whether enough free GPUs are available for "
+                "dp_size * tp_size."
+            )
 
         # Create actors for each DP rank
         ReplicaActor = ray.remote(
@@ -223,11 +234,18 @@ def _run_ray_actor_calibration_dp(args, worker_fn: Callable[[Any], Any]) -> list
             actor.run.remote(args_dict, dp_rank) for dp_rank, actor in enumerate(actors)
         ]
 
-        # Wait for results
-        ray.wait(
+        # Wait for results with timeout
+        ready, pending = ray.wait(
             result_refs,
             num_returns=len(result_refs),
+            timeout=getattr(args, "dp_timeout", None),
         )
+        if pending:
+            raise TimeoutError(
+                "Timed out waiting for calibration DP actors: "
+                f"finished={len(ready)}, pending={len(pending)}, "
+                f"timeout={getattr(args, 'dp_timeout', None)}s."
+            )
 
         results = ray.get(result_refs)
         merged_activation_stats = _merge_dp_payloads(args.output_dir, results)
@@ -253,10 +271,17 @@ def _run_ray_actor_calibration_dp(args, worker_fn: Callable[[Any], Any]) -> list
                 actor.run_kv_search.remote(args_dict, dp_rank, activation_stats_ref)
                 for dp_rank, actor in enumerate(actors)
             ]
-            ray.wait(
+            ready, pending = ray.wait(
                 kv_refs,
                 num_returns=len(kv_refs),
+                timeout=getattr(args, "dp_timeout", None),
             )
+            if pending:
+                raise TimeoutError(
+                    "Timed out waiting for DP KV search actors: "
+                    f"finished={len(ready)}, pending={len(pending)}, "
+                    f"timeout={getattr(args, 'dp_timeout', None)}s."
+                )
             kv_results = ray.get(kv_refs)
             _merge_dp_kv_search_payloads(
                 args.output_dir,

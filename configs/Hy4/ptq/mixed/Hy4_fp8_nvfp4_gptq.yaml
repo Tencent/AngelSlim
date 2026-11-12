@@ -1,0 +1,70 @@
+# Hy4 / Hy4-VL: FP8 attention linears + NVFP4 routed experts, exported as compressed-tensors.
+# Run: bash scripts/ptq/run_hy4_vlm_gptq.sh (or tools/run.py -c <this> --stage ...)
+global:
+  save_path: /path/to/run_dir            # run root: weights land in out/, calibration
+                                         # products in stats/ hessian/ image_embeds/
+
+model:
+  name: hy4
+  model_path: /path/to/model             # BF16 Hy4 / Hy4-VL checkpoint
+
+# Rollout JSONL with images/ beside it; only the calib stage reads it.
+dataset:
+  name: VLMRollout
+  data_path: /path/to/rollout.jsonl
+  max_seq_length: 16384
+  num_samples: 0                         # 0 = whole JSONL
+
+compression:
+  name: PTQWeightOnly
+  # Stage calib: one vLLM forward collects Hessians and MoE absmax; skipped when present.
+  calibrate:
+    backend: vllm
+    tp_size: 32                          # 4 nodes x 8 GPUs, Ray cluster
+    max_num_seqs: 4
+    distributed_executor_backend: ray
+    args:                                # vllm_calib.hessian_collect options
+      vision_budget: 8448
+      max_images_per_prompt: 4
+      max_num_batched_tokens: 8192       # 16384 peaks ~11 GiB of activations and OOMs
+      gpu_memory_utilization: 0.70       # H is allocated outside this budget; err low
+      enable_mtp: true
+      num_speculative_tokens: 1
+      modules: '^(?!visual\.).*(mlp\.experts\.|o_proj)'
+  quantization:
+    name: mixed
+    save_name: compressed-tensors
+    algorithm: gptq                      # default for groups that do not set one
+    gptq: {damp: 0.05, batch_rows: 131072}
+    num_workers: 8                       # shard workers per node, one GPU each
+    mtp_file: /path/to/mtp_bf16.safetensors  # omit when MTP lives in model_path
+    # Targets match checkpoint module names (key minus .weight); first matching group wins.
+    config_groups:
+      block_fp8_w8a8:                    # o_proj: GPTQ; linear_gate: RTN (no H)
+        format: fp8_block
+        block_size: [128, 128]
+        targets:
+          - 're:model\.layers\.(?!0\.)\d+\.self_attn\.(?:linear_gate|o_proj)$'
+      mtp_fp8:
+        format: fp8_block
+        block_size: [128, 128]
+        algorithm: rtn
+        targets:
+          - 're:model\.mtp_layers\.\d+\.self_attn\.(?:linear_gate|o_proj|q_a_proj|q_b_proj|kv_a_proj_with_mqa|kv_b_proj|indexer\.wq_b)$'
+          - 're:model\.mtp_layers\.\d+\.mlp\.shared_experts\.(?:gate_proj|up_proj|down_proj)$'
+      nvfp4_moe:
+        format: nvfp4
+        alpha_list: [0.85, 0.88, 0.91, 0.94, 0.97, 1.0, 1.4, 1.45, 1.5]
+        targets:
+          - 're:model\.layers\.\d+\.mlp\.experts\.(?:gate_up_proj|down_proj)$'
+      mtp_nvfp4:
+        format: nvfp4
+        algorithm: rtn
+        alpha_list: [0.85, 0.88, 0.91, 0.94, 0.97, 1.0, 1.4, 1.45, 1.5]
+        targets:
+          - 're:model\.mtp_layers\.\d+\.mlp\.experts\.(?:gate_up_proj|down_proj)$'
+    ignore_layers:                       # "re:" = regex, otherwise substring
+      - 're:(?:visual|vit)\..*'
+      - 're:.*lm_head$'
+      - 're:model\.layers\.0\.self_attn\..*'
+      - 're:.*indexer\.(?:wk|weights_proj)$'

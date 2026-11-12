@@ -1,0 +1,25 @@
+# GLM-5 (BF16) -> MXFP8 W8A8 for attention / indexer / MLP / experts, compressed-tensors.
+# Data-free: python3 tools/run.py -c <this>
+global:
+  save_path: /path/to/output
+
+model:
+  name: GLM5
+  model_path: /path/to/model
+
+compression:
+  name: PTQWeightOnly
+  quantization:
+    name: mixed
+    save_name: compressed-tensors
+    num_workers: 8
+    config_groups:
+      mxfp8:
+        format: mxfp8
+        targets:
+          - 're:model\.layers\.\d+\.self_attn\.(?:q_a_proj|q_b_proj|kv_a_proj_with_mqa|kv_b_proj|o_proj)$'
+          - 're:model\.layers\.\d+\.self_attn\.indexer\.(?:wk|wq_b)$'
+          - 're:model\.layers\.\d+\.mlp\.(?:shared_experts\.)?(?:gate_proj|up_proj|down_proj)$'
+          - 're:model\.layers\.\d+\.mlp\.experts\.\d+\.(?:gate_proj|up_proj|down_proj)$'
+    ignore_layers:
+      - 're:.*lm_head$'

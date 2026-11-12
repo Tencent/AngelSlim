@@ -3,7 +3,7 @@
 # One-click pipeline:  bf16 model  ->  vLLM activation calibration
 #                                   ->  FP8 quantization (HF safetensors)
 #
-# Stage 1: tools/run_vllm_calibrate.py
+# Stage 1: angelslim.compressor.quant.vllm_calib.calibrate
 #   * Loads the bf16 model with vLLM, runs forward passes on the PTQ dataset,
 #     and dumps activation_stats.json / moe_expert_stats.json / kv_cache_*
 #     into the directory given by ``output_dir`` in PTQ_CONFIG.
@@ -81,7 +81,7 @@ if [[ "${do_calibrate}" -eq 1 ]]; then
     echo "[pipeline] === Stage 1/2: activation calibration ==="
     echo "[pipeline] PTQ_CONFIG=${PTQ_CONFIG}"
 
-    python3 tools/run_vllm_calibrate.py \
+    python3 -m angelslim.compressor.quant.vllm_calib.calibrate \
         -c "${PTQ_CONFIG}" \
         2>&1 | tee "logs/run_vllm_quant_Hy3-calibrate.log"
 

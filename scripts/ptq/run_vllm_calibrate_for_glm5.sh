@@ -22,10 +22,10 @@ export ASYNC_SCHEDULING=1
 export VLLM_ENABLE_PREFIX_CACHING=1
 export PRECISIONMODE=HF
 
-CONFIG=configs/glm5/ptq/nvfp4/glm5_vllm_ptq_moe_fp8.yaml
+CONFIG=configs/glm5/ptq/mixed/glm5_fp8_nvfp4_rtn.yaml
 
 mkdir -p logs
 
-python3 tools/run_vllm_calibrate.py \
+python3 -m angelslim.compressor.quant.vllm_calib.calibrate \
     -c $CONFIG \
     2>&1 | tee logs/run_vllm_calibrate_glm5.log

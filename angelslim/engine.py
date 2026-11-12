@@ -744,7 +744,8 @@ class VLLMCalibrateEngine:
         """
         from vllm import LLM
 
-        from .compressor.quant import setup_activation_hooks
+        from .compressor.quant.vllm_calib import worker_bootstrap
+        from .compressor.quant.vllm_calib.hooks import setup_activation_hooks
 
         print_info(f"VLLM_MOE_COLLECT_STATS: {os.environ.get('VLLM_MOE_COLLECT_STATS')}")
         print_info("\nConfiguration:")
@@ -764,6 +765,8 @@ class VLLMCalibrateEngine:
             enable_expert_parallel=False,
             max_num_seqs=max_num_seqs,
             max_model_len=max_length + 16,
+            # vllm_calib.hooks observes TritonExperts; other MoE backends bypass it.
+            moe_backend="triton",
         )
 
         if skip_weight_loading:
@@ -776,6 +779,7 @@ class VLLMCalibrateEngine:
         print_info("\n" + "=" * 80)
         print_info("Setting up activation hooks...")
         print_info("=" * 80)
+        self.llm.llm_engine.collective_rpc(worker_bootstrap())
         hook_results = self.llm.apply_model(setup_activation_hooks)
         for i, result in enumerate(hook_results):
             print_info(f"Worker {i}: {result}")
@@ -837,11 +841,9 @@ class VLLMCalibrateEngine:
         """
         from vllm import SamplingParams
 
-        from .compressor.quant import (
+        from .compressor.quant.vllm_calib.hooks import (
             get_activation_stats,
             get_moe_stats,
-            print_activation_stats,
-            print_moe_stats,
         )
 
         if self.llm is None:
@@ -877,12 +879,6 @@ class VLLMCalibrateEngine:
         print_info("\n" + "=" * 80)
         print_info("Collecting Statistics...")
         print_info("=" * 80)
-
-        print_info("\nActivation Statistics:")
-        self.llm.apply_model(print_activation_stats)
-
-        print_info("\nMoE Expert Statistics:")
-        self.llm.apply_model(lambda model: print_moe_stats(model, verbose=verbose))
 
         # Create output directory
         os.makedirs(output_dir, exist_ok=True)

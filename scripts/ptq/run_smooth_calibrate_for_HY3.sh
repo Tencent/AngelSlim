@@ -31,4 +31,4 @@ export VLLM_MOE_COLLECT_SMOOTH_STATS=1
 export VLLM_MOE_COLLECT_ALPHA_SEARCH=1
 
 
-python3 tools/smooth/run_vllm_smooth.py -c "$CONFIG" "$@"
+python3 -m angelslim.compressor.transform.smooth.vllm.collect -c "$CONFIG" "$@"

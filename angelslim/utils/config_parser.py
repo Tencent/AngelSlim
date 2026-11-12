@@ -65,6 +65,7 @@ class QuantizationMethod(str, Enum):
     NVFP4_GPTQ = "nvfp4_gptq"
     NVFP4_GPTAQ = "nvfp4_gptaq"
     W4A8_INT8 = "w4a8i8"
+    MIXED = "mixed"
 
 
 @dataclass
@@ -262,6 +263,12 @@ class QuantizationConfig:
     scale_search: Optional[Dict[str, Any]] = field(default=None)
     num_workers: int = field(default=8)
     gpus: Optional[str] = field(default=None)
+    # mixed (PTQWeightOnly): {group: {format, targets, algorithm, alpha_list, gptq, ...}}
+    config_groups: Dict[str, Any] = field(default_factory=dict)
+    algorithm: str = field(default="rtn")
+    gptq: Dict[str, Any] = field(default_factory=dict)
+    mtp_file: Optional[str] = field(default=None)
+    skip_unquantized_source: bool = field(default=False)
 
 
 @dataclass
@@ -592,6 +599,17 @@ class CompressionConfig:
             raise ValueError(f"Unsupported compression method in 'name': {e}")
 
 
+def default_run_dirs(save_path):
+    """``global.save_path`` is the run root: weights in ``out/``, calibration products beside
+    them. Callers take the YAML value when set and fall back to these."""
+    return {
+        "save_path": os.path.join(save_path, "out"),
+        "stats_dir": os.path.join(save_path, "stats"),
+        "hessian_dir": os.path.join(save_path, "hessian"),
+        "image_embeds_dir": os.path.join(save_path, "image_embeds"),
+    }
+
+
 @dataclass
 class CalibrateConfig:
     """Configuration for vLLM-based calibration.
@@ -603,6 +621,9 @@ class CalibrateConfig:
         distributed_executor_backend: Distributed executor backend ('ray' or 'mp')
         skip_weight_loading: Use dummy weights for fast debug mode
         verbose: Enable verbose output for debugging
+        stats_dir: MoE absmax output (moe_expert_stats.json, mtp_moe_expert_stats.json)
+        hessian_dir: Hessian output of vllm_calib.hessian_collect
+        args: Extra vllm_calib.hessian_collect options, keyed by argparse dest
     """
 
     backend: str = field(default="hf")
@@ -611,6 +632,9 @@ class CalibrateConfig:
     distributed_executor_backend: str = field(default="ray")
     skip_weight_loading: bool = field(default=False)
     verbose: bool = field(default=False)
+    stats_dir: Optional[str] = field(default=None)
+    hessian_dir: Optional[str] = field(default=None)
+    args: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
