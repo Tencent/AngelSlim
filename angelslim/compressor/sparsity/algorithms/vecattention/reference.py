@@ -94,33 +94,31 @@ def build_vecattention_keep_mask(
     gap = float("inf") if threshold <= 0.0 else -math.log(threshold)
 
     nqb = (L + block_size_q - 1) // block_size_q
+    nfull = L // block_size_q  # query blocks with all block_size_q rows
     qf = q.float()
     kf = k.float()
-    keep_tok = torch.zeros(B, H, nqb, L, device=q.device, dtype=torch.bool)
+    tok_idx = torch.arange(L, device=q.device)  # (L,)
+    q0 = torch.arange(nqb, device=q.device).unsqueeze(1) * block_size_q  # (nqb,1)
+    last_q = (q0 + block_size_q).clamp(max=L) - 1  # last query position per block
+    # (1) mean query vector for every block; the partial tail block is pooled
+    #     on its own so its mean covers only the rows that exist.
+    split = nfull * block_size_q
+    mean_q = qf[:, :, :split].reshape(B, H, nfull, block_size_q, D).mean(dim=3)
+    if nfull < nqb:
+        mean_q = torch.cat([mean_q, qf[:, :, split:].mean(dim=2, keepdim=True)], dim=2)
+    # (2) score against all keys; mask future keys (causal at block level:
+    #     keys beyond the block's last query position cannot be attended).
+    qk = torch.matmul(mean_q, kf.transpose(-1, -2)) * scale  # (B,H,nqb,L)
+    future = tok_idx > last_q  # (nqb,L)
+    qk.masked_fill_(future, float("-inf"))
+    # MinP: keep key j iff qk[j] + gap >= max_j qk (no rows to reduce when L == 0).
+    rowmax = qk.amax(dim=-1, keepdim=True) if L else qk
+    keep = qk.add_(gap) >= rowmax
+    # (3) always-keep: initial sink block + local band before the query block.
     k_local_tokens = block_size_k * block_size_q  # local band width in tokens
-    tok_idx = torch.arange(L, device=q.device)
-    for qb in range(nqb):
-        q0, q1 = qb * block_size_q, min((qb + 1) * block_size_q, L)
-        # (1) mean query vector for this block.
-        mean_q = qf[:, :, q0:q1, :].mean(dim=2)  # (B,H,D)
-        # (2) score against all keys; mask future keys (causal at block level:
-        #     keys beyond the block's last query position cannot be attended).
-        qk = torch.matmul(mean_q.unsqueeze(2), kf.transpose(-1, -2)).squeeze(2) * scale  # (B,H,L)
-        last_q = q1 - 1
-        future = tok_idx.view(1, 1, L) > last_q
-        qk = qk.masked_fill(future, float("-inf"))
-        # MinP: keep key j iff qk[j] + gap >= max_j qk.
-        rowmax = qk.amax(dim=-1, keepdim=True)  # (B,H,1)
-        keep = (qk + gap) >= rowmax  # (B,H,L)
-        # (3) always-keep: initial sink block + local band before the query block.
-        keep = keep | (tok_idx.view(1, 1, L) < block_size_q)  # sink (first q-block)
-        local_lo = max(0, q0 - k_local_tokens)
-        local_band = (tok_idx.view(1, 1, L) >= local_lo) & (tok_idx.view(1, 1, L) <= last_q)
-        keep = keep | local_band
-        # never keep a future key (re-assert after the always-keep unions).
-        keep = keep & ~future
-        keep_tok[:, :, qb, :] = keep
-    return keep_tok
+    always = (tok_idx < block_size_q) | (tok_idx >= q0 - k_local_tokens)
+    # never keep a future key (re-assert after the always-keep unions).
+    return (keep | always) & ~future
 
 
 def vecattention_reference_prefill(
