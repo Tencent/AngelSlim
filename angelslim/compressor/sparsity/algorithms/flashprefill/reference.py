@@ -66,13 +66,13 @@ def flashprefill_reference_prefill(
         last_n_block_full=last_n_block_full,
     )
 
-    scores = torch.matmul(q.float(), k.float().transpose(-1, -2)) * scale  # (B,H,L,L)
+    scores = torch.matmul(q.float(), k.float().transpose(-1, -2)).mul_(scale)  # (B,H,L,L)
     causal = torch.ones(L, L, device=q.device, dtype=torch.bool).triu(1)  # True=masked
     # Expand block keep mask -> token keep mask.
     tok = keep_block.repeat_interleave(block_size, dim=2).repeat_interleave(block_size, dim=3)[
         :, :, :L, :L
     ]  # (B,H,L,L) True=keep
     full_mask = (~tok) | causal[None, None]  # True=masked
-    scores = scores.masked_fill(full_mask, float("-inf"))
+    scores.masked_fill_(full_mask, float("-inf"))
     probs = F.softmax(scores, dim=-1, dtype=torch.float32).to(v.dtype)
     return torch.matmul(probs, v)
