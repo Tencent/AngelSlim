@@ -148,6 +148,7 @@
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
           <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html">Eagle3</a></li>
+          <li><a href="https://github.com/fscdc/MMFlash">MMFlash</a></li>
         </ul>
       </td>
       <td>
