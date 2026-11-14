@@ -12,8 +12,9 @@
 |---|---|---|---|
 | [Qwen/Qwen3.5-4B](https://huggingface.co/Qwen/Qwen3.5-4B) | [FSCCS/Qwen3.5-4B-MMFlash](https://huggingface.co/FSCCS/Qwen3.5-4B-MMFlash) | 16 | layers 1, 8, 15, 22, 29 (of 32) |
 | [Qwen/Qwen3.5-9B](https://huggingface.co/Qwen/Qwen3.5-9B) | [FSCCS/Qwen3.5-9B-MMFlash](https://huggingface.co/FSCCS/Qwen3.5-9B-MMFlash) | 16 | layers 1, 8, 15, 22, 29 (of 32) |
+| [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) | [FSCCS/Qwen3.8-27B-MMFlash](https://huggingface.co/FSCCS/Qwen3.8-27B-MMFlash) | 16 | layers 1, 16, 31, 46, 61 (of 64) |
 
-The checkpoints use the DFlash draft format, so they load with AngelSlim's `QwenDFlashDraftModel` without conversion. More drafts are listed in the [Hugging Face collection](https://huggingface.co/collections/FSCCS/mmflash-6af09b489ba5237bda91177f).
+Qwen3.8 uses the Qwen3.5 architecture (`Qwen3_5ForConditionalGeneration`), so the same code serves both. The checkpoints use the DFlash draft format, so they load with AngelSlim's `QwenDFlashDraftModel` without conversion. More drafts are listed in the [Hugging Face collection](https://huggingface.co/collections/FSCCS/mmflash-6af09b489ba5237bda91177f).
 
 ## ⚡ Quick Start
 
@@ -100,7 +101,7 @@ print("tokens per verification step:", sum(out.acceptance_lengths) / len(out.acc
 `MMFlashGenerator` (`angelslim/compressor/speculative/inference/mmflash.py`) extends the DFlash loop of `tools/dflash_benchmark.py`:
 
 - **Multimodal prefill.** The processor outputs (`pixel_values`, `image_grid_thw`, `mm_token_type_ids`) go into the first target forward. The multimodal RoPE offset that the target computes for the prompt (`rope_deltas`) is applied to the positions of every verification block.
-- **Hybrid attention.** Qwen3.5 interleaves Gated DeltaNet (linear-attention) layers with full attention. When a draft suffix is rejected, it has to be removed from the convolution and recurrent states of the linear-attention layers, which `Cache.crop` cannot do. The loop saves those states before each verification forward and records the outputs of the layers' input projections during it. After acceptance it recomputes the states of the accepted prefix in one batched pass over all layers, with the flash-linear-attention kernel when it is installed. This is exact, because in a causal model the inputs at the accepted positions do not depend on the rejected tokens. Full-attention layers are cropped to the accepted length.
+- **Hybrid attention.** Qwen3.5 and Qwen3.8 interleave Gated DeltaNet (linear-attention) layers with full attention. When a draft suffix is rejected, it has to be removed from the convolution and recurrent states of the linear-attention layers, which `Cache.crop` cannot do. The loop saves those states before each verification forward and records the outputs of the layers' input projections during it. After acceptance it recomputes the states of the accepted prefix in one batched pass over all layers, with the flash-linear-attention kernel when it is installed. This is exact, because in a causal model the inputs at the accepted positions do not depend on the rejected tokens. Full-attention layers are cropped to the accepted length.
 - The loop decodes one request at a time and runs on transformers 5.8 and later (tested with 5.8.1, 5.15.0 and 5.23.0). Targets with sliding-window attention are not supported. For serving, use SGLang or vLLM (below).
 
 ### Serving with SGLang and vLLM
@@ -131,7 +132,7 @@ vllm serve Qwen/Qwen3.5-4B \
 
 ## 📈 Results
 
-`tools/mmflash_benchmark.py` on one NVIDIA H200 (transformers 5.15, flash-linear-attention 0.6, bfloat16, SDPA, greedy, `--max-new-tokens 2048`; a random subset of each dataset). The speedup is the ratio of the mean time per output token, as in `tools/dflash_benchmark.py`. Eager transformers decoding is bound by CPU launch overhead (about 29 ms per step for both targets), so these numbers describe this loop rather than a serving engine.
+`tools/mmflash_benchmark.py` on one NVIDIA H200 (transformers 5.15, flash-linear-attention 0.6, bfloat16, SDPA, greedy, `--max-new-tokens 2048`; a random subset of each dataset). The speedup is the ratio of the mean time per output token, as in `tools/dflash_benchmark.py`. Eager transformers decoding is bound by CPU launch overhead (about 29 ms per step for Qwen3.5-4B/9B and 59 ms for Qwen3.8-27B), so these numbers describe this loop rather than a serving engine.
 
 | Target | Dataset | Questions | Avg. acceptance length | Autoregressive (tok/s) | MMFlash (tok/s) | Speedup |
 |---|---|---|---|---|---|---|
@@ -140,6 +141,9 @@ vllm serve Qwen/Qwen3.5-4B \
 | Qwen3.5-4B | MathVista | 20 | 6.67 | 34.2 | 98.0 | 3.45× |
 | Qwen3.5-9B | ChartQA | 10 | 6.08 | 33.7 | 95.8 | 3.34× |
 | Qwen3.5-9B | MMStar | 10 | 4.58 | 33.9 | 70.5 | 2.28× |
+| Qwen3.8-27B | ChartQA | 10 | 6.09 | 16.7 | 56.7 | 3.45× |
+| Qwen3.8-27B | MMStar | 10 | 5.53 | 17.0 | 45.6 | 2.87× |
+| Qwen3.8-27B | MathVista | 10 | 7.87 | 17.1 | 68.9 | 4.23× |
 
 On SGLang with one NVIDIA H200 (temperature 0, concurrency 1), averaged over ChartQA, CharXiv, MMStar, MMBench, DynaMath, MathVista and MathVerse:
 
@@ -148,7 +152,9 @@ On SGLang with one NVIDIA H200 (temperature 0, concurrency 1), averaged over Cha
 | Qwen3.5-4B | 5.70 | 3.00× |
 | Qwen3.5-9B | 5.60 | 3.05× |
 
-Per-benchmark results and concurrency scaling are in the [4B](https://huggingface.co/FSCCS/Qwen3.5-4B-MMFlash) and [9B](https://huggingface.co/FSCCS/Qwen3.5-9B-MMFlash) model cards and the [GitHub repository](https://github.com/fscdc/MMFlash).
+For Qwen3.8-27B (ChartQA / MMStar / DynaMath): acceptance length 6.37 / 5.36 / 7.57, decoding speedup 4.18× / 3.54× / 4.71×.
+
+Per-benchmark results and concurrency scaling are in the [4B](https://huggingface.co/FSCCS/Qwen3.5-4B-MMFlash), [9B](https://huggingface.co/FSCCS/Qwen3.5-9B-MMFlash) and [27B](https://huggingface.co/FSCCS/Qwen3.8-27B-MMFlash) model cards and the [GitHub repository](https://github.com/fscdc/MMFlash).
 
 ## 📜 Citation
 

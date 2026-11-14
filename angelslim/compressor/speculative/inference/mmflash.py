@@ -29,17 +29,17 @@ target needs:
   RoPE (the Qwen-VL family) store the position offset of the prompt in
   ``model.rope_deltas``; every verify block is placed at ``cached length + offset``.
   The draft uses plain sequence positions.
-* Hybrid targets. Qwen3.5 interleaves Gated DeltaNet (linear-attention) layers with full
-  attention. A rejected draft suffix has to be removed from their convolution and
-  recurrent states, which ``Cache.crop`` cannot do. The states are saved before each
-  verify forward and the outputs of the layers' input projections are recorded during it;
-  after acceptance the states of the accepted prefix are recomputed in one batched pass
-  over all layers. Other linear-attention modules are restored and re-run on the accepted
-  prefix of their recorded inputs. Both are exact: in a causal model the inputs at the
-  accepted positions do not depend on the rejected tokens. Full-attention layers are
-  cropped to the accepted length.
+* Hybrid targets. Qwen3.5 (and Qwen3.8, which shares its architecture) interleaves Gated
+  DeltaNet (linear-attention) layers with full attention. A rejected draft suffix has to be
+  removed from their convolution and recurrent states, which ``Cache.crop`` cannot do. The
+  states are saved before each verify forward and the outputs of the layers' input
+  projections are recorded during it; after acceptance the states of the accepted prefix
+  are recomputed in one batched pass over all layers. Other linear-attention modules are
+  restored and re-run on the accepted prefix of their recorded inputs. Both are exact: in a
+  causal model the inputs at the accepted positions do not depend on the rejected tokens.
+  Full-attention layers are cropped to the accepted length.
 
-The loop relies only on forward pre-hooks and on the cache layers' ``keys`` / ``values`` and
+The loop relies only on module forward hooks and on the cache layers' ``keys`` / ``values`` and
 ``conv_states`` / ``recurrent_states`` attributes, which transformers 5.8 through 5.23
 share. Block size 1 runs the target alone through the same loop, which is the
 autoregressive baseline.
