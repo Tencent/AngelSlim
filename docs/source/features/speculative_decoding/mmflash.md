@@ -56,7 +56,7 @@ torchrun --nproc_per_node=8 --master_port=29600 tools/mmflash_benchmark.py \
 
 Notes:
 
-- Without `flash-linear-attention`, transformers runs the Qwen3.5 linear-attention layers with its PyTorch reference kernels. Decoding still works, but a 16-token verification pass becomes much slower: in our ChartQA run with Qwen3.5-4B the speedup was 1.3× instead of about 3×.
+- Without `flash-linear-attention`, transformers runs the Qwen3.5 linear-attention layers with its PyTorch reference kernels. Decoding still works, but a 16-token verification pass becomes much slower and most of the speedup is lost.
 - Supported datasets: `chartqa` (HuggingFaceM4/ChartQA test), `mmstar` (Lin-Chen/MMStar val) and `mathvista` (AI4Math/MathVista testmini), with the prompts of the MMFlash evaluation. `--max-samples` selects a fixed random subset (seed 0).
 - `--block-size` defaults to the draft config (16). `--enable-thinking` turns on Qwen3.5's thinking mode (off by default, as in the MMFlash evaluation). `--output-file` writes every output and its timing to a JSON file.
 - The average acceptance length is the mean number of tokens committed per verification step (accepted drafts plus the target's own token), averaged over questions, as in `tools/dflash_benchmark.py`.
@@ -137,12 +137,9 @@ vllm serve Qwen/Qwen3.5-4B \
 | Target | Dataset | Questions | Avg. acceptance length | Autoregressive (tok/s) | MMFlash (tok/s) | Speedup |
 |---|---|---|---|---|---|---|
 | Qwen3.5-4B | ChartQA | 20 | 5.74 | 34.4 | 105.8 | 3.12× |
-| Qwen3.5-4B | MMStar | 20 | 4.48 | 34.2 | 75.9 | 2.29× |
 | Qwen3.5-4B | MathVista | 20 | 6.67 | 34.2 | 98.0 | 3.45× |
 | Qwen3.5-9B | ChartQA | 10 | 6.08 | 33.7 | 95.8 | 3.34× |
-| Qwen3.5-9B | MMStar | 10 | 4.58 | 33.9 | 70.5 | 2.28× |
 | Qwen3.8-27B | ChartQA | 10 | 6.09 | 16.7 | 56.7 | 3.45× |
-| Qwen3.8-27B | MMStar | 10 | 5.53 | 17.0 | 45.6 | 2.87× |
 | Qwen3.8-27B | MathVista | 10 | 7.87 | 17.1 | 68.9 | 4.23× |
 
 On SGLang with one NVIDIA H200 (temperature 0, concurrency 1), averaged over ChartQA, CharXiv, MMStar, MMBench, DynaMath, MathVista and MathVerse:
