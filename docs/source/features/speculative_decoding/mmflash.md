@@ -60,7 +60,7 @@ Notes:
 - `--block-size` defaults to the draft config (16). `--enable-thinking` turns on Qwen3.5's thinking mode (off by default, as in the MMFlash evaluation). `--output-file` writes every output and its timing to a JSON file.
 - The average acceptance length is the mean number of tokens committed per verification step (accepted drafts plus the target's own token), averaged over questions, as in `tools/dflash_benchmark.py`.
 - In bfloat16, a 16-token verification pass and a 1-token decoding step round differently, so a greedy output can leave the autoregressive one at a near-tied token, as in other serving engines. `tests/test_mmflash_inference.py` checks on a small float32 model that the outputs are identical for every acceptance length.
-- The script disables PyTorch's cuDNN attention backend (`torch.backends.cuda.enable_cudnn_sdp(False)`, also in the Python example below). That backend rebuilds its execution plan whenever the key/value length changes, i.e. at every decoding step. With it enabled, both autoregressive and MMFlash decoding ran about 8× slower on an H200.
+- The script disables PyTorch's cuDNN attention backend (`torch.backends.cuda.enable_cudnn_sdp(False)`, also in the Python example below). That backend rebuilds its execution plan whenever the key/value length changes, i.e. at every decoding step. With it enabled, autoregressive decoding ran about 8× and MMFlash decoding about 28× slower on an H200.
 
 ### Python API
 

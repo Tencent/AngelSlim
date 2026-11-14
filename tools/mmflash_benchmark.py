@@ -238,8 +238,8 @@ def main() -> None:
     torch.manual_seed(0)
     torch.cuda.manual_seed_all(0)
     # PyTorch may run SDPA through cuDNN on Hopper GPUs, which rebuilds its execution plan
-    # whenever the key/value length changes, i.e. at every decoding step (both methods
-    # decode about 8x slower on an H200 with it).
+    # whenever the key/value length changes, i.e. at every decoding step (on an H200 it made
+    # autoregressive decoding about 8x and MMFlash decoding about 28x slower).
     torch.backends.cuda.enable_cudnn_sdp(False)
 
     _dist_init()
