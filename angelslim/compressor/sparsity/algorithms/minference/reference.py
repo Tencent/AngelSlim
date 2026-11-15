@@ -76,9 +76,23 @@ def _masked_softmax_attention(
     mask exactly as upstream does.
     """
     scaling = q.shape[-1] ** -0.5
-    attn = torch.matmul(q, k.transpose(2, 3)) * scaling
-    attn = attn.masked_fill(~keep, float("-inf"))
-    probs = F.softmax(attn, dim=-1, dtype=torch.float32).to(q.dtype)
+    attn = torch.matmul(q, k.transpose(2, 3)).mul_(scaling)
+    mask = ~keep
+    if (
+        type(attn) is torch.Tensor
+        and type(mask) is torch.Tensor
+        and mask.ndim <= attn.ndim
+        and all(s == 1 or s == t for s, t in zip(reversed(mask.shape), reversed(attn.shape)))
+    ):
+        attn.masked_fill_(mask, float("-inf"))
+    else:
+        attn = attn.masked_fill(mask, float("-inf"))
+    softmax = F.softmax
+    options = {}
+    if type(attn) is torch.Tensor and attn.dtype == torch.float32 and not attn.requires_grad:
+        softmax = torch.softmax
+        options["out"] = attn
+    probs = softmax(attn, dim=-1, dtype=torch.float32, **options).to(q.dtype)
     return torch.matmul(probs, v)
 
 
