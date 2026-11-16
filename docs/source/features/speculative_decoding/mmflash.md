@@ -2,7 +2,7 @@
 
 **MMFlash** is a speculative decoding method for vision-language models (VLMs), from the paper **MMFlash: Faster Speculative Decoding for Vision-Language Models**. It builds on [DFlash](https://github.com/z-lab/dflash) block-diffusion drafting: the draft reads hidden states from five layers of the target and proposes a block of 16 tokens in one forward pass, and the target verifies the block in one forward pass. MMFlash keeps the DFlash draft architecture and is trained on multimodal data with a loss weighted by per-token visual-grounding (visual-KL) scores.
 
-[[GitHub]](https://github.com/fscdc/MMFlash) | [[Project page]](https://fscdc.github.io/MMFlash/) | [[Hugging Face]](https://huggingface.co/collections/FSCCS/mmflash-6af09b489ba5237bda91177f)
+[[Paper]](https://arxiv.org/abs/2611.18482) | [[GitHub]](https://github.com/fscdc/MMFlash) | [[Project page]](https://fscdc.github.io/MMFlash/) | [[Hugging Face]](https://huggingface.co/collections/FSCCS/mmflash-6af09b489ba5237bda91177f)
 
 ---
 
@@ -159,7 +159,7 @@ Per-benchmark results and concurrency scaling are in the [4B](https://huggingfac
 @article{feng2026mmflash,
   title   = {MMFlash: Faster Speculative Decoding for Vision-Language Models},
   author  = {Feng, Sicheng and Chen, Zigeng and Wang, Song and Fang, Gongfan and Wang, Xinchao},
-  journal = {arXiv preprint},
+  journal = {arXiv preprint arXiv:2611.18482},
   year    = {2026}
 }
 ```
