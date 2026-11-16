@@ -59,7 +59,7 @@ model cannot be constructed on one GPU.
 Update one of the supplied examples:
 
 - `configs/qwen3/mcore_qad/qwen3_moe_nvfp4.yaml`
-- `configs/Hy3/mcore_qad/hy_v3_nvfp4.yaml`
+- `configs/Hy3/mcore_qad/hy_v3_w4a16.yaml`
 
 Then launch with `torchrun`:
 

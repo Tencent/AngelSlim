@@ -63,7 +63,7 @@ Compared with `tools/vllm_patch/install.sh`, this installer deliberately:
   moved to `experts/triton_moe.py`), and `fused_moe.py` now contains HPC
   SM90 `swap_ab` GEMM optimisations that whole-file replacement would
   destroy.
-* **Does NOT install `smooth_moe_inject.py`.** Hy4's NVFP4 MoE
+* **Does NOT install `smooth_moe_inject.py`.** Hy4's MoE
   calibration only needs the global input `scale_amax` (i.e.
   `collect_fused_moe_internal_stats`); smooth stats / alpha search are
   not part of the Hy4 pipeline.
