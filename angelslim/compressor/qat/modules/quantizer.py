@@ -92,22 +92,22 @@ def _quant_fp4_element(
     tensor: torch.Tensor, ebits: int, mbits: int, max_norm: float, mantissa_rounding: str = "even"
 ):
     if ebits != 0:
-        private_exp = floor_ste(torch.log2(torch.abs(tensor) + (tensor == 0).type(tensor.dtype)))
+        private_exp = floor_ste(torch.log2(torch.abs(tensor).add_(tensor == 0)))
         min_exp = -(2.0 ** float(ebits - 1)) + 2
-        private_exp = private_exp.clip(min=min_exp)
+        private_exp = private_exp.clip_(min=min_exp)
     else:
         private_exp = None
 
     tensor = (
         tensor * (2.0 ** float(mbits - 2))
         if private_exp is None
-        else tensor / (2.0 ** private_exp.float()) * (2.0 ** float(mbits - 2))
+        else (tensor / (2.0 ** private_exp.float())).mul_(2.0 ** float(mbits - 2))
     )
 
     if mantissa_rounding == "even":
         abs_tensor = torch.abs(tensor)
-        mask_tensor = ((abs_tensor - 0.5) % 2 == torch.zeros_like(abs_tensor)).type(tensor.dtype)
-        tensor = torch.sign(tensor) * (floor_ste(abs_tensor + 0.5) - mask_tensor)
+        mask_tensor = (abs_tensor.detach() - 0.5).remainder_(2).eq_(0)
+        tensor = torch.sign(tensor) * (floor_ste(abs_tensor.add_(0.5)) - mask_tensor)
     elif mantissa_rounding == "nearest":
         tensor = torch.sign(tensor) * round_ste(torch.abs(tensor))
     elif mantissa_rounding == "floor":
@@ -116,11 +116,11 @@ def _quant_fp4_element(
         raise ValueError("mantissa_rounding only supports even, nearest or floor.")
 
     tensor = (
-        tensor / (2.0 ** float(mbits - 2))
+        tensor.div_(2.0 ** float(mbits - 2))
         if private_exp is None
-        else tensor / (2.0 ** float(mbits - 2)) * (2.0 ** private_exp.float())
+        else tensor.div_(2.0 ** float(mbits - 2)) * (2.0 ** private_exp.float())
     )
-    return torch.clamp(tensor, min=-max_norm, max=max_norm)
+    return tensor.clamp_(min=-max_norm, max=max_norm)
 
 
 def _parse_bits_and_dtype(qtype_str):
