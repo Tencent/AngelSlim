@@ -926,7 +926,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "VLLM_DISABLE_PYNCCL": lambda: (
         os.getenv("VLLM_DISABLE_PYNCCL", "False").lower() in ("true", "1")
     ),
-    # Optional: enable external Oink custom ops (e.g., Blackwell RMSNorm).
+    # Optional: enable external Oink custom ops.
     # Disabled by default.
     "VLLM_USE_OINK_OPS": lambda: (
         os.getenv("VLLM_USE_OINK_OPS", "False").lower() in ("true", "1")
@@ -1158,7 +1158,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
         os.environ.get("VLLM_HUMMING_MOE_GEMM_TYPE", None)
     ),
     # Whether to use DeepEPLL kernels for NVFP4 quantization and dispatch method
-    # only supported on Blackwell GPUs and with
+    # only supported on specific GPUs and with
     # https://github.com/deepseek-ai/DeepEP/pull/341
     "VLLM_DEEPEPLL_NVFP4_DISPATCH": lambda: bool(
         int(os.getenv("VLLM_DEEPEPLL_NVFP4_DISPATCH", "0"))
@@ -1185,7 +1185,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "VLLM_USE_DEEP_GEMM": lambda: bool(int(os.getenv("VLLM_USE_DEEP_GEMM", "1"))),
     # Allow use of DeepGemm specifically for MoE fused ops (overrides only MoE).
     "VLLM_MOE_USE_DEEP_GEMM": lambda: bool(int(os.getenv("VLLM_MOE_USE_DEEP_GEMM", "1"))),
-    # Whether to use E8M0 scaling when DeepGEMM is used on Blackwell GPUs.
+    # Whether to use E8M0 scaling when DeepGEMM is used on supported GPUs.
     "VLLM_USE_DEEP_GEMM_E8M0": lambda: bool(int(os.getenv("VLLM_USE_DEEP_GEMM_E8M0", "1"))),
     # Whether to create TMA-aligned scale tensor when DeepGEMM is used.
     "VLLM_USE_DEEP_GEMM_TMA_ALIGNED_SCALES": lambda: bool(
@@ -1517,12 +1517,12 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "VLLM_DEEPEP_BUFFER_SIZE_MB": lambda: int(os.getenv("VLLM_DEEPEP_BUFFER_SIZE_MB", "1024")),
     # Force DeepEP to use intranode kernel for inter-node communication in
     # high throughput mode. This is useful archive higher prefill throughput
-    # on system supports multi-node nvlink (e.g GB200).
+    # on system supports multi-node nvlink.
     "VLLM_DEEPEP_HIGH_THROUGHPUT_FORCE_INTRA_NODE": lambda: bool(
         int(os.getenv("VLLM_DEEPEP_HIGH_THROUGHPUT_FORCE_INTRA_NODE", "0"))
     ),
     # Allow DeepEP to use MNNVL (multi-node nvlink) for internode_ll kernel,
-    # turn this for better latency on GB200 like system
+    # turn this for better latency on multi-node nvlink systems
     "VLLM_DEEPEP_LOW_LATENCY_USE_MNNVL": lambda: bool(
         int(os.getenv("VLLM_DEEPEP_LOW_LATENCY_USE_MNNVL", "0"))
     ),

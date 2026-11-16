@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright 2025 Tencent Inc. All Rights Reserved.
 
-"""Utilities shared by the HY3 calibration and NVFP4 merge pipelines.
+"""Utilities shared by the HY3 calibration pipelines.
 
 HY3 checkpoints store MTP blocks as transformer layers appended after the
 ``num_hidden_layers`` main-model layers.  The helpers in this file deliberately
