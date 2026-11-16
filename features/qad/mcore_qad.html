@@ -473,7 +473,7 @@ model cannot be constructed on one GPU.</p>
 <p>Update one of the supplied examples:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">configs/qwen3/mcore_qad/qwen3_moe_nvfp4.yaml</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">configs/Hy3/mcore_qad/hy_v3_nvfp4.yaml</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">configs/Hy3/mcore_qad/hy_v3_w4a16.yaml</span></code></p></li>
 </ul>
 <p>Then launch with <code class="docutils literal notranslate"><span class="pre">torchrun</span></code>:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>torchrun<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">8</span><span class="w"> </span>tools/run.py<span class="w"> </span><span class="se">\</span>
