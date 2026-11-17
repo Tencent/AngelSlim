@@ -1,0 +1,54 @@
+# Hy4 W4A8 (INT4 group-128 weights, dynamic per-token FP8 activations) trunk routed experts +
+# FP8 128x128 GPTQ for attention / indexer.wq_b / dense + shared MLP and the MTP stack,
+# compressed-tensors. linear_gate and indexer.wk stay BF16.
+global:
+  save_path: /path/to/run_dir            # run root: weights land in out/, calibration
+                                         # products in stats/ hessian/ image_embeds/
+
+model:
+  name: hy4
+  model_path: /path/to/model             # BF16 Hy4 / Hy4-VL checkpoint
+
+dataset:                                 # calib stage only
+  name: VLMRollout
+  data_path: /path/to/rollout.jsonl
+  max_seq_length: 16384
+  num_samples: 0
+
+compression:
+  name: PTQWeightOnly
+  # Stage calib: vLLM forward collecting Hessians; skipped when hessian_meta.json exists.
+  calibrate:
+    backend: vllm
+    tp_size: 32                          # 4 nodes x 8 GPUs, Ray cluster
+    max_num_seqs: 4
+    distributed_executor_backend: ray
+    args:
+      vision_budget: 8448
+      max_images_per_prompt: 4
+      max_num_batched_tokens: 8192       # 16384 peaks ~11 GiB of activations and OOMs
+      gpu_memory_utilization: 0.70       # H is allocated outside this budget; err low
+      modules: '^(?!visual\.).*(experts\.|o_proj)'
+  quantization:
+    name: mixed
+    save_name: compressed-tensors
+    algorithm: gptq
+    gptq: {damp: 0.05, batch_rows: 131072, mode: per_column}
+    num_workers: 8
+    config_groups:
+      moe_int4:
+        format: int4_group
+        group_size: 128
+        act: fp8
+        targets:
+          - 're:model\.layers\.\d+\.mlp\.experts\.(?:gate_up_proj|down_proj)$'
+      linear_fp8:
+        format: fp8_block
+        block_size: [128, 128]
+        targets:
+          - 're:model\.(?:layers|mtp_layers)\.\d+\.self_attn\.(?:q_a_proj|q_b_proj|kv_a_proj_with_mqa|kv_b_proj|o_proj|indexer\.wq_b)$'
+          - 're:model\.(?:layers|mtp_layers)\.\d+\.mlp\.(?:shared_experts\.)?(?:gate_proj|up_proj|down_proj)$'
+          - 're:model\.mtp_layers\.\d+\.mlp\.experts\.(?:gate_up_proj|down_proj)$'
+    ignore_layers:
+      - 're:(?:visual|vit)\..*'
+      - 're:.*lm_head$'

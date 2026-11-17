@@ -31,7 +31,7 @@ Weight-Only 模式仅量化权重，不需要校准数据集，量化速度快�
 ### 运行示例
 
 ```shell
-python3 tools/run.py -c configs/glm5/ptq/nvfp4/glm5_1_nvfp4_weight_only.yaml
+python3 tools/run.py -c configs/glm5/ptq/mixed/glm5_nvfp4_rtn.yaml
 ```
 
 ### 配置文件说明

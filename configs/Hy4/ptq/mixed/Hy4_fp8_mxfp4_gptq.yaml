@@ -1,0 +1,55 @@
+# Hy4 MXFP4 routed experts (trunk + MTP) + FP8 128x128 ue8m0 linears, GPTQ with exponent search,
+# compressed-tensors. MXFP4 scales are powers of two: only distinct log2(alpha) octaves matter.
+global:
+  save_path: /path/to/run_dir            # run root: weights land in out/, calibration
+                                         # products in stats/ hessian/ image_embeds/
+
+model:
+  name: hy4
+  model_path: /path/to/model             # BF16 Hy4 / Hy4-VL checkpoint
+
+dataset:                                 # calib stage only
+  name: VLMRollout
+  data_path: /path/to/rollout.jsonl
+  max_seq_length: 16384
+  num_samples: 0
+
+compression:
+  name: PTQWeightOnly
+  # Stage calib: vLLM forward collecting Hessians; skipped when hessian_meta.json exists.
+  calibrate:
+    backend: vllm
+    tp_size: 32                          # 4 nodes x 8 GPUs, Ray cluster
+    max_num_seqs: 4
+    distributed_executor_backend: ray
+    args:
+      vision_budget: 8448
+      max_images_per_prompt: 4
+      max_num_batched_tokens: 8192       # 16384 peaks ~11 GiB of activations and OOMs
+      gpu_memory_utilization: 0.70       # H is allocated outside this budget; err low
+      modules: '^(?!visual\.).*(mlp\.experts\.|o_proj)'   # modules without H fall back to RTN
+  quantization:
+    name: mixed
+    save_name: compressed-tensors
+    algorithm: gptq
+    gptq: {damp: 0.05, batch_rows: 131072, mode: per_column}
+    num_workers: 8
+    config_groups:
+      mxfp4_moe:
+        format: mxfp4
+        alpha_list: [2.0, 1.0, 0.5]      # exponent offsets {+1, 0, -1}
+        targets:
+          - 're:model\.(?:layers|mtp_layers)\.\d+\.mlp\.experts\.(?:gate_up_proj|down_proj)$'
+      fp8_linear:
+        format: fp8_block
+        block_size: [128, 128]
+        scale_fmt: ue8m0
+        alpha_list: [2.0, 1.0, 0.5]
+        targets:
+          - 're:model\.layers\.\d+\.self_attn\.(?:linear_gate|o_proj)$'
+          - 're:model\.mtp_layers\.\d+\.self_attn\.(?:linear_gate|q_a_proj|q_b_proj|kv_a_proj_with_mqa|kv_b_proj|o_proj|indexer\.(?:wk|wq_b))$'
+          - 're:model\.mtp_layers\.\d+\.mlp\.(?:shared_experts\.)?(?:gate_proj|up_proj|down_proj)$'
+    ignore_layers:
+      - 're:(?:visual|vit)\..*'
+      - 're:.*lm_head$'
+      - 're:model\.layers\.0\.self_attn\..*'

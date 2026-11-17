@@ -1,6 +1,6 @@
 # vLLM activation/MoE calibration for a BF16 GLM-5.1 checkpoint.
 #
-# This configuration is consumed by tools/run_vllm_calibrate.py from
+# This configuration is consumed by angelslim.compressor.quant.vllm_calib.calibrate from
 # scripts/ptq/run_vllm_quant_for_glm5.sh when GLM5_SOURCE_FORMAT=bf16.
 # SOURCE_MODEL_PATH and BF16_STATISTICS_PATH in the shell pipeline can
 # override model_path and output_dir without editing this file.
