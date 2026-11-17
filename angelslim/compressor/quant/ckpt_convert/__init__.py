@@ -38,13 +38,19 @@ class ConvertSpec:
     ignore: List[str] = field(default_factory=list)
     algorithm: str = "rtn"
     gptq: dict = field(default_factory=dict)
-    legacy: bool = False  # fp8_blockwise: ``quant_method: fp8`` instead of compressed-tensors
+    save_name: str = "compressed-tensors"  # a key of export.SAVE_FORMATS
     split_experts: bool = True
     hessian_dir: Optional[str] = None
     stats_dir: Optional[str] = None
     mtp_file: Optional[str] = None
     num_workers: int = 8
     skip_unquantized_source: bool = False  # FP8 source: keep its BF16 modules unquantized
+
+    @property
+    def legacy(self):
+        from .export import get_save_format
+
+        return get_save_format(self.save_name).legacy
 
 
 def fp8_blockwise_spec(model_path, save_path, block_size=(128, 128), num_workers=8, ignore=(),
@@ -59,7 +65,7 @@ def fp8_blockwise_spec(model_path, save_path, block_size=(128, 128), num_workers
         model_name=model_name,
         config_groups={"fp8_blockwise": group},
         ignore=list(ignore),
-        legacy=True,
+        save_name="fp8_blockwise",
         # Qwen3.5 stores experts batched and the official FP8 layout splits them per expert.
         split_experts=model_name.lower() == "qwen3_5",
         num_workers=num_workers,
@@ -90,6 +96,11 @@ def spec_from_config(config):
             model_path, save_path, tuple(qm.get("block_size", [128, 128])),
             int(qm.get("num_workers", 8)), quant.ignore_layers, config.model_config.name,
         )  # fmt: skip
+    from .convert import build_groups
+    from .export import get_save_format
+
+    save = get_save_format(quant.save_name)
+    save.check(build_groups(quant.config_groups))
     spec = ConvertSpec(
         model_path=model_path,
         save_path=save_path,
@@ -98,6 +109,8 @@ def spec_from_config(config):
         ignore=list(quant.ignore_layers),
         algorithm=quant.algorithm,
         gptq=dict(quant.gptq or {}),
+        save_name=quant.save_name,
+        split_experts=save.split_experts,
         hessian_dir=getattr(calib, "hessian_dir", None)
         or (dirs["hessian_dir"] if needs_hessian(quant) else None),
         stats_dir=getattr(calib, "stats_dir", None) or dirs["stats_dir"],

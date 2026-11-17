@@ -46,8 +46,10 @@ __all__ = [
     "cs_ignore",
     "finalize",
     "fp8_blockwise_targets",
+    "get_save_format",
     "list_shards",
     "record_path",
+    "register_save_format",
     "run_node",
 ]
 
@@ -431,6 +433,101 @@ def _copy_aux(src, dst):
             shutil.copy2(s, d)
 
 
+SAVE_FORMATS = {}
+
+
+def register_save_format(name):
+    """Register a ``quantization.save_name``: how finalize names tensors and writes config.json."""
+
+    def _wrapper(cls):
+        if name in SAVE_FORMATS:
+            raise ValueError(f"save format {name} is already registered")
+        SAVE_FORMATS[name] = cls()
+        return cls
+
+    return _wrapper
+
+
+def get_save_format(name):
+    if name not in SAVE_FORMATS:
+        raise ValueError(f"save_name must be one of {sorted(SAVE_FORMATS)}, got {name}")
+    return SAVE_FORMATS[name]
+
+
+class SaveFormat:
+    legacy = False  # ``<weight>_scale_inv`` tensors with bf16 scales
+    split_experts = True
+    indent = 2
+
+    def check(self, groups):
+        pass
+
+    def update_config(self, spec, groups, rec, config):
+        raise NotImplementedError
+
+
+@register_save_format("compressed-tensors")
+class CompressedTensors(SaveFormat):
+    def update_config(self, spec, groups, rec, config):
+        schemes = {g.name: {**g.fmt.cs_scheme(), "format": g.fmt.cs_format} for g in groups}
+        layout = Layout(spec.model_path, spec.split_experts)
+        config["quantization_config"] = build_cs_config(
+            rec["quantized"], rec["plain"], spec.ignore, schemes, layout.runtime_name
+        )
+        if spec.mtp_file:
+            config.setdefault("angelspec_mtp", {})["mtp_source_path"] = spec.mtp_file
+
+
+@register_save_format("fp8")
+class FP8(SaveFormat):
+    """``quant_method: fp8`` as the Hy4 FP8 releases: batched experts, BF16 modules under
+    their vLLM names in ``text_config`` for VL models."""
+
+    legacy = True
+    split_experts = False
+
+    def check(self, groups):
+        blocks = {getattr(g.fmt, "block_size", None) for g in groups}
+        if any(g.fmt.name != "fp8_block" for g in groups) or len(blocks) != 1:
+            raise ValueError("save_name fp8 needs every group to be fp8_block of one block_size")
+
+    # Draft models (MTP, DFly) are served outside the VL wrapper and keep checkpoint names.
+    _DRAFT = re.compile(r"^model\.(?:mtp_layers|dfly_layers)\.")
+
+    def update_config(self, spec, groups, rec, config):
+        vlm = "text_config" in config
+
+        def runtime(name):
+            if not vlm or self._DRAFT.match(name):
+                return name
+            if name == "lm_head":
+                return "language_model.model.lm_head"
+            return re.sub(r"^model\.", "language_model.model.model.", name)
+
+        (config.get("text_config") or config)["quantization_config"] = {
+            "activation_scheme": "dynamic",
+            "fmt": "e4m3",
+            "quant_method": "fp8",
+            "weight_block_size": list(groups[0].fmt.block_size),
+            "modules_to_not_convert": sorted(runtime(m) for m in rec["plain"]),
+        }
+
+
+@register_save_format("fp8_blockwise")
+class FP8Blockwise(SaveFormat):
+    """``quantization.name: fp8_blockwise``: BF16 modules taken from an empty-weight model."""
+
+    legacy = True
+    indent = 4
+
+    def update_config(self, spec, groups, rec, config):
+        qc = fp8_blockwise_quant_config(spec.model_path, groups[0].fmt.block_size, spec.model_name)
+        skipped = sorted(m for m in rec["plain"] if groups[0].matches(m))  # YAML ignore_layers
+        known = set(qc["modules_to_not_convert"])
+        qc["modules_to_not_convert"] += [m for m in skipped if m not in known]
+        config["quantization_config"] = qc
+
+
 def finalize(spec):
     """Merge the per-shard records into the index and write ``config.json``."""
     rec = _read_records(spec)
@@ -443,23 +540,9 @@ def finalize(spec):
     with open(os.path.join(spec.model_path, "config.json"), encoding="utf-8") as f:
         config = json.load(f)
     groups = build_groups(spec.config_groups, spec.algorithm, spec.gptq, spec.legacy)
-    if spec.legacy:
-        qc = fp8_blockwise_quant_config(spec.model_path, groups[0].fmt.block_size, spec.model_name)
-        skipped = sorted(m for m in rec["plain"] if groups[0].matches(m))  # YAML ignore_layers
-        known = set(qc["modules_to_not_convert"])
-        qc["modules_to_not_convert"] += [m for m in skipped if m not in known]
-        config["quantization_config"] = qc
-        indent = 4
-    else:
-        schemes = {g.name: {**g.fmt.cs_scheme(), "format": g.fmt.cs_format} for g in groups}
-        layout = Layout(spec.model_path, spec.split_experts)
-        config["quantization_config"] = build_cs_config(
-            rec["quantized"], rec["plain"], spec.ignore, schemes, layout.runtime_name
-        )
-        if spec.mtp_file:
-            config.setdefault("angelspec_mtp", {})["mtp_source_path"] = spec.mtp_file
-        indent = 2
+    save = get_save_format(spec.save_name)
+    save.update_config(spec, groups, rec, config)
     with open(os.path.join(spec.save_path, "config.json"), "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=indent)
+        json.dump(config, f, indent=save.indent)
     shutil.rmtree(os.path.join(spec.save_path, RECORDS_DIR), ignore_errors=True)
     print(f"quantization_config written to {spec.save_path}/config.json", flush=True)

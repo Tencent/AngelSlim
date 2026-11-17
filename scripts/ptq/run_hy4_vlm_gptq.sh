@@ -19,6 +19,8 @@ export ASYNC_SCHEDULING=1 VLLM_ENABLE_PREFIX_CACHING=1
 export VLLM_MOE_COLLECT_STATS=1 VLLM_MOE_COLLECT_PER_EXPERT_STATS=1
 export VLLM_MOE_COLLECT_STATS_VERBOSE="${VLLM_MOE_COLLECT_STATS_VERBOSE:-0}"
 export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS="${VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS:-3600}"
+# FlashInfer all-reduce JIT-builds trtllm_mnnvl_comm, which this image's nvcc fails to compile.
+export VLLM_ALLREDUCE_USE_FLASHINFER="${VLLM_ALLREDUCE_USE_FLASHINFER:-0}"
 # PRECISIONMODE=HF nearly doubles per-rank weights and leaves no room for H.
 if [[ "${PRECISION_MODE:-default}" == "default" ]]; then
     unset PRECISIONMODE VLLM_PRECISION_MODE

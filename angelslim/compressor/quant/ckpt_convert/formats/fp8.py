@@ -110,6 +110,11 @@ class FP8Block:
     def global_scale(self, weights, device=None):
         return None
 
+    def _scale(self, tiles, alphas):
+        scale = _tile_scale(tiles, self.scale_fmt, alphas)
+        # legacy ships bf16 scales: round first so the codes match the stored scale
+        return scale.to(torch.bfloat16).float() if self.legacy else scale
+
     def can_stack_rows(self, rows):
         return rows % self.block_size[0] == 0
 
@@ -132,15 +137,8 @@ class FP8Block:
         padded = param.shape
         gm, gn = math.ceil(rows / bm), math.ceil(cols / bn)
         tiles = param.float().reshape(-1, gm, bm, gn, bn).permute(0, 1, 3, 2, 4)
-        if self.legacy and self.scale_fmt == "float" and not alphas:
-            # tools/fp8_quant_blockwise.py arithmetic: multiply by 448 / amax.
-            amax = tiles.abs().amax(dim=(-1, -2))
-            inv = FP8_MAX / torch.where(amax == 0, torch.ones_like(amax), amax)
-            q = torch.clamp(tiles * inv[..., None, None], min=FP8_MIN, max=FP8_MAX)
-            scale = inv.reciprocal()
-        else:
-            scale = _tile_scale(tiles, self.scale_fmt, alphas)
-            q = torch.clamp(tiles / scale[..., None, None], min=FP8_MIN, max=FP8_MAX)
+        scale = self._scale(tiles, alphas)
+        q = torch.clamp(tiles / scale[..., None, None], min=FP8_MIN, max=FP8_MAX)
         q = q.to(torch.float8_e4m3fn).permute(0, 1, 3, 2, 4).reshape(padded)[..., :rows, :cols]
         return q.contiguous(), scale.reshape(*lead, gm, gn).contiguous()
 
@@ -154,7 +152,7 @@ class FP8Block:
 
         def group_scale(block):
             tiles = block.reshape(*block.shape[:-2], nbm, bm, bn)
-            scale = _tile_scale(tiles, self.scale_fmt, alphas)
+            scale = self._scale(tiles, alphas)
             eff = scale.clamp(min=1e-30).repeat_interleave(bm, dim=-1).unsqueeze(-1)
             return scale, eff
 

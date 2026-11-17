@@ -170,6 +170,7 @@ class Unit:
     share: Any  # units with the same key share one global scale
     stats_key: str  # input module name for the activation stats lookup
     siblings: List[str] = field(default_factory=list)  # keys sharing the global scale
+    expert: Optional[int] = None  # set when restacked into a batched expert tensor
 
 
 class Layout:
@@ -197,8 +198,21 @@ class Layout:
 
     def units(self, module, key, tensor):
         stage = module.rpartition(".experts.")[2]
-        if tensor.dim() == 3 and self.split_experts and stage in _EXPERT_STAGES:
+        if tensor.dim() == 3 and stage in _EXPERT_STAGES:
             prefix = module[: -len(stage)]  # "<...>.experts."
+            if not self.split_experts:  # one unit per expert for its H, restacked on write
+                return [
+                    Unit(
+                        module,
+                        key,
+                        tensor[e],
+                        self.runtime_name(f"{prefix}{e}.{stage}"),
+                        (module, e),
+                        module,
+                        expert=e,
+                    )
+                    for e in range(tensor.shape[0])
+                ]
             if stage == "gate_up_proj":
                 gate, up = tensor.chunk(2, dim=1)  # [E, 2I, H]
                 parts = (("gate_proj", gate), ("up_proj", up))
@@ -417,7 +431,7 @@ class Converter:
                 group = None
             if group is None:
                 out[key] = tensor
-                if tensor.dim() == 2 and key.endswith(".weight"):
+                if tensor.dim() >= 2:
                     record["plain"].append(module)
                 continue
             units = self.layout.units(module, key, tensor)
@@ -504,9 +518,14 @@ class Converter:
             if batch:
                 flush(batch, bkey[0])
 
+        qs = [
+            results.pop(i, None) or fmt.rtn(u.weight.to(dev), gscale[u.share], group.alphas)
+            for i, u in enumerate(units)
+        ]
+        if units[0].expert is not None:
+            qs, units = [tuple(torch.stack([t[k].cpu() for t in qs]) for k in (0, 1))], units[:1]
         out = OrderedDict()
-        for i, u in enumerate(units):
-            q, s = results.pop(i, None) or fmt.rtn(u.weight.to(dev), gscale[u.share], group.alphas)
+        for u, (q, s) in zip(units, qs):
             out.update(fmt.tensors(u.base, u.wkey, q, s, gscale[u.share], act))
             record["quantized"][u.base] = group.name
         if str(dev).startswith("cuda"):

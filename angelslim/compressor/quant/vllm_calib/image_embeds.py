@@ -288,18 +288,18 @@ def precompute(model_path, data_path, out_dir, image_dir=None, device="cuda:0"):
 
     image_dir = image_dir or os.path.join(os.path.dirname(os.path.abspath(data_path)), "images")
     names = collect_image_names(data_path)
-    if not names:
-        sys.exit(f"ERROR: no image references in {data_path}")
     print(f"images referenced: {len(names)}")
 
-    visual = build_vision_tower(model_path, device)
-    if _hy_v4_vision() is not None:
-        # The processor the engine builds; transformers has no HYV4VL mapping on this build.
-        from vllm.transformers_utils.processors.hy_v4 import HYV4VLProcessor
+    # Text-only data still writes an (empty) cache, so the engine's lookup stays armed.
+    if names:
+        visual = build_vision_tower(model_path, device)
+        if _hy_v4_vision() is not None:
+            # The processor the engine builds; transformers has no HYV4VL mapping on this build.
+            from vllm.transformers_utils.processors.hy_v4 import HYV4VLProcessor
 
-        proc = HYV4VLProcessor.from_pretrained(model_path)
-    else:
-        proc = AutoProcessor.from_pretrained(model_path, trust_remote_code=True, use_fast=True)
+            proc = HYV4VLProcessor.from_pretrained(model_path)
+        else:
+            proc = AutoProcessor.from_pretrained(model_path, trust_remote_code=True, use_fast=True)
     tensors, manifest, n_fail = {}, {}, 0
     for i, name in enumerate(names, 1):
         try:
@@ -324,7 +324,7 @@ def precompute(model_path, data_path, out_dir, image_dir=None, device="cuda:0"):
             print(f"  WARN: {name}: {e}", file=sys.stderr)
         if i % 50 == 0 or i == len(names):
             print(f"  [{i}/{len(names)}] unique={len(tensors)} fail={n_fail}", flush=True)
-    if not tensors:
+    if names and not tensors:
         sys.exit("ERROR: no embeddings produced")
 
     os.makedirs(out_dir, exist_ok=True)

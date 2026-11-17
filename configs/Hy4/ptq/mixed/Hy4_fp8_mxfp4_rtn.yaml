@@ -28,5 +28,9 @@ compression:
           - 're:model\.(?:layers|mtp_layers)\.\d+\.self_attn\.indexer\.(?:wk|wq_b)$'
           - 're:model\.(?:layers|mtp_layers)\.\d+\.mlp\.(?:shared_experts\.)?(?:gate_proj|up_proj|down_proj)$'
           - 're:model\.mtp_layers\.\d+\.mlp\.experts\.(?:gate_up_proj|down_proj)$'
+          - 're:model\.dfly_layers\.\d+\.self_attn\.(?:linear_gate|q_a_proj|q_b_proj|kv_a_proj_with_mqa|kv_b_proj|o_proj)$'
+          - 're:model\.dfly_layers\.\d+\.mlp\.(?:gate_proj|up_proj|down_proj)$'
+          - 're:model\.dfly_layers\.hidden_correction\.(?:gate_proj|up_proj|down_proj)$'
     ignore_layers:
       - 're:.*lm_head$'
+      - 're:model\.dfly_layers\.(?:confidence_head\.proj|mtp_fusion\.eh_proj)$'

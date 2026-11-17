@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .fp8_block import FP8Block
+from .fp8 import FP8Block
 from .int4 import INT4Group
 from .int8 import INT8Channel
 from .mxfp4 import MXFP4
