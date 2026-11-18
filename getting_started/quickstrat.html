@@ -455,13 +455,11 @@ document.write(`
 </pre></div>
 </div>
 <ul class="simple">
-<li><p>fp8 block-wise量化可以使用并行GPU转化脚本，其中block_size是权重量化scale对应分块形状，<code class="docutils literal notranslate"><span class="pre">num_workers</span></code>是并行数</p></li>
+<li><p>fp8 block-wise等只量化权重的格式可以不加载模型、直接逐 shard 转换 checkpoint，由 YAML 指定格式（<code class="docutils literal notranslate"><span class="pre">quant_method.block_size</span></code> 为 scale 分块形状，<code class="docutils literal notranslate"><span class="pre">num_workers</span></code> 为并行数）；多种格式混合（如 FP8 + NVFP4 / MXFP4 / MXFP8）见 <code class="docutils literal notranslate"><span class="pre">configs/*/ptq/mixed/</span></code></p></li>
 </ul>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/fp8_quant_blockwise.py<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--block_size<span class="w"> </span><span class="m">128</span><span class="w"> </span><span class="m">128</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--num_workers<span class="w"> </span><span class="m">32</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--input_path<span class="w"> </span><span class="si">${</span><span class="nv">INPUT_PATH</span><span class="si">}</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--output_path<span class="w"> </span><span class="si">${</span><span class="nv">OUTPUT_PATH</span><span class="si">}</span>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/qwen3_5/fp8_blockwise/qwen3_5-9b_fp8_blockwise.yaml<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--model-path<span class="w"> </span><span class="si">${</span><span class="nv">INPUT_PATH</span><span class="si">}</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--save-path<span class="w"> </span><span class="si">${</span><span class="nv">OUTPUT_PATH</span><span class="si">}</span>
 </pre></div>
 </div>
 </section>

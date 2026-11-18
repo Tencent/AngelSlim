@@ -451,7 +451,7 @@ document.write(`
 <p>Weight-Only 模式仅量化权重，不需要校准数据集，量化速度快，适合 MoE 模型的 Expert 层量化。</p>
 <section id="id4">
 <h3>运行示例<a class="headerlink" href="#id4" title="Link to this heading">#</a></h3>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/glm5/ptq/nvfp4/glm5_1_nvfp4_weight_only.yaml
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/glm5/ptq/mixed/glm5_nvfp4_rtn.yaml
 </pre></div>
 </div>
 </section>
@@ -546,7 +546,7 @@ document.write(`
 </section>
 <section id="id8">
 <h2>端到端流水线<a class="headerlink" href="#id8" title="Link to this heading">#</a></h2>
-<p>如需将 NVFP4 Weight-Only 量化与 vLLM 激活校准、权重合并串联为可部署的完整模型，请参考 <span class="xref myst">scripts/ptq/README.md</span> 中的 GLM-5 系列脚本（<code class="docutils literal notranslate"><span class="pre">scripts/ptq/run_vllm_quant_for_glm5.sh</span></code>）。</p>
+<p>如需将 NVFP4 Weight-Only 量化与 vLLM 激活校准、权重合并串联为可部署的完整模型，请参考 <a class="reference internal" href="#../../../../scripts/ptq/README.md"><span class="xref myst">scripts/ptq/README.md</span></a> 中的 GLM-5 系列脚本（<code class="docutils literal notranslate"><span class="pre">scripts/ptq/run_vllm_quant_for_glm5.sh</span></code>）。</p>
 </section>
 </section>
 

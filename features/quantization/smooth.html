@@ -1,0 +1,1544 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>SmoothQuant PTQ 量化脚本说明 &#8212; AngelSlim</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../_static/custom.css" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=a5fa425f"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../_static/togglebutton.js?v=4a39c7ea"></script>
+    <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'features/quantization/smooth';</script>
+    <script src="../../_static/custom.js"></script>
+    <link rel="icon" href="../../_static/angelslim_icon.png"/>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="KV-cache 校准与 scale 替换" href="kvcache.html" />
+    <link rel="prev" title="FOCUS：面向 FP4 的端到端 Scale 优化" href="focus_fp4.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../_static/angelslim_logo.png" class="logo__image only-light" alt="AngelSlim - Home"/>
+    <script>document.write(`<img src="../../_static/angelslim_logo.png" class="logo__image only-dark" alt="AngelSlim - Home"/>`);</script>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">入门指南</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/installation.html">安装教程</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/quickstrat.html">快速开始</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">算法特性</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">量化</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="fp8.html">FP8量化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="int8.html">INT8量化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="awq.html">AWQ量化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gptq.html">GPTQ量化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fp8_lepto.html">FP8_LEPTO量化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="qat.html">QAT 量化感知训练</a></li>
+<li class="toctree-l2"><a class="reference internal" href="qat_zero3.html">QAT + DeepSpeed ZeRO-3</a></li>
+<li class="toctree-l2"><a class="reference internal" href="focus_fp4.html">FOCUS：面向 FP4 的端到端 Scale 优化</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">SmoothQuant PTQ 量化脚本说明</a></li>
+<li class="toctree-l2"><a class="reference internal" href="kvcache.html">KV-cache 校准与 scale 替换</a></li>
+<li class="toctree-l2"><a class="reference internal" href="daq.html">DAQ量化</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../speculative_decoding/index.html">投机采样</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../sparse_attention/index.html">稀疏注意力</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../token_compressor/index.html">Token 压缩</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../diffusion/index.html">文生图/视频/3D压缩</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../distill/index.html">Distillation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../qad/index.html">Quantization-Aware Distillation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../qad/mcore_qad.html">MCoreQAD Backend</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">模型支持</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../models/hunyuan/hunyuan_quant.html">混元模型量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/hunyuan_ocr/hunyuan_ocr_quant.html">HunyuanOCR量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/deepseek/deepseek_quant.html">DeepSeek量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwen/qwen_quant.html">Qwen量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwenvl/qwenvl_quant.html">Qwen2.5VL量化指南</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwen3_omni/qwen3_omni_quant.html">Qwen3-Omni量化指南</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/Hy-MT1.5/hy-mt1.5.html">Hy-MT1.5 量化</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">部署文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../deployment/deploy.html">压缩模型部署</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">性能表现</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../performance/quantization/benchmarks.html">量化benchmark</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../performance/speculative_decoding/benchmarks.html">投机采样Benchmark</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">设计文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../design/index.html">设计文档</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim/edit/main/docs/source/features/quantization/smooth.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../../_sources/features/quantization/smooth.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>SmoothQuant PTQ 量化脚本说明</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">目录</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">快速开始</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">一键执行完整流水线</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">核心概念</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#smoothquant">SmoothQuant 算法</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">关键术语</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">两阶段流水线</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#alpha">阶段 1：统计收集与 Alpha 搜索</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">阶段 2：离线权重变换</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id8">环境准备（必要条件）</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ray">1. Ray 集群</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id9">2. 环境变量</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id10">脚本使用</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#run-smooth-for-hy3-sh">1. <code class="docutils literal notranslate"><span class="pre">run_smooth_for_HY3.sh</span></code> ★ 推荐的一键流水线</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#run-smooth-calibrate-for-hy3-sh-phase-1">2. <code class="docutils literal notranslate"><span class="pre">run_smooth_calibrate_for_HY3.sh</span></code> — 仅 Phase 1</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#run-smooth-convert-for-hy3-sh-phase-2">3. <code class="docutils literal notranslate"><span class="pre">run_smooth_convert_for_HY3.sh</span></code> — 仅 Phase 2</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id11">配置管理</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id12">配置文件位置</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id13">关键配置项</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id14">路径配置</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#phase-1">Phase 1 运行时配置</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#phase-2">Phase 2 变换配置</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#alpha-phase-1-phase-2">Alpha 网格搜索配置（Phase 1 执行，Phase 2 应用）</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id15">配置示例</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#hy3">典型 HY3 配置</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#qwen3">自定义配置（Qwen3 示例）</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id16">Alpha 网格搜索</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id17">原理</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id18">搜索流程（Phase 1 中执行）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id19">输出格式</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id20">快速迭代建议</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id21">工作流示例</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id22">示例 1：完整流程（一键执行）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id23">示例 2：调试 Alpha 搜索</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id24">示例 3：复用统计进行多次 Phase 2</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ptq">示例 4：集成到现有 PTQ 流水线</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id25">数据格式</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#phase-1-smooth-stats-json">Phase 1 输出：<code class="docutils literal notranslate"><span class="pre">smooth_stats.json</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#phase-1-smooth-alpha-search-json">Phase 1 输出：<code class="docutils literal notranslate"><span class="pre">smooth_alpha_search.json</span></code>（若启用）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id26">变换公式（Phase 2）</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#qk-smooth">QK Smooth</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#vo-smooth">VO Smooth</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#down-smooth">Down Smooth</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id27">集成与扩展</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id28">添加新模型配置</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id29">自定义 Phase 2 变换</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id30">与其他工具集成</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id31">故障排查</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id32">问题 1：Ray 集群连接失败</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#vllm">问题 2：vLLM 仍带旧版补丁</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#oom">问题 3：OOM（内存溢出）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id33">问题 4：Phase 2 转换失败</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id34">问题 5：Alpha 搜索耗时过长</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id35">参考资源</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id36">论文和文献</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id37">相关文档</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id38">核心代码位置</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id39">快速命令参考</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#faq">常见问题（FAQ）</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="smoothquant-ptq">
+<h1>SmoothQuant PTQ 量化脚本说明<a class="headerlink" href="#smoothquant-ptq" title="Link to this heading">#</a></h1>
+<p>本文档介绍 <strong>SmoothQuant</strong> 两阶段离线量化流水线的使用、配置和原理。SmoothQuant 是一种后训练量化（PTQ）技术，通过平滑激活和权重分布，提升低比特量化的精度。</p>
+<blockquote>
+<div><p>⚠️ <strong>前置条件</strong>：本节所有脚本均依赖 <a class="reference internal" href="#id8">环境准备</a> 中的 Ray 集群。vLLM 无需打补丁，MoE 统计通过运行时 hook（<code class="docutils literal notranslate"><span class="pre">angelslim/compressor/quant/vllm_calib/moe_hook.py</span></code>）采集。</p>
+</div></blockquote>
+<hr class="docutils" />
+<section id="id1">
+<h2>目录<a class="headerlink" href="#id1" title="Link to this heading">#</a></h2>
+<ol class="arabic simple">
+<li><p><a class="reference internal" href="#id2">快速开始</a></p></li>
+<li><p><a class="reference internal" href="#id4">核心概念</a></p></li>
+<li><p><a class="reference internal" href="#id6">两阶段流水线</a></p></li>
+<li><p><a class="reference internal" href="#id8">环境准备（必要条件）</a></p></li>
+<li><p><a class="reference internal" href="#id10">脚本使用</a></p></li>
+<li><p><a class="reference internal" href="#id11">配置管理</a></p></li>
+<li><p><a class="reference internal" href="#id16">Alpha 网格搜索</a></p></li>
+<li><p><a class="reference internal" href="#id21">工作流示例</a></p></li>
+<li><p><a class="reference internal" href="#id25">数据格式</a></p></li>
+<li><p><a class="reference internal" href="#id27">集成与扩展</a></p></li>
+<li><p><a class="reference internal" href="#id31">故障排查</a></p></li>
+<li><p><a class="reference internal" href="#id35">参考资源</a></p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="id2">
+<h2>快速开始<a class="headerlink" href="#id2" title="Link to this heading">#</a></h2>
+<section id="id3">
+<h3>一键执行完整流水线<a class="headerlink" href="#id3" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>/path/to/AngelSlim<span class="w">  </span><span class="c1"># 必须在仓库根目录</span>
+bash<span class="w"> </span>scripts/ptq/run_smooth_for_HY3.sh
+</pre></div>
+</div>
+<p><strong>分步执行</strong>（调试或复用统计时）：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 仅运行 Phase 1（收集统计，需时较长）</span>
+bash<span class="w"> </span>scripts/ptq/run_smooth_calibrate_for_HY3.sh
+
+<span class="c1"># 仅运行 Phase 2（应用变换，较快）</span>
+bash<span class="w"> </span>scripts/ptq/run_smooth_convert_for_HY3.sh
+
+<span class="c1"># Phase 1 完成后，复用其输出的统计再执行 Phase 2</span>
+bash<span class="w"> </span>scripts/ptq/run_smooth_for_HY3.sh<span class="w"> </span>--skip-calibrate
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="id4">
+<h2>核心概念<a class="headerlink" href="#id4" title="Link to this heading">#</a></h2>
+<section id="smoothquant">
+<h3>SmoothQuant 算法<a class="headerlink" href="#smoothquant" title="Link to this heading">#</a></h3>
+<p><strong>目标</strong>：解决 PTQ 中”离群值”导致的量化误差。</p>
+<p><strong>原理</strong>：通过对激活和权重分布进行缩放变换，使其更”均匀”（smooth），从而提高低比特量化精度。</p>
+<p><strong>三类变换</strong>：</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>变换类型</p></th>
+<th class="head"><p>应用层</p></th>
+<th class="head"><p>作用</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>QK Smooth</strong></p></td>
+<td><p>Attention Q/K 投影层</p></td>
+<td><p>平滑注意力查询和键的激活分布</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>VO Smooth</strong></p></td>
+<td><p>Attention V/O 投影层</p></td>
+<td><p>平滑 Value 输入和 Output 投影的激活</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Down Smooth</strong></p></td>
+<td><p>MLP Down 投影层</p></td>
+<td><p>平滑前馈网络激活</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="id5">
+<h3>关键术语<a class="headerlink" href="#id5" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>Alpha (α)</strong>：控制平滑强度的参数，范围通常 <code class="docutils literal notranslate"><span class="pre">[0.3,</span> <span class="pre">1.0]</span></code></p>
+<ul>
+<li><p>α = 0：无平滑（完全依赖权重）</p></li>
+<li><p>α = 1：完全平滑（完全依赖激活）</p></li>
+<li><p>最优 α 因层而异，通过网格搜索获得</p></li>
+</ul>
+</li>
+<li><p><strong>EMA（指数移动平均）</strong>：在线追踪激活统计的技术，避免全缓存</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">ema_momentum</span></code>：动量系数，通常 0.9</p></li>
+<li><p>更新公式：<code class="docutils literal notranslate"><span class="pre">new_stat</span> <span class="pre">=</span> <span class="pre">momentum</span> <span class="pre">*</span> <span class="pre">old_stat</span> <span class="pre">+</span> <span class="pre">(1</span> <span class="pre">-</span> <span class="pre">momentum)</span> <span class="pre">*</span> <span class="pre">current_stat</span></code></p></li>
+</ul>
+</li>
+<li><p><strong>Per-channel 统计</strong>：为每个输出通道独立计算 abs_max 和 EMA 值</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="id6">
+<h2>两阶段流水线<a class="headerlink" href="#id6" title="Link to this heading">#</a></h2>
+<section id="alpha">
+<h3>阶段 1：统计收集与 Alpha 搜索<a class="headerlink" href="#alpha" title="Link to this heading">#</a></h3>
+<p><strong>任务</strong>：</p>
+<ol class="arabic simple">
+<li><p>在 PTQ 数据集上前向推理，收集激活值统计</p></li>
+<li><p>计算每层每通道的 abs_max 和 EMA</p></li>
+<li><p>执行可选的 Alpha 网格搜索，找到最优平滑参数</p></li>
+</ol>
+<p><strong>入口</strong>：<code class="docutils literal notranslate"><span class="pre">python3</span> <span class="pre">-m</span> <span class="pre">angelslim.compressor.transform.smooth.vllm.collect</span></code></p>
+<p><strong>输出</strong>：</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">smooth_stats.json</span></code> — 所有层的 abs_max / EMA 统计</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">smooth_alpha_search.json</span></code>（可选）— 每层搜索得到的最优 alpha</p></li>
+</ul>
+<p><strong>关键文件</strong>：</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">angelslim/compressor/transform/smooth/vllm</span></code> — 统计钩子</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">angelslim/compressor/transform/smooth/core</span></code> — Alpha 搜索实现等核心统计函数</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">angelslim/compressor/transform/smooth/convert</span></code> - 权重转换</p></li>
+</ul>
+</section>
+<section id="id7">
+<h3>阶段 2：离线权重变换<a class="headerlink" href="#id7" title="Link to this heading">#</a></h3>
+<p><strong>任务</strong>：</p>
+<ol class="arabic simple">
+<li><p>读取阶段 1 产出的统计文件</p></li>
+<li><p>根据 alpha 值和统计，对权重进行缩放变换</p></li>
+<li><p>输出平滑后的权重到 HuggingFace safetensors 格式</p></li>
+</ol>
+<p><strong>入口</strong>：<code class="docutils literal notranslate"><span class="pre">python3</span> <span class="pre">-m</span> <span class="pre">angelslim.compressor.transform.smooth.convert.run</span></code></p>
+<p><strong>输出</strong>：</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">{save_path}/</span></code> — 平滑后的模型（safetensors 格式）</p></li>
+</ul>
+<p><strong>关键文件</strong>：</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">angelslim/compressor/quant/modules/smooth/smooth.py</span></code> — 核心变换实现</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">angelslim/compressor/transform/smooth/convert/run.py</span></code> — 权重处理和转换逻辑</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="id8">
+<h2>环境准备（必要条件）<a class="headerlink" href="#id8" title="Link to this heading">#</a></h2>
+<section id="ray">
+<h3>1. Ray 集群<a class="headerlink" href="#ray" title="Link to this heading">#</a></h3>
+<p><strong>必须先完成</strong> <code class="docutils literal notranslate"><span class="pre">scripts/ptq/README.md</span></code> 中”一、环境准备”的 Ray 集群搭建（2 节点 × 8 卡 = 16 卡）。</p>
+<p>vLLM 不需要打补丁：FusedMoE 的 down_proj 输入由 <code class="docutils literal notranslate"><span class="pre">vllm_calib.hooks</span></code> 在运行时包装 <code class="docutils literal notranslate"><span class="pre">TritonExperts.apply</span></code> 采集（校准时强制 <code class="docutils literal notranslate"><span class="pre">moe_backend=&quot;triton&quot;</span></code>）。若 vLLM 曾用旧版 <code class="docutils literal notranslate"><span class="pre">tools/vllm_patch*/install.sh</span></code> 打过补丁，请先用其 <code class="docutils literal notranslate"><span class="pre">.bak</span></code> 备份还原，否则会报错以避免重复统计。</p>
+</section>
+<section id="id9">
+<h3>2. 环境变量<a class="headerlink" href="#id9" title="Link to this heading">#</a></h3>
+<p>Smooth 脚本会自动设置以下环境变量，无需手动配置：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">VLLM_MOE_COLLECT_SMOOTH_STATS</span><span class="o">=</span><span class="m">1</span><span class="w">          </span><span class="c1"># 启用 Smooth 统计收集</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">VLLM_MOE_COLLECT_ALPHA_SEARCH</span><span class="o">=</span><span class="m">1</span><span class="w">          </span><span class="c1"># 启用 Alpha 搜索</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">VLLM_ALLOW_INSECURE_SERIALIZATION</span><span class="o">=</span><span class="m">1</span><span class="w">      </span><span class="c1"># 允许不安全序列化</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">PYTHONPATH</span><span class="o">=</span>&lt;AngelSlim_root&gt;<span class="w">              </span><span class="c1"># 确保 angelslim 包可导入</span>
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="id10">
+<h2>脚本使用<a class="headerlink" href="#id10" title="Link to this heading">#</a></h2>
+<section id="run-smooth-for-hy3-sh">
+<h3>1. <code class="docutils literal notranslate"><span class="pre">run_smooth_for_HY3.sh</span></code> ★ 推荐的一键流水线<a class="headerlink" href="#run-smooth-for-hy3-sh" title="Link to this heading">#</a></h3>
+<p><strong>功能</strong>：自动执行 Phase 1 + Phase 2，完成完整的 Smooth 量化流程。</p>
+<p><strong>用法</strong>：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 标准用法：执行 Phase 1 + Phase 2</span>
+bash<span class="w"> </span>scripts/ptq/run_smooth_for_HY3.sh
+
+<span class="c1"># 仅执行 Phase 2（复用已有的 smooth_stats.json）</span>
+bash<span class="w"> </span>scripts/ptq/run_smooth_for_HY3.sh<span class="w"> </span>--skip-calibrate
+
+<span class="c1"># 仅执行 Phase 1（调试或仅收集统计）</span>
+bash<span class="w"> </span>scripts/ptq/run_smooth_for_HY3.sh<span class="w"> </span>--skip-convert
+
+<span class="c1"># 查看帮助</span>
+bash<span class="w"> </span>scripts/ptq/run_smooth_for_HY3.sh<span class="w"> </span>--help
+</pre></div>
+</div>
+<p><strong>运行日志示例</strong>：</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">========================================</span>
+<span class="p">[</span><span class="n">Phase</span> <span class="mi">1</span><span class="p">]</span> <span class="n">Smooth</span> <span class="n">Stats</span> <span class="n">Calibration</span>
+<span class="o">========================================</span>
+<span class="p">[</span><span class="mi">2025</span><span class="o">-</span><span class="mi">05</span><span class="o">-</span><span class="mi">26</span> <span class="mi">10</span><span class="p">:</span><span class="mi">15</span><span class="p">:</span><span class="mi">23</span><span class="p">]</span> <span class="n">Loading</span> <span class="n">model</span><span class="p">:</span> <span class="o">/</span><span class="n">path</span><span class="o">/</span><span class="n">to</span><span class="o">/</span><span class="n">model</span> <span class="o">...</span>
+<span class="p">[</span><span class="mi">2025</span><span class="o">-</span><span class="mi">05</span><span class="o">-</span><span class="mi">26</span> <span class="mi">10</span><span class="p">:</span><span class="mi">15</span><span class="p">:</span><span class="mi">45</span><span class="p">]</span> <span class="n">Setting</span> <span class="n">up</span> <span class="n">hooks</span> <span class="k">for</span> <span class="n">smooth</span> <span class="n">stats</span> <span class="n">collection</span> <span class="o">...</span>
+<span class="p">[</span><span class="mi">2025</span><span class="o">-</span><span class="mi">05</span><span class="o">-</span><span class="mi">26</span> <span class="mi">10</span><span class="p">:</span><span class="mi">20</span><span class="p">:</span><span class="mi">18</span><span class="p">]</span> <span class="n">Processing</span> <span class="mi">512</span> <span class="n">samples</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="mi">16384</span> <span class="o">...</span>
+<span class="p">[</span><span class="mi">2025</span><span class="o">-</span><span class="mi">05</span><span class="o">-</span><span class="mi">26</span> <span class="mi">10</span><span class="p">:</span><span class="mi">35</span><span class="p">:</span><span class="mi">42</span><span class="p">]</span> <span class="n">Phase</span> <span class="mi">1</span> <span class="n">complete</span><span class="o">.</span> <span class="n">Output</span><span class="p">:</span> <span class="o">/</span><span class="n">path</span><span class="o">/</span><span class="n">to</span><span class="o">/</span><span class="n">output_dir</span><span class="o">/</span><span class="n">smooth_stats</span><span class="o">.</span><span class="n">json</span>
+<span class="p">[</span><span class="mi">2025</span><span class="o">-</span><span class="mi">05</span><span class="o">-</span><span class="mi">26</span> <span class="mi">10</span><span class="p">:</span><span class="mi">35</span><span class="p">:</span><span class="mi">43</span><span class="p">]</span> <span class="n">Starting</span> <span class="n">alpha</span> <span class="n">search</span> <span class="p">(</span><span class="n">enable_alpha_search</span><span class="o">=</span><span class="n">true</span><span class="p">)</span> <span class="o">...</span>
+<span class="p">[</span><span class="mi">2025</span><span class="o">-</span><span class="mi">05</span><span class="o">-</span><span class="mi">26</span> <span class="mi">10</span><span class="p">:</span><span class="mi">45</span><span class="p">:</span><span class="mi">20</span><span class="p">]</span> <span class="n">Alpha</span> <span class="n">search</span> <span class="n">complete</span><span class="p">:</span> <span class="o">/</span><span class="n">path</span><span class="o">/</span><span class="n">to</span><span class="o">/</span><span class="n">output_dir</span><span class="o">/</span><span class="n">smooth_alpha_search</span><span class="o">.</span><span class="n">json</span>
+<span class="o">========================================</span>
+<span class="p">[</span><span class="n">Phase</span> <span class="mi">2</span><span class="p">]</span> <span class="n">Offline</span> <span class="n">Weight</span> <span class="n">Conversion</span>
+<span class="o">========================================</span>
+<span class="p">[</span><span class="mi">2025</span><span class="o">-</span><span class="mi">05</span><span class="o">-</span><span class="mi">26</span> <span class="mi">10</span><span class="p">:</span><span class="mi">45</span><span class="p">:</span><span class="mi">21</span><span class="p">]</span> <span class="n">Reading</span> <span class="n">stats</span> <span class="n">from</span><span class="p">:</span> <span class="o">/</span><span class="n">path</span><span class="o">/</span><span class="n">to</span><span class="o">/</span><span class="n">output_dir</span><span class="o">/</span><span class="n">smooth_stats</span><span class="o">.</span><span class="n">json</span>
+<span class="p">[</span><span class="mi">2025</span><span class="o">-</span><span class="mi">05</span><span class="o">-</span><span class="mi">26</span> <span class="mi">10</span><span class="p">:</span><span class="mi">45</span><span class="p">:</span><span class="mi">22</span><span class="p">]</span> <span class="n">Applying</span> <span class="n">QK</span> <span class="n">smooth</span> <span class="o">...</span>
+<span class="p">[</span><span class="mi">2025</span><span class="o">-</span><span class="mi">05</span><span class="o">-</span><span class="mi">26</span> <span class="mi">10</span><span class="p">:</span><span class="mi">50</span><span class="p">:</span><span class="mi">15</span><span class="p">]</span> <span class="n">Applying</span> <span class="n">VO</span> <span class="n">smooth</span> <span class="o">...</span>
+<span class="p">[</span><span class="mi">2025</span><span class="o">-</span><span class="mi">05</span><span class="o">-</span><span class="mi">26</span> <span class="mi">10</span><span class="p">:</span><span class="mi">55</span><span class="p">:</span><span class="mi">30</span><span class="p">]</span> <span class="n">Applying</span> <span class="n">down_proj</span> <span class="n">smooth</span> <span class="o">...</span>
+<span class="p">[</span><span class="mi">2025</span><span class="o">-</span><span class="mi">05</span><span class="o">-</span><span class="mi">26</span> <span class="mi">11</span><span class="p">:</span><span class="mi">05</span><span class="p">:</span><span class="mi">45</span><span class="p">]</span> <span class="n">Saving</span> <span class="n">smoothed</span> <span class="n">model</span> <span class="n">to</span><span class="p">:</span> <span class="o">/</span><span class="n">path</span><span class="o">/</span><span class="n">to</span><span class="o">/</span><span class="n">save_path</span><span class="o">/</span>
+<span class="o">========================================</span>
+<span class="n">Done</span><span class="o">.</span>
+<span class="o">========================================</span>
+</pre></div>
+</div>
+</section>
+<section id="run-smooth-calibrate-for-hy3-sh-phase-1">
+<h3>2. <code class="docutils literal notranslate"><span class="pre">run_smooth_calibrate_for_HY3.sh</span></code> — 仅 Phase 1<a class="headerlink" href="#run-smooth-calibrate-for-hy3-sh-phase-1" title="Link to this heading">#</a></h3>
+<p><strong>功能</strong>：独立运行 Phase 1（统计收集 + 可选 Alpha 搜索）。</p>
+<p><strong>用法</strong>：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>bash<span class="w"> </span>scripts/ptq/run_smooth_calibrate_for_HY3.sh
+</pre></div>
+</div>
+<p><strong>何时使用</strong>：</p>
+<ul class="simple">
+<li><p>需要多次调整 <code class="docutils literal notranslate"><span class="pre">alpha_min</span></code>、<code class="docutils literal notranslate"><span class="pre">alpha_max</span></code>、<code class="docutils literal notranslate"><span class="pre">alpha_steps</span></code> 等搜索参数，复用统计结果</p></li>
+<li><p>需要手工检查或修改 <code class="docutils literal notranslate"><span class="pre">smooth_stats.json</span></code> 或 <code class="docutils literal notranslate"><span class="pre">smooth_alpha_search.json</span></code></p></li>
+<li><p>需要与其他工具链集成（如自定义量化后处理）</p></li>
+</ul>
+</section>
+<section id="run-smooth-convert-for-hy3-sh-phase-2">
+<h3>3. <code class="docutils literal notranslate"><span class="pre">run_smooth_convert_for_HY3.sh</span></code> — 仅 Phase 2<a class="headerlink" href="#run-smooth-convert-for-hy3-sh-phase-2" title="Link to this heading">#</a></h3>
+<p><strong>功能</strong>：独立运行 Phase 2（离线权重变换）。</p>
+<p><strong>用法</strong>：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>bash<span class="w"> </span>scripts/ptq/run_smooth_convert_for_HY3.sh
+</pre></div>
+</div>
+<p><strong>前置条件</strong>：必须已有 <code class="docutils literal notranslate"><span class="pre">output_dir</span></code> 下的 <code class="docutils literal notranslate"><span class="pre">smooth_stats.json</span></code> 文件（通常来自阶段 1）。</p>
+<p><strong>何时使用</strong>：</p>
+<ul class="simple">
+<li><p>已有来自阶段 1 的 <code class="docutils literal notranslate"><span class="pre">smooth_stats.json</span></code>，想测试不同的 <code class="docutils literal notranslate"><span class="pre">alpha_qk</span></code> / <code class="docutils literal notranslate"><span class="pre">alpha_vo</span></code> / <code class="docutils literal notranslate"><span class="pre">alpha_down</span></code> 值</p></li>
+<li><p>阶段 1 成功完成，阶段 2 因故障中断，需要单独重跑</p></li>
+<li><p>线下编辑 <code class="docutils literal notranslate"><span class="pre">smooth_stats.json</span></code> 进行手工调试</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="id11">
+<h2>配置管理<a class="headerlink" href="#id11" title="Link to this heading">#</a></h2>
+<section id="id12">
+<h3>配置文件位置<a class="headerlink" href="#id12" title="Link to this heading">#</a></h3>
+<p>所有 Smooth 脚本共享同一套 YAML 配置，默认为：</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">configs</span><span class="o">/</span><span class="n">Hy3</span><span class="o">/</span><span class="n">ptq</span><span class="o">/</span><span class="n">fp8</span><span class="o">/</span><span class="n">Hy3_smooth</span><span class="o">.</span><span class="n">yaml</span>
+</pre></div>
+</div>
+</section>
+<section id="id13">
+<h3>关键配置项<a class="headerlink" href="#id13" title="Link to this heading">#</a></h3>
+<section id="id14">
+<h4>路径配置<a class="headerlink" href="#id14" title="Link to this heading">#</a></h4>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># Phase 1 读取；Phase 2 读取和输出 stats 的位置</span>
+<span class="nt">model_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/hunyuan/model</span>
+
+<span class="c1"># Phase 1 读取的 PTQ 校准数据集</span>
+<span class="nt">ptq_data_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/calibration_data.jsonl</span>
+
+<span class="c1"># Phase 1 输出 smooth_stats.json 和 smooth_alpha_search.json 的目录</span>
+<span class="nt">output_dir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/smooth_output</span>
+
+<span class="c1"># Phase 2 输出平滑权重的目录</span>
+<span class="nt">save_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/smoothed_model</span>
+</pre></div>
+</div>
+</section>
+<section id="phase-1">
+<h4>Phase 1 运行时配置<a class="headerlink" href="#phase-1" title="Link to this heading">#</a></h4>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># vLLM 分布式执行参数</span>
+<span class="nt">tp_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">16</span><span class="w">                                    </span><span class="c1"># Tensor Parallel 卡数</span>
+<span class="nt">batch_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span><span class="w">                                  </span><span class="c1"># 前向 batch 大小</span>
+<span class="nt">num_samples</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">512</span><span class="w">                               </span><span class="c1"># PTQ 数据集采样数</span>
+<span class="nt">max_length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">16384</span><span class="w">                              </span><span class="c1"># 最大序列长度</span>
+<span class="nt">distributed_executor_backend</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ray</span><span class="w">              </span><span class="c1"># 使用 Ray 分布式执行</span>
+<span class="nt">skip_weight_loading</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">                     </span><span class="c1"># 是否跳过权重加载（调试用）</span>
+
+<span class="c1"># 统计收集范围</span>
+<span class="nt">collect_attn</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">                             </span><span class="c1"># 收集 Q/K/V/O 激活统计</span>
+<span class="nt">collect_down_proj</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">                        </span><span class="c1"># 收集 MLP 激活统计</span>
+<span class="nt">collect_moe</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">                              </span><span class="c1"># 收集 MoE expert 统计</span>
+<span class="nt">ema_momentum</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.9</span><span class="w">                              </span><span class="c1"># EMA 指数移动平均动量</span>
+
+<span class="nt">verbose</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">                                 </span><span class="c1"># 是否输出详细日志</span>
+</pre></div>
+</div>
+</section>
+<section id="phase-2">
+<h4>Phase 2 变换配置<a class="headerlink" href="#phase-2" title="Link to this heading">#</a></h4>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># 是否启用各类变换</span>
+<span class="nt">smooth_qk</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">                                </span><span class="c1"># 启用 Q/K 平滑</span>
+<span class="nt">smooth_vo</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">                                </span><span class="c1"># 启用 V/O 平滑</span>
+<span class="nt">smooth_down</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">                              </span><span class="c1"># 启用 Down 平滑</span>
+
+<span class="c1"># 手工指定的 alpha 值（未进行网格搜索时的默认值）</span>
+<span class="nt">alpha_qk</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.6</span><span class="w">                                  </span><span class="c1"># Q/K 平滑 alpha</span>
+<span class="nt">alpha_vo</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.5</span><span class="w">                                  </span><span class="c1"># V/O 平滑 alpha</span>
+<span class="nt">alpha_down</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.6</span><span class="w">                                </span><span class="c1"># Down 平滑 alpha（无搜索结果时使用）</span>
+
+<span class="nt">use_ema</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">                                 </span><span class="c1"># 是否使用 EMA 统计（通常 false）</span>
+<span class="nt">device</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cpu</span><span class="w">                                    </span><span class="c1"># 权重处理设备</span>
+<span class="nt">dtype</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span><span class="w">                                    </span><span class="c1"># 权重数据类型（auto 自动推断）</span>
+</pre></div>
+</div>
+</section>
+<section id="alpha-phase-1-phase-2">
+<h4>Alpha 网格搜索配置（Phase 1 执行，Phase 2 应用）<a class="headerlink" href="#alpha-phase-1-phase-2" title="Link to this heading">#</a></h4>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># 启用 Alpha 网格搜索</span>
+<span class="nt">enable_alpha_search</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+
+<span class="c1"># 搜索参数</span>
+<span class="nt">num_search_samples</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">16</span><span class="w">                         </span><span class="c1"># 搜索用的 calibration 样本数</span>
+<span class="nt">search_max_length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8192</span><span class="w">                        </span><span class="c1"># 搜索用的最大序列长度</span>
+<span class="nt">alpha_min</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.3</span><span class="w">                                 </span><span class="c1"># 搜索下界</span>
+<span class="nt">alpha_max</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span><span class="w">                                 </span><span class="c1"># 搜索上界</span>
+<span class="nt">alpha_steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span><span class="w">                                 </span><span class="c1"># 搜索步数（8 步 =&gt; 采样 9 个 alpha 值）</span>
+
+<span class="c1"># 量化配置（用于评估搜索得到的 alpha）</span>
+<span class="nt">alpha_act_quant_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">per_token</span><span class="w">              </span><span class="c1"># 激活量化粒度</span>
+<span class="nt">alpha_act_quant_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">int8</span><span class="w">                     </span><span class="c1"># 激活量化类型</span>
+<span class="nt">alpha_weight_quant_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">per_channel</span><span class="w">         </span><span class="c1"># 权重量化粒度</span>
+<span class="nt">alpha_weight_quant_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">int8</span><span class="w">                  </span><span class="c1"># 权重量化类型</span>
+<span class="nt">alpha_weight_quant_bits</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span><span class="w">                     </span><span class="c1"># 权重位宽</span>
+<span class="nt">alpha_weight_group_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">128</span><span class="w">                   </span><span class="c1"># 权重分组大小</span>
+<span class="nt">alpha_max_tokens</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4096</span><span class="w">                         </span><span class="c1"># 搜索过程中的最大 token 数</span>
+<span class="nt">alpha_use_ema</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">                           </span><span class="c1"># 搜索中是否使用 EMA</span>
+<span class="nt">alpha_smooth_search_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span><span class="w">              </span><span class="c1"># 搜索模式</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="id15">
+<h3>配置示例<a class="headerlink" href="#id15" title="Link to this heading">#</a></h3>
+<section id="hy3">
+<h4>典型 HY3 配置<a class="headerlink" href="#hy3" title="Link to this heading">#</a></h4>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># configs/Hy3/ptq/fp8/Hy3_smooth.yaml</span>
+<span class="nt">model_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/ckpt/</span>
+<span class="nt">ptq_data_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/sampled_3000_for_quant_shuf.jsonl</span>
+<span class="nt">output_dir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/ckpt/stat_debug</span>
+<span class="nt">save_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/ckpt/smooth_model</span>
+
+<span class="nt">tp_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">16</span>
+<span class="nt">batch_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span>
+<span class="nt">num_samples</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">512</span>
+<span class="nt">max_length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">16384</span>
+<span class="nt">distributed_executor_backend</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ray</span>
+
+<span class="nt">collect_attn</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="nt">collect_down_proj</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="nt">collect_moe</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="nt">ema_momentum</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.9</span>
+
+<span class="nt">smooth_qk</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="nt">smooth_vo</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="nt">smooth_down</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="nt">alpha_qk</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.6</span>
+<span class="nt">alpha_vo</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.5</span>
+<span class="nt">alpha_down</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.6</span>
+
+<span class="nt">enable_alpha_search</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="nt">num_search_samples</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">16</span>
+<span class="nt">alpha_min</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.3</span>
+<span class="nt">alpha_max</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
+<span class="nt">alpha_steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span>
+</pre></div>
+</div>
+</section>
+<section id="qwen3">
+<h4>自定义配置（Qwen3 示例）<a class="headerlink" href="#qwen3" title="Link to this heading">#</a></h4>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># configs/qwen3/ptq/smooth_int8/qwen3-8b_int8_dynamic_smooth.yaml</span>
+<span class="nt">model_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/qwen3-8b</span>
+
+<span class="c1"># 数据集</span>
+<span class="nt">ptq_data_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/calibration.jsonl</span>
+
+<span class="c1"># 统计输出目录</span>
+<span class="nt">output_dir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/smooth_stats</span>
+<span class="nt">save_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/qwen3_smoothed</span>
+
+<span class="c1"># 运行时</span>
+<span class="nt">tp_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span><span class="w">                                     </span><span class="c1"># Qwen3-8B 用较少卡数</span>
+<span class="nt">batch_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span>
+<span class="nt">num_samples</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">256</span><span class="w">                               </span><span class="c1"># 更少样本，更快迭代</span>
+<span class="nt">max_length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4096</span>
+
+<span class="c1"># 平滑配置</span>
+<span class="nt">smooth_qk</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="nt">smooth_vo</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="nt">smooth_down</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="nt">alpha_qk</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.5</span>
+<span class="nt">alpha_vo</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.4</span>
+<span class="nt">alpha_down</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.5</span>
+
+<span class="c1"># Alpha 搜索</span>
+<span class="nt">enable_alpha_search</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="nt">alpha_steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6</span><span class="w">                                 </span><span class="c1"># 更少步数加快搜索</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+<hr class="docutils" />
+<section id="id16">
+<h2>Alpha 网格搜索<a class="headerlink" href="#id16" title="Link to this heading">#</a></h2>
+<section id="id17">
+<h3>原理<a class="headerlink" href="#id17" title="Link to this heading">#</a></h3>
+<p>Alpha 网格搜索的目标是为每一层自动找到最优的 α 值，使得经过 Smooth 变换后的权重，在量化时的误差最小。</p>
+</section>
+<section id="id18">
+<h3>搜索流程（Phase 1 中执行）<a class="headerlink" href="#id18" title="Link to this heading">#</a></h3>
+<ol class="arabic simple">
+<li><p><strong>采样配置</strong>：从 PTQ 数据集中采样 <code class="docutils literal notranslate"><span class="pre">num_search_samples</span></code> 个样本</p></li>
+<li><p><strong>Alpha 网格</strong>：在 <code class="docutils literal notranslate"><span class="pre">[alpha_min,</span> <span class="pre">alpha_max]</span></code> 范围内均匀采样 <code class="docutils literal notranslate"><span class="pre">alpha_steps</span> <span class="pre">+</span> <span class="pre">1</span></code> 个 alpha 值</p></li>
+<li><p><strong>逐层评估</strong>：对每一层，尝试所有 alpha 值</p></li>
+<li><p><strong>量化评估</strong>：对每个 alpha，进行模拟量化，计算量化后的 MSE / 相对误差</p></li>
+<li><p><strong>记录最优值</strong>：选择误差最小的 alpha，写入 <code class="docutils literal notranslate"><span class="pre">smooth_alpha_search.json</span></code></p></li>
+</ol>
+</section>
+<section id="id19">
+<h3>输出格式<a class="headerlink" href="#id19" title="Link to this heading">#</a></h3>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">"layer_0"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"attn.q_proj"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"best_alpha"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.6</span><span class="p">,</span><span class="w"> </span><span class="nt">"mse"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.00123</span><span class="w"> </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">"attn.k_proj"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"best_alpha"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.65</span><span class="p">,</span><span class="w"> </span><span class="nt">"mse"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.00118</span><span class="w"> </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">"attn.v_proj"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"best_alpha"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.55</span><span class="p">,</span><span class="w"> </span><span class="nt">"mse"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.00145</span><span class="w"> </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">"attn.o_proj"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"best_alpha"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.5</span><span class="p">,</span><span class="w"> </span><span class="nt">"mse"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.00162</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">"layer_1"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="err">...</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="id20">
+<h3>快速迭代建议<a class="headerlink" href="#id20" title="Link to this heading">#</a></h3>
+<p><strong>若搜索过程过长</strong>（通常 5-10 小时），可尝试：</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">alpha_min</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.4</span><span class="w">              </span><span class="c1"># 缩小搜索范围（从 0.3 改为 0.4）</span>
+<span class="nt">alpha_max</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.9</span><span class="w">              </span><span class="c1"># （从 1.0 改为 0.9）</span>
+<span class="nt">alpha_steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span><span class="w">              </span><span class="c1"># 减少搜索步数（从 8 改为 4）</span>
+<span class="nt">num_search_samples</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span><span class="w">       </span><span class="c1"># 减少评估用的样本数（从 16 改为 8）</span>
+<span class="nt">search_max_length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4096</span><span class="w">     </span><span class="c1"># 减少最大序列长度（从 8192 改为 4096）</span>
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="id21">
+<h2>工作流示例<a class="headerlink" href="#id21" title="Link to this heading">#</a></h2>
+<section id="id22">
+<h3>示例 1：完整流程（一键执行）<a class="headerlink" href="#id22" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>/path/to/AngelSlim
+
+<span class="c1"># 编辑配置文件，指定模型、数据、输出路径</span>
+vim<span class="w"> </span>configs/Hy3/ptq/fp8/Hy3_smooth.yaml
+
+<span class="c1"># 一键执行 Phase 1 + Phase 2（约 4-6 小时）</span>
+bash<span class="w"> </span>scripts/ptq/run_smooth_for_HY3.sh
+
+<span class="c1"># 查看输出</span>
+ls<span class="w"> </span>-la<span class="w"> </span><span class="k">$(</span>grep<span class="w"> </span><span class="s2">"save_path:"</span><span class="w"> </span>configs/Hy3/ptq/fp8/Hy3_smooth.yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>cut<span class="w"> </span>-d<span class="s1">' '</span><span class="w"> </span>-f2<span class="k">)</span>
+</pre></div>
+</div>
+</section>
+<section id="id23">
+<h3>示例 2：调试 Alpha 搜索<a class="headerlink" href="#id23" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 1. 先跑一次快速搜索（较小搜索范围）</span>
+cat<span class="w"> </span>&gt;<span class="w"> </span>/tmp/smooth_debug.yaml<span class="w"> </span><span class="s">&lt;&lt; 'YAML'</span>
+<span class="s"># 复制 hy3_smooth.yaml，修改以下参数</span>
+<span class="s">alpha_steps: 4</span>
+<span class="s">num_search_samples: 8</span>
+<span class="s">search_max_length: 4096</span>
+<span class="s">YAML</span>
+
+<span class="c1"># 2. 运行 Phase 1（仅统计收集 + 搜索）</span>
+cp<span class="w"> </span>configs/Hy3/ptq/fp8/Hy3_smooth.yaml<span class="w"> </span>configs/Hy3/ptq/fp8/Hy3_smooth_debug.yaml
+vim<span class="w"> </span>configs/Hy3/ptq/fp8/Hy3_smooth_debug.yaml<span class="w">  </span><span class="c1"># 编辑搜索参数</span>
+
+python3<span class="w"> </span>-m<span class="w"> </span>angelslim.compressor.transform.smooth.vllm.collect<span class="w"> </span>-c<span class="w"> </span>configs/Hy3/ptq/fp8/Hy3_smooth_debug.yaml
+
+<span class="c1"># 3. 检查搜索结果</span>
+cat<span class="w"> </span>output_dir/smooth_alpha_search.json<span class="w"> </span><span class="p">|</span><span class="w"> </span>python3<span class="w"> </span>-m<span class="w"> </span>json.tool<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-50
+
+<span class="c1"># 4. 若满意，再用更精细参数重新搜索</span>
+vim<span class="w"> </span>configs/Hy3/ptq/fp8/Hy3_smooth_debug.yaml
+python3<span class="w"> </span>-m<span class="w"> </span>angelslim.compressor.transform.smooth.vllm.collect<span class="w"> </span>-c<span class="w"> </span>configs/Hy3/ptq/fp8/Hy3_smooth_debug.yaml
+
+<span class="c1"># 5. 查看最终搜索结果</span>
+cat<span class="w"> </span>output_dir/smooth_alpha_search.json<span class="w"> </span><span class="p">|</span><span class="w"> </span>python3<span class="w"> </span>-m<span class="w"> </span>json.tool
+</pre></div>
+</div>
+</section>
+<section id="id24">
+<h3>示例 3：复用统计进行多次 Phase 2<a class="headerlink" href="#id24" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Phase 1 已完成，假设输出在 /data/smooth_stats</span>
+
+<span class="c1"># 方案 A：测试不同的 alpha_qk 值</span>
+<span class="k">for</span><span class="w"> </span>alpha<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="m">0</span>.4<span class="w"> </span><span class="m">0</span>.5<span class="w"> </span><span class="m">0</span>.6<span class="w"> </span><span class="m">0</span>.7<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">    </span>sed<span class="w"> </span>-i<span class="w"> </span><span class="s2">"s/alpha_qk: .*/alpha_qk: </span><span class="nv">$alpha</span><span class="s2">/"</span><span class="w"> </span>configs/Hy3/ptq/fp8/Hy3_smooth.yaml
+<span class="w">    </span>sed<span class="w"> </span>-i<span class="w"> </span><span class="s2">"s|save_path: .*|save_path: /data/smooth_model_alpha_qk_</span><span class="si">${</span><span class="nv">alpha</span><span class="si">}</span><span class="s2">|"</span><span class="w"> </span>configs/Hy3/ptq/fp8/Hy3_smooth.yaml
+<span class="w">    </span>bash<span class="w"> </span>scripts/ptq/run_smooth_convert_for_HY3.sh
+<span class="k">done</span>
+
+<span class="c1"># 方案 B：使用网格搜索结果（自动应用最优 alpha）</span>
+<span class="c1"># 若 smooth_alpha_search.json 存在，Phase 2 会自动使用其中的最优 alpha，</span>
+<span class="c1"># 忽略手工指定的 alpha_qk / alpha_vo / alpha_down</span>
+</pre></div>
+</div>
+</section>
+<section id="ptq">
+<h3>示例 4：集成到现有 PTQ 流水线<a class="headerlink" href="#ptq" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 1. 若已有 W8A8C8 量化的模型，先跑 Smooth 统计</span>
+bash<span class="w"> </span>scripts/ptq/run_smooth_calibrate_for_HY3.sh
+
+<span class="c1"># 2. 应用 Smooth 变换后再量化</span>
+python3<span class="w"> </span>tools/fp8_quant_with_vllm_activation.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--model-path<span class="w"> </span>/data/smooth_model<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--stats-dir<span class="w"> </span>/data/smooth_output<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--fp8-path<span class="w"> </span>/data/fp8_smoothed_model
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="id25">
+<h2>数据格式<a class="headerlink" href="#id25" title="Link to this heading">#</a></h2>
+<section id="phase-1-smooth-stats-json">
+<h3>Phase 1 输出：<code class="docutils literal notranslate"><span class="pre">smooth_stats.json</span></code><a class="headerlink" href="#phase-1-smooth-stats-json" title="Link to this heading">#</a></h3>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">"model.layers.0.self_attn.q_proj"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"absmax"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mf">0.234</span><span class="p">,</span><span class="w"> </span><span class="mf">0.456</span><span class="p">,</span><span class="w"> </span><span class="mf">0.789</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">],</span><span class="w">      </span><span class="c1">// per-channel absmax，长度 = 输出维度</span>
+<span class="w">    </span><span class="nt">"ema"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mf">0.230</span><span class="p">,</span><span class="w"> </span><span class="mf">0.450</span><span class="p">,</span><span class="w"> </span><span class="mf">0.780</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">]</span><span class="w">          </span><span class="c1">// per-channel EMA</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">"model.layers.0.self_attn.k_proj"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"absmax"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="err">...</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">"ema"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="err">...</span><span class="p">]</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">"model.layers.0.self_attn.v_proj"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"absmax"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="err">...</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">"ema"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="err">...</span><span class="p">]</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">"model.layers.0.mlp.down_proj"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"absmax"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="err">...</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">"ema"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="err">...</span><span class="p">]</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="err">...</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="phase-1-smooth-alpha-search-json">
+<h3>Phase 1 输出：<code class="docutils literal notranslate"><span class="pre">smooth_alpha_search.json</span></code>（若启用）<a class="headerlink" href="#phase-1-smooth-alpha-search-json" title="Link to this heading">#</a></h3>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">"model.layers.0.self_attn.q_proj"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"best_alpha"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.65</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"mse"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.001234</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">"model.layers.0.self_attn.k_proj"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"best_alpha"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.60</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"mse"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.001210</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="err">...</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="id26">
+<h3>变换公式（Phase 2）<a class="headerlink" href="#id26" title="Link to this heading">#</a></h3>
+<section id="qk-smooth">
+<h4>QK Smooth<a class="headerlink" href="#qk-smooth" title="Link to this heading">#</a></h4>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">smooth_weight</span> <span class="o">=</span> <span class="n">k_absmax</span><span class="o">^</span><span class="n">alpha</span>
+<span class="n">q_scaled</span> <span class="o">=</span> <span class="n">q_proj</span> <span class="o">/</span> <span class="n">smooth_weight</span>
+<span class="n">k_scaled</span> <span class="o">=</span> <span class="n">k_proj</span> <span class="o">*</span> <span class="n">smooth_weight</span>
+</pre></div>
+</div>
+</section>
+<section id="vo-smooth">
+<h4>VO Smooth<a class="headerlink" href="#vo-smooth" title="Link to this heading">#</a></h4>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">smooth_weight</span> <span class="o">=</span> <span class="n">attn_out_absmax</span><span class="o">^</span><span class="n">alpha</span> <span class="o">/</span> <span class="n">o_proj_max</span><span class="o">^</span><span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">alpha</span><span class="p">)</span>
+<span class="n">v_scaled</span> <span class="o">=</span> <span class="n">v_proj</span> <span class="o">*</span> <span class="n">smooth_weight</span>
+<span class="n">attn_out_scaled</span> <span class="o">=</span> <span class="n">attn_output</span> <span class="o">/</span> <span class="n">smooth_weight</span>
+<span class="n">o_proj_scaled</span> <span class="o">=</span> <span class="n">o_proj</span> <span class="o">/</span> <span class="n">smooth_weight</span>
+</pre></div>
+</div>
+</section>
+<section id="down-smooth">
+<h4>Down Smooth<a class="headerlink" href="#down-smooth" title="Link to this heading">#</a></h4>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">smooth_weight</span> <span class="o">=</span> <span class="n">down_proj_absmax</span><span class="o">^</span><span class="n">alpha</span> <span class="o">/</span> <span class="n">up_proj_max</span><span class="o">^</span><span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">alpha</span><span class="p">)</span>
+<span class="n">mlp_act_scaled</span> <span class="o">=</span> <span class="n">mlp_activation</span> <span class="o">/</span> <span class="n">smooth_weight</span>
+<span class="n">down_scaled</span> <span class="o">=</span> <span class="n">down_proj</span> <span class="o">*</span> <span class="n">smooth_weight</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+<hr class="docutils" />
+<section id="id27">
+<h2>集成与扩展<a class="headerlink" href="#id27" title="Link to this heading">#</a></h2>
+<section id="id28">
+<h3>添加新模型配置<a class="headerlink" href="#id28" title="Link to this heading">#</a></h3>
+<ol class="arabic simple">
+<li><p><strong>创建模型特定配置</strong>：</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cp<span class="w"> </span>configs/Hy3/ptq/fp8/Hy3_smooth.yaml<span class="w"> </span>configs/my_model/ptq/my_model_smooth.yaml
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p><strong>编辑配置文件</strong>：</p></li>
+</ol>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># configs/my_model/ptq/my_model_smooth.yaml</span>
+<span class="nt">model_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/my_model</span>
+<span class="nt">ptq_data_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/my_calibration_data.jsonl</span>
+<span class="nt">output_dir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/my_smooth_output</span>
+<span class="nt">save_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/my_smooth_model</span>
+
+<span class="nt">tp_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span><span class="w">                    </span><span class="c1"># 根据模型大小调整</span>
+<span class="nt">batch_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span>
+<span class="nt">num_samples</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">256</span>
+<span class="nt">max_length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4096</span>
+
+<span class="c1"># 其他配置项...</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="3">
+<li><p><strong>创建快捷脚本</strong>（可选）：</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># scripts/ptq/run_smooth_for_my_model.sh</span>
+<span class="c1">#!/usr/bin/env bash</span>
+<span class="nb">set</span><span class="w"> </span>-euo<span class="w"> </span>pipefail
+
+<span class="nv">CONFIG</span><span class="o">=</span><span class="s2">"configs/my_model/ptq/my_model_smooth.yaml"</span>
+
+<span class="nb">export</span><span class="w"> </span><span class="nv">VLLM_MOE_COLLECT_SMOOTH_STATS</span><span class="o">=</span><span class="m">1</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">VLLM_MOE_COLLECT_ALPHA_SEARCH</span><span class="o">=</span><span class="m">1</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">VLLM_ALLOW_INSECURE_SERIALIZATION</span><span class="o">=</span><span class="m">1</span>
+
+python3<span class="w"> </span>-m<span class="w"> </span>angelslim.compressor.transform.smooth.vllm.collect<span class="w"> </span>-c<span class="w"> </span><span class="s2">"</span><span class="nv">$CONFIG</span><span class="s2">"</span><span class="w"> </span><span class="s2">"</span><span class="nv">$@</span><span class="s2">"</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+python3<span class="w"> </span>-m<span class="w"> </span>angelslim.compressor.transform.smooth.convert.run<span class="w"> </span>-c<span class="w"> </span><span class="s2">"</span><span class="nv">$CONFIG</span><span class="s2">"</span><span class="w"> </span><span class="s2">"</span><span class="nv">$@</span><span class="s2">"</span>
+</pre></div>
+</div>
+</section>
+<section id="id29">
+<h3>自定义 Phase 2 变换<a class="headerlink" href="#id29" title="Link to this heading">#</a></h3>
+<p>若需自定义 Phase 2 逻辑（如自己的量化后处理），可直接调用核心 API：</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">angelslim.compressor.quant.modules.smooth</span><span class="w"> </span><span class="kn">import</span> <span class="n">SmoothQuant</span><span class="p">,</span> <span class="n">SmoothConfig</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+
+<span class="c1"># 1. 加载统计</span>
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">"/path/to/smooth_stats.json"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+    <span class="n">smooth_stats</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+
+<span class="c1"># 2. 创建配置</span>
+<span class="n">smooth_config</span> <span class="o">=</span> <span class="n">SmoothConfig</span><span class="p">(</span>
+    <span class="n">alpha</span><span class="o">=</span><span class="mf">0.6</span><span class="p">,</span>
+    <span class="n">smooth_first_linears</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>   <span class="c1"># Q/K</span>
+    <span class="n">smooth_second_linears</span><span class="o">=</span><span class="kc">True</span>   <span class="c1"># V/O</span>
+<span class="p">)</span>
+
+<span class="c1"># 3. 应用变换</span>
+<span class="n">smoother</span> <span class="o">=</span> <span class="n">SmoothQuant</span><span class="p">(</span><span class="n">smooth_config</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">smoother</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">smooth_stats</span><span class="p">)</span>
+
+<span class="c1"># 4. 后续量化或保存...</span>
+</pre></div>
+</div>
+</section>
+<section id="id30">
+<h3>与其他工具集成<a class="headerlink" href="#id30" title="Link to this heading">#</a></h3>
+<p><strong>与 vLLM 量化集成</strong>：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 1. Smooth 处理</span>
+bash<span class="w"> </span>scripts/ptq/run_smooth_calibrate_for_HY3.sh
+bash<span class="w"> </span>scripts/ptq/run_smooth_convert_for_HY3.sh
+
+<span class="c1"># 2. 后续 FP8 量化</span>
+python3<span class="w"> </span>tools/fp8_quant_with_vllm_activation.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--model-path<span class="w"> </span>/data/smooth_model<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--ptq-data-path<span class="w"> </span>/path/to/calibration_data.jsonl<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--fp8-path<span class="w"> </span>/data/fp8_smoothed_model
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="id31">
+<h2>故障排查<a class="headerlink" href="#id31" title="Link to this heading">#</a></h2>
+<section id="id32">
+<h3>问题 1：Ray 集群连接失败<a class="headerlink" href="#id32" title="Link to this heading">#</a></h3>
+<p><strong>症状</strong>：<code class="docutils literal notranslate"><span class="pre">RuntimeError:</span> <span class="pre">Job</span> <span class="pre">submission</span> <span class="pre">client</span> <span class="pre">cannot</span> <span class="pre">connect</span> <span class="pre">to</span> <span class="pre">Ray</span> <span class="pre">head.</span></code></p>
+<p><strong>解决方案</strong>：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 1. 检查 Ray 集群状态</span>
+ray<span class="w"> </span>status
+
+<span class="c1"># 2. 若集群未启动，重新启动（参考 README.md 的"环境准备"）</span>
+ray<span class="w"> </span>stop
+ray<span class="w"> </span>start<span class="w"> </span>--head<span class="w"> </span>--port<span class="w"> </span><span class="m">6700</span><span class="w"> </span>--num-gpus<span class="o">=</span><span class="m">8</span>
+
+<span class="c1"># 3. 确保 PYTHONPATH 包含 AngelSlim 根目录</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">PYTHONPATH</span><span class="o">=</span>/path/to/AngelSlim:<span class="nv">$PYTHONPATH</span>
+</pre></div>
+</div>
+</section>
+<section id="vllm">
+<h3>问题 2：vLLM 仍带旧版补丁<a class="headerlink" href="#vllm" title="Link to this heading">#</a></h3>
+<p><strong>症状</strong>：<code class="docutils literal notranslate"><span class="pre">RuntimeError:</span> <span class="pre">...</span> <span class="pre">still</span> <span class="pre">carries</span> <span class="pre">a</span> <span class="pre">retired</span> <span class="pre">AngelSlim</span> <span class="pre">vllm_patch</span></code></p>
+<p><strong>解决方案</strong>：用 vLLM 目录下的 <code class="docutils literal notranslate"><span class="pre">.bak</span></code> 备份还原被改过的 <code class="docutils literal notranslate"><span class="pre">fused_moe.py</span></code> / <code class="docutils literal notranslate"><span class="pre">triton_moe.py</span></code>（每个节点都要还原），新版本只依赖运行时 hook。</p>
+</section>
+<section id="oom">
+<h3>问题 3：OOM（内存溢出）<a class="headerlink" href="#oom" title="Link to this heading">#</a></h3>
+<p><strong>症状</strong>：<code class="docutils literal notranslate"><span class="pre">CUDA</span> <span class="pre">out</span> <span class="pre">of</span> <span class="pre">memory</span></code> 或 <code class="docutils literal notranslate"><span class="pre">RuntimeError:</span> <span class="pre">CUDA</span> <span class="pre">memory</span></code></p>
+<p><strong>解决方案</strong>：</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># 在配置文件中减少以下参数</span>
+<span class="nt">batch_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span><span class="w">              </span><span class="c1"># 从 4 减为 2</span>
+<span class="nt">max_length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8192</span><span class="w">           </span><span class="c1"># 从 16384 减为 8192</span>
+<span class="nt">num_samples</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">256</span><span class="w">           </span><span class="c1"># 从 512 减为 256</span>
+
+<span class="c1"># 对 Alpha 搜索也减少</span>
+<span class="nt">num_search_samples</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span><span class="w">      </span><span class="c1"># 从 16 减为 8</span>
+<span class="nt">search_max_length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4096</span><span class="w">    </span><span class="c1"># 从 8192 减为 4096</span>
+</pre></div>
+</div>
+</section>
+<section id="id33">
+<h3>问题 4：Phase 2 转换失败<a class="headerlink" href="#id33" title="Link to this heading">#</a></h3>
+<p><strong>症状</strong>：<code class="docutils literal notranslate"><span class="pre">KeyError:</span> <span class="pre">'model.layers.0.self_attn.q_proj'</span> <span class="pre">not</span> <span class="pre">found</span> <span class="pre">in</span> <span class="pre">smooth_stats.json</span></code></p>
+<p><strong>解决方案</strong>：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 1. 检查 smooth_stats.json 文件是否存在且非空</span>
+ls<span class="w"> </span>-la<span class="w"> </span>/path/to/output_dir/smooth_stats.json
+wc<span class="w"> </span>-l<span class="w"> </span>/path/to/output_dir/smooth_stats.json
+
+<span class="c1"># 2. 查看 JSON 结构</span>
+python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">"import json; f=json.load(open('/path/to/smooth_stats.json')); print(list(f.keys())[:5])"</span>
+
+<span class="c1"># 3. 检查配置中的 output_dir 是否正确</span>
+grep<span class="w"> </span><span class="s2">"output_dir:"</span><span class="w"> </span>configs/Hy3/ptq/fp8/Hy3_smooth.yaml
+</pre></div>
+</div>
+</section>
+<section id="id34">
+<h3>问题 5：Alpha 搜索耗时过长<a class="headerlink" href="#id34" title="Link to this heading">#</a></h3>
+<p><strong>症状</strong>：Phase 1 运行超过 10 小时仍未完成</p>
+<p><strong>解决方案</strong>：</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># 减少搜索复杂度</span>
+<span class="nt">enable_alpha_search</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">         </span><span class="c1"># 暂时禁用搜索，仅收集统计</span>
+<span class="c1"># 或改用手工指定的 alpha 值</span>
+
+<span class="c1"># 若确实需要搜索，减少搜索参数</span>
+<span class="nt">alpha_steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span><span class="w">                     </span><span class="c1"># 从 8 改为 4</span>
+<span class="nt">num_search_samples</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span><span class="w">              </span><span class="c1"># 从 16 改为 8</span>
+<span class="nt">alpha_min</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.4</span><span class="w">                     </span><span class="c1"># 缩小搜索范围</span>
+<span class="nt">alpha_max</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.8</span><span class="w">                     </span><span class="c1"># 缩小搜索范围</span>
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="id35">
+<h2>参考资源<a class="headerlink" href="#id35" title="Link to this heading">#</a></h2>
+<section id="id36">
+<h3>论文和文献<a class="headerlink" href="#id36" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>SmoothQuant 原论文</strong>：https://arxiv.org/abs/2211.10438</p>
+<ul>
+<li><p>提出 Smooth 的核心思想和数学框架</p></li>
+</ul>
+</li>
+<li><p><strong>GPTQ（含与 Smooth 的对比）</strong>：https://arxiv.org/abs/2210.17323</p></li>
+</ul>
+</section>
+<section id="id37">
+<h3>相关文档<a class="headerlink" href="#id37" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><a class="reference internal" href="kvcache.html"><span class="std std-doc">KV-Cache 校准说明</span></a></p></li>
+<li><p>主 PTQ 校准说明：<code class="docutils literal notranslate"><span class="pre">scripts/ptq/README.md</span></code></p></li>
+</ul>
+</section>
+<section id="id38">
+<h3>核心代码位置<a class="headerlink" href="#id38" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>文件</p></th>
+<th class="head"><p>功能</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">angelslim/compressor/transform/smooth/vllm/collect.py</span></code></p></td>
+<td><p>Phase 1 主程序（统计收集 + Alpha 搜索）</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">angelslim/compressor/transform/smooth/convert/run.py</span></code></p></td>
+<td><p>Phase 2 主程序（权重变换）</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">angelslim/compressor/quant/modules/smooth/smooth.py</span></code></p></td>
+<td><p>核心 Smooth 算法实现</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">angelslim/compressor/transform/smooth/vllm/</span></code></p></td>
+<td><p>统计钩子 / Alpha 搜索实现</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">configs/Hy3/ptq/fp8/Hy3_smooth.yaml</span></code></p></td>
+<td><p>HY3 默认配置</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="id39">
+<h3>快速命令参考<a class="headerlink" href="#id39" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 快速开始</span>
+bash<span class="w"> </span>scripts/ptq/run_smooth_for_HY3.sh
+
+<span class="c1"># 分步执行</span>
+bash<span class="w"> </span>scripts/ptq/run_smooth_calibrate_for_HY3.sh<span class="w">   </span><span class="c1"># Phase 1</span>
+bash<span class="w"> </span>scripts/ptq/run_smooth_convert_for_HY3.sh<span class="w">     </span><span class="c1"># Phase 2</span>
+
+<span class="c1"># 查看日志</span>
+tail<span class="w"> </span>-f<span class="w"> </span>/path/to/output_dir/smooth_stats.json
+
+<span class="c1"># 验证输出</span>
+python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">"import json; print(json.load(open('/path/to/smooth_model/model.safetensors.metadata.json'))['_file_type'])"</span>
+
+<span class="c1"># 集成到量化流水线</span>
+python3<span class="w"> </span>tools/fp8_quant_with_vllm_activation.py<span class="w"> </span>--model-path<span class="w"> </span>/data/smooth_model<span class="w"> </span>...
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="faq">
+<h2>常见问题（FAQ）<a class="headerlink" href="#faq" title="Link to this heading">#</a></h2>
+<p><strong>Q: Smooth 和 GPTQ 有什么区别？</strong></p>
+<p>A: Smooth 是一种”前处理”方法，在量化前对激活和权重分布进行缩放变换，提升量化友好性；而 GPTQ 是一种量化算法本身，通过海森矩阵进行逐层优化。两者可以互补：先用 Smooth 预处理，再用 GPTQ 量化。</p>
+<p><strong>Q: Alpha 应该如何选择？</strong></p>
+<p>A: 若启用 <code class="docutils literal notranslate"><span class="pre">enable_alpha_search:</span> <span class="pre">true</span></code>，系统会自动为每层搜索最优 alpha；否则使用手工指定的 <code class="docutils literal notranslate"><span class="pre">alpha_qk</span></code> / <code class="docutils literal notranslate"><span class="pre">alpha_vo</span></code> / <code class="docutils literal notranslate"><span class="pre">alpha_down</span></code>。通常推荐启用搜索以获得更好的精度。</p>
+<p><strong>Q: smooth_stats.json 可以手工编辑吗？</strong></p>
+<p>A: 可以。文件格式为标准 JSON，每层包含 <code class="docutils literal notranslate"><span class="pre">absmax</span></code> 和 <code class="docutils literal notranslate"><span class="pre">ema</span></code> 两个数组。若某层的统计不合理，可以手工修改后重跑 Phase 2。</p>
+<p><strong>Q: 如何应用 Smooth 到自己的模型？</strong></p>
+<p>A: 在 <code class="docutils literal notranslate"><span class="pre">configs/</span></code> 下创建模型特定配置文件，修改 <code class="docutils literal notranslate"><span class="pre">model_path</span></code>、<code class="docutils literal notranslate"><span class="pre">ptq_data_path</span></code>、<code class="docutils literal notranslate"><span class="pre">output_dir</span></code>、<code class="docutils literal notranslate"><span class="pre">save_path</span></code> 等路径，然后执行相应的脚本。详见”集成与扩展”章节。</p>
+<hr class="docutils" />
+<p><strong>最后更新</strong>：2026-05-26</p>
+<p><strong>维护者</strong>：AngelSlim 开发团队</p>
+<p><strong>反馈</strong>：若发现问题或有改进建议，欢迎提交 Issue 或 Pull Request。</p>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="focus_fp4.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">FOCUS：面向 FP4 的端到端 Scale 优化</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="kvcache.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">KV-cache 校准与 scale 替换</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">目录</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">快速开始</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">一键执行完整流水线</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">核心概念</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#smoothquant">SmoothQuant 算法</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">关键术语</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">两阶段流水线</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#alpha">阶段 1：统计收集与 Alpha 搜索</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">阶段 2：离线权重变换</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id8">环境准备（必要条件）</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ray">1. Ray 集群</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id9">2. 环境变量</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id10">脚本使用</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#run-smooth-for-hy3-sh">1. <code class="docutils literal notranslate"><span class="pre">run_smooth_for_HY3.sh</span></code> ★ 推荐的一键流水线</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#run-smooth-calibrate-for-hy3-sh-phase-1">2. <code class="docutils literal notranslate"><span class="pre">run_smooth_calibrate_for_HY3.sh</span></code> — 仅 Phase 1</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#run-smooth-convert-for-hy3-sh-phase-2">3. <code class="docutils literal notranslate"><span class="pre">run_smooth_convert_for_HY3.sh</span></code> — 仅 Phase 2</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id11">配置管理</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id12">配置文件位置</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id13">关键配置项</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id14">路径配置</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#phase-1">Phase 1 运行时配置</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#phase-2">Phase 2 变换配置</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#alpha-phase-1-phase-2">Alpha 网格搜索配置（Phase 1 执行，Phase 2 应用）</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id15">配置示例</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#hy3">典型 HY3 配置</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#qwen3">自定义配置（Qwen3 示例）</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id16">Alpha 网格搜索</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id17">原理</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id18">搜索流程（Phase 1 中执行）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id19">输出格式</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id20">快速迭代建议</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id21">工作流示例</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id22">示例 1：完整流程（一键执行）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id23">示例 2：调试 Alpha 搜索</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id24">示例 3：复用统计进行多次 Phase 2</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ptq">示例 4：集成到现有 PTQ 流水线</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id25">数据格式</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#phase-1-smooth-stats-json">Phase 1 输出：<code class="docutils literal notranslate"><span class="pre">smooth_stats.json</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#phase-1-smooth-alpha-search-json">Phase 1 输出：<code class="docutils literal notranslate"><span class="pre">smooth_alpha_search.json</span></code>（若启用）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id26">变换公式（Phase 2）</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#qk-smooth">QK Smooth</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#vo-smooth">VO Smooth</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#down-smooth">Down Smooth</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id27">集成与扩展</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id28">添加新模型配置</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id29">自定义 Phase 2 变换</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id30">与其他工具集成</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id31">故障排查</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id32">问题 1：Ray 集群连接失败</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#vllm">问题 2：vLLM 仍带旧版补丁</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#oom">问题 3：OOM（内存溢出）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id33">问题 4：Phase 2 转换失败</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id34">问题 5：Alpha 搜索耗时过长</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id35">参考资源</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id36">论文和文献</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id37">相关文档</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id38">核心代码位置</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id39">快速命令参考</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#faq">常见问题（FAQ）</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By the AngelSlim Team
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, AngelSlim Team.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>
