@@ -137,6 +137,8 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
         <ul style="padding-left: 0; list-style-position: inside;">
           <li><a href="">Hunyuan-VL</a></li>
           <li><a href="https://huggingface.co/tencent/HunyuanOCR">HunyuanOCR</a></li>
+          <li><a href="https://huggingface.co/collections/Qwen/qwen38-6a7d69d63a8fa0914eb7e54c">Qwen3.8</a></li>
+          <li><a href="https://huggingface.co/collections/Qwen/qwen35-6992e3053c019221cf2d725f">Qwen3.5</a></li>
           <li><a href="https://huggingface.co/collections/Qwen/qwen3-vl">Qwen3-VL</a></li>
           <li><a href="https://huggingface.co/collections/Qwen/qwen25-vl">Qwen2.5-VL</a></li>
         </ul>
@@ -151,6 +153,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
           <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html">Eagle3</a></li>
+          <li><a href="https://github.com/fscdc/MMFlash">MMFlash</a></li>
         </ul>
       </td>
       <td>
