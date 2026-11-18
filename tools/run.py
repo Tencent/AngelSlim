@@ -38,11 +38,20 @@ def get_args():
     parser.add_argument("-c", "--config", type=str, required=True)
     parser.add_argument("--model-path", type=str, default=None)
     parser.add_argument("--save-path", type=str, default=None)
+    parser.add_argument("--stats-dir", type=str, default=None, help="calibrate.stats_dir")
+    parser.add_argument("--hessian-dir", type=str, default=None, help="calibrate.hessian_dir")
     parser.add_argument("--multi-nodes", "--muti-nodes", dest="multi_nodes", action="store_true")
     parser.add_argument("--lm-eval", action="store_true")
     parser.add_argument("--lm-eval-task", nargs="+", default=["ceval-valid"])
     parser.add_argument("--ppl-eval", action="store_true")
+    # PTQWeightOnly checkpoint conversion (vLLM calibration + per-shard quantization)
+    parser.add_argument("--stage", choices=["calib", "quant", "finalize", "all"], default="all")
+    parser.add_argument("--node-rank", type=int, default=0)
+    parser.add_argument("--num-nodes", type=int, default=1)
+    parser.add_argument("--skip-existing", action="store_true", help="resume the quant stage")
     args = parser.parse_args()
+    if not 0 <= args.node_rank < args.num_nodes:
+        parser.error(f"--node-rank {args.node_rank} out of range for --num-nodes {args.num_nodes}")
     return args
 
 
@@ -58,10 +67,22 @@ def merge_config(config, args):
         config.global_config.save_path = args.save_path
     if args.model_path is not None:
         config.model_config.model_path = args.model_path
-    config.global_config.save_path = os.path.join(
-        config.global_config.save_path,
-        get_yaml_prefix_simple(args.config),
-    )
+    if args.stats_dir is not None or args.hessian_dir is not None:
+        from angelslim.utils.config_parser import CalibrateConfig
+
+        if config.compression_config.calibrate is None:
+            config.compression_config.calibrate = CalibrateConfig()
+        if args.stats_dir is not None:
+            config.compression_config.calibrate.stats_dir = args.stats_dir
+        if args.hessian_dir is not None:
+            config.compression_config.calibrate.hessian_dir = args.hessian_dir
+    quant = config.compression_config.quantization
+    if quant is None or quant.name not in ("fp8_blockwise", "mixed"):
+        # ckpt_convert keeps save_path as the run root and lays out out/ itself.
+        config.global_config.save_path = os.path.join(
+            config.global_config.save_path,
+            get_yaml_prefix_simple(args.config),
+        )
 
 
 def multi_nodes_run(config):
@@ -222,53 +243,36 @@ def vllm_calibrate_run(config):
     )
 
 
-def weight_only_run(config):
+def weight_only_run(config, args):
     """
-    Dispatch weight-only quantization based on compression.quantization.name.
+    Weight-only quantization straight from safetensors, without building the model.
 
-    Weight-only quantization operates directly on safetensors files without
-    loading the model into GPU memory.  New algorithms can be added here by
-    checking quantization.name and calling the appropriate implementation.
-
-    Currently supported quantization names:
-      - "fp8_blockwise": FP8 block-wise quantization (128x128 tiles)
-
-    The YAML config must contain:
-      - model.model_path: input model directory
-      - global.save_path: output directory
-      - compression.quantization.quant_method.block_size: [128, 128] (optional)
-      - compression.quantization.quant_method.num_workers: int (optional, default 8)
+    Supported compression.quantization.name:
+      - "fp8_blockwise": FP8 block-wise (quant_method: fp8 layout)
+      - "mixed": formats per config_groups, exported as compressed-tensors;
+        compression.calibrate (backend vllm) collects Hessians / MoE absmax first
+      - "daq"
+    ``--stage`` picks calib / quant / finalize; quant splits shards over ``--num-nodes``.
     """
-    import sys
-
     quant_name = ""
     if config.compression_config and config.compression_config.quantization:
         quant_name = config.compression_config.quantization.name
 
-    if quant_name == "fp8_blockwise":
-        # fp8_quant_blockwise.py lives alongside run.py in tools/
-        tools_dir = os.path.dirname(os.path.abspath(__file__))
-        if tools_dir not in sys.path:
-            sys.path.insert(0, tools_dir)
-        from fp8_quant_blockwise import main as fp8_main
+    if quant_name in ("fp8_blockwise", "mixed"):
+        from angelslim.compressor.quant.ckpt_convert import (
+            convert_checkpoint,
+            run_calibration,
+            spec_from_config,
+        )
 
-        input_path = config.model_config.model_path
-        output_path = config.global_config.save_path
-
-        quant_method = {}
-        qm = config.compression_config.quantization.quant_method
-        if isinstance(qm, dict):
-            quant_method = qm
-
-        block_size = tuple(quant_method.get("block_size", [128, 128]))
-        num_workers = int(quant_method.get("num_workers", 8))
-
-        print_info(f"FP8 block-wise quantization: {input_path} -> {output_path}")
-        print_info(f"  block_size={block_size}, num_workers={num_workers}")
-
-        fp8_main(input_path, output_path, block_size, num_workers)
-
-        print_info(f"FP8 block-wise quantized model saved to: {output_path}")
+        spec = spec_from_config(config)
+        if quant_name == "mixed" and args.stage in ("calib", "all"):
+            run_calibration(config, args.config)
+        if args.stage != "calib":
+            convert_checkpoint(
+                spec, args.stage, args.node_rank, args.num_nodes, args.skip_existing
+            )
+            print_info(f"{quant_name} stage {args.stage} done: {spec.save_path}")
     elif quant_name == "daq":
         from angelslim.compressor.quant.modules.daq import DAQ
 
@@ -277,7 +281,7 @@ def weight_only_run(config):
     else:
         raise ValueError(
             f"Unsupported PTQWeightOnly quantization method: '{quant_name}'. "
-            "Supported methods: ['fp8_blockwise']"
+            "Supported methods: ['fp8_blockwise', 'mixed', 'daq']"
         )
 
 
@@ -383,17 +387,18 @@ def run(config):
         mcore_qad_run(config)
         return
 
+    # Weight-only quantization never loads the model. Its calibrate.backend vllm means
+    # vllm_calib.hessian_collect, not the VLLMCalibrateEngine used by PTQ below.
+    if "PTQWeightOnly" in config.compression_config.name:
+        weight_only_run(config, args)
+        return
+
     # Dispatch to vLLM calibration if calibrate config specifies vllm backend
     if (
         config.compression_config.calibrate
         and config.compression_config.calibrate.backend == "vllm"
     ):
         vllm_calibrate_run(config)
-        return
-
-    # Dispatch to weight-only quantization (no model loading required)
-    if "PTQWeightOnly" in config.compression_config.name:
-        weight_only_run(config)
         return
 
     # Trainer + DeepSpeed: register HfTrainerDeepSpeedConfig BEFORE loading the

@@ -98,6 +98,16 @@ def find_layers(module, layers=None, name=""):
     return res
 
 
+def find_modules(module, types, name=""):
+    """Like ``find_layers`` but matches subclasses too; matched modules are not descended."""
+    if isinstance(module, tuple(types)):
+        return {name: module}
+    res = {}
+    for name1, child in module.named_children():
+        res.update(find_modules(child, types, name + "." + name1 if name != "" else name1))
+    return res
+
+
 def get_tensor_item(x):
     return x.item()
 
@@ -318,3 +328,34 @@ def get_loaders(tokenizer, name, seed=0, seqlen=2048, cache_dir=None):
             valenc.append(tmp.input_ids[:, i : i + seqlen])
         return torch.hstack(valenc)
     raise NotImplementedError(f"Unsupported PPL dataset: {name}")
+
+
+def new_minmax():
+    return {"min": torch.tensor(float("inf")), "max": torch.tensor(float("-inf"))}
+
+
+def rank_world():
+    import torch.distributed as dist
+
+    if dist.is_initialized():
+        return dist.get_rank(), dist.get_world_size()
+    return 0, 1
+
+
+def all_reduce_minmax(stats_dict, label="stats"):
+    """In-place global MIN/MAX of ``{name: {"min", "max"}}``; unseen entries become 1.0."""
+    import torch.distributed as dist
+
+    rank, world_size = rank_world()
+    if world_size <= 1:
+        return
+    for name, stats in stats_dict.items():
+        if stats["min"] == float("inf") or stats["max"] == float("-inf"):
+            if rank == 0:
+                print(f"[WARNING] {label} '{name}' was not calibrated, defaulting to 1")
+            stats["min"], stats["max"] = torch.tensor(1.0), torch.tensor(1.0)
+        for key, op in (("min", dist.ReduceOp.MIN), ("max", dist.ReduceOp.MAX)):
+            t = stats[key].cuda()
+            dist.all_reduce(t, op=op)
+            stats[key] = t.cpu()
+    dist.barrier()

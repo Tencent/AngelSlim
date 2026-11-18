@@ -378,11 +378,6 @@ def inplace_div_fp32(weight: torch.Tensor, scale: torch.Tensor) -> None:
 #
 # These are intentionally backend-agnostic — both the vLLM online searcher
 # and any offline simulator can call them with plain torch tensors.
-#
-# Migrated from
-# ``angelslim/compressor/quant/core/vllm_calibrate_utils/search.py``
-# (``_smooth_qdq_act`` / ``_smooth_qdq_weight``) — leading underscore
-# dropped, behaviour unchanged.
 
 
 def smooth_qdq_act(

@@ -12,26 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""FusedMoE kernel-injection entry points for smooth-stat / alpha-search
-collection.
-
-These two functions are imported and called from the patched
-``vllm/model_executor/layers/fused_moe/fused_moe.py`` (deployed via
-``tools/vllm_patch/install.sh`` to ``vllm/tools/smooth_moe_inject.py``).
-The kernel calls them right after computing ``intermediate_cache2``
-(= ``silu(gate) * up``) and before the ``w2`` matmul.
-
-The module-level flags ``_MOE_COLLECT_SMOOTH`` /
-``_MOE_COLLECT_ALPHA_SEARCH`` are read once at import time from env
-vars; ``setup_smooth_hooks`` / ``setup_smooth_alpha_search_hooks``
-update them at runtime so the hot-path skips ``os.getenv`` overhead.
-"""
+"""FusedMoE down_proj input (``silu(gate) * up``) collectors for smooth stats and alpha
+search, fed at runtime by ``vllm_calib.hooks`` through ``smooth_moe_observer``."""
 
 import os
 
 import torch
 
 __all__ = [
+    "smooth_moe_observer",
     "collect_fused_moe_smooth_stats",
     "collect_fused_moe_alpha_search_values",
     "set_moe_collect_smooth",
@@ -226,3 +215,20 @@ def collect_fused_moe_alpha_search_values(
                     0, stored["tokens"].shape[0] - 1, max_tokens_per_expert
                 ).long()
                 stored["tokens"] = stored["tokens"][indices]
+
+
+def smooth_moe_observer(stage, hidden_states, topk_ids, global_num_experts, w1):
+    """``moe_hook`` observer; layers are wired through attributes on ``w13_weight``."""
+    if stage != "down_proj":
+        return
+    name = getattr(w1, "_vllm_layer_name_smooth", None)
+    collect_fused_moe_smooth_stats(
+        stage, hidden_states, topk_ids, layer_name=name,
+        global_smooth_stats=getattr(w1, "_smooth_stats_of_model", None),
+        ema_momentum=getattr(w1, "_smooth_ema_momentum", 0.9),
+    )  # fmt: skip
+    collect_fused_moe_alpha_search_values(
+        stage, hidden_states, topk_ids, layer_name=name,
+        alpha_search_values=getattr(w1, "_alpha_search_values_of_model", None),
+        max_tokens_per_expert=getattr(w1, "_alpha_search_max_tokens", 512),
+    )  # fmt: skip

@@ -1,0 +1,43 @@
+# GLM-5 (BF16) GPTQ: NVFP4 routed experts only (MTP layer 78 and everything else stay BF16),
+# compressed-tensors. Hessians and input_global_scale both come from the stage-1 vLLM pass.
+# Stage 1: python3 tools/run.py -c <this> --stage calib
+# Stage 2: python3 tools/run.py -c <this>
+#          (or GLM5_SOURCE_FORMAT=bf16 BF16_QUANT_METHOD=gptq bash scripts/ptq/run_vllm_quant_for_glm5.sh)
+global:
+  save_path: ./output/glm5_bf16/nvfp4_gptq
+
+model:
+  name: GLM5
+  model_path: /path/to/GLM-5.1           # local BF16 checkpoint
+
+dataset:                                 # stage 1 only
+  name: TextDataset
+  data_path: ./dataset/sharegpt_gpt4/sharegpt_gpt4_256.jsonl
+  max_seq_length: 2048
+  num_samples: 64
+
+compression:
+  name: PTQWeightOnly
+  calibrate:
+    backend: vllm
+    tp_size: 16
+    max_num_seqs: 4
+    distributed_executor_backend: ray
+    stats_dir: ./output/glm5_bf16/statistics          # moe_expert_stats.json
+    hessian_dir: ./output/glm5_bf16/statistics/hessian
+    args:                                # vllm_calib.hessian_collect options
+      dp_size: 1
+      modules: '.*mlp\.experts\.'        # routed experts only
+  quantization:
+    name: mixed
+    save_name: compressed-tensors
+    algorithm: gptq
+    gptq: {damp: 0.05, batch_rows: 131072}
+    num_workers: 8
+    config_groups:
+      nvfp4_moe:
+        format: nvfp4
+        targets:
+          - 're:model\.layers\.(?!78\.)\d+\.mlp\.experts\.\d+\.(?:gate_proj|up_proj|down_proj)$'
+    ignore_layers:
+      - 're:.*lm_head$'

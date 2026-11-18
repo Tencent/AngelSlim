@@ -1,6 +1,6 @@
 # Unified YAML config for the Hy3 PTQ pipeline.
 # Consumed by BOTH stages of scripts/ptq/run_vllm_quant_for_Hy3.sh:
-#   - tools/run_vllm_calibrate.py            (stage 1: activation calibration)
+#   - angelslim.compressor.quant.vllm_calib.calibrate            (stage 1: activation calibration)
 #   - tools/fp8_quant_with_vllm_activation.py (stage 2: FP8 quantization)
 #
 # Each stage's argparse picks up only the keys it knows about; unrelated
@@ -19,7 +19,7 @@ output_dir: /path/to/statistics         # stage1: where stats are written; stage
 output_fp8_hf_path: /path/to/output/fp8_model  # stage2 only
 
 # ============================================================================
-# Stage 1 — vLLM activation calibration (tools/run_vllm_calibrate.py)
+# Stage 1 — vLLM activation calibration (angelslim.compressor.quant.vllm_calib.calibrate)
 # ============================================================================
 
 # -------- Model loading / runtime --------

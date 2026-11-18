@@ -12,12 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""vLLM-side smooth pipeline (online calibration).
-
-Re-exports the public API used by:
-* ``tools/smooth/run_vllm_smooth.py`` (Phase 1 driver)
-* the patched ``vllm/tools/smooth_moe_inject.py`` (FusedMoE kernel hook)
-"""
+"""vLLM-side smooth pipeline (online calibration); CLI: ``python -m ...smooth.vllm.collect``."""
 
 from .hooks import (
     SmoothAlphaValueHook,

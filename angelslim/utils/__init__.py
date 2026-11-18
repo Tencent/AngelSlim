@@ -15,9 +15,11 @@
 from .config_parser import SlimConfigParser, parse_json_full_config  # noqa: F401
 from .default_compress_config import *  # noqa: F401 F403
 from .lazy_imports import *  # noqa: F401 F403
+from .utils import all_reduce_minmax  # noqa: F401
 from .utils import common_prefix  # noqa: F401
 from .utils import decide_device_for_distributed  # noqa: F401
 from .utils import find_layers  # noqa: F401
+from .utils import find_modules  # noqa: F401
 from .utils import find_parent_layer_and_sub_name  # noqa: F401
 from .utils import get_best_device  # noqa: F401
 from .utils import get_loaders  # noqa: F401
@@ -26,9 +28,11 @@ from .utils import get_op_name  # noqa: F401
 from .utils import get_package_info  # noqa: F401
 from .utils import get_tensor_item  # noqa: F401
 from .utils import get_yaml_prefix_simple  # noqa: F401
+from .utils import new_minmax  # noqa: F401
 from .utils import print_info  # noqa: F401
 from .utils import print_with_rank  # noqa: F401
 from .utils import rank0_print  # noqa: F401
+from .utils import rank_world  # noqa: F401
 from .utils import set_op_by_name  # noqa: F401
 from .vllm_calibration_dp import run_vllm_calibration_with_dp  # noqa: F401
 from .vllm_calibration_dp import validate_vllm_calibration_dp_args  # noqa: F401

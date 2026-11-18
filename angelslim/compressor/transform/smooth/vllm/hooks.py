@@ -12,41 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Online smooth-stat collection: forward hooks, setup/teardown, and
-TP-aware stats retrieval.
-
-Combines:
-
-* Forward-hook classes for online smooth-stat collection:
-    - :class:`SmoothAttnHook` — captures ``q`` / ``k`` inputs and the
-      attention output (= ``o_proj`` input) on a vLLM ``Attention`` module.
-    - :class:`SmoothDownProjInputHook` — captures the input of a dense MLP
-      ``down_proj`` (which is ``silu(gate) * up``).
-    - :class:`SmoothAlphaValueHook` — captures the *raw* down_proj input
-      tensors needed by the alpha grid search.
-* Setup / teardown for the above hooks and alpha-search hooks (registered
-  via ``llm.apply_model(...)`` from the Phase 1 driver
-  ``tools/smooth/run_vllm_smooth.py``).
-* TP-aware smooth-stats retrieval & summary printing.
-
-The hook classes were migrated verbatim from
-``angelslim/compressor/quant/core/vllm_calibrate_utils/{hooks,search}.py``;
-the only change is the import of ``per_channel_absmax`` from the
-shared ``smooth/core`` layer instead of being defined locally.
-"""
+"""Online smooth-stat collection: forward hooks on Attention / dense down_proj, FusedMoE
+down_proj via ``vllm_calib.hooks``, and TP-aware stats retrieval. Registered through
+``llm.apply_model`` by ``smooth.vllm.collect``."""
 
 import os
 from collections import defaultdict
 
 import torch
 
-from angelslim.compressor.quant.core.vllm_calibrate_utils._common import (
-    _find_layers,
-    _get_dist_info,
-)
-
+from .....utils import rank_world
+from .....utils.utils import find_modules
+from ....quant.vllm_calib import hooks as moe_hook
 from ..core.tensor_math import per_channel_absmax
-from .moe_inject import set_moe_collect_alpha_search, set_moe_collect_smooth
+from .moe_inject import (
+    set_moe_collect_alpha_search,
+    set_moe_collect_smooth,
+    smooth_moe_observer,
+)
 
 __all__ = [
     # Hook classes
@@ -261,16 +244,16 @@ def setup_smooth_hooks(
     # ------------------------------------------------------------------
     # 1. Discover layers for each requested scope
     # ------------------------------------------------------------------
-    attn_layers = _find_layers(model, layers=[Attention]) if collect_attn else {}
+    attn_layers = find_modules(model, [Attention]) if collect_attn else {}
     down_proj_layers = {}
     if collect_down_proj:
-        all_linear = _find_layers(model, layers=[torch.nn.Linear, LinearBase])
+        all_linear = find_modules(model, [torch.nn.Linear, LinearBase])
         down_proj_layers = {
             name: module
             for name, module in all_linear.items()
             if name.split(".")[-1] == "down_proj"
         }
-    moe_layers = _find_layers(model, layers=[FusedMoE]) if collect_moe else {}
+    moe_layers = find_modules(model, [FusedMoE]) if collect_moe else {}
 
     # ------------------------------------------------------------------
     # EP (Expert Parallelism) check: smooth stat collection is NOT
@@ -393,6 +376,8 @@ def setup_smooth_hooks(
     # 4. Wire FusedMoE layers for kernel-injected smooth stats
     # ------------------------------------------------------------------
     if collect_moe_smooth:
+        moe_hook.install()
+        moe_hook.register_observer(smooth_moe_observer)
         for name, layer in moe_layers.items():
             if hasattr(layer, "w13_weight") and layer.w13_weight is not None:
                 layer.w13_weight._vllm_layer_name_smooth = name
@@ -445,7 +430,7 @@ def setup_smooth_alpha_search_hooks(
         model._alpha_search_hooks = []
 
     # --- Dense MLP down_proj ---
-    all_linear = _find_layers(model, layers=[torch.nn.Linear, LinearBase])
+    all_linear = find_modules(model, [torch.nn.Linear, LinearBase])
     down_proj_layers = {
         name: module for name, module in all_linear.items() if name.split(".")[-1] == "down_proj"
     }
@@ -463,13 +448,15 @@ def setup_smooth_alpha_search_hooks(
         try:
             from vllm.model_executor.layers.fused_moe.layer import FusedMoE
 
-            moe_layers = _find_layers(model, layers=[FusedMoE])
+            moe_layers = find_modules(model, [FusedMoE])
         except ImportError:
             moe_layers = {}
 
         if moe_layers:
             os.environ["VLLM_MOE_COLLECT_ALPHA_SEARCH"] = "1"
             set_moe_collect_alpha_search(True)
+            moe_hook.install()
+            moe_hook.register_observer(smooth_moe_observer)
 
         per_expert_max = max(1, max_tokens // 8)  # for topk=8
         for name, layer in moe_layers.items():
@@ -538,7 +525,7 @@ def get_smooth_stats(model):
 
     import torch.distributed as dist
 
-    rank, world_size = _get_dist_info()
+    rank, world_size = rank_world()
 
     if world_size > 1 and dist.is_initialized():
         meta = getattr(model, "_smooth_stats_meta", {})
@@ -595,7 +582,7 @@ def print_smooth_stats(model, max_rows=20):
         print("No smooth statistics available")
         return
 
-    rank, _ = _get_dist_info()
+    rank, _ = rank_world()
     if rank != 0:
         return
 
