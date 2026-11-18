@@ -22,11 +22,18 @@
 </p>
 
 ## 📣最新进展
-- [26/07/29] 我们已发布 hy4 preview [MIX-STQ1_0 版本](https://huggingface.co/AngelSlim/Hy4-preview-GGUF)！模型从 1.5TB 压缩至 214 GiB，在 SWE-bench Pro 上的性能仅下降了 0.7%。借助 [Prima.cpp]，我们 在4090笔记本（32GB 内存，16GB 显存） 以及搭载 4 张 A4000（32GB 内存，每张 16GB 显存）的服务器 上成功运行了该模型，推理速度达到了 1.02 tokens/s。详情请见[博客](https://opencpil.github.io/prima.cpp/blog/hunyuan4-770b-local-devices)和[部署指南](docs/source/_extra/hy4_preview_gguf_guideline.md)！🔥🔥🔥
+- [26/11/18] 我们发布了 **Hy4-flash** 的 FP8 量化权重([Hy4-flash-FP8](https://huggingface.co/tencent/Hy4-flash-FP8)) 与量化工具，以及端侧低 bit 量化 GGUF 模型 ([Hy4-flash-GGUF](https://huggingface.co/AngelSlim/Hy4-flash-GGUF))。🔥🔥🔥
+- [26/10/26] 我们发布了 [Hy-SimulMT](https://github.com/Tencent-Hunyuan/Hy-SimulMT) 在 llama.cpp 上的 Q4_K_M 和 Q8_0 量化模型，支持[纯翻译](https://huggingface.co/tencent/Hy-SimulMT-30B-A3B-GGUF/tree/main)和[原文+翻译](https://huggingface.co/tencent/Hy-SimulMT-30B-A3B-Interleave-GGUF/tree/main)两种模式，并提交了架构支持和 ASR 推理的 [PR](https://github.com/ggml-org/llama.cpp/pull/31198)！🔥🔥🔥
+- [26/09/01] 我们发布了 [hy4 preview MIX-STQ1_0 版本](https://huggingface.co/AngelSlim/Hy4-preview-GGUF)！模型从 1.5TB 压缩至 214 GiB，在 SWE-bench Pro 上的性能仅下降了 0.7%。🔥🔥🔥
+- [26/07/29] 我们已开源 **AngelSpec**，一个支持 DFly / MTP + TTT 等多种 draft 方法的投机解码训练框架，并发布了 Hy3-A21B 的 MTP 和 DFly 权重，DFly 端到端加速比可达 **2.40×**。[[论文]](https://arxiv.org/abs/2607.25852) | [[GitHub]](https://github.com/Tencent/AngelSpec) | [[文档]](https://angelspec.readthedocs.io/) | [[Hugging Face]](https://huggingface.co/collections/AngelSlim/angelspec) 🔥🔥🔥
 - [26/07/20] 我们支持了基于 Megatron-Core 的 Qwen3-MoE 和 Hy3 **量化感知蒸馏**，训练时仅更新量化 scale，并支持 TP/EP/CP/SP 分布式训练。[[文档]](docs/source/features/qad/mcore_qad.md)
 - [26/07/06] 我们支持了 **Hy3**（MoE A21B）模型的 FP8-Static 量化，SmoothQuant 量化. [[文档]](https://github.com/Tencent/AngelSlim/tree/main/scripts/ptq)
 - [26/06/04] 我们发布了 **Stem**，一种稀疏注意力算法，通过在 block 粒度动态选择 top-k 关键块执行 block-sparse attention，加速长上下文 LLM 的 **Prefill** 阶段，在大幅降低延迟的同时实现几乎无损的生成质量。[[文档]](https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/stem.html)
 - [26/06/01] 我们发布了 **DFlare**，一种基于 layer-wise fusion 的块扩散投机解码框架，端到端加速比可达 **5.52×**。[[文档]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/dflare.html)
+
+<details>
+<summary>历史更新</summary>
+
 - [26/05/27] 我们发布了 **D-Cut**，一种用于投机解码的自适应验证深度裁剪技术。[[文档]](https://angelslim.readthedocs.io/zh-cn/latest/dcut.html)
 - [26/05/20]  我们支持了模型蒸馏功能，适用于huggingface 全精度或者**QAT量化**模型，详细步骤可以参考[文档](https://angelslim.readthedocs.io/zh-cn/latest/features/distill/index.html).🔥🔥🔥
 - [26/05/08] 我们发布了用于 1.25-bit 模型的 STQ1_0 内核，并向 llama.cpp 提交了 [PR #22836](https://github.com/ggml-org/llama.cpp/pull/22836)！如果您对 STQ_0 有任何疑问或建议，欢迎在该 PR 下留言！🔥🔥🔥
@@ -35,10 +42,6 @@
 - [26/03/25] 我们发布了量化算法DAQ，该方法在后训练参数更新较小时，可保留量化后模型能力 [[论文]](https://arxiv.org/abs/2603.22324) | [[文档]](docs/source/features/quantization/daq.md)
 - [26/02/09] 我们发布了 HY-1.8B-2Bit, 2比特端侧大模型, 模型可见[[Huggingface]](https://huggingface.co/AngelSlim/HY-1.8B-2Bit).
 - [26/01/13] 我们发布V0.3版本， 支持了全模态场景的投机采样训练及部署，文档：[Eagle3 for LLM/VLM/Audio](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html)。并且我们发布了 **Sherry** 新的硬件高效的1.25bit三值量化算法 [[论文]](https://arxiv.org/abs/2601.07892) | [[代码]](https://github.com/Tencent/AngelSlim/tree/sherry/Sherry)🔥🔥🔥
-
-<details>
-<summary>历史更新</summary>
-
 - [25/11/05] 我们发布V0.2版本，支持了包括GLM-4.6/Qwen3-VL/Qwen3-Omni等更多模型的量化，开源投机采样Eagle3训练框架，更新Diffusion模型量化工具。
 - [25/09/30] 我们开源了思考早退新算法 **SpecExit** [[论文]](http://arxiv.org/abs/2509.24248) | [[文档]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html) | [[vLLM代码]](https://github.com/vllm-project/vllm/pull/27192)
 - [25/09/30] 我们发布了三值量化新算法 **Tequila** [[论文]](https://arxiv.org/abs/2509.23809) | [[代码]](https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant)

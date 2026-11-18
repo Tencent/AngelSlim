@@ -22,14 +22,20 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
 </p>
 
 ## 📣Latest News
+- [26/11/18] We've released FP8 quantized weights for **Hy4-flash** ([Hy4-flash-FP8](https://huggingface.co/tencent/Hy4-flash-FP8)), along with the quantization toolkit and low-bit on-device GGUF models ([Hy4-flash-GGUF](https://huggingface.co/AngelSlim/Hy4-flash-GGUF)). 🔥🔥🔥
 - [26/10/26] We've released the Q4_K_M and Q8_0 quantized model for [Hy-SimulMT](https://github.com/Tencent-Hunyuan/Hy-SimulMT) on llama.cpp, supporting both the [translation-only model](https://huggingface.co/tencent/Hy-SimulMT-30B-A3B-GGUF/tree/main) and [source text and translation](https://huggingface.co/tencent/Hy-SimulMT-30B-A3B-Interleave-GGUF/tree/main)). We also propose a [PR](https://github.com/ggml-org/llama.cpp/pull/31198) to support the architecture and ASR inference!🔥🔥🔥
-- llama.cpp support for [Hy-SimulMT]()! Enable. Using [Prima.cpp](https://github.com/OpenCPIL/prima.cpp), we ran this 214 GB model on a Laptop 4090 (32GB RAM, 16GB VRAM) + a Server with 4x A4000 (32GB RAM, 16GB VRAM each), hitting 1.02 tokens/s. See the [blog](https://opencpil.github.io/prima.cpp/blog/hunyuan4-770b-local-devices) and the deployment [guideline](docs/source/_extra/hy4_preview_gguf_guideline.md)! 🔥🔥🔥
+
+- [26/10/26] llama.cpp support for [Hy-SimulMT]()! Enable. Using [Prima.cpp](https://github.com/OpenCPIL/prima.cpp), we ran this 214 GB model on a Laptop 4090 (32GB RAM, 16GB VRAM) + a Server with 4x A4000 (32GB RAM, 16GB VRAM each), hitting 1.02 tokens/s. See the [blog](https://opencpil.github.io/prima.cpp/blog/hunyuan4-770b-local-devices) and the deployment [guideline](docs/source/_extra/hy4_preview_gguf_guideline.md)! 🔥🔥🔥
 - [26/09/01] We've released the [hy4 preview MIX-STQ1_0 version](https://huggingface.co/AngelSlim/Hy4-preview-GGUF)! Compressed from 1.5TB to 214 GiB with only a 0.7% performance drop on SWE-bench Pro. Using [Prima.cpp](https://github.com/OpenCPIL/prima.cpp), we ran this 214 GB model on a Laptop 4090 (32GB RAM, 16GB VRAM) + a Server with 4x A4000 (32GB RAM, 16GB VRAM each), hitting 1.02 tokens/s. See the [blog](https://opencpil.github.io/prima.cpp/blog/hunyuan4-770b-local-devices) and the deployment [guideline](docs/source/_extra/hy4_preview_gguf_guideline.md)! 🔥🔥🔥
 - [26/07/29] We have open-sourced **AngelSpec**, a torch-native, disaggregated speculative-decoding **training framework** with support for a variety of draft methods, led by **DFly** and **MTP + TTT**, and released the **MTP** and **DFly** drafter weights for **Hy3-A21B** — DFly delivers up to **2.40× average end-to-end speedup** over AR, and **D-cut** adds up to **+15.7%** throughput at high concurrency. [[Paper]](https://arxiv.org/abs/2607.25852) | [[GitHub]](https://github.com/Tencent/AngelSpec) | [[Docs]](https://angelspec.readthedocs.io/) | [[Hugging Face]](https://huggingface.co/collections/AngelSlim/angelspec) 🔥🔥🔥
 - [26/07/20] We now support scale-only **quantization-aware distillation on Megatron-Core** for Qwen3-MoE and Hy3, with TP/EP/CP/SP distributed training. [[Docs]](docs/source/features/qad/mcore_qad.md)
 - [26/07/06] We now support FP8-Static quantization , SmoothQuant for **Hy3** (MoE A21B).[[Docs]](https://github.com/Tencent/AngelSlim/tree/main/scripts/ptq)
 - [26/06/04] We have released **Stem**, a sparse attention algorithm that accelerates the **Prefill** stage of long-context LLMs by dynamically selecting top-k key blocks for block-sparse attention, significantly reducing latency while preserving generation quality. [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/stem.html)
 - [26/06/01] We have released **DFlare**, a block-diffusion speculative decoding framework with layer-wise fusion that achieves up to **5.52× end-to-end speedup**. [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/dflare.html)
+
+<details>
+<summary>Previous News</summary>
+
 - [26/05/27] We have released **D-Cut**, an adaptive verification depth pruning technique for speculative decoding. [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/dcut.html)
 - [26/05/20] We support Distillation for full-precision HuggingFace models and **quantized QAT-style** models, as detailed in the [distillation documentation](https://angelslim.readthedocs.io/zh-cn/latest/features/distill/index.html). 
 - [26/05/08] We have released STQ1_0 kernel for 1.25-bit model and given a PR to llama.cpp [PR #22836](https://github.com/ggml-org/llama.cpp/pull/22836) ! If you have any questions or suggestions for STQ_0, welcome to comment under the PR !🔥🔥🔥
@@ -38,10 +44,6 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
 - [26/03/25] We have released **DAQ**, the quantization algorithm that preserves the knowledge acquired while the update of parameters is relatively small during post-training training.[[Paper]](https://arxiv.org/abs/2603.22324) | [[Docs]](docs/source/features/quantization/daq.md)
 - [26/02/09] We have released HY-1.8B-2Bit, 2bit on-device large language model,[[Huggingface]](https://huggingface.co/AngelSlim/HY-1.8B-2Bit).
 - [26/01/13] We have released v0.3. We support the training and deployment of Eagle3 for all-scale LLMs/VLMs/Audio models, as detailed in the [guidance documentation](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html). And We released **Sherry**, the hardware-efficient 1.25 bit quantization algorithm [[Paper]](https://arxiv.org/abs/2601.07892) | [[Code]](https://github.com/Tencent/AngelSlim/tree/sherry/Sherry)🔥🔥🔥
-
-<details>
-<summary>Previous News</summary>
-
 - [25/11/05] We have released v0.2. Quantization support for new models, such as `GLM-4.6`, `Qwen3-VL` and `Qwen3-Omni`, open-sources the Eagle3 speculative decoding training framework, and updates the Diffusion model quantization tools.
 - [25/09/30] We have released **SpecExit**, the reasoning early-exit algorithm: [[Paper]](http://arxiv.org/abs/2509.24248) | [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html) | [[vLLM Code]](https://github.com/vllm-project/vllm/pull/27192)
 - [25/09/26] We have released **TEQUILA**, the ternary quantization algorithm [[Paper]](https://arxiv.org/abs/2509.23809) | [[Code]](https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant)
