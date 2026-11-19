@@ -134,21 +134,25 @@ class Eagle3Config(PretrainedConfig):
         if self.rope_scaling is None:
             return
 
-        if not isinstance(self.rope_scaling, dict) or len(self.rope_scaling) != 2:
-            raise ValueError(
-                "`rope_scaling` must be a dictionary with with two fields, "
-                f"`name` and `factor`, got {self.rope_scaling}"
-            )
-        rope_scaling_type = self.rope_scaling.get("type", None)
-        rope_scaling_factor = self.rope_scaling.get("factor", None)
-        if rope_scaling_type is None or rope_scaling_type not in ["linear", "dynamic"]:
+        if not isinstance(self.rope_scaling, dict):
+            raise ValueError("`rope_scaling` must be a dictionary, " f"got {self.rope_scaling}")
+        # transformers >= 5 renames "type" to "rope_type" and may carry extra
+        # keys (rope_theta, mrope_section, ...) in the same dict. Accept both
+        # spellings and ignore the keys this drafter does not use (#330).
+        rope_scaling_type = self.rope_scaling.get("rope_type", self.rope_scaling.get("type"))
+        if rope_scaling_type in (None, "default"):
+            # No scaling requested; a newer config may still carry rope_theta.
+            return
+        if rope_scaling_type not in ["linear", "dynamic"]:
             raise ValueError(
                 f"`rope_scaling`'s name field must be one of ['linear', 'dynamic'], "
                 f"got {rope_scaling_type}"
             )
+        rope_scaling_factor = self.rope_scaling.get("factor", None)
         if (
             rope_scaling_factor is None
-            or not isinstance(rope_scaling_factor, float)
+            or not isinstance(rope_scaling_factor, (int, float))
+            or isinstance(rope_scaling_factor, bool)
             or rope_scaling_factor <= 1.0
         ):
             raise ValueError(
