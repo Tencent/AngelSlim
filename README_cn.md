@@ -22,7 +22,8 @@
 </p>
 
 ## 📣最新进展
-- [26/11/18] 我们发布了 **Hy4-flash** 的 FP8 量化权重([Hy4-flash-FP8](https://huggingface.co/tencent/Hy4-flash-FP8)) 与量化工具，以及端侧低 bit 量化 GGUF 模型 ([Hy4-flash-GGUF](https://huggingface.co/AngelSlim/Hy4-flash-GGUF))。🔥🔥🔥
+- [26/11/20] 我们发布了 **Hy4** 的 FP8 量化权重 ([Hy4-FP8](https://huggingface.co/tencent/Hy4-FP8)) 与 FP8、MXFP4 量化工具，以及端侧低 bit 量化 GGUF 模型 ([Hy4-GGUF](https://huggingface.co/AngelSlim/Hy4-GGUF))。🔥🔥🔥
+- [26/11/18] 我们发布了 **Hy4-flash** 的 FP8 量化权重 ([Hy4-flash-FP8](https://huggingface.co/tencent/Hy4-flash-FP8)) 与量化工具，以及端侧低 bit 量化 GGUF 模型 ([Hy4-flash-GGUF](https://huggingface.co/AngelSlim/Hy4-flash-GGUF))。🔥🔥🔥
 - [26/10/26] 我们发布了 [Hy-SimulMT](https://github.com/Tencent-Hunyuan/Hy-SimulMT) 在 llama.cpp 上的 Q4_K_M 和 Q8_0 量化模型，支持[纯翻译](https://huggingface.co/tencent/Hy-SimulMT-30B-A3B-GGUF/tree/main)和[原文+翻译](https://huggingface.co/tencent/Hy-SimulMT-30B-A3B-Interleave-GGUF/tree/main)两种模式，并提交了架构支持和 ASR 推理的 [PR](https://github.com/ggml-org/llama.cpp/pull/31198)！🔥🔥🔥
 - [26/09/01] 我们发布了 [hy4 preview MIX-STQ1_0 版本](https://huggingface.co/AngelSlim/Hy4-preview-GGUF)！模型从 1.5TB 压缩至 214 GiB，在 SWE-bench Pro 上的性能仅下降了 0.7%。🔥🔥🔥
 - [26/07/29] 我们已开源 **AngelSpec**，一个支持 DFly / MTP + TTT 等多种 draft 方法的投机解码训练框架，并发布了 Hy3-A21B 的 MTP 和 DFly 权重，DFly 端到端加速比可达 **2.40×**。[[论文]](https://arxiv.org/abs/2607.25852) | [[GitHub]](https://github.com/Tencent/AngelSpec) | [[文档]](https://angelspec.readthedocs.io/) | [[Hugging Face]](https://huggingface.co/collections/AngelSlim/angelspec) 🔥🔥🔥
