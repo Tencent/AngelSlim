@@ -967,7 +967,7 @@ Benchmark results for Qwen3-Omni series models in BF16, FP8-Static, and FP8-Dyna
 
 #### 2.6 Other Models
 
-Other models such as GLM-4.6, Qwen2.5, and Seed-OSS have been evaluated on benchmarks like `CEVAL`, `MMLU`, and `GSM8K` using quantization strategies including `FP8-Static`, `FP8-Dynamic`, `INT4-GPTQ`, and `INT4-AWQ`.
+Other models such as Qwen2.5, and Seed-OSS have been evaluated on benchmarks like `CEVAL`, `MMLU`, and `GSM8K` using quantization strategies including `FP8-Static`, `FP8-Dynamic`, `INT4-GPTQ`, and `INT4-AWQ`.
 
 <details>
 <summary>Benchmark Experiment Details</summary>
