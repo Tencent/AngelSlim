@@ -265,7 +265,7 @@ class QuantizationConfig:
     gpus: Optional[str] = field(default=None)
     # mixed (PTQWeightOnly): {group: {format, targets, algorithm, alpha_list, gptq, ...}}
     config_groups: Dict[str, Any] = field(default_factory=dict)
-    algorithm: str = field(default="rtn")
+    algorithm: Union[str, List[str]] = field(default="rtn")
     gptq: Dict[str, Any] = field(default_factory=dict)
     mtp_file: Optional[str] = field(default=None)
     skip_unquantized_source: bool = field(default=False)

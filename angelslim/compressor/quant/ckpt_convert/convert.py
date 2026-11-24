@@ -71,6 +71,7 @@ class QuantGroup:
     algorithm: str = "rtn"
     alphas: Optional[List[float]] = None
     gptq: dict = field(default_factory=lambda: dict(GPTQ_DEFAULTS))
+    smooth: bool = False
 
     def __post_init__(self):
         self._match = [compile_pattern(t) for t in self.targets]
@@ -109,9 +110,15 @@ def build_groups(config_groups, algorithm="rtn", gptq=None, legacy=False):
         targets = spec.get("targets") or []
         if not targets or not all(isinstance(t, str) for t in targets):
             raise ValueError(f"config_groups.{name}: targets must be a non-empty list of strings")
-        algo = spec.get("algorithm", algorithm)
-        if algo not in ("rtn", "gptq"):
-            raise ValueError(f"config_groups.{name}: algorithm must be rtn or gptq, got {algo}")
+        steps = spec.get("algorithm", algorithm)
+        steps = [steps] if isinstance(steps, str) else steps
+        if steps not in (["rtn"], ["gptq"], ["smooth", "rtn"], ["smooth", "gptq"]):
+            raise ValueError(f"config_groups.{name}: expected rtn/gptq or [smooth, rtn/gptq]")
+        algo, smooth = steps[-1], steps[0] == "smooth"
+        if smooth and (fmt_name != "fp8_block" or legacy
+                       or spec.get("block_size", [128, 128]) != [128, 128]
+                       or spec.get("scale_fmt", "float") != "float" or spec.get("alpha_list")):
+            raise ValueError("Offline Smooth currently requires FP8 block128 with float scales")
         group_gptq = spec.get("gptq") or {}
         for src in (defaults, group_gptq):
             if set(src) - _GPTQ_KEYS:
@@ -135,6 +142,7 @@ def build_groups(config_groups, algorithm="rtn", gptq=None, legacy=False):
                 algorithm=algo,
                 alphas=[float(a) for a in spec.get("alpha_list") or []] or None,
                 gptq={**defaults, **group_gptq},
+                smooth=smooth,
             )
         )
     return groups
@@ -380,6 +388,21 @@ class Converter:
         self.mtp_keys = set()
         if spec.mtp_file:
             self.mtp_keys = set(self._open(spec.mtp_file).keys())
+        self.smooth_ops, self.smooth_scales = {}, {}
+        if any(g.smooth for g in self.groups) and not spec.smooth_plan:
+            raise ValueError("algorithm includes smooth but smooth_plan is missing; run calib")
+        if spec.smooth_plan:
+            from ...transform.smooth.core.stats_search import load_smooth_plan
+
+            selection = None
+            if any(g.smooth for g in self.groups):
+                selection = dict(modules=spec.smooth_modules, config_groups=spec.config_groups,
+                                 algorithm=spec.algorithm, gptq=spec.gptq, ignore=spec.ignore)
+            self.smooth_ops, self.smooth_scales, manifest = load_smooth_plan(
+                spec.smooth_plan, selection=selection, model_name=spec.model_name
+            )
+            if os.path.realpath(manifest["model_path"]) != os.path.realpath(spec.model_path):
+                raise ValueError("Smooth plan belongs to a different BF16 checkpoint")
 
     def _open(self, path):
         if path not in self._files:
@@ -411,6 +434,10 @@ class Converter:
         scale_key = key + "_scale_inv"
         if tensor.dtype == torch.float8_e4m3fn and self.layout.fp8_block and self._has(scale_key):
             tensor = dequant_fp8_block(tensor, self._raw(scale_key), self.layout.fp8_block)
+        if key in self.smooth_ops:
+            from ...transform.smooth.core.tensor_math import apply_smooth_operations
+
+            tensor = apply_smooth_operations(key, tensor, self.smooth_ops, self.smooth_scales)
         return tensor
 
     def convert_shard(self, file_name):
@@ -451,7 +478,11 @@ class Converter:
         if self.hstore is not None and unit.hkey and unit.weight.dim() == 2:
             entry = self.hstore.entry(unit.hkey)
             if entry is not None:
-                hinv = self.hstore.get_hinv(unit.hkey, self.device, group.gptq["damp"])
+                scales = [self.smooth_scales[op["scale"]]
+                          for op in self.smooth_ops.get(unit.wkey, [])
+                          if op["op"] == "mul" and op["axis"] == 1]
+                options = {"input_scale": math.prod(scales)} if scales else {}
+                hinv = self.hstore.get_hinv(unit.hkey, self.device, group.gptq["damp"], **options)
                 k = unit.weight.shape[-1]
                 if hinv is None:
                     reason = "not_pd"

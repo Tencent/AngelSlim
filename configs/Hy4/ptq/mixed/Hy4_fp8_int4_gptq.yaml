@@ -1,6 +1,6 @@
-# Hy4 W4A8 (INT4 group-128 weights, dynamic per-token FP8 activations) trunk routed experts +
-# FP8 128x128 GPTQ for attention / indexer.wq_b / dense + shared MLP and the MTP stack,
-# compressed-tensors. linear_gate and indexer.wk stay BF16.
+# Trunk/MTP routed MoE: INT4 group128 + alpha search, per-token FP8 activations.
+# Trunk gate/O: Smooth + FP8 RTN; other trunk linears: BF16.
+# MTP/DFly linears: FP8. GPTQ groups fall back to RTN without usable Hessians.
 global:
   save_path: /path/to/run_dir            # run root: weights land in out/, calibration
                                          # products in stats/ hessian/ image_embeds/
@@ -28,7 +28,15 @@ compression:
       max_images_per_prompt: 4
       max_num_batched_tokens: 8192       # 16384 peaks ~11 GiB of activations and OOMs
       gpu_memory_utilization: 0.70       # H is allocated outside this budget; err low
-      modules: '^(?!visual\.).*(experts\.|o_proj)'
+      smooth:
+        modules: 'model\.layers\.\d+\.self_attn\.(linear_gate|o_proj)$'
+        num_samples: 128
+        seed: 42
+        sample_tokens: 128
+        alphas: [0, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+        smooth_min: 0.08333333333333333
+        smooth_max: 2
+        minimum_gain: 0.001
   quantization:
     name: mixed
     save_name: compressed-tensors
@@ -40,15 +48,21 @@ compression:
         format: int4_group
         group_size: 128
         act: fp8
+        alpha_list: [0.80, 0.82, 0.84, 0.86, 0.88, 0.90, 0.92, 0.94, 0.96, 0.98, 1.00]
         targets:
-          - 're:model\.layers\.\d+\.mlp\.experts\.(?:gate_up_proj|down_proj)$'
+          - 're:model\.(?:layers|mtp_layers)\.\d+\.mlp\.experts\.(?:gate_up_proj|down_proj)$'
       linear_fp8:
+        format: fp8_block
+        algorithm: [smooth, rtn]
+        block_size: [128, 128]
+        targets:
+          - 're:model\.layers\.\d+\.self_attn\.(?:linear_gate|o_proj)$'
+      mtp_dfly_linear_fp8:
         format: fp8_block
         block_size: [128, 128]
         targets:
-          - 're:model\.(?:layers|mtp_layers)\.\d+\.self_attn\.(?:q_a_proj|q_b_proj|kv_a_proj_with_mqa|kv_b_proj|o_proj|indexer\.wq_b)$'
-          - 're:model\.(?:layers|mtp_layers)\.\d+\.mlp\.(?:shared_experts\.)?(?:gate_proj|up_proj|down_proj)$'
-          - 're:model\.mtp_layers\.\d+\.mlp\.experts\.(?:gate_up_proj|down_proj)$'
+          - 're:model\.mtp_layers\.\d+\.self_attn\.(?:linear_gate|q_a_proj|q_b_proj|kv_a_proj_with_mqa|kv_b_proj|o_proj|indexer\.(?:wk|wq_b))$'
+          - 're:model\.mtp_layers\.\d+\.mlp\.(?:shared_experts\.)?(?:gate_proj|up_proj|down_proj)$'
           - 're:model\.dfly_layers\.\d+\.self_attn\.(?:linear_gate|q_a_proj|q_b_proj|kv_a_proj_with_mqa|kv_b_proj|o_proj)$'
           - 're:model\.dfly_layers\.\d+\.mlp\.(?:gate_proj|up_proj|down_proj)$'
           - 're:model\.dfly_layers\.hidden_correction\.(?:gate_proj|up_proj|down_proj)$'

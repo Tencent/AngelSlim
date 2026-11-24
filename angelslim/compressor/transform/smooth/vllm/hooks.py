@@ -25,6 +25,7 @@ from .....utils import rank_world
 from .....utils.utils import find_modules
 from ....quant.vllm_calib import hooks as moe_hook
 from ..core.tensor_math import per_channel_absmax
+from ..models import get_smooth_model, resolve_model_name
 from .moe_inject import (
     set_moe_collect_alpha_search,
     set_moe_collect_smooth,
@@ -201,6 +202,12 @@ def setup_smooth_hooks(
     collect_down_proj=True,
     collect_moe=True,
     token_clip=-1,
+    model_name=None,
+    sample_tokens=128,
+    seed=42,
+    num_hidden_layers=None,
+    image_embeds_dir=None,
+    stat_names=None,
 ):
     """Register smooth hooks on the model to collect per-channel absmax
     and EMA stats.
@@ -234,6 +241,24 @@ def setup_smooth_hooks(
           "<moe_layer>.<i>.down_proj": {...},
         }
     """
+    if model_name:
+        model_name = resolve_model_name(model_name)
+        if image_embeds_dir:
+            from ....quant.vllm_calib.image_embeds import patch_image_embeds
+
+            previous = os.environ.get("VLLM_IMAGE_EMBEDS_DIR")
+            try:
+                os.environ["VLLM_IMAGE_EMBEDS_DIR"] = str(image_embeds_dir)
+                print("[smooth] " + patch_image_embeds(model), flush=True)
+            finally:
+                if previous is None:
+                    os.environ.pop("VLLM_IMAGE_EMBEDS_DIR", None)
+                else:
+                    os.environ["VLLM_IMAGE_EMBEDS_DIR"] = previous
+        return _setup_offline_hooks(
+            model, model_name, sample_tokens, seed, num_hidden_layers, stat_names
+        )
+
     try:
         from vllm.model_executor.layers.attention import Attention
     except ImportError:
@@ -394,8 +419,17 @@ def setup_smooth_hooks(
     return f"Registered {len(model._smooth_hooks)} smooth hooks"
 
 
-def remove_smooth_hooks(model):
+def remove_smooth_hooks(model, model_name=None):
     """Remove smooth hooks registered by :func:`setup_smooth_hooks`."""
+    if model_name:
+        resolve_model_name(model_name)
+        for handle in getattr(model, "_offline_smooth_handles", []):
+            handle.remove()
+        model._offline_smooth_handles = []
+        model._offline_smooth_stats, model._offline_smooth_samples = {}, {}
+        model._offline_smooth_modes = {}
+        return "Offline Smooth hooks removed"
+
     if hasattr(model, "_smooth_hooks"):
         for handle in model._smooth_hooks:
             handle.remove()
@@ -498,7 +532,7 @@ def remove_smooth_alpha_search_hooks(model):
 # ===========================================================================
 
 
-def get_smooth_stats(model):
+def get_smooth_stats(model, model_name=None, samples_output=None):
     """Retrieve smooth statistics from the model.
 
     Performs all-reduce (MAX for absmax, mean for ema) across all
@@ -520,6 +554,10 @@ def get_smooth_stats(model):
         Keys are grouped by ``(tensor_size, kv_replicas)``; each group
         runs **one** ``dist.all_gather`` instead of one per key.
     """
+    if model_name:
+        resolve_model_name(model_name)
+        return _get_offline_stats(model, samples_output)
+
     if not hasattr(model, "_smooth_stats"):
         return None
 
@@ -608,3 +646,110 @@ def print_smooth_stats(model, max_rows=20):
                 print(f"  ... and {remaining} more entries (use get_smooth_stats() for full data)")
             break
     print("=" * 90 + "\n")
+
+
+class OfflineInputAbsmaxHook:
+    """Collect channel absmax and a bounded uniform token sample."""
+
+    def __init__(self, name, stats, samples, sample_tokens, seed=42, output=False):
+        if sample_tokens <= 0:
+            raise ValueError("sample_tokens must be positive")
+        self.name, self.stats, self.samples = name, stats, samples
+        self.sample_tokens, self.output = sample_tokens, output
+        self.generator = torch.Generator(device="cpu").manual_seed(seed)
+        self.priorities = torch.empty(0, device="cpu")
+
+    def __call__(self, module, inputs, output):
+        x = output if self.output else inputs
+        x = x[0] if isinstance(x, tuple) else x
+        if not isinstance(x, torch.Tensor) or not x.numel():
+            return
+        flat = x.detach().reshape(-1, x.shape[-1])
+        slot = self.stats[self.name]
+        current = flat.float().abs().amax(0)
+        slot["absmax"] = (
+            current if slot["absmax"] is None else torch.maximum(slot["absmax"], current)
+        )
+        slot["call_count"] += 1
+        slot["tokens"] += flat.shape[0]
+        # Matching seeds/call shapes select the same rows across TP ranks.
+        priorities = torch.rand(flat.shape[0], generator=self.generator, device="cpu")
+        priority, indices = priorities.topk(min(self.sample_tokens, flat.shape[0]))
+        rows = flat.index_select(0, indices.to(flat.device)).to(device="cpu", dtype=torch.bfloat16)
+        if self.samples[self.name] is not None:
+            rows = torch.cat((self.samples[self.name], rows))
+            priority = torch.cat((self.priorities, priority))
+        self.priorities, keep = priority.topk(min(self.sample_tokens, priority.numel()))
+        self.samples[self.name] = rows[keep].contiguous()
+
+
+def _setup_offline_hooks(model, model_name, sample_tokens, seed, num_hidden_layers, stat_names):
+    if sample_tokens <= 0:
+        raise ValueError("sample_tokens must be positive")
+    adapter = get_smooth_model(model_name)
+    remove_smooth_hooks(model, model_name=model_name)
+    candidates = {}
+    for runtime_name, module in model.named_modules():
+        spec = adapter.hook_spec(runtime_name, module, num_hidden_layers, stat_names)
+        if spec is None:
+            continue
+        name, output_hook, mode = spec
+        if name in candidates:
+            raise ValueError(f"duplicate logical Smooth hook: {name}")
+        candidates[name] = module, output_hook, mode
+    for name, (module, output_hook, mode) in candidates.items():
+        model._offline_smooth_stats[name] = dict(absmax=None, call_count=0, tokens=0)
+        model._offline_smooth_samples[name] = None
+        model._offline_smooth_modes[name] = mode
+        hook = OfflineInputAbsmaxHook(
+            name, model._offline_smooth_stats, model._offline_smooth_samples,
+            sample_tokens, seed, output=output_hook,
+        )
+        model._offline_smooth_handles.append(module.register_forward_hook(hook))
+    return dict(names=sorted(model._offline_smooth_stats))
+
+
+def _get_offline_stats(model, samples_output):
+    from vllm.distributed import get_tp_group
+
+    tp = get_tp_group()
+    stats, samples = model._offline_smooth_stats, model._offline_smooth_samples
+    result, tensors = {}, {}
+    for name in sorted(stats):
+        slot = stats[name]
+        if tp.world_size > 1:
+            # Check rank agreement before shape-dependent gathers.
+            meta = torch.tensor(
+                [slot["call_count"], slot["tokens"],
+                 0 if samples[name] is None else samples[name].shape[0],
+                 0 if slot["absmax"] is None else slot["absmax"].numel()],
+                device=next(model.parameters()).device, dtype=torch.int64,
+            )
+            peers = tp.all_gather(meta, dim=0).reshape(tp.world_size, -1)
+            if not (peers == peers[0]).all():
+                raise RuntimeError(f"TP Smooth sample/call shape mismatch: {name}")
+        if slot["absmax"] is None or samples[name] is None:
+            raise RuntimeError(f"uncalled Smooth hook: {name}")
+        value = slot["absmax"].clone()
+        rows = samples[name].to(value.device)
+        if tp.world_size > 1:
+            if model._offline_smooth_modes[name] == "concat":
+                value = tp.all_gather(value, dim=0)
+                rows = tp.all_gather(rows, dim=1)
+            else:
+                import torch.distributed as dist
+
+                dist.all_reduce(value, op=dist.ReduceOp.MAX, group=tp.device_group)
+        result[name] = dict(
+            absmax=value.cpu().tolist(), call_count=slot["call_count"], tokens=slot["tokens"],
+        )
+        if tp.rank_in_group == 0:
+            tensors[name] = rows.cpu().contiguous()
+    if tp.rank_in_group == 0:
+        if samples_output is not None:
+            from safetensors.torch import save_file
+
+            os.makedirs(os.path.dirname(os.path.abspath(samples_output)), exist_ok=True)
+            save_file(tensors, str(samples_output))
+        return result
+    return None

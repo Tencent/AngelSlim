@@ -17,8 +17,14 @@ dense down_proj and FusedMoE down_proj inputs, plus optional alpha grid search.
 CLI: ``python -m angelslim.compressor.transform.smooth.vllm.collect -c <yaml>``."""
 
 import argparse
+import gc
 import json
 import os
+import random
+import sys
+from functools import partial
+from pathlib import Path
+from types import SimpleNamespace
 
 from vllm import LLM, SamplingParams
 
@@ -34,6 +40,7 @@ from . import (
     setup_smooth_alpha_search_hooks,
     setup_smooth_hooks,
 )
+from .hooks import remove_smooth_hooks
 
 patch_hpc_version()
 os.environ.setdefault("VLLM_ALLOW_INSECURE_SERIALIZATION", "1")  # collective_rpc lambdas
@@ -44,10 +51,12 @@ os.environ.setdefault("VLLM_ALLOW_INSECURE_SERIALIZATION", "1")  # collective_rp
 # ---------------------------------------------------------------------------
 
 
-def parse_args():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(
         description="vLLM SmoothQuant calibration: per-channel absmax/EMA statistics"
     )
+    parser.add_argument("--model-name", help="Model adapter for offline Smooth")
+    parser.add_argument("--profile", default=None, help=argparse.SUPPRESS)
 
     # Model configuration
     parser.add_argument("--model-path", type=str, help="Path to the model directory")
@@ -280,8 +289,41 @@ def parse_args():
         "explicit CLI flags still take final precedence.",
     )
 
-    args = parser.parse_args()
-    apply_yaml_config(parser, args)
+    args = parser.parse_args(argv)
+    raw = {}
+    if args.config:
+        import yaml
+
+        with open(args.config, encoding="utf-8") as handle:
+            raw = yaml.safe_load(handle) or {}
+        if not isinstance(raw, dict):
+            raise ValueError("Top level of Smooth YAML must be a mapping")
+    runtime = ((raw.get("compression") or {}).get("calibrate") or {}).get("args") or {}
+    from ....quant.ckpt_convert import smooth_options
+    from ..models import resolve_model_name
+
+    model_name = args.model_name or (raw.get("model") or {}).get("name") or raw.get("model_name")
+    options = smooth_options((raw.get("compression") or {}).get("quantization") or {},
+                             runtime.get("smooth"), model_name)
+    profile = (args.profile or (options or runtime.get("smooth") or {}).get("profile")
+               or raw.get("profile"))
+    if args.profile != "default" and (options or args.model_name or raw.get("model_name")
+                                      or profile not in (None, "default")):
+        model_name = resolve_model_name(model_name, profile=profile)
+        explicit = {item.split("=", 1)[0] for item in (sys.argv[1:] if argv is None else argv)}
+        aliases = {
+            "ptq_data_path": "data_path", "batch_size": "max_num_seqs", "output_dir": "run_root",
+        }
+        overrides = {
+            aliases.get(action.dest, action.dest): getattr(args, action.dest)
+            for action in parser._actions
+            if explicit.intersection(action.option_strings)
+            and action.dest not in ("config", "profile")
+        }
+        overrides["model_name"] = model_name
+        args.offline_config = normalize_offline_config(raw, **overrides)
+    else:
+        apply_yaml_config(parser, args)
 
     return args
 
@@ -368,8 +410,12 @@ def save_stats_to_json(stats_data, output_dir, filename, stats_type="statistics"
 # ---------------------------------------------------------------------------
 
 
-def main():
-    args = parse_args()
+def main(argv=None):
+    args = parse_args(argv)
+    if hasattr(args, "offline_config"):
+        collect_offline_stats(args.offline_config)
+        return search_offline_plan(args.offline_config)
+
     collect_attn, collect_down_proj, collect_moe = _resolve_scopes(args)
 
     # ------------------------------------------------------------------
@@ -651,6 +697,229 @@ def main():
     print("Smooth stat calibration completed successfully!")
     print(f"Results saved to: {args.output_dir}")
     print("=" * 80)
+
+
+def normalize_offline_config(raw, model_path=None, output_dir=None, **overrides):
+    """Resolve offline Smooth options; explicit CLI flags override YAML."""
+    from ....quant.ckpt_convert import smooth_options
+    from ....quant.vllm_calib.llm import flatten_angelslim_yaml
+    from ..models import resolve_model_name
+
+    config = dict(
+        num_samples=128, seed=42, sample_offset=0,
+        max_length=16384, sample_tokens=128,
+        alphas=[0, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1], smooth_min=1 / 12, smooth_max=2,
+        minimum_gain=0.001, device="cuda:0", tp_size=32, max_num_seqs=4,
+        max_num_batched_tokens=8192, gpu_memory_utilization=0.70, vision_budget=8448,
+        max_images_per_prompt=4, image_dir=None, image_embeds_dir=None,
+        attention_backend=None,
+    )
+    if "compression" in raw:
+        flat = flatten_angelslim_yaml(raw)
+        # Calibration may use a no-draft card; search uses the full checkpoint.
+        runtime = ((raw.get("compression") or {}).get("calibrate") or {}).get("args") or {}
+        config["calibration_model_path"] = runtime.get("model_path")
+        aliases = {"ptq_data_path": "data_path", "batch_size": "max_num_seqs"}
+        for key in (
+            "ptq_data_path", "max_length", "tp_size", "batch_size",
+            "distributed_executor_backend", "image_dir", "image_embeds_dir", "vision_budget",
+            "max_images_per_prompt", "max_num_batched_tokens", "gpu_memory_utilization",
+            "attention_backend", "max_model_len",
+        ):
+            if key in flat:
+                config[aliases.get(key, key)] = flat[key]
+        config["model_path"] = (raw.get("model") or {}).get("model_path")
+        config["model_name"] = (raw.get("model") or {}).get("name")
+        config["run_root"] = (raw.get("global") or {}).get("save_path")
+        # Smooth sample count is independent of dataset.num_samples.
+        quant = (raw.get("compression") or {}).get("quantization") or {}
+        config.update(smooth_options(quant, flat.get("smooth"),
+                                     overrides.get("model_name") or config["model_name"])
+                      or flat.get("smooth") or {})
+    else:
+        config.update(raw)
+        for key, alias in (("ptq_data_path", "data_path"), ("batch_size", "max_num_seqs"),
+                           ("output_dir", "run_root")):
+            if key in raw and alias not in raw:
+                config[alias] = raw[key]
+    if model_path is not None:
+        config["model_path"] = model_path
+    if output_dir is not None:
+        config["run_root"] = output_dir
+    config.update(overrides)
+    config["model_name"] = resolve_model_name(config.get("model_name"),
+                                               profile=config.pop("profile", None))
+    for key in ("model_path", "data_path", "run_root"):
+        if not config.get(key):
+            raise ValueError(f"Offline Smooth requires {key}")
+        config[key] = str(Path(config[key]).resolve())
+    config["calibration_model_path"] = config.get("calibration_model_path") or config["model_path"]
+    config.setdefault("distributed_executor_backend", "ray" if config["tp_size"] > 8 else "mp")
+    config["image_dir"] = config["image_dir"] or str(Path(config["data_path"]).parent / "images")
+    config["image_embeds_dir"] = config["image_embeds_dir"] or os.getenv("VLLM_IMAGE_EMBEDS_DIR")
+    if config["image_embeds_dir"]:
+        config["image_embeds_dir"] = str(Path(config["image_embeds_dir"]).resolve())
+    for key in ("num_samples", "sample_tokens", "max_length", "tp_size", "max_num_seqs",
+                "max_num_batched_tokens"):
+        if config[key] <= 0:
+            raise ValueError(f"Offline Smooth {key} must be positive")
+    if config["sample_offset"] < 0:
+        raise ValueError("Offline Smooth sample_offset must be nonnegative")
+    if config.get("skip_weight_loading") or config.get("enable_mtp"):
+        raise ValueError("Offline Smooth requires real trunk weights and no speculative decoding")
+    return config
+
+
+def collect_offline_stats(config):
+    """Collect seeded Smooth samples in a separate BF16 engine."""
+    from transformers import AutoTokenizer
+
+    from ....quant.vllm_calib import image_embeds
+    from ....quant.vllm_calib.llm import (
+        attention_backend,
+        build_prompts,
+        hf_config,
+        load_records,
+    )
+    from ..core.stats_search import (
+        TensorReader,
+        offline_group_specs,
+        save_smooth_stats,
+        smooth_selection,
+    )
+
+    reader = TensorReader(config["model_path"], config["model_name"])
+    specs = offline_group_specs(reader, **smooth_selection(config))
+    expected = {spec[key] for spec in specs
+                for key in ("stat", "producer_stat") if key in spec}
+    root = Path(config["run_root"]) / "smooth"
+    root.mkdir(parents=True, exist_ok=True)
+    if not specs:
+        from safetensors.torch import save_file
+
+        print("[smooth] no supported targets; skipping collection", flush=True)
+        save_smooth_stats(dict(stats={}), root / "stats.json")
+        save_file({}, str(root / "samples.safetensors"))
+        return str(root / "stats.json")
+    records = load_records(config["data_path"], 0)
+    random.Random(config["seed"]).shuffle(records)
+    offset, count = config["sample_offset"], config["num_samples"]
+    if count <= 0 or offset < 0 or offset + count > len(records):
+        raise ValueError(f"requested {offset}+{count} from {len(records)} usable records")
+    records = records[offset:offset + count]
+    metadata = hf_config(config["model_path"])
+    image_pad_id = getattr(metadata, "image_token_id", None)
+    vlm = image_pad_id is not None or getattr(metadata, "vision_config", None) is not None
+    tokenizer = AutoTokenizer.from_pretrained(config["model_path"], trust_remote_code=True)
+    prompts, n_mm, max_images = build_prompts(
+        records, tokenizer, config["image_dir"], image_pad_id,
+        config["max_length"], config["max_images_per_prompt"],
+    )
+    if len(prompts) != count:
+        raise RuntimeError(f"Smooth requires all {count} selected records; built {len(prompts)}")
+    print(f"[smooth] {count} prompts, {n_mm} multimodal, seed={config['seed']}", flush=True)
+    previous_cache = os.environ.get("VLLM_IMAGE_EMBEDS_DIR")
+    llm = None
+    hooks_started = False
+    try:
+        if config.get("image_embeds_dir"):
+            os.environ["VLLM_IMAGE_EMBEDS_DIR"] = config["image_embeds_dir"]
+        kwargs = dict(
+            model=config["calibration_model_path"], trust_remote_code=True, dtype="bfloat16",
+            tensor_parallel_size=config["tp_size"],
+            distributed_executor_backend=config["distributed_executor_backend"],
+            enforce_eager=True, enable_chunked_prefill=True, enable_prefix_caching=False,
+            async_scheduling=False, enable_expert_parallel=False, moe_backend="triton",
+            max_num_batched_tokens=config["max_num_batched_tokens"],
+            max_num_seqs=config["max_num_seqs"],
+            max_model_len=config.get("max_model_len") or (
+                config["max_length"] + (config["vision_budget"] if vlm else 0) + 16
+            ),
+            gpu_memory_utilization=config["gpu_memory_utilization"],
+            attention_backend=attention_backend(
+                config["model_path"], config.get("attention_backend")
+            ),
+        )
+        if vlm or max_images:
+            # VL checkpoints need vision options even for text-only samples.
+            kwargs.update(
+                limit_mm_per_prompt={"image": max(1, max_images)},
+                mm_encoder_tp_mode="data", mm_encoder_attn_backend="TORCH_SDPA",
+                **image_embeds.engine_kwargs(),
+            )
+        llm = LLM(**kwargs)
+        llm.llm_engine.collective_rpc(worker_bootstrap())
+        hooks_started = True
+        setup = llm.apply_model(partial(
+            setup_smooth_hooks, model_name=config["model_name"],
+            sample_tokens=config["sample_tokens"],
+            seed=config["seed"], num_hidden_layers=int(reader.config["num_hidden_layers"]),
+            stat_names=sorted(expected),
+            image_embeds_dir=config.get("image_embeds_dir") or previous_cache,
+        ))
+        if len(setup) != config["tp_size"] or any(set(s["names"]) != expected for s in setup):
+            raise RuntimeError("incomplete offline Smooth hook coverage")
+        outputs = llm.generate(
+            prompts, SamplingParams(temperature=0, max_tokens=1, detokenize=False), use_tqdm=True,
+        )
+        if len(outputs) != count:
+            raise RuntimeError("Smooth generation returned an incomplete sample set")
+        results = llm.apply_model(partial(
+            get_smooth_stats, model_name=config["model_name"],
+            samples_output=str(root / "samples.safetensors"),
+        ))
+        stats = next((s for s in results if s is not None), None)
+        if stats is None or set(stats) != expected:
+            raise RuntimeError("incomplete offline Smooth statistics")
+        save_smooth_stats(dict(stats=stats), root / "stats.json")
+        return str(root / "stats.json")
+    finally:
+        try:
+            if llm is not None:
+                try:
+                    if hooks_started:
+                        llm.apply_model(partial(
+                            remove_smooth_hooks, model_name=config["model_name"]
+                        ))
+                finally:
+                    llm.llm_engine.engine_core.shutdown()
+                    del llm
+        finally:
+            if previous_cache is None:
+                os.environ.pop("VLLM_IMAGE_EMBEDS_DIR", None)
+            else:
+                os.environ["VLLM_IMAGE_EMBEDS_DIR"] = previous_cache
+            gc.collect()
+
+
+def search_offline_plan(config):
+    """Search scales and save the compensation plan."""
+    from safetensors.torch import save_file
+
+    from ..core.stats_search import (
+        build_plan,
+        save_smooth_stats,
+        search_offline_scales,
+        smooth_selection,
+    )
+
+    root = Path(config["run_root"]) / "smooth"
+    report = search_offline_scales(SimpleNamespace(**{
+        **config, "stats": root / "stats.json", "samples": root / "samples.safetensors",
+        "output": root / "search.json",
+    }))
+    plan, scales = build_plan(
+        config["model_path"], json.loads((root / "stats.json").read_text())["stats"],
+        report["selected_alpha"], config["smooth_min"], config["smooth_max"],
+        selection=smooth_selection(config),
+        model_name=config["model_name"],
+    )
+    (root / "plan").mkdir(parents=True, exist_ok=True)
+    save_file(scales, str(root / "plan" / plan["scale_file"]))
+    path = root / "plan" / "smooth_plan.json"
+    save_smooth_stats(plan, path)
+    print(f"[smooth] plan: {path}", flush=True)
+    return str(path)
 
 
 if __name__ == "__main__":

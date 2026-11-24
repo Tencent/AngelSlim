@@ -67,13 +67,15 @@ class HessianStore:
                     return hit
         return None
 
-    def get_hinv(self, name, device, damp=None):
+    def get_hinv(self, name, device, damp=None, input_scale=None):
         """Upper Cholesky of the damped inverse Hessian, or None if H is missing or not PD."""
         entry = self.entry(name)
         if entry is None:
             return None
         damp = self.damp if damp is None else damp
         slot = (entry["group"], entry.get("expert"), damp)
+        if input_scale is not None:
+            slot += (name, input_scale.detach().cpu().float().contiguous().numpy().tobytes())
         if slot in self._not_pd:
             return None
         hit = self._cache.get(slot)
@@ -84,6 +86,12 @@ class HessianStore:
         with safe_open(os.path.join(self.dir, group["file"]), framework="pt", device="cpu") as f:
             H = f.get_slice("H")[entry["expert"]] if group.get("per_expert") else f.get_tensor("H")
         H = H.to(device=device, dtype=torch.float64)
+        if input_scale is not None:
+            scale = input_scale.to(device=device, dtype=H.dtype)
+            if (scale.shape != (H.shape[-1],) or not torch.isfinite(scale).all()
+                    or (scale <= 0).any()):
+                raise ValueError(f"invalid Smooth input scale: {name}")
+            H = H / scale[:, None] / scale[None, :]
         H.diagonal().add_(damp * H.diagonal().mean())
         try:
             hinv = torch.cholesky_inverse(torch.linalg.cholesky(H))
