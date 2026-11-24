@@ -101,6 +101,7 @@ def parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("-c", "--config", help="flat YAML whose keys are option names")
     p.add_argument("--model-path")
+    p.add_argument("--hf-overrides", type=json.loads, help="Runtime HF config overrides (JSON)")
     p.add_argument("--ptq-data-path", help="TextDataset JSONL, or VLM rollout rows")
     p.add_argument("--output-dir")
     p.add_argument("--image-dir", help="VLM images (default: <data dir>/images)")
@@ -177,7 +178,7 @@ def vlm_prompts(args):
 
     from .llm import build_prompts, load_records
 
-    cfg = hf_config(args.model_path)
+    cfg = hf_config(args.model_path, args.hf_overrides)
     tokenizer = AutoTokenizer.from_pretrained(args.model_path, trust_remote_code=True)
     image_dir = args.image_dir or os.path.join(
         os.path.dirname(os.path.abspath(args.ptq_data_path)), "images"
@@ -236,6 +237,8 @@ def build_llm(args, vlm, max_images):
             mm_encoder_attn_backend="TORCH_SDPA",
             **image_embeds.engine_kwargs(),
         )
+    if args.hf_overrides:
+        kwargs["hf_overrides"] = args.hf_overrides
     return LLM(**kwargs)
 
 

@@ -44,7 +44,6 @@ compression:
         format: fp8_block
         block_size: [128, 128]
         scale_fmt: ue8m0
-        alpha_list: [2.0, 1.0, 0.5]
         targets:
           - 're:model\.layers\.\d+\.self_attn\.(?:linear_gate|o_proj)$'
           - 're:model\.mtp_layers\.\d+\.self_attn\.(?:linear_gate|q_a_proj|q_b_proj|kv_a_proj_with_mqa|kv_b_proj|o_proj|indexer\.(?:wk|wq_b))$'

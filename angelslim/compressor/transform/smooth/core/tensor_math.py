@@ -27,11 +27,20 @@ All functions accept torch tensors and return torch tensors with no
 awareness of TP / Linear / FusedMoE.
 """
 
+import math
 import os
 
 import torch
 
 __all__ = [
+    "power_of_two_smooth_scale",
+    "fp8_group_qdq_act",
+    "fp8_block_qdq_weight",
+    "norm_scale",
+    "apply_smooth_operations",
+    "consumer_error",
+    "bf16_equivalence_error",
+    "producer_equivalence_error",
     # formulas
     "smooth_default",
     "smooth_per_tensor_act_first",
@@ -526,3 +535,202 @@ def smooth_qdq_weight(
 
     else:
         raise ValueError(f"Unknown weight quant_type: {quant_type}")
+
+
+# Offline channel compensation.
+def power_of_two_smooth_scale(act, weight, alpha, lower=1 / 12, upper=2):
+    """Power-of-two channel scales; alpha=0 means identity."""
+    if not 0 <= alpha <= 1 or not 0 < lower <= upper or not math.isfinite(upper):
+        raise ValueError("invalid alpha or scale bounds")
+    if act.shape != weight.shape or act.ndim != 1 or not act.numel():
+        raise ValueError("expected matching nonempty activation/weight channel vectors")
+    if (
+        not torch.isfinite(act).all()
+        or not torch.isfinite(weight).all()
+        or (act < 0).any()
+        or (weight < 0).any()
+    ):
+        raise ValueError("expected finite nonnegative activation/weight statistics")
+    lo, hi = math.ceil(math.log2(lower)), math.floor(math.log2(upper))
+    if lo > hi:
+        raise ValueError("scale interval contains no power of two")
+    if alpha == 0:
+        return torch.ones_like(act, dtype=torch.float32)
+    scale = smooth_default(act.float(), weight.float(), alpha, lower, upper)
+    return torch.pow(2.0, scale.log2().round().clamp(lo, hi))
+
+
+def _positive_scale(scale):
+    if (
+        scale.ndim != 1
+        or not scale.numel()
+        or not torch.isfinite(scale).all()
+        or (scale <= 0).any()
+    ):
+        raise ValueError("expected a finite positive channel scale vector")
+
+
+def norm_scale(norm, requested):
+    """Return rounded Norm weights and the actual x/x' ratio."""
+    requested = requested.to(device=norm.device, dtype=torch.float32)
+    _positive_scale(requested)
+    if norm.shape != requested.shape or not torch.isfinite(norm).all():
+        raise ValueError("invalid Norm compensation shape or values")
+    replacement = (norm.float() / requested).to(norm.dtype)
+    if not torch.isfinite(replacement).all() or ((replacement == 0) & (norm != 0)).any():
+        raise ValueError("Norm compensation overflowed or underflowed")
+    actual = torch.where(replacement != 0, norm.float() / replacement.float(), requested)
+    _positive_scale(actual)
+    return replacement, actual
+
+
+def apply_smooth_operations(name, tensor, operations, scales):
+    """Apply compensation without mutating the source or changing dtype.
+    KV_b compensation touches V rows only; nonparticipants pass through.
+    """
+    ops = operations.get(name, [])
+    if not ops:
+        return tensor
+    out = tensor.float().clone()
+    for op in ops:
+        scale = scales[op["scale"]].to(device=out.device, dtype=torch.float32)
+        if op["op"] == "replace":
+            if scale.shape != out.shape or not torch.isfinite(scale).all():
+                raise ValueError(f"invalid replacement: {name}")
+            out = scale.clone()
+            continue
+        _positive_scale(scale)
+        selector = op.get("selector")
+        if selector:
+            if selector["kind"] != "head_strided_rows" or op["axis"] != 0:
+                raise ValueError(f"invalid selector: {op}")
+            heads, width, offset, length = [
+                selector[k] for k in ("heads", "head_width", "offset", "length")
+            ]
+            if (
+                min(heads, width, length) <= 0
+                or offset < 0
+                or offset + length > width
+                or out.ndim != 2
+                or out.shape[0] != heads * width
+                or scale.numel() != heads * length
+            ):
+                raise ValueError(f"selector shape mismatch: {name}")
+            target = out.reshape(heads, width, -1)[:, offset : offset + length]
+            factor = scale.reshape(heads, length, 1)
+        else:
+            target = out
+            if op["axis"] not in range(out.ndim) or out.shape[op["axis"]] != scale.numel():
+                raise ValueError(f"scale shape mismatch: {name}")
+            shape = [1] * out.ndim
+            shape[op["axis"]] = scale.numel()
+            factor = scale.reshape(shape)
+        if op["op"] == "mul":
+            target.mul_(factor)
+        elif op["op"] == "div":
+            target.div_(factor)
+        else:
+            raise ValueError(f"unknown operation: {op}")
+    out = out.to(tensor.dtype).contiguous()
+    if not torch.isfinite(out).all():
+        raise ValueError(f"nonfinite Smooth tensor: {name}")
+    return out
+
+
+def fp8_group_qdq_act(x, group_size=128):
+    """E4M3 dynamic per-token/group QDQ with FP32 scales (vLLM eps=1e-10)."""
+    if x.ndim != 2 or not x.numel() or group_size <= 0:
+        raise ValueError("expected a nonempty activation matrix and positive group size")
+    rows, cols = x.shape
+    padded = torch.nn.functional.pad(x.float(), (0, (-cols) % group_size))
+    blocks = padded.reshape(rows, -1, group_size)
+    scale = blocks.abs().amax(-1, keepdim=True).clamp(min=1e-10) / 448.0
+    q = (blocks / scale).clamp(-448.0, 448.0).to(torch.float8_e4m3fn)
+    return (q.float() * scale).reshape_as(padded)[:, :cols]
+
+
+def fp8_block_qdq_weight(weight):
+    """Gate/O QDQ via FP8Block RTN with FP32 scales."""
+    from ....quant.ckpt_convert.formats.fp8 import FP8Block
+
+    if weight.ndim != 2 or not weight.numel():
+        raise ValueError("expected a nonempty weight matrix")
+    quantized, scale = FP8Block(block_size=(128, 128), legacy=False).rtn(weight)
+    rows, cols = weight.shape
+    scale = scale.repeat_interleave(min(128, rows), 0).repeat_interleave(min(128, cols), 1)
+    return quantized.float() * scale[:rows, :cols]
+
+
+def consumer_error(x, weights, scale, device="cuda:0"):
+    """FP8 output SSE normalized by reference energy."""
+    scale = scale.to(device).float()
+    _positive_scale(scale)
+    inputs = x if isinstance(x, (list, tuple)) else [x] * len(weights)
+    if not weights or len(inputs) != len(weights):
+        raise ValueError("invalid consumer samples, weights or scale")
+    error, energy = 0.0, 0.0
+    for x, weight in zip(inputs, weights):
+        x = x.to(device).float()
+        if x.ndim != 2 or not x.numel() or x.shape[1] != scale.numel():
+            raise ValueError("invalid consumer samples, weights or scale")
+        xq = fp8_group_qdq_act((x / scale).bfloat16().float())
+        weight = weight.to(device)
+        if weight.ndim != 2 or weight.shape[1] != scale.numel():
+            raise ValueError("consumer weight/input scale mismatch")
+        # Keep chunks aligned to 128-row FP8 tiles.
+        for begin in range(0, weight.shape[0], 1024):
+            w = weight[begin : begin + 1024].float()
+            reference = x @ w.T
+            ws = (w * scale).to(weight.dtype)
+            candidate = xq @ fp8_block_qdq_weight(ws).T
+            error += float((candidate - reference).square().sum())
+            energy += float(reference.square().sum())
+    return error / max(energy, 1e-30)
+
+
+def bf16_equivalence_error(x, weights, scale, norm=None):
+    """Consumer compensation relative L2 error after BF16 rounding."""
+    scale = scale.to(x.device)
+    actual = norm_scale(norm.to(x.device), scale)[1] if norm is not None else scale
+    _positive_scale(actual)
+    xs = (x.float() / actual).bfloat16().float()
+    worst = 0.0
+    for weight in weights:
+        weight = weight.to(x.device)
+        for begin in range(0, weight.shape[0], 1024):
+            w = weight[begin : begin + 1024].float()
+            before = x.float() @ w.T
+            after = xs @ (w * actual).to(weight.dtype).float().T
+            error = (
+                (before - after).square().mean() / before.square().mean().clamp(min=1e-30)
+            ).sqrt()
+            if not torch.isfinite(error):
+                return float("inf")
+            worst = max(worst, float(error))
+    return worst
+
+
+def producer_equivalence_error(x, weight, scale, selector=None):
+    """Relative L2 error of the V-row producer; selector is (heads,width,offset,length)."""
+    weight, scale = weight.to(x.device), scale.to(x.device)
+    _positive_scale(scale)
+    if selector:
+        heads, width, offset, length = selector
+        if (
+            min(heads, width, length) <= 0
+            or offset < 0
+            or offset + length > width
+            or weight.shape[0] != heads * width
+        ):
+            raise ValueError("invalid producer head selector")
+        weight = weight.reshape(heads, width, -1)[:, offset : offset + length].reshape(
+            -1, weight.shape[-1]
+        )
+    if weight.ndim != 2 or weight.shape[0] != scale.numel():
+        raise ValueError("producer weight/output scale mismatch")
+    before = x.float() @ weight.float().T
+    after = x.float() @ (weight.float() / scale[:, None]).to(weight.dtype).float().T
+    expected = before / scale
+    return float(
+        ((after - expected).square().mean() / expected.square().mean().clamp(min=1e-30)).sqrt()
+    )
