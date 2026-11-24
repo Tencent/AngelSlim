@@ -22,6 +22,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
 </p>
 
 ## 📣Latest News
+- [26/11/24] We have supported multiple quantization weights for **Hy-MT3**(https://huggingface.co/collections/tencent/hy-mt3).
 - [26/11/20] We've released FP8 quantized weights for **Hy4** ([Hy4-FP8](https://huggingface.co/tencent/Hy4-FP8)), along with FP8 and MXFP4 quantization toolkits and low-bit on-device GGUF models ([Hy4-GGUF](https://huggingface.co/AngelSlim/Hy4-GGUF)). 🔥🔥🔥
 - [26/11/18] We've released FP8 quantized weights for **Hy4-flash** ([Hy4-flash-FP8](https://huggingface.co/tencent/Hy4-flash-FP8)), along with the quantization toolkit and low-bit on-device GGUF models ([Hy4-flash-GGUF](https://huggingface.co/AngelSlim/Hy4-flash-GGUF)). 🔥🔥🔥
 - [26/10/26] We've released the Q4_K_M and Q8_0 quantized model for [Hy-SimulMT](https://github.com/Tencent-Hunyuan/Hy-SimulMT) on llama.cpp, supporting both the [translation-only model](https://huggingface.co/tencent/Hy-SimulMT-30B-A3B-GGUF/tree/main) and [source text and translation](https://huggingface.co/tencent/Hy-SimulMT-30B-A3B-Interleave-GGUF/tree/main)). We also propose a [PR](https://github.com/ggml-org/llama.cpp/pull/31198) to support the architecture and ASR inference!🔥🔥🔥
