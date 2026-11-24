@@ -22,7 +22,7 @@
 </p>
 
 ## 📣最新进展
-- [26/11/24] 我们已支持 [**Hy-MT3**](https://huggingface.co/collections/tencent/hy-mt3) 的多种量化权重。🔥🔥🔥
+- [26/11/24] 我们已支持 [**Hy-MT3**](https://huggingface.co/collections/tencent/hy-mt3) 的多种量化权重，包括云端版本以及端侧GGUF模型。🔥🔥🔥
 - [26/11/20] 我们发布了 **Hy4** 的 FP8 量化权重 ([Hy4-FP8](https://huggingface.co/tencent/Hy4-FP8)) 与 FP8、MXFP4 量化工具，以及端侧低 bit 量化 GGUF 模型 ([Hy4-GGUF](https://huggingface.co/AngelSlim/Hy4-GGUF))。🔥🔥🔥
 - [26/11/18] 我们发布了 **Hy4-flash** 的 FP8 量化权重 ([Hy4-flash-FP8](https://huggingface.co/tencent/Hy4-flash-FP8)) 与量化工具，以及端侧低 bit 量化 GGUF 模型 ([Hy4-flash-GGUF](https://huggingface.co/AngelSlim/Hy4-flash-GGUF))。🔥🔥🔥
 - [26/10/26] 我们发布了 [Hy-SimulMT](https://github.com/Tencent-Hunyuan/Hy-SimulMT) 在 llama.cpp 上的 Q4_K_M 和 Q8_0 量化模型，支持[纯翻译](https://huggingface.co/tencent/Hy-SimulMT-30B-A3B-GGUF/tree/main)和[原文+翻译](https://huggingface.co/tencent/Hy-SimulMT-30B-A3B-Interleave-GGUF/tree/main)两种模式，并提交了架构支持和 ASR 推理的 [PR](https://github.com/ggml-org/llama.cpp/pull/31198)！🔥🔥🔥
