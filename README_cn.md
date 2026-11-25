@@ -22,7 +22,8 @@
 </p>
 
 ## 📣最新进展
-- [26/07/29] 我们已发布 hy4 preview [MIX-STQ1_0 版本](https://huggingface.co/AngelSlim/Hy4-preview-GGUF)！模型从 1.5TB 压缩至 214 GiB，在 SWE-bench Pro 上的性能仅下降了 0.7%。借助 [Prima.cpp]，我们 在4090笔记本（32GB 内存，16GB 显存） 以及搭载 4 张 A4000（32GB 内存，每张 16GB 显存）的服务器 上成功运行了该模型，推理速度达到了 1.02 tokens/s。详情请见[博客](https://opencpil.github.io/prima.cpp/blog/hunyuan4-770b-local-devices)和[部署指南](docs/source/_extra/hy4_preview_gguf_guideline.md)！🔥🔥🔥
+- [26/11/25] 我们已经发布 Hy4 flash [gguf](https://huggingface.co/AngelSlim/Hy4-flash-GGUF)用来端侧推理, 并且特别支持了Strata 高性能版本 [(hy4-flash-hpc 分支)](https://github.com/Niko1221/Strata/pull/7120)，能够在 4090 (24GB显存) PC 上达到 58 TPS ! 🔥🔥🔥 
+- [26/07/29] 我们已发布 Hy4 preview [MIX-STQ1_0 版本](https://huggingface.co/AngelSlim/Hy4-preview-GGUF)！模型从 1.5TB 压缩至 214 GiB，在 SWE-bench Pro 上的性能仅下降了 0.7%。借助 [Prima.cpp]，我们 在4090笔记本（32GB 内存，16GB 显存） 以及搭载 4 张 A4000（32GB 内存，每张 16GB 显存）的服务器 上成功运行了该模型，推理速度达到了 1.02 tokens/s。详情请见[博客](https://opencpil.github.io/prima.cpp/blog/hunyuan4-770b-local-devices)和[部署指南](docs/source/_extra/hy4_preview_gguf_guideline.md)！🔥🔥🔥
 - [26/07/20] 我们支持了基于 Megatron-Core 的 Qwen3-MoE 和 Hy3 **量化感知蒸馏**，训练时仅更新量化 scale，并支持 TP/EP/CP/SP 分布式训练。[[文档]](docs/source/features/qad/mcore_qad.md)
 - [26/07/06] 我们支持了 **Hy3**（MoE A21B）模型的 FP8-Static 量化，SmoothQuant 量化. [[文档]](https://github.com/Tencent/AngelSlim/tree/main/scripts/ptq)
 - [26/06/04] 我们发布了 **Stem**，一种稀疏注意力算法，通过在 block 粒度动态选择 top-k 关键块执行 block-sparse attention，加速长上下文 LLM 的 **Prefill** 阶段，在大幅降低延迟的同时实现几乎无损的生成质量。[[文档]](https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/stem.html)
