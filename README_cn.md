@@ -22,6 +22,7 @@
 </p>
 
 ## 📣最新进展
+- [26/11/26] 我们在 [**AngelSpec**](https://github.com/Tencent/AngelSpec) 中开源了 [**DFly2**](https://arxiv.org/abs/2611.34776) 的训练代码。DFly2 是随 [**Hy4**](https://huggingface.co/tencent/Hy4) 与 [**Hy4 flash**](https://huggingface.co/tencent/Hy4-flash) 发布的投机解码草稿模型，长上下文与 Agent 场景最高提速 **4.2 倍**。[[Paper]](https://arxiv.org/abs/2611.34776) | [[GitHub]](https://github.com/Tencent/AngelSpec) | [[Hugging Face]](https://huggingface.co/collections/AngelSlim/angelspec) 🔥🔥🔥
 - [26/11/25] 我们已经发布 Hy4 flash [gguf](https://huggingface.co/AngelSlim/Hy4-flash-GGUF)用来端侧推理, 并且特别支持了Strata 高性能版本 [(hy4-flash-hpc 分支)](https://github.com/Niko1221/Strata/pull/7120)，能够在 4090 (24GB显存) PC 上达到 58 TPS ! 同时提供了 llama.cpp 高性能版本[patch](https://huggingface.co/AngelSlim/Hy4-flash-GGUF/tree/main/patch)。🔥🔥🔥 
 - [26/11/24] 我们已支持 [**Hy-MT3**](https://huggingface.co/collections/tencent/hy-mt3) 的多种量化权重，包括云端版本以及端侧GGUF模型。🔥🔥🔥
 - [26/11/20] 我们发布了 **Hy4** 的 FP8 量化权重 ([Hy4-FP8](https://huggingface.co/tencent/Hy4-FP8)) 与 FP8、MXFP4 量化工具，以及端侧低 bit 量化 GGUF 模型 ([Hy4-GGUF](https://huggingface.co/AngelSlim/Hy4-GGUF))。🔥🔥🔥
@@ -100,6 +101,7 @@
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
+          <li><a href="https://angelspec.readthedocs.io/">DFly2</a></li>
           <li><a href="https://app.readthedocs.org/">DFly</a></li>
           <li><a href="https://app.readthedocs.org/">DFlare</a></li>
           <li><a href="https://app.readthedocs.org/">DFlash</a></li>
@@ -273,20 +275,21 @@ cd AngelSlim && python setup.py install
 
 #### 2.1 投机采样
 
-AngelSlim 的投机采样训练由 **[AngelSpec](https://github.com/Tencent/AngelSpec)** 提供（git submodule，位于 `third_party/AngelSpec/`）——一个用于**训练**投机解码 draft 模型的 torch-native 框架，提供丰富的 draft 架构、target 模型支持与生产级训练能力，支持多种 draft 方法，以 **DFly** 与 **MTP + TTT** 为代表。
+AngelSlim 的投机采样训练由 **[AngelSpec](https://github.com/Tencent/AngelSpec)** 提供（git submodule，位于 `third_party/AngelSpec/`）——一个用于**训练**投机解码 draft 模型的 torch-native 框架，提供丰富的 draft 架构、target 模型支持与生产级训练能力，支持多种 draft 方法，以 **DFly2**、**DFly** 与 **MTP + TTT** 为代表。
 
 框架采用**训推分离**设计：推理引擎运行冻结的 target 模型并抽取多层隐状态，经 [Mooncake](https://github.com/kvcache-ai/Mooncake) store 通过 RDMA 直接流式传输（不落盘）至 FSDP2 训练进程，由 controller 负责批处理、背压与评估。推理与训练运行在独立的 GPU 资源池上，可独立扩缩。
 
 **核心能力：**
 
-- **多推理后端** —— vLLM（一等支持）、SGLang、HuggingFace。
-- **长序列训练** —— Ulysses 序列并行（USP），支持 128k+ 上下文。
-- **文档感知序列 packing** —— 严格的跨文档注意力隔离。
-- **在线评估** —— 训练过程中直接测量投机解码接受率。
-- **多机** —— 大型 MoE target 模型跨节点分布，经 Mooncake RDMA 互联。
-- **词表裁剪** —— 在训练或转换阶段将 draft `lm_head` 裁剪到更小的 token 集。
+- **多推理后端** —— vLLM、SGLang、HuggingFace。
+- **在线、离线与混合训练** —— 隐状态一次采集、多轮回放。
+- **目标模型状态复用** —— DFly2 直接复用目标模型的 MLA latents 与 DSA top-k 选择。
+- **On-policy 蒸馏** —— 为草稿模型 OPD 提供独立打分引擎。
+- **长序列训练** —— Ulysses 序列并行，最长 256k，支持文档感知 packing。
 
-<!-- TODO: 补充 AngelSpec 框架总览图至 docs/source/assets/speculative_decoding/ 后在此嵌入 -->
+<p align="center">
+  <img alt="AngelSpec 框架" src="./docs/source/assets/speculative_decoding/angelspec_framework.jpg" width=100%>
+</p>
 
 ```shell
 # 初始化 submodule（参见上文安装章节）
@@ -296,11 +299,11 @@ cd third_party/AngelSpec
 pip install -e ".[vllm]"
 # Hidden-state 传输（extras 未自动拉取，需单独安装）
 pip install mooncake-transfer-engine
-# 单机快速开始（默认 4 GPU：2 推理 + 2 训练）
-./examples/qwen3-8b-single-node/run.sh
+# 单机快速开始（默认 8 GPU：4 推理 + 4 训练）
+./examples/qwen3-8b-dfly/run.sh
 ```
 
-更多细节请参考[技术报告](https://arxiv.org/abs/2607.25852)、[AngelSpec 文档](https://angelspec.readthedocs.io/)、[AngelSpec README](https://github.com/Tencent/AngelSpec/blob/main/README.md) 与 [Hugging Face 权重](https://huggingface.co/collections/AngelSlim/angelspec)。
+更多细节请参考 [AngelSpec](https://arxiv.org/abs/2607.25852) 与 [DFly2](https://arxiv.org/abs/2611.34776) 技术报告、[AngelSpec 文档](https://angelspec.readthedocs.io/)、[AngelSpec README](https://github.com/Tencent/AngelSpec/blob/main/README.md) 与 [Hugging Face 权重](https://huggingface.co/collections/AngelSlim/angelspec)。
 
 #### 2.2 LLM/VLM模型量化
 完成安装`AngelSlim`后，您可以通过以下脚本快速开始，完成`Qwen3-1.7B`模型的静态`FP8`量化：
@@ -446,317 +449,150 @@ bash scripts/deploy/lm_eval.sh -d 0,1 -t 2 -g 0.8 -r $RESULT_PATH -b "auto" --ta
 
 ### 1、投机采样
 
-下列结果来自 **[AngelSpec](https://github.com/Tencent/AngelSpec)**——一个 torch-native、训推分离投机采样训练框架，由 AngelSlim 以 git submodule 形式集成（详见 2.1 节），支持多种 draft 方法，以 **DFly** 与 **MTP + TTT** 为代表。[[论文]](https://arxiv.org/abs/2607.25852) | [[文档]](https://angelspec.readthedocs.io/) | [[Hugging Face]](https://huggingface.co/collections/AngelSlim/angelspec)
+以下结果来自 **[AngelSpec](https://github.com/Tencent/AngelSpec)** ——一个 torch 原生、推训分离的投机采样训练框架，已作为 git submodule 集成进 AngelSlim（见 §2.1）。[[Paper]](https://arxiv.org/abs/2611.34776) | [[Docs]](https://angelspec.readthedocs.io/) | [[Hugging Face]](https://huggingface.co/collections/AngelSlim/angelspec)
 
-**✨ 核心亮点**
-- **🏗️ 全链路开源**：AngelSpec 训练框架 + Hy3-A21B 的 MTP / DFly drafter 权重与训练代码，一次性放出。
-- **🚀 DFly 全面领先**：在 Hy3-A21B 上，DFly 于 4–64 全部并发档位、六个 benchmark 均取得最高吞吐——相较 AR 基线平均加速 **1.98–2.40×**（代码 / 数学单项峰值 **2.86×**），并比 DFlash 快 **10.5–11.8%**。
-- **📈 接受长度大幅提升**：DFly 平均接受长度达 **4.79**，较 DFlash（3.69）**+30%**、较 MTP（3.00）约 **1.6×**，HumanEval 高达 **5.52**。
-- **⚡ D-cut 榨干高并发**：在 295B 模型线上真实流量中，高并发区间额外带来最高 **+15.7%** 吞吐，且几乎无损（平均接受长度 2.50 → 2.46）。
-- **💬 MTP + TTT 攻克对话**：修复训练-推理不一致，平均接受率 **52.8% → 66.4%**，平均接受长度 **2.58 → 2.99**。
+**✨ 亮点**
 
-#### 1.1 🏆 Drafter 大比拼：DFly 领跑
+- **🏗️ 全栈开源** —— AngelSpec 训练框架、DFly2 技术报告，以及 **Hy4 flash**、**DeepSeek-V4.1-Flash**、**GLM-5.3-Flash** 三个目标模型的 MoE 草稿模型权重，一并发布。
+- **📐 起草开销恒定** —— DFly2 直接复用目标模型自己的稀疏 KV 缓存与 top-k 索引，**无论上下文多长**，每个草稿 token 至多只注意约 2K 个 key，且草稿模型**不额外维护 KV 缓存**。
+- **📈 三个目标上接受长度全面领先** —— 在全部 7 个长上下文与 agentic 数据集上，DFly2 均为最优；agentic 汇总达 **4.06 / 4.03 / 4.11**，而最强基线为 **3.35 / 3.10 / 3.16**。
+- **🚀 上下文越长，优势越大** —— 相对自回归解码最高 **3.41×** 解码加速、**2.17×** 端到端加速，且随上下文增长，相对 DFlash 与 DSpark 的差距持续拉大。
 
-**起草质量：平均接受长度。** 在 **Qwen3-8B** 与 **Hy3-A21B** 上、覆盖数学/代码/对话基准测得（temperature = 1，no thinking）；**粗体**表示每个目标模型在对应基准上的最优 drafter。**DFly** 平均领先——Qwen3-8B 达 **5.41**、Hy3-A21B 达 **4.79**，并在几乎所有基准上夺魁，明显甩开 DFlash 与 MTP。
+#### 1.1 🏆 DFly2 在长上下文与 Agentic 场景
+
+<p align="center">
+  <img alt="DFly2 逐数据集接受长度与加速比" src="./docs/source/assets/speculative_decoding/dfly2_long_context_cn.png" width=100%>
+</p>
+
+**草稿质量——平均接受长度 τ。** 在 **DeepSeek-V4.1-Flash**、**GLM-5.3-Flash**、**Hy4 flash** 上测得，每格为温度 0 / 1（Hy4 flash 为 0.9）；**加粗**表示该目标该数据集上的最优草稿模型。
 
 <table>
   <thead>
     <tr>
-      <th rowspan="2">Target Model</th>
-      <th rowspan="2">Drafter</th>
-      <th colspan="2" style="text-align:center;">Math</th>
-      <th colspan="3" style="text-align:center;">Code</th>
-      <th style="text-align:center;">Chat</th>
-      <th rowspan="2">Avg.</th>
-    </tr>
-    <tr>
-      <th>Math500</th><th>GSM8K</th>
-      <th>HumanEval</th><th>MBPP</th><th>LiveCodeBench</th>
-      <th>MT-Bench</th>
+      <th>Target</th><th>Drafter</th>
+      <th style="text-align:center;">LongSpec 32K</th><th style="text-align:center;">CodeSpan 64K</th><th style="text-align:center;">LSWE 128K</th><th style="text-align:center;">ALB</th><th style="text-align:center;">MemAgent</th><th style="text-align:center;">BFCL-v3</th><th style="text-align:center;">SWE 64K</th><th style="text-align:center;">Long</th><th style="text-align:center;">Agentic</th>
     </tr>
   </thead>
   <tbody>
-    <!-- Qwen3-8B -->
     <tr>
-      <td rowspan="4">Qwen3-8B</td>
-      <td>MTP</td>
-      <td>3.53</td><td>3.56</td><td>3.33</td><td>3.22</td><td>3.25</td><td>2.57</td><td>3.24</td>
+      <td rowspan="4">DeepSeek-V4.1-Flash</td>
+      <td>DFlash</td>
+      <td>2.98 / 2.55</td><td>3.81 / 3.13</td><td>3.42 / 2.96</td><td>4.38 / 4.13</td><td>2.84 / 2.60</td><td>3.40 / 3.11</td><td>3.58 / 3.14</td><td>3.40 / 2.88</td><td>3.55 / 3.25</td>
     </tr>
     <tr>
-      <td>DFlash</td>
-      <td>4.97</td><td>5.54</td><td>4.77</td><td>4.50</td><td>4.46</td><td>3.16</td><td>4.57</td>
+      <td>DFlash†</td>
+      <td>2.74 / 2.40</td><td>3.43 / 2.86</td><td>3.15 / 2.77</td><td>3.78 / 3.62</td><td>2.80 / 2.52</td><td>3.21 / 2.98</td><td>3.19 / 2.80</td><td>3.11 / 2.68</td><td>3.24 / 2.98</td>
     </tr>
     <tr>
       <td>DSpark</td>
-      <td>5.87</td><td>6.25</td><td>5.56</td><td>5.25</td><td>5.20</td><td><b>3.77</b></td><td>5.32</td>
+      <td>2.82 / 2.48</td><td>3.58 / 2.92</td><td>3.29 / 2.98</td><td>3.87 / 3.59</td><td>2.85 / 2.65</td><td>3.33 / 3.09</td><td>3.35 / 2.99</td><td>3.23 / 2.79</td><td>3.35 / 3.08</td>
     </tr>
     <tr>
-      <td><b>DFly</b></td>
-      <td><b>6.06</b></td><td><b>6.42</b></td><td><b>5.60</b></td><td><b>5.34</b></td><td><b>5.36</b></td><td>3.67</td><td><b>5.41</b></td>
-    </tr>
-    <!-- Hy3-A21B -->
-    <tr>
-      <td rowspan="3">Hy3-A21B</td>
-      <td>MTP</td>
-      <td>3.30</td><td>3.30</td><td>3.13</td><td>3.04</td><td>2.84</td><td>2.40</td><td>3.00</td>
+      <td><b>DFly2</b></td>
+      <td><b>3.12</b> / <b>2.81</b></td><td><b>4.14</b> / <b>3.59</b></td><td><b>3.97</b> / <b>3.55</b></td><td><b>5.10</b> / <b>4.72</b></td><td><b>3.36</b> / <b>3.13</b></td><td><b>3.77</b> / <b>3.55</b></td><td><b>4.02</b> / <b>3.60</b></td><td><b>3.74</b> / <b>3.32</b></td><td><b>4.06</b> / <b>3.75</b></td>
     </tr>
     <tr>
+      <td rowspan="4">GLM-5.3-Flash</td>
       <td>DFlash</td>
-      <td>4.01</td><td>4.23</td><td>4.36</td><td>4.05</td><td>3.10</td><td>2.38</td><td>3.69</td>
+      <td>2.55 / 2.17</td><td>3.12 / 2.48</td><td>2.92 / 2.64</td><td>3.12 / 1.92</td><td>2.79 / 2.50</td><td>2.99 / 2.75</td><td>2.91 / 2.60</td><td>2.86 / 2.43</td><td>2.95 / 2.44</td>
     </tr>
     <tr>
-      <td><b>DFly</b></td>
-      <td><b>5.23</b></td><td><b>5.53</b></td><td><b>5.52</b></td><td><b>5.41</b></td><td><b>4.07</b></td><td><b>2.96</b></td><td><b>4.79</b></td>
+      <td>DFlash†</td>
+      <td>2.69 / 2.23</td><td>3.22 / 2.60</td><td>2.97 / 2.65</td><td>3.50 / 3.45</td><td>2.68 / 2.48</td><td>3.00 / 2.73</td><td>2.86 / 2.61</td><td>2.96 / 2.50</td><td>3.01 / 2.82</td>
+    </tr>
+    <tr>
+      <td>DSpark</td>
+      <td>2.75 / 2.37</td><td>3.32 / 2.77</td><td>3.08 / 2.79</td><td>3.53 / 3.73</td><td>2.74 / 2.58</td><td>3.15 / 2.91</td><td>2.98 / 2.74</td><td>3.05 / 2.64</td><td>3.10 / 2.99</td>
+    </tr>
+    <tr>
+      <td><b>DFly2</b></td>
+      <td><b>3.31</b> / <b>2.92</b></td><td><b>4.40</b> / <b>3.63</b></td><td><b>3.82</b> / <b>3.52</b></td><td><b>5.49</b> / <b>4.77</b></td><td><b>3.30</b> / <b>3.12</b></td><td><b>3.61</b> / <b>3.35</b></td><td><b>3.73</b> / <b>3.48</b></td><td><b>3.85</b> / <b>3.36</b></td><td><b>4.03</b> / <b>3.68</b></td>
+    </tr>
+    <tr>
+      <td rowspan="4">Hy4 flash</td>
+      <td>DFlash</td>
+      <td>2.59 / 2.41</td><td>1.17 / 1.10</td><td>1.12 / 1.09</td><td>1.50 / 1.36</td><td>1.08 / 1.06</td><td>3.18 / 3.20</td><td>2.26 / 1.88</td><td>1.63 / 1.53</td><td>2.00 / 1.88</td>
+    </tr>
+    <tr>
+      <td>DFlash†</td>
+      <td>2.68 / 2.50</td><td>3.47 / 3.28</td><td>3.23 / 3.06</td><td>3.32 / 3.06</td><td>2.63 / 2.47</td><td>2.90 / 2.92</td><td>3.40 / 2.94</td><td>3.13 / 2.95</td><td>3.06 / 2.85</td>
+    </tr>
+    <tr>
+      <td>DSpark</td>
+      <td>2.74 / 2.56</td><td>3.54 / 3.35</td><td>3.31 / 3.11</td><td>3.32 / 3.10</td><td>2.77 / 2.56</td><td>3.08 / 2.98</td><td>3.45 / 3.14</td><td>3.20 / 3.01</td><td>3.16 / 2.95</td>
+    </tr>
+    <tr>
+      <td><b>DFly2</b></td>
+      <td><b>2.94</b> / <b>2.75</b></td><td><b>4.12</b> / <b>4.03</b></td><td><b>3.83</b> / <b>3.60</b></td><td><b>5.41</b> / <b>5.22</b></td><td><b>3.23</b> / <b>2.95</b></td><td><b>3.69</b> / <b>3.67</b></td><td><b>4.12</b> / <b>3.70</b></td><td><b>3.63</b> / <b>3.46</b></td><td><b>4.11</b> / <b>3.88</b></td>
     </tr>
   </tbody>
 </table>
 
-**端到端吞吐：Hy3-295B-A21B。** 相对 AR 基线的输出 token 吞吐（Tok/s）与加速比（Spd.）（TP=8，temperature 1，并发 c4–c64；每格为 3×120s 窗口）。**粗体**表示每个基准在对应并发下的最优加速比；`MTP-3` 使用 3 个投机 token，`DFlash-8` / `DFly-8` 使用 block 长度 8。**DFly-8** 在每个并发档位都拿下最高平均加速——相较 AR **1.98×–2.40×**，HumanEval 上峰值达 **2.86×**。
+**相对自回归解码的加速比。** 并发为 1、贪心解码，格式为 解码 / 端到端。
 
 <table>
   <thead>
     <tr>
-      <th rowspan="2">Conc.</th>
-      <th rowspan="2">Method</th>
-      <th colspan="2" style="text-align:center;">GSM8K</th>
-      <th colspan="2" style="text-align:center;">Math500</th>
-      <th colspan="2" style="text-align:center;">HumanEval</th>
-      <th colspan="2" style="text-align:center;">MBPP</th>
-      <th colspan="2" style="text-align:center;">LiveCodeBench</th>
-      <th colspan="2" style="text-align:center;">MT-Bench</th>
-      <th colspan="2" style="text-align:center;">Avg.</th>
-    </tr>
-    <tr>
-      <th>Tok/s</th><th>Spd.</th>
-      <th>Tok/s</th><th>Spd.</th>
-      <th>Tok/s</th><th>Spd.</th>
-      <th>Tok/s</th><th>Spd.</th>
-      <th>Tok/s</th><th>Spd.</th>
-      <th>Tok/s</th><th>Spd.</th>
-      <th>Tok/s</th><th>Spd.</th>
+      <th>Target</th><th>Drafter</th>
+      <th style="text-align:center;">LongSpec 32K</th><th style="text-align:center;">CodeSpan 64K</th><th style="text-align:center;">LSWE 128K</th><th style="text-align:center;">ALB</th><th style="text-align:center;">MemAgent</th><th style="text-align:center;">BFCL-v3</th><th style="text-align:center;">SWE 64K</th><th style="text-align:center;">Long</th><th style="text-align:center;">Agentic</th>
     </tr>
   </thead>
   <tbody>
-    <!-- c4 -->
     <tr>
-      <td rowspan="4">c4</td>
-      <td>AR</td>
-      <td>287.9</td><td>1.00×</td>
-      <td>293.9</td><td>1.00×</td>
-      <td>279.7</td><td>1.00×</td>
-      <td>294.4</td><td>1.00×</td>
-      <td>284.5</td><td>1.00×</td>
-      <td>290.0</td><td>1.00×</td>
-      <td>288.4</td><td>1.00×</td>
+      <td rowspan="4">DeepSeek-V4.1-Flash</td>
+      <td>DFlash</td>
+      <td><b>2.46×</b> / 1.75×</td><td>3.05× / 1.67×</td><td>2.59× / 1.16×</td><td>3.46× / 0.69×</td><td>2.22× / 0.63×</td><td>2.67× / 0.78×</td><td>2.79× / 1.49×</td><td>2.70× / 1.52×</td><td>2.78× / 0.90×</td>
     </tr>
     <tr>
-      <td>MTP-3</td>
-      <td>495.5</td><td>1.72×</td>
-      <td>517.0</td><td>1.76×</td>
-      <td>473.6</td><td>1.69×</td>
-      <td>476.7</td><td>1.62×</td>
-      <td>414.0</td><td>1.46×</td>
-      <td>384.5</td><td><b>1.33×</b></td>
-      <td>460.2</td><td>1.60×</td>
+      <td>DFlash†</td>
+      <td>2.32× / 1.70×</td><td>2.70× / 1.55×</td><td>2.52× / 1.13×</td><td>3.09× / 0.83×</td><td>2.25× / 0.69×</td><td>2.63× / 0.84×</td><td>2.55× / 1.47×</td><td>2.51× / 1.46×</td><td>2.63× / 0.96×</td>
     </tr>
     <tr>
-      <td>DFlash-8</td>
-      <td>569.5</td><td>1.98×</td>
-      <td>587.9</td><td>2.00×</td>
-      <td>588.1</td><td>2.10×</td>
-      <td>575.7</td><td>1.96×</td>
-      <td>408.4</td><td>1.44×</td>
-      <td>371.6</td><td>1.28×</td>
-      <td>516.9</td><td>1.79×</td>
+      <td>DSpark</td>
+      <td>2.28× / 1.99×</td><td>2.63× / 2.06×</td><td>2.49× / 1.68×</td><td>2.95× / 1.21×</td><td>2.37× / <b>1.27×</b></td><td>2.58× / <b>1.37×</b></td><td>2.54× / 1.89×</td><td>2.47× / 1.91×</td><td>2.61× / 1.44×</td>
     </tr>
     <tr>
-      <td><b>DFly-8</b></td>
-      <td>635.4</td><td><b>2.21×</b></td>
-      <td>643.9</td><td><b>2.19×</b></td>
-      <td>647.2</td><td><b>2.31×</b></td>
-      <td>661.5</td><td><b>2.25×</b></td>
-      <td>455.2</td><td><b>1.60×</b></td>
-      <td>384.0</td><td>1.32×</td>
-      <td>571.2</td><td><b>1.98×</b></td>
-    </tr>
-    <!-- c8 -->
-    <tr>
-      <td rowspan="4">c8</td>
-      <td>AR</td>
-      <td>426.3</td><td>1.00×</td>
-      <td>435.7</td><td>1.00×</td>
-      <td>400.3</td><td>1.00×</td>
-      <td>433.7</td><td>1.00×</td>
-      <td>413.4</td><td>1.00×</td>
-      <td>421.8</td><td>1.00×</td>
-      <td>421.8</td><td>1.00×</td>
+      <td><b>DFly2</b></td>
+      <td>2.44× / <b>2.10×</b></td><td><b>3.23×</b> / <b>2.37×</b></td><td><b>2.94×</b> / <b>1.86×</b></td><td><b>3.82×</b> / <b>1.25×</b></td><td><b>2.60×</b> / 1.24×</td><td><b>2.97×</b> / 1.36×</td><td><b>3.00×</b> / <b>2.13×</b></td><td><b>2.87×</b> / <b>2.11×</b></td><td><b>3.10×</b> / <b>1.50×</b></td>
     </tr>
     <tr>
-      <td>MTP-3</td>
-      <td>756.9</td><td>1.78×</td>
-      <td>791.5</td><td>1.82×</td>
-      <td>717.4</td><td>1.79×</td>
-      <td>729.1</td><td>1.68×</td>
-      <td>620.8</td><td>1.50×</td>
-      <td>590.1</td><td><b>1.40×</b></td>
-      <td>701.0</td><td>1.66×</td>
+      <td rowspan="4">GLM-5.3-Flash</td>
+      <td>DFlash</td>
+      <td>1.70× / 1.47×</td><td>2.03× / 1.46×</td><td>1.89× / 1.28×</td><td>2.15× / 1.09×</td><td>1.83× / <b>1.01×</b></td><td>2.02× / 1.16×</td><td>1.88× / 1.36×</td><td>1.87× / 1.40×</td><td>1.97× / 1.15×</td>
     </tr>
     <tr>
-      <td>DFlash-8</td>
-      <td>857.0</td><td>2.01×</td>
-      <td>860.1</td><td>1.97×</td>
-      <td>866.2</td><td>2.16×</td>
-      <td>866.2</td><td>2.00×</td>
-      <td>609.1</td><td>1.47×</td>
-      <td>545.5</td><td>1.29×</td>
-      <td>767.4</td><td>1.82×</td>
+      <td>DFlash†</td>
+      <td>1.86× / 1.56×</td><td>2.12× / 1.48×</td><td>2.04× / 1.28×</td><td>2.45× / 1.07×</td><td>1.92× / 0.97×</td><td>2.08× / 1.09×</td><td>1.99× / 1.50×</td><td>2.00× / 1.44×</td><td>2.11× / 1.16×</td>
     </tr>
     <tr>
-      <td><b>DFly-8</b></td>
-      <td>964.8</td><td><b>2.26×</b></td>
-      <td>959.5</td><td><b>2.20×</b></td>
-      <td>974.1</td><td><b>2.43×</b></td>
-      <td>1001.5</td><td><b>2.31×</b></td>
-      <td>641.3</td><td><b>1.55×</b></td>
-      <td>565.8</td><td>1.34×</td>
-      <td>851.2</td><td><b>2.02×</b></td>
-    </tr>
-    <!-- c16 -->
-    <tr>
-      <td rowspan="4">c16</td>
-      <td>AR</td>
-      <td>650.7</td><td>1.00×</td>
-      <td>670.6</td><td>1.00×</td>
-      <td>594.8</td><td>1.00×</td>
-      <td>667.9</td><td>1.00×</td>
-      <td>617.2</td><td>1.00×</td>
-      <td>628.1</td><td>1.00×</td>
-      <td>638.2</td><td>1.00×</td>
+      <td>DSpark</td>
+      <td>1.84× / 1.53×</td><td>2.24× / 1.58×</td><td>2.12× / 1.38×</td><td>2.48× / 1.08×</td><td>1.90× / 0.97×</td><td>2.17× / 1.13×</td><td>2.02× / 1.49×</td><td>2.07× / 1.49×</td><td>2.14× / 1.17×</td>
     </tr>
     <tr>
-      <td>MTP-3</td>
-      <td>1146.6</td><td>1.76×</td>
-      <td>1174.0</td><td>1.75×</td>
-      <td>1076.1</td><td>1.81×</td>
-      <td>1103.3</td><td>1.65×</td>
-      <td>893.5</td><td>1.45×</td>
-      <td>876.6</td><td>1.40×</td>
-      <td>1045.0</td><td>1.64×</td>
+      <td><b>DFly2</b></td>
+      <td><b>2.14×</b> / <b>1.75×</b></td><td><b>2.82×</b> / <b>1.79×</b></td><td><b>2.40×</b> / <b>1.39×</b></td><td><b>3.57×</b> / <b>1.10×</b></td><td><b>2.20×</b> / 0.98×</td><td><b>2.34×</b> / <b>1.17×</b></td><td><b>2.35×</b> / <b>1.62×</b></td><td><b>2.45×</b> / <b>1.64×</b></td><td><b>2.61×</b> / <b>1.22×</b></td>
     </tr>
     <tr>
-      <td>DFlash-8</td>
-      <td>1446.1</td><td>2.22×</td>
-      <td>1430.4</td><td>2.13×</td>
-      <td>1433.3</td><td>2.41×</td>
-      <td>1440.4</td><td>2.16×</td>
-      <td>970.5</td><td>1.57×</td>
-      <td>901.0</td><td>1.43×</td>
-      <td>1270.3</td><td>1.99×</td>
+      <td rowspan="4">Hy4 flash</td>
+      <td>DFlash</td>
+      <td>2.15× / 1.93×</td><td>0.96× / 0.96×</td><td>0.90× / 1.00×</td><td>1.23× / 1.06×</td><td>0.87× / 0.97×</td><td>2.64× / 1.87×</td><td>1.87× / 1.46×</td><td>1.34× / 1.30×</td><td>1.65× / 1.34×</td>
     </tr>
     <tr>
-      <td><b>DFly-8</b></td>
-      <td>1623.8</td><td><b>2.50×</b></td>
-      <td>1607.5</td><td><b>2.40×</b></td>
-      <td>1595.4</td><td><b>2.68×</b></td>
-      <td>1677.8</td><td><b>2.51×</b></td>
-      <td>1046.7</td><td><b>1.70×</b></td>
-      <td>961.5</td><td><b>1.53×</b></td>
-      <td>1418.8</td><td><b>2.22×</b></td>
-    </tr>
-    <!-- c32 -->
-    <tr>
-      <td rowspan="4">c32</td>
-      <td>AR</td>
-      <td>918.6</td><td>1.00×</td>
-      <td>1000.8</td><td>1.00×</td>
-      <td>850.8</td><td>1.00×</td>
-      <td>1018.7</td><td>1.00×</td>
-      <td>893.2</td><td>1.00×</td>
-      <td>921.1</td><td>1.00×</td>
-      <td>933.9</td><td>1.00×</td>
+      <td>DFlash†</td>
+      <td>2.28× / 2.03×</td><td>2.96× / 2.26×</td><td>2.75× / 1.60×</td><td>2.81× / 1.26×</td><td>2.18× / 1.29×</td><td>2.46× / 1.82×</td><td>2.90× / 1.80×</td><td>2.66× / 1.96×</td><td>2.59× / 1.54×</td>
     </tr>
     <tr>
-      <td>MTP-3</td>
-      <td>1923.8</td><td>2.09×</td>
-      <td>1989.8</td><td>1.99×</td>
-      <td>1780.7</td><td>2.09×</td>
-      <td>1863.6</td><td>1.83×</td>
-      <td>1394.2</td><td>1.56×</td>
-      <td>1469.4</td><td>1.60×</td>
-      <td>1736.9</td><td>1.86×</td>
+      <td>DSpark</td>
+      <td>2.32× / 2.06×</td><td>3.00× / 2.28×</td><td>2.79× / 1.60×</td><td>2.80× / 1.26×</td><td>2.23× / 1.27×</td><td>2.59× / 1.85×</td><td>2.92× / 1.81×</td><td>2.70× / 1.98×</td><td>2.63× / 1.55×</td>
     </tr>
     <tr>
-      <td>DFlash-8</td>
-      <td>2261.8</td><td>2.46×</td>
-      <td>2334.3</td><td>2.33×</td>
-      <td>2170.6</td><td>2.55×</td>
-      <td>2339.3</td><td>2.30×</td>
-      <td>1489.9</td><td>1.67×</td>
-      <td>1453.4</td><td>1.58×</td>
-      <td>2008.2</td><td>2.15×</td>
-    </tr>
-    <tr>
-      <td><b>DFly-8</b></td>
-      <td>2527.4</td><td><b>2.75×</b></td>
-      <td>2608.9</td><td><b>2.61×</b></td>
-      <td>2429.1</td><td><b>2.86×</b></td>
-      <td>2741.3</td><td><b>2.69×</b></td>
-      <td>1602.6</td><td><b>1.79×</b></td>
-      <td>1549.4</td><td><b>1.68×</b></td>
-      <td>2243.1</td><td><b>2.40×</b></td>
-    </tr>
-    <!-- c64 -->
-    <tr>
-      <td rowspan="4">c64</td>
-      <td>AR</td>
-      <td>1156.9</td><td>1.00×</td>
-      <td>1381.3</td><td>1.00×</td>
-      <td>1197.6</td><td>1.00×</td>
-      <td>1513.9</td><td>1.00×</td>
-      <td>1229.6</td><td>1.00×</td>
-      <td>1306.9</td><td>1.00×</td>
-      <td>1297.7</td><td>1.00×</td>
-    </tr>
-    <tr>
-      <td>MTP-3</td>
-      <td>2932.0</td><td><b>2.53×</b></td>
-      <td>3170.0</td><td>2.29×</td>
-      <td>2639.6</td><td>2.20×</td>
-      <td>3011.3</td><td>1.99×</td>
-      <td>2050.4</td><td>1.67×</td>
-      <td>2350.0</td><td><b>1.80×</b></td>
-      <td>2692.2</td><td>2.08×</td>
-    </tr>
-    <tr>
-      <td>DFlash-8</td>
-      <td>2523.4</td><td>2.18×</td>
-      <td>2947.1</td><td>2.13×</td>
-      <td>2655.2</td><td>2.22×</td>
-      <td>2671.8</td><td>1.76×</td>
-      <td>2015.8</td><td>1.64×</td>
-      <td>1815.8</td><td>1.39×</td>
-      <td>2438.2</td><td>1.89×</td>
-    </tr>
-    <tr>
-      <td><b>DFly-8</b></td>
-      <td>2827.8</td><td>2.44×</td>
-      <td>3301.8</td><td><b>2.39×</b></td>
-      <td>2965.0</td><td><b>2.48×</b></td>
-      <td>3130.9</td><td><b>2.07×</b></td>
-      <td>2195.0</td><td><b>1.79×</b></td>
-      <td>1936.6</td><td>1.48×</td>
-      <td>2726.2</td><td><b>2.11×</b></td>
+      <td><b>DFly2</b></td>
+      <td><b>2.47×</b> / <b>2.17×</b></td><td><b>3.48×</b> / <b>2.51×</b></td><td><b>3.22×</b> / <b>1.68×</b></td><td><b>4.55×</b> / <b>1.35×</b></td><td><b>2.54×</b> / <b>1.31×</b></td><td><b>3.08×</b> / <b>2.04×</b></td><td><b>3.46×</b> / <b>1.96×</b></td><td><b>3.06×</b> / <b>2.12×</b></td><td><b>3.41×</b> / <b>1.67×</b></td>
     </tr>
   </tbody>
 </table>
 
-#### 1.2 ⚡ D-cut：突破高并发吞吐天花板
-
-并发一高，target 验证就成了瓶颈，被拒绝的 draft 后缀白白占用 batch 容量。**D-cut** 把验证当作 batch 级的共享预算——按「期望收益/成本」对各请求的验证深度全局排序，空闲时自动加深 draft，繁忙时主动裁剪。优势恰好出现在 DFly 触顶之处：并发 48 之后 DFly 吞吐饱和，而 D-cut 仍在把负载转化为吞吐，相较 DFly 最高 **+15.7%**，且几乎无损（平均接受长度 2.50 → 2.46）。
-
-<p align="center">
-  <img alt="D-cut 在 Hy3-295B-A21B 线上流量上的表现" src="./docs/source/assets/speculative_decoding/dcut_live_traffic.jpg" width=100%>
-</p>
+Long 与 Agentic 分别为三个长上下文与四个 agentic 数据集的等权平均；每个目标的最优值加粗。DFlash† 在解码时只读取上下文的一个窗口，但 prefill 阶段仍会建立完整缓存。
 
 ### 2、量化
 
