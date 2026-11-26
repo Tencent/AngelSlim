@@ -1,0 +1,941 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>端侧低比特训练（QAT / QAD） &#8212; AngelSlim</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../_static/custom.css" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=a5fa425f"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../_static/togglebutton.js?v=4a39c7ea"></script>
+    <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'on_device/zh/low_bit';</script>
+    <script src="../../_static/custom.js"></script>
+    <link rel="icon" href="../../_static/angelslim_icon.png"/>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="部署总览与推理校验" href="deployment/index.html" />
+    <link rel="prev" title="端侧量化（PTQ）" href="quantization.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../_static/angelslim_logo.png" class="logo__image only-light" alt="AngelSlim - Home"/>
+    <script>document.write(`<img src="../../_static/angelslim_logo.png" class="logo__image only-dark" alt="AngelSlim - Home"/>`);</script>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">入门指南</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/installation.html">安装教程</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/quickstrat.html">快速开始</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">算法特性</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../features/quantization/index.html">量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../features/speculative_decoding/index.html">投机采样</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../features/sparse_attention/index.html">稀疏注意力</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../features/token_compressor/index.html">Token 压缩</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../features/diffusion/index.html">文生图/视频/3D压缩</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../features/distill/index.html">Distillation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../features/qad/index.html">Quantization-Aware Distillation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../features/qad/mcore_qad.html">MCoreQAD Backend</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">模型支持</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../models/hunyuan/hunyuan_quant.html">混元模型量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/hunyuan_ocr/hunyuan_ocr_quant.html">HunyuanOCR量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/deepseek/deepseek_quant.html">DeepSeek量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwen/qwen_quant.html">Qwen量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwenvl/qwenvl_quant.html">Qwen2.5VL量化指南</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwen3_omni/qwen3_omni_quant.html">Qwen3-Omni量化指南</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/Hy-MT1.5/hy-mt1.5.html">Hy-MT1.5 量化</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">端侧量化和部署</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="index.html">端侧部署教程（总览）</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quantization.html">端侧量化（PTQ）</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">端侧低比特训练（QAT / QAD）</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment/index.html">部署总览与推理校验</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment/llamacpp.html">llama.cpp 部署</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment/strata.html">Strata 部署（Hy4-flash）</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment/prima_multi_machine.html">多机部署（prima.cpp）</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment/mobile.html">移动端部署</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment/visual_token_compression.html">视觉 Token 压缩（端侧 VLM）</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment/checklist.html">上线前检查清单</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">部署文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../deployment/deploy.html">压缩模型部署</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">性能表现</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../performance/quantization/benchmarks.html">量化benchmark</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../performance/speculative_decoding/benchmarks.html">投机采样Benchmark</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">设计文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../design/index.html">设计文档</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim/edit/main/docs/source/on_device/zh/low_bit.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../../_sources/on_device/zh/low_bit.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>端侧低比特训练（QAT / QAD）</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">目录</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">1. 方法选择</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qat-int4">2. QAT：INT4 权重量化训练</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qat-w4a8-fp8">3. QAT：W4A8-FP8 训练</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qad">4. QAD：带教师模型的量化蒸馏</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#sherry-seq-lsq-twn-absmean-dlt">5. 特殊权重量化器：Sherry / SEQ / LSQ / TWN / AbsMean / DLT</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#bit-sherry-qad">6. 1.25-bit：Sherry QAD</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#bit-seq-qad">7. 2-bit：翻译模型的 SEQ QAD</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#zero-3-qat">8. 大模型的 ZeRO-3 QAT</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#fp4-w4a4-focus">9. FP4 W4A4：FOCUS</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">10. 训练后的评测（可选）</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">11. 注意事项</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="qat-qad">
+<h1>端侧低比特训练（QAT / QAD）<a class="headerlink" href="#qat-qad" title="Link to this heading">#</a></h1>
+<p><a class="reference internal" href="quantization.html"><span class="std std-doc">← 量化（PTQ）</span></a> ｜ <a class="reference internal" href="deployment/index.html"><span class="std std-doc">端侧部署 →</span></a></p>
+<p>当 PTQ 无法满足端侧的精度或压缩率要求时，可以使用量化感知训练（QAT，Quantization-Aware Training）与量化感知蒸馏（QAD，Quantization-Aware Distillation）。它们在训练过程中插入伪量化算子，让模型学习适应量化误差。本页涵盖 1.25-bit、2-bit 与 FP4 等低比特方案的训练入口。</p>
+<section id="id1">
+<h2>目录<a class="headerlink" href="#id1" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="#id2">1. 方法选择</a></p></li>
+<li><p><a class="reference internal" href="#qat-int4">2. QAT：INT4 权重量化训练</a></p></li>
+<li><p><a class="reference internal" href="#qat-w4a8-fp8">3. QAT：W4A8-FP8 训练</a></p></li>
+<li><p><a class="reference internal" href="#qad">4. QAD：带教师模型的量化蒸馏</a></p></li>
+<li><p><a class="reference internal" href="#sherry-seq-lsq-twn-absmean-dlt">5. 特殊权重量化器：Sherry / SEQ / LSQ / TWN / AbsMean / DLT</a></p></li>
+<li><p><a class="reference internal" href="#bit-sherry-qad">6. 1.25-bit：Sherry QAD</a></p></li>
+<li><p><a class="reference internal" href="#bit-seq-qad">7. 2-bit：翻译模型的 SEQ QAD</a></p></li>
+<li><p><a class="reference internal" href="#zero-3-qat">8. 大模型的 ZeRO-3 QAT</a></p></li>
+<li><p><a class="reference internal" href="#fp4-w4a4-focus">9. FP4 W4A4：FOCUS</a></p></li>
+<li><p><a class="reference internal" href="#id3">10. 训练后的评测（可选）</a></p></li>
+<li><p><a class="reference internal" href="#id4">11. 注意事项</a></p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="id2">
+<h2>1. 方法选择<a class="headerlink" href="#id2" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>方法</p></th>
+<th class="head"><p>教师模型</p></th>
+<th class="head"><p>训练内容</p></th>
+<th class="head"><p>典型用途</p></th>
+<th class="head"><p>配置目录</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>QAT</p></td>
+<td><p>无</p></td>
+<td><p>量化后的学生模型，可学习 scale</p></td>
+<td><p>INT4 / W4A8-FP8 的精度恢复</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">configs/qwen3/qat/</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>QAD</p></td>
+<td><p>有（全精度教师）</p></td>
+<td><p>量化后的学生模型，蒸馏损失 + LM 损失</p></td>
+<td><p>更低比特（1.25 / 2 bit）或精度要求高的场景</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">configs/qwen3/qad/</span></code>、<code class="docutils literal notranslate"><span class="pre">configs/hunyuan/qad/</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Distill</p></td>
+<td><p>有</p></td>
+<td><p>全精度学生模型（不量化）</p></td>
+<td><p>训练更小的端侧模型</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">configs/qwen3/distill/</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>简单判断：</p>
+<ul class="simple">
+<li><p>已有 PTQ 精度可接受 → 直接部署，无需训练；</p></li>
+<li><p>INT4 / W4A8 精度不足 → QAT；</p></li>
+<li><p>1.25-bit、2-bit 等极低比特 → QAD，并使用特殊权重量化器。</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="qat-int4">
+<h2>2. QAT：INT4 权重量化训练<a class="headerlink" href="#qat-int4" title="Link to this heading">#</a></h2>
+<p>以 Qwen3-4B 的 INT4 权重量化为例，使用端到端（end2end）训练，并启用可学习 scale。</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/qwen3/qat/int4_weight_only/learn_scale/qwen3-4b_int4_weight_only_end2end_learn_scale.yaml
+</pre></div>
+</div>
+<p>关键配置：</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">compression</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">QAT</span>
+<span class="w">  </span><span class="nt">quantization</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">ignore_layers</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"lm_head"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"embed_tokens"</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="nt">QAT</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">hf_dataset</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Salesforce/wikitext,wikitext-2-raw-v1</span><span class="w">   </span><span class="c1"># 训练数据，会覆盖 dataset.data_path</span>
+<span class="w">    </span><span class="nt">training_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">end2end</span><span class="w">                              </span><span class="c1"># end2end 或 blockwise</span>
+<span class="w">    </span><span class="nt">dist_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hf</span>
+<span class="w">    </span><span class="nt">save_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">fake</span><span class="w">                                   </span><span class="c1"># fake / real，或不设置（跳过保存）</span>
+<span class="w">    </span><span class="nt">do_train</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">plugin_config</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">enable_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">                                </span><span class="c1"># 启用可学习 scale</span>
+<span class="w">      </span><span class="nt">quant_config</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">use_weight_quant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">        </span><span class="nt">use_activation_quant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">        </span><span class="nt">weight</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">qtype</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">int4</span>
+<span class="w">          </span><span class="nt">granularity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">per-group</span>
+<span class="w">          </span><span class="nt">group_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">128</span>
+<span class="w">          </span><span class="nt">is_sym</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">hf_args</span><span class="p">:</span><span class="w">                                            </span><span class="c1"># 透传给 HuggingFace Trainer 的参数，如 learning_rate、num_train_epochs</span>
+<span class="w">      </span><span class="nt">max_steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000</span>
+</pre></div>
+</div>
+<p>若使用逐块训练（blockwise），将配置替换为：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/qwen3/qat/int4_weight_only/learn_scale/qwen3-4b_int4_weight_only_blockwise_learn_scale.yaml
+</pre></div>
+</div>
+<p>训练流程：插件在 <code class="docutils literal notranslate"><span class="pre">before_train</span></code> 阶段把 <code class="docutils literal notranslate"><span class="pre">nn.Linear</span></code> 替换为 <code class="docutils literal notranslate"><span class="pre">QuantLinear</span></code> 并做激活校准；训练结束后 <code class="docutils literal notranslate"><span class="pre">convert()</span></code> 把 <code class="docutils literal notranslate"><span class="pre">QuantLinear</span></code> 替换为推理用的 QDQ 模块并保存。完整架构见 <a class="reference internal" href="../../features/quantization/qat.html"><span class="std std-doc">QAT 文档</span></a>。</p>
+</section>
+<hr class="docutils" />
+<section id="qat-w4a8-fp8">
+<h2>3. QAT：W4A8-FP8 训练<a class="headerlink" href="#qat-w4a8-fp8" title="Link to this heading">#</a></h2>
+<p>W4A8-FP8 表示权重为 4 bit、激活为 FP8。以 Qwen3-4B 为例：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/qwen3/qat/w4a8_fp8/learn_scale/qwen3-4b_w4a8_fp8_end2end_learn_scale.yaml
+</pre></div>
+</div>
+<p>该目录下还提供了若干变体：</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>配置</p></th>
+<th class="head"><p>说明</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qwen3-4b_w4a8_fp8_end2end_learn_scale.yaml</span></code></p></td>
+<td><p>基础端到端版本</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qwen3-4b_w4a8_fp8_end2end_learn_scale_lwc.yaml</span></code></p></td>
+<td><p>增加 LWC（learnable weight clipping）</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qwen3-4b_w4a8_fp8_end2end_learn_scale_qkv_fp8attn.yaml</span></code></p></td>
+<td><p>注意力 QKV 使用 FP8</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qwen3-4b_w4a8_fp8_end2end_learn_scale_lwc_qkv_fp8attn.yaml</span></code></p></td>
+<td><p>上述两项同时开启</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<hr class="docutils" />
+<section id="qad">
+<h2>4. QAD：带教师模型的量化蒸馏<a class="headerlink" href="#qad" title="Link to this heading">#</a></h2>
+<p>QAD 使用独立的全精度教师模型指导量化学生模型训练，学生模型的所有量化参数可以按需训练。W4A8-FP8 的 QAD 示例：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>torchrun<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>tools/run.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-c<span class="w"> </span>configs/qwen3/qad/w4a8_fp8/qwen3-4b_w4a8_fp8_qad_zero2.yaml
+</pre></div>
+</div>
+<p>关键字段：</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">compression</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">QAD</span>
+<span class="w">  </span><span class="nt">quantization</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">w4a8_fp8</span>
+<span class="w">  </span><span class="nt">QAD</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">teacher_model_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Qwen/Qwen3-4B</span><span class="w">      </span><span class="c1"># 全精度教师</span>
+<span class="w">    </span><span class="nt">student_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quantized</span><span class="w">                </span><span class="c1"># 学生为量化模型</span>
+<span class="w">    </span><span class="nt">trainable_parameters</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quant</span><span class="w">            </span><span class="c1"># 只训练量化相关参数；all 为全部参数</span>
+<span class="w">    </span><span class="nt">save_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">real</span>
+<span class="w">    </span><span class="nt">plugin_config</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">enable_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</pre></div>
+</div>
+<p>QAD 的损失组合与 Distill 相同（<code class="docutils literal notranslate"><span class="pre">loss_type</span></code>、<code class="docutils literal notranslate"><span class="pre">kd_temperature</span></code>、<code class="docutils literal notranslate"><span class="pre">lm_loss_weight</span></code>、<code class="docutils literal notranslate"><span class="pre">kd_loss_weight</span></code> 等）。更多说明见 <a class="reference internal" href="../../features/qad/index.html"><span class="std std-doc">QAD 文档</span></a>。</p>
+</section>
+<hr class="docutils" />
+<section id="sherry-seq-lsq-twn-absmean-dlt">
+<h2>5. 特殊权重量化器：Sherry / SEQ / LSQ / TWN / AbsMean / DLT<a class="headerlink" href="#sherry-seq-lsq-twn-absmean-dlt" title="Link to this heading">#</a></h2>
+<p>特殊权重量化器保留标准的 <code class="docutils literal notranslate"><span class="pre">QuantLinear</span></code> 封装，仅通过配置切换权重量化器实现。在 QAD 配置中，将 <code class="docutils literal notranslate"><span class="pre">weight_quantizer</span></code> 设为 <code class="docutils literal notranslate"><span class="pre">special</span></code>，并在 <code class="docutils literal notranslate"><span class="pre">special</span></code> 下指定 <code class="docutils literal notranslate"><span class="pre">quant_method</span></code>：</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">plugin_config</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enable_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">quant_config</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">use_weight_quant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">use_activation_quant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">weight_quantizer</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">special</span>
+<span class="w">    </span><span class="nt">special</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">quant_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sherry</span><span class="w">         </span><span class="c1"># sherry / seq / lsq / twn / absmean / dlt</span>
+<span class="w">      </span><span class="nt">granularity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">per_group</span>
+<span class="w">      </span><span class="nt">group_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">128</span>
+<span class="w">      </span><span class="nt">w_bits</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<span class="w">      </span><span class="nt">N</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
+<span class="w">      </span><span class="nt">M</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span>
+</pre></div>
+</div>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p><code class="docutils literal notranslate"><span class="pre">quant_method</span></code></p></th>
+<th class="head"><p>含义</p></th>
+<th class="head"><p>对应配置（<code class="docutils literal notranslate"><span class="pre">configs/qwen3/qad/special/</span></code>）</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">sherry</span></code></p></td>
+<td><p>3:4 细粒度稀疏的 1.25-bit 三值量化，每 4 个权重中 3 个为 1-bit（{-1, +1}），1 个置零</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qwen3-1_7b_sherry_qad_from_qwen3-4b_zero2.yaml</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">seq</span></code></p></td>
+<td><p>Stretched Elastic Quantization，2-bit 权重取值 {-1.5, -0.5, 0.5, 1.5}</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qwen3-1_7b_seq_qad_from_qwen3-4b_zero2.yaml</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">lsq</span></code></p></td>
+<td><p>Learned Step-size Quantization，可学习步长</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qwen3-1_7b_lsq_qad_from_qwen3-4b_zero2.yaml</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">twn</span></code></p></td>
+<td><p>Ternary Weight Network 风格的三值量化</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qwen3-1_7b_twn_qad_from_qwen3-4b_zero2.yaml</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">absmean</span></code></p></td>
+<td><p>基于绝对均值的三值量化</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qwen3-1_7b_absmean_qad_from_qwen3-4b_zero2.yaml</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dlt</span></code></p></td>
+<td><p>DLT 量化器</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qwen3-1_7b_dlt_qad_from_qwen3-4b_zero2.yaml</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>运行任意一种方法，只需替换配置路径：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>torchrun<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>tools/run.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-c<span class="w"> </span>configs/qwen3/qad/special/qwen3-1_7b_seq_qad_from_qwen3-4b_zero2.yaml
+</pre></div>
+</div>
+<p>这些量化器的实现位于 <code class="docutils literal notranslate"><span class="pre">angelslim/compressor/qat/modules/special_quantizer.py</span></code>。</p>
+</section>
+<hr class="docutils" />
+<section id="bit-sherry-qad">
+<h2>6. 1.25-bit：Sherry QAD<a class="headerlink" href="#bit-sherry-qad" title="Link to this heading">#</a></h2>
+<p>Sherry 是本项目 Hy-MT1.5 1.25-bit 模型所采用的方法（论文 <a class="reference external" href="https://arxiv.org/abs/2601.07892">arXiv:2601.07892</a>，ACL 2026）。以 Qwen3-1.7B 为学生、Qwen3-4B 为教师的示例：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>torchrun<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>tools/run.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-c<span class="w"> </span>configs/qwen3/qad/special/qwen3-1_7b_sherry_qad_from_qwen3-4b_zero2.yaml
+</pre></div>
+</div>
+<p>关键字段解释：</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>字段</p></th>
+<th class="head"><p>值</p></th>
+<th class="head"><p>含义</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">quant_method</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">sherry</span></code></p></td>
+<td><p>使用 Sherry 量化器</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">w_bits</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1</span></code></p></td>
+<td><p>每个非零权重为 1 bit</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">N</span></code> / <code class="docutils literal notranslate"><span class="pre">M</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">3</span></code> / <code class="docutils literal notranslate"><span class="pre">4</span></code></p></td>
+<td><p>每 4 个权重中保留 3 个非零值</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">granularity</span></code> / <code class="docutils literal notranslate"><span class="pre">group_size</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">per_group</span></code> / <code class="docutils literal notranslate"><span class="pre">128</span></code></p></td>
+<td><p>分组量化粒度</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>该示例配置中 <code class="docutils literal notranslate"><span class="pre">max_steps:</span> <span class="pre">5</span></code>，用于验证流程。正式训练时请增大步数与数据量。</p>
+</section>
+<hr class="docutils" />
+<section id="bit-seq-qad">
+<h2>7. 2-bit：翻译模型的 SEQ QAD<a class="headerlink" href="#bit-seq-qad" title="Link to this heading">#</a></h2>
+<p>Hy-MT1.5-1.8B-2bit 使用 SEQ 量化加量化感知蒸馏。仓库提供了对应的训练模板：</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>configs/hunyuan/qad/special/hunyuan_seq_2bit_qad_zero2.yaml
+</pre></div>
+</div>
+<p>运行前，需要替换配置中的三个占位符：</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>字段</p></th>
+<th class="head"><p>替换为</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">model.model_path</span></code></p></td>
+<td><p>你的翻译模型路径（学生模型）</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">compression.QAD.teacher_model_path</span></code></p></td>
+<td><p>全精度教师模型路径</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dataset.data_path</span></code></p></td>
+<td><p>翻译训练数据（JSONL）</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>该配置的核心设置如下：</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">compression</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">QAD</span>
+<span class="w">  </span><span class="nt">quantization</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">w4a8_fp8</span>
+<span class="w">  </span><span class="nt">QAD</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">student_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quantized</span>
+<span class="w">    </span><span class="nt">plugin_config</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">enable_scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">      </span><span class="nt">quant_config</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">weight_quantizer</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">special</span>
+<span class="w">        </span><span class="nt">special</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">quant_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">seq</span>
+<span class="w">          </span><span class="nt">granularity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">per_channel</span>
+<span class="w">          </span><span class="nt">w_bits</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
+<span class="w">          </span><span class="nt">N</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
+<span class="w">          </span><span class="nt">M</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span>
+<span class="w">          </span><span class="nt">max_eps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.0</span>
+<span class="nt">dataset</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TextDataset</span>
+<span class="w">  </span><span class="nt">is_sft_data</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</pre></div>
+</div>
+<p>启动命令：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>torchrun<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">8</span><span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>configs/hunyuan/qad/special/hunyuan_seq_2bit_qad_zero2.yaml
+</pre></div>
+</div>
+<p>2-bit 量化的方法论与技术报告见 <a class="reference external" href="https://arxiv.org/abs/2602.21233">AngelSlim 技术报告</a>。训练产物的端侧推理方法见 <a class="reference internal" href="deployment/llamacpp.html"><span class="std std-doc">llama.cpp 部署</span></a>。</p>
+</section>
+<hr class="docutils" />
+<section id="zero-3-qat">
+<h2>8. 大模型的 ZeRO-3 QAT<a class="headerlink" href="#zero-3-qat" title="Link to this heading">#</a></h2>
+<p>对于单卡无法容纳的大模型，可以使用 ZeRO-3 的 QAT 流程。其流程分为两步：先用 PTQ 生成带 scale 的初始 checkpoint，再进行 ZeRO-3 QAT。</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># 阶段 1：PTQ 生成带 scale 的初始 checkpoint（单卡即可）</span>
+python<span class="w"> </span>tools/run.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-c<span class="w"> </span>configs/qwen3/ptq/fp8_static/qwen3-4b_fp8_static.yaml<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--model-path<span class="w"> </span>Qwen/Qwen3-4B<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--save-path<span class="w"> </span>./output_ptq
+
+<span class="c1"># 阶段 2：ZeRO-3 QAT（多卡）</span>
+torchrun<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">8</span><span class="w"> </span>tools/run.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-c<span class="w"> </span>configs/qwen3/qat/fp8_static/learn_scale/qwen3-4b_fp8_static_end2end_learn_scale_zero3.yaml
+</pre></div>
+</div>
+<p>更大规模的 Qwen3-30B-A3B 对应配置为 <code class="docutils literal notranslate"><span class="pre">configs/qwen3/qat/fp8_static/learn_scale/qwen3-30b-a3b_fp8_static_end2end_learn_scale_zero3.yaml</span></code>，流程相同。</p>
+<p>详细流程与配置字段见 <a class="reference internal" href="../../features/quantization/qat_zero3.html"><span class="std std-doc">ZeRO-3 QAT 文档</span></a>。</p>
+</section>
+<hr class="docutils" />
+<section id="fp4-w4a4-focus">
+<h2>9. FP4 W4A4：FOCUS<a class="headerlink" href="#fp4-w4a4-focus" title="Link to this heading">#</a></h2>
+<p>FOCUS 是面向 MXFP4 与 NVFP4 W4A4 的后训练 scale 优化方法（论文 <a class="reference external" href="https://arxiv.org/abs/2608.01847">arXiv:2608.01847</a>）。它冻结原始权重，仅通过端到端优化量化 scale 恢复 FP4 精度，产出仍为标准硬件格式。</p>
+<p>环境准备：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+pip<span class="w"> </span>install<span class="w"> </span>deepspeed
+</pre></div>
+</div>
+<p>运行入口为 <code class="docutils literal notranslate"><span class="pre">scripts/fp4/qwen-3-4b/run_focus_fp4.sh</span></code>，通过环境变量选择格式：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># MXFP4</span>
+<span class="nv">CUDA_VISIBLE_DEVICES</span><span class="o">=</span><span class="m">0</span>,1<span class="w"> </span><span class="se">\</span>
+<span class="nv">FORMAT</span><span class="o">=</span>mxfp4<span class="w"> </span><span class="se">\</span>
+<span class="nv">NPROC</span><span class="o">=</span><span class="m">2</span><span class="w"> </span><span class="se">\</span>
+<span class="nv">MODEL_PATH</span><span class="o">=</span>/path/to/Qwen3-4B<span class="w"> </span><span class="se">\</span>
+bash<span class="w"> </span>scripts/fp4/qwen-3-4b/run_focus_fp4.sh
+
+<span class="c1"># NVFP4</span>
+<span class="nv">CUDA_VISIBLE_DEVICES</span><span class="o">=</span><span class="m">0</span>,1<span class="w"> </span><span class="se">\</span>
+<span class="nv">FORMAT</span><span class="o">=</span>nvfp4<span class="w"> </span><span class="se">\</span>
+<span class="nv">NPROC</span><span class="o">=</span><span class="m">2</span><span class="w"> </span><span class="se">\</span>
+<span class="nv">MODEL_PATH</span><span class="o">=</span>/path/to/Qwen3-4B<span class="w"> </span><span class="se">\</span>
+bash<span class="w"> </span>scripts/fp4/qwen-3-4b/run_focus_fp4.sh
+</pre></div>
+</div>
+<p>对应配置：</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">configs/qwen3/fp4/qwen3-4b_focus_mxfp4_w4a4_zero3.yaml</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">configs/qwen3/fp4/qwen3-4b_focus_nvfp4_w4a4_zero3.yaml</span></code></p></li>
+</ul>
+<p>注意：<code class="docutils literal notranslate"><span class="pre">NPROC</span></code> 应与 <code class="docutils literal notranslate"><span class="pre">CUDA_VISIBLE_DEVICES</span></code> 中的 GPU 数量一致。FP4 W4A4 需要支持对应数据格式的硬件或推理引擎。</p>
+</section>
+<hr class="docutils" />
+<section id="id3">
+<h2>10. 训练后的评测（可选）<a class="headerlink" href="#id3" title="Link to this heading">#</a></h2>
+<p>QAT 运行时可附加评测参数，包括 PPL 与 lm-eval 任务：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/run.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-c<span class="w"> </span><span class="s2">"configs/qwen3/qat/int4_weight_only/learn_scale/qwen3-4b_int4_weight_only_end2end_learn_scale.yaml"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--lm-eval<span class="w"> </span>--ppl-eval
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--ppl-eval</span></code>：在 wikitext2、c4 等数据集上计算困惑度；</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--lm-eval</span></code>：运行 lm-evaluation-harness 任务，任务由 <code class="docutils literal notranslate"><span class="pre">--lm-eval-task</span></code> 指定，默认为 <code class="docutils literal notranslate"><span class="pre">ceval-valid</span></code>。</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="id4">
+<h2>11. 注意事项<a class="headerlink" href="#id4" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>显存</strong>：QAD 需要同时加载教师与学生模型，请优先使用 ZeRO-2/ZeRO-3 配置（如 <code class="docutils literal notranslate"><span class="pre">configs/qwen3/qad/w4a8_fp8/ds_config_zero2.json</span></code>）。</p></li>
+<li><p><strong>数据</strong>：QAT 默认使用配置中的 <code class="docutils literal notranslate"><span class="pre">hf_dataset</span></code>（如 wikitext），QAD 与 SEQ 训练推荐使用与目标任务一致的数据。</p></li>
+<li><p><strong>保存格式</strong>：<code class="docutils literal notranslate"><span class="pre">save_format</span></code> 可设为 <code class="docutils literal notranslate"><span class="pre">fake</span></code> 或 <code class="docutils literal notranslate"><span class="pre">real</span></code>，不同格式的说明见 <a class="reference internal" href="../../features/quantization/qat.html"><span class="std std-doc">QAT 文档的保存格式表</span></a>。</p></li>
+<li><p><strong>样例规模</strong>：仓库中的 QAD 样例（如 Sherry 的 <code class="docutils literal notranslate"><span class="pre">max_steps:</span> <span class="pre">5</span></code>）用于验证流程，正式训练需按需调整步数、学习率与数据量。</p></li>
+</ul>
+<p>下一步：<a class="reference internal" href="deployment/index.html"><span class="std std-doc">端侧部署 →</span></a></p>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="quantization.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">端侧量化（PTQ）</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="deployment/index.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">部署总览与推理校验</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">目录</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">1. 方法选择</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qat-int4">2. QAT：INT4 权重量化训练</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qat-w4a8-fp8">3. QAT：W4A8-FP8 训练</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qad">4. QAD：带教师模型的量化蒸馏</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#sherry-seq-lsq-twn-absmean-dlt">5. 特殊权重量化器：Sherry / SEQ / LSQ / TWN / AbsMean / DLT</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#bit-sherry-qad">6. 1.25-bit：Sherry QAD</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#bit-seq-qad">7. 2-bit：翻译模型的 SEQ QAD</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#zero-3-qat">8. 大模型的 ZeRO-3 QAT</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#fp4-w4a4-focus">9. FP4 W4A4：FOCUS</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">10. 训练后的评测（可选）</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">11. 注意事项</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By the AngelSlim Team
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, AngelSlim Team.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

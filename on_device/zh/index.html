@@ -1,0 +1,952 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>端侧部署教程（总览） &#8212; AngelSlim</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../_static/custom.css" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=a5fa425f"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../_static/togglebutton.js?v=4a39c7ea"></script>
+    <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'on_device/zh/index';</script>
+    <script src="../../_static/custom.js"></script>
+    <link rel="icon" href="../../_static/angelslim_icon.png"/>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="端侧量化（PTQ）" href="quantization.html" />
+    <link rel="prev" title="Hy-MT1.5 量化" href="../../models/Hy-MT1.5/hy-mt1.5.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../_static/angelslim_logo.png" class="logo__image only-light" alt="AngelSlim - Home"/>
+    <script>document.write(`<img src="../../_static/angelslim_logo.png" class="logo__image only-dark" alt="AngelSlim - Home"/>`);</script>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">入门指南</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/installation.html">安装教程</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/quickstrat.html">快速开始</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">算法特性</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../features/quantization/index.html">量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../features/speculative_decoding/index.html">投机采样</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../features/sparse_attention/index.html">稀疏注意力</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../features/token_compressor/index.html">Token 压缩</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../features/diffusion/index.html">文生图/视频/3D压缩</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../features/distill/index.html">Distillation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../features/qad/index.html">Quantization-Aware Distillation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../features/qad/mcore_qad.html">MCoreQAD Backend</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">模型支持</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../models/hunyuan/hunyuan_quant.html">混元模型量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/hunyuan_ocr/hunyuan_ocr_quant.html">HunyuanOCR量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/deepseek/deepseek_quant.html">DeepSeek量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwen/qwen_quant.html">Qwen量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwenvl/qwenvl_quant.html">Qwen2.5VL量化指南</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/qwen3_omni/qwen3_omni_quant.html">Qwen3-Omni量化指南</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/Hy-MT1.5/hy-mt1.5.html">Hy-MT1.5 量化</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">端侧量化和部署</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">端侧部署教程（总览）</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quantization.html">端侧量化（PTQ）</a></li>
+<li class="toctree-l1"><a class="reference internal" href="low_bit.html">端侧低比特训练（QAT / QAD）</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment/index.html">部署总览与推理校验</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment/llamacpp.html">llama.cpp 部署</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment/strata.html">Strata 部署（Hy4-flash）</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment/prima_multi_machine.html">多机部署（prima.cpp）</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment/mobile.html">移动端部署</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment/visual_token_compression.html">视觉 Token 压缩（端侧 VLM）</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment/checklist.html">上线前检查清单</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">部署文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../deployment/deploy.html">压缩模型部署</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">性能表现</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../performance/quantization/benchmarks.html">量化benchmark</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../performance/speculative_decoding/benchmarks.html">投机采样Benchmark</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">设计文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../design/index.html">设计文档</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim/edit/main/docs/source/on_device/zh/index.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../../_sources/on_device/zh/index.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>端侧部署教程（总览）</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">目录</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">1. 端侧压缩流程概览</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">2. 支持的端侧相关模型</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">2.1 小参数量语言模型（适合手机与边缘设备）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">2.2 端侧多模态模型（视觉语言）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#hy-mt">2.3 Hy-MT 模型与其它端侧模型（已发布端侧权重）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#gguf-pc">2.4 大参数量模型的端侧 GGUF 版本（PC 本地运行）</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">3. 环境准备</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#angelslim">3.1 安装 AngelSlim</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id8">3.2 运行入口</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#hugging-face">3.3 Hugging Face 访问</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id9">4. 教程导航</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id10">5. 端侧相关的论文与资源</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id11">6. 范围说明</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="id1">
+<h1>端侧部署教程（总览）<a class="headerlink" href="#id1" title="Link to this heading">#</a></h1>
+<p>本教程介绍如何使用 AngelSlim 对面向端侧（手机、PC、嵌入式 CPU/NPU 等设备）部署的大模型进行压缩，并将压缩后的模型部署到端侧推理引擎中。内容涵盖 AngelSlim 中与端侧相关的模型、量化与低比特训练算法、以及部署方式，每个步骤均给出可直接执行的命令与对应的配置文件路径。</p>
+<blockquote>
+<div><p>本教程只介绍<strong>方法、命令与配置</strong>，不包含任何性能或精度结果。如需评测数据，请参考各算法页面中的链接与对应技术报告。</p>
+</div></blockquote>
+<section id="id2">
+<h2>目录<a class="headerlink" href="#id2" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="#id3">1. 端侧压缩流程概览</a></p></li>
+<li><p><a class="reference internal" href="#id4">2. 支持的端侧相关模型</a></p></li>
+<li><p><a class="reference internal" href="#id7">3. 环境准备</a></p></li>
+<li><p><a class="reference internal" href="#id9">4. 教程导航</a></p></li>
+<li><p><a class="reference internal" href="#id10">5. 端侧相关的论文与资源</a></p></li>
+<li><p><a class="reference internal" href="#id11">6. 范围说明</a></p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="id3">
+<h2>1. 端侧压缩流程概览<a class="headerlink" href="#id3" title="Link to this heading">#</a></h2>
+<p>端侧部署通常同时受限于显存/内存、存储空间、带宽与功耗，因此需要把模型权重压缩到 INT8、INT4 甚至 1~2 bit 的水平。AngelSlim 提供的端到端流程如下：</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>源模型（BF16 / FP8 Hugging Face 权重）
+   │
+   ├─ PTQ 训练后量化：FP8 / INT8 / INT4(GPTQ、AWQ) / NVFP4 / MXFP4 ...
+   │        └─ 无需训练，只需少量校准数据
+   │
+   ├─ QAT / QAD 量化感知训练：INT4 / W4A8-FP8 / 1.25-bit(Sherry) / 2-bit(SEQ) ...
+   │        └─ 需要训练数据与训练资源，精度更高
+   │
+   ▼
+压缩后的模型（compressed-tensors / fake / real 格式）
+   │
+   ├─ Hugging Face Transformers（调试、校验）
+   ├─ vLLM / SGLang（GPU 服务端 / 工作站）
+   └─ llama.cpp GGUF（PC、手机、CPU 端侧推理）
+</pre></div>
+</div>
+<p>选择建议：</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>目标</p></th>
+<th class="head"><p>推荐路径</p></th>
+<th class="head"><p>对应页面</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>快速得到端侧可用的小模型，不想训练</p></td>
+<td><p>PTQ：INT8 / FP8 / INT4-GPTQ / INT4-AWQ</p></td>
+<td><p><a class="reference internal" href="quantization.html"><span class="std std-doc">量化</span></a></p></td>
+</tr>
+<tr class="row-odd"><td><p>在较低比特下尽量保持精度</p></td>
+<td><p>QAT / QAD：INT4、W4A8-FP8</p></td>
+<td><p><a class="reference internal" href="low_bit.html"><span class="std std-doc">低比特训练</span></a></p></td>
+</tr>
+<tr class="row-even"><td><p>极致压缩（1.25 bit / 2 bit）</p></td>
+<td><p>Sherry、SEQ 的 QAD 训练 + GGUF/STQ 推理</p></td>
+<td><p><a class="reference internal" href="low_bit.html"><span class="std std-doc">低比特训练</span></a>、<a class="reference internal" href="deployment/llamacpp.html"><span class="std std-doc">llama.cpp 部署</span></a></p></td>
+</tr>
+<tr class="row-odd"><td><p>在手机或 PC 上直接跑 GGUF 模型</p></td>
+<td><p>llama.cpp 推理</p></td>
+<td><p><a class="reference internal" href="deployment/llamacpp.html"><span class="std std-doc">llama.cpp 部署</span></a></p></td>
+</tr>
+<tr class="row-even"><td><p>Hy4-flash 本地高性能推理</p></td>
+<td><p>Strata</p></td>
+<td><p><a class="reference internal" href="deployment/strata.html"><span class="std std-doc">Strata 部署</span></a></p></td>
+</tr>
+<tr class="row-odd"><td><p>超大模型的多机本地运行</p></td>
+<td><p>Hy4 preview GGUF + prima.cpp</p></td>
+<td><p><a class="reference internal" href="deployment/prima_multi_machine.html"><span class="std std-doc">多机部署</span></a></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<hr class="docutils" />
+<section id="id4">
+<h2>2. 支持的端侧相关模型<a class="headerlink" href="#id4" title="Link to this heading">#</a></h2>
+<p>下表列出 AngelSlim 中与端侧直接相关的模型、可用压缩方式与对应的配置目录。配置文件中的 <code class="docutils literal notranslate"><span class="pre">model_path</span></code> 默认指向 Hugging Face 上的基础模型，可替换为本地路径。</p>
+<section id="id5">
+<h3>2.1 小参数量语言模型（适合手机与边缘设备）<a class="headerlink" href="#id5" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>模型</p></th>
+<th class="head"><p>参数规模</p></th>
+<th class="head"><p>可用压缩方式</p></th>
+<th class="head"><p>配置目录</p></th>
+<th class="head"><p>Hugging Face 模型</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Hunyuan Dense</p></td>
+<td><p>0.5B / 1.8B / 4B</p></td>
+<td><p>FP8-Static、LeptoQuant、INT4-GPTQ、INT4-AWQ</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">configs/hunyuan/</span></code></p></td>
+<td><p><a class="reference external" href="https://huggingface.co/tencent/Hunyuan-0.5B-Instruct">tencent/Hunyuan-0.5B-Instruct</a>、<a class="reference external" href="https://huggingface.co/tencent/Hunyuan-1.8B-Instruct">tencent/Hunyuan-1.8B-Instruct</a>、<a class="reference external" href="https://huggingface.co/tencent/Hunyuan-4B-Instruct">tencent/Hunyuan-4B-Instruct</a>（<a class="reference external" href="https://huggingface.co/collections/tencent/hunyuan-dense-model-6890632cda26b19119c9c5e7">合集</a>）</p></td>
+</tr>
+<tr class="row-odd"><td><p>Qwen3</p></td>
+<td><p>0.6B / 1.7B / 4B</p></td>
+<td><p>FP8-Static、FP8-Dynamic、LeptoQuant、INT8-Dynamic、SmoothQuant-INT8、INT4-GPTQ、INT4-AWQ、INT4-GPTAQ、NVFP4、QAT（INT4、W4A8-FP8）、QAD（Sherry、SEQ、LSQ、TWN、AbsMean、DLT、W4A8-FP8）</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">configs/qwen3/</span></code></p></td>
+<td><p><a class="reference external" href="https://huggingface.co/Qwen/Qwen3-0.6B">Qwen/Qwen3-0.6B</a>、<a class="reference external" href="https://huggingface.co/Qwen/Qwen3-1.7B">Qwen/Qwen3-1.7B</a>、<a class="reference external" href="https://huggingface.co/Qwen/Qwen3-4B">Qwen/Qwen3-4B</a></p></td>
+</tr>
+<tr class="row-even"><td><p>Qwen2.5-Instruct</p></td>
+<td><p>0.5B / 1.5B / 3B</p></td>
+<td><p>FP8-Static、FP8-Dynamic、INT4-GPTQ、INT4-AWQ</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">configs/qwen2_5/</span></code></p></td>
+<td><p><a class="reference external" href="https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct">Qwen/Qwen2.5-0.5B-Instruct</a>、<a class="reference external" href="https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct">Qwen/Qwen2.5-1.5B-Instruct</a>、<a class="reference external" href="https://huggingface.co/Qwen/Qwen2.5-3B-Instruct">Qwen/Qwen2.5-3B-Instruct</a></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="id6">
+<h3>2.2 端侧多模态模型（视觉语言）<a class="headerlink" href="#id6" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>模型</p></th>
+<th class="head"><p>参数规模</p></th>
+<th class="head"><p>可用压缩方式</p></th>
+<th class="head"><p>配置目录</p></th>
+<th class="head"><p>Hugging Face 模型</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Qwen3-VL-Instruct</p></td>
+<td><p>2B / 4B</p></td>
+<td><p>FP8-Static、INT8-Dynamic</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">configs/qwen3_vl/</span></code></p></td>
+<td><p><a class="reference external" href="https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct">Qwen/Qwen3-VL-2B-Instruct</a>、<a class="reference external" href="https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct">Qwen/Qwen3-VL-4B-Instruct</a>（<a class="reference external" href="https://huggingface.co/collections/Qwen/qwen3-vl">合集</a>）</p></td>
+</tr>
+<tr class="row-odd"><td><p>Qwen2.5-VL</p></td>
+<td><p>视觉 Token 压缩（IDPruner 等）</p></td>
+<td><p>IDPruner 等视觉 Token 剪枝</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">configs/qwen2_5_vl/pruning/</span></code></p></td>
+<td><p>见 <a class="reference internal" href="../../features/token_compressor/index.html"><span class="std std-doc">Token 压缩文档</span></a></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="hy-mt">
+<h3>2.3 Hy-MT 模型与其它端侧模型（已发布端侧权重）<a class="headerlink" href="#hy-mt" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>模型</p></th>
+<th class="head"><p>压缩方式</p></th>
+<th class="head"><p>端侧格式</p></th>
+<th class="head"><p>相关链接</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>HY-MT2-1.8B-1.25Bit</p></td>
+<td><p>1.25-bit 低比特量化</p></td>
+<td><p>GGUF（STQ）</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/tencent/Hy-MT2-1.8B-1.25Bit-GGUF">GGUF</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>HY-MT2-1.8B-2Bit</p></td>
+<td><p>2-bit 低比特量化</p></td>
+<td><p>GGUF（STQ）</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/tencent/Hy-MT2-1.8B-2Bit-GGUF">GGUF</a></p></td>
+</tr>
+<tr class="row-even"><td><p>HY-MT2-1.8B / 7B</p></td>
+<td><p>标准量化（Q4_K_M、Q6_K、Q8_0）与 FP8</p></td>
+<td><p>GGUF、FP8</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF">1.8B-GGUF</a>、<a class="reference external" href="https://huggingface.co/tencent/Hy-MT2-7B-GGUF">7B-GGUF</a>、<a class="reference external" href="https://huggingface.co/tencent/Hy-MT2-1.8B-FP8">1.8B-FP8</a>、<a class="reference external" href="https://huggingface.co/tencent/Hy-MT2-7B-FP8">7B-FP8</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>HY-MT2-30B-A3B</p></td>
+<td><p>FP8 与 GGUF</p></td>
+<td><p>FP8、GGUF</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/tencent/Hy-MT2-30B-A3B-GGUF">30B-A3B-GGUF</a>、<a class="reference external" href="https://huggingface.co/tencent/Hy-MT2-30B-A3B-FP8">30B-A3B-FP8</a></p></td>
+</tr>
+<tr class="row-even"><td><p>Hy-MT1.5-1.8B-1.25bit</p></td>
+<td><p>Sherry 1.25-bit 三值量化（3:4 细粒度稀疏）</p></td>
+<td><p>权重 + GGUF（STQ1_0）</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/AngelSlim/Hy-MT1.5-1.8B-1.25bit">权重</a>、<a class="reference external" href="https://huggingface.co/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF">GGUF</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>Hy-MT1.5-1.8B-2bit</p></td>
+<td><p>SEQ（Stretched Elastic Quantization）2-bit + 量化感知蒸馏</p></td>
+<td><p>权重 + GGUF</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/AngelSlim/Hy-MT1.5-1.8B-2bit">权重</a>、<a class="reference external" href="https://huggingface.co/AngelSlim/Hy-MT1.5-1.8B-2bit-GGUF">GGUF</a></p></td>
+</tr>
+<tr class="row-even"><td><p>Hy-MT3</p></td>
+<td><p>云端版本与端侧 GGUF 量化版本</p></td>
+<td><p>GGUF</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/collections/tencent/hy-mt3">合集</a></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>以下为非翻译类的端侧模型：</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>模型</p></th>
+<th class="head"><p>压缩方式</p></th>
+<th class="head"><p>端侧格式</p></th>
+<th class="head"><p>相关链接</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>HY-1.8B-2Bit</p></td>
+<td><p>2-bit 端侧大语言模型</p></td>
+<td><p>权重</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/AngelSlim/HY-1.8B-2Bit">权重</a></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Hy-MT1.5 的完整说明见 <a class="reference internal" href="../../models/Hy-MT1.5/hy-mt1.5.html"><span class="std std-doc">Hy-MT1.5 量化文档</span></a>。</p>
+</section>
+<section id="gguf-pc">
+<h3>2.4 大参数量模型的端侧 GGUF 版本（PC 本地运行）<a class="headerlink" href="#gguf-pc" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>模型</p></th>
+<th class="head"><p>端侧格式</p></th>
+<th class="head"><p>推理方式</p></th>
+<th class="head"><p>相关链接</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Hy4（preview）</p></td>
+<td><p>MIX-STQ1_0 GGUF</p></td>
+<td><p>prima.cpp，多机多卡分片</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/AngelSlim/Hy4-preview-GGUF">GGUF 合集</a>、<a class="reference external" href="https://github.com/Tencent/AngelSlim/blob/main/docs/source/_extra/hy4_preview_gguf_guideline.md">部署指南</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>Hy4</p></td>
+<td><p>FP8 权重与低 bit GGUF</p></td>
+<td><p>推理方式见对应模型卡</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/tencent/Hy4-FP8">Hy4-FP8</a>、<a class="reference external" href="https://huggingface.co/AngelSlim/Hy4-GGUF">Hy4-GGUF</a></p></td>
+</tr>
+<tr class="row-even"><td><p>Hy4-flash</p></td>
+<td><p>多种量化 GGUF（Q4_K_M、Q3_K、IQ2_AH、SPARK-4Bit 等）</p></td>
+<td><p>llama.cpp（PR #32517）；Strata（PR #7120）高性能推理</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/tencent/Hy4-flash-FP8">Hy4-flash-FP8</a>、<a class="reference external" href="https://huggingface.co/AngelSlim/Hy4-flash-GGUF">Hy4-flash-GGUF</a>、<a class="reference external" href="https://github.com/Niko1221/Strata/pull/7120">Strata PR</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>Hy-SimulMT（同传）</p></td>
+<td><p>Q4_K_M / Q8_0 GGUF</p></td>
+<td><p>llama.cpp</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/tencent/Hy-SimulMT-30B-A3B-GGUF/tree/main">translation-only</a>、<a class="reference external" href="https://huggingface.co/tencent/Hy-SimulMT-30B-A3B-Interleave-GGUF/tree/main">interleave</a>、<a class="reference external" href="https://github.com/ggml-org/llama.cpp/pull/31198">llama.cpp PR #31198</a></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="id7">
+<h2>3. 环境准备<a class="headerlink" href="#id7" title="Link to this heading">#</a></h2>
+<section id="angelslim">
+<h3>3.1 安装 AngelSlim<a class="headerlink" href="#angelslim" title="Link to this heading">#</a></h3>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># 默认安装（LLM 量化）</span>
+pip<span class="w"> </span>install<span class="w"> </span>angelslim
+
+<span class="c1"># 低比特 QAT / QAD 训练所需的依赖（需要 DeepSpeed 时）</span>
+pip<span class="w"> </span>install<span class="w"> </span>deepspeed
+
+<span class="c1"># 从源码安装（修改了源码时推荐）</span>
+<span class="nb">cd</span><span class="w"> </span>AngelSlim<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>python<span class="w"> </span>setup.py<span class="w"> </span>install
+</pre></div>
+</div>
+<p>更多安装选项参见 <a class="reference internal" href="../../getting_started/installation.html"><span class="std std-doc">安装教程</span></a>。</p>
+</section>
+<section id="id8">
+<h3>3.2 运行入口<a class="headerlink" href="#id8" title="Link to this heading">#</a></h3>
+<p>所有压缩任务统一通过 <code class="docutils literal notranslate"><span class="pre">tools/run.py</span></code> 执行，由 YAML 配置决定压缩算法、模型与数据：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>tools/run.py<span class="w"> </span>-c<span class="w"> </span>&lt;配置文件路径&gt;
+</pre></div>
+</div>
+<p>常用覆盖参数：</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>参数</p></th>
+<th class="head"><p>说明</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">-c,</span> <span class="pre">--config</span></code></p></td>
+<td><p>必填，YAML 配置文件路径</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--model-path</span></code></p></td>
+<td><p>覆盖配置中的 <code class="docutils literal notranslate"><span class="pre">model.model_path</span></code>（例如替换为本地模型目录）</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--save-path</span></code></p></td>
+<td><p>覆盖配置中的 <code class="docutils literal notranslate"><span class="pre">global.save_path</span></code>（压缩产出目录）</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--lm-eval</span></code> / <code class="docutils literal notranslate"><span class="pre">--ppl-eval</span></code></p></td>
+<td><p>压缩后运行精度评测（可选）</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>查看 AngelSlim 支持的压缩策略列表：</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">angelslim</span><span class="w"> </span><span class="kn">import</span> <span class="n">engine</span>
+<span class="n">engine</span><span class="o">.</span><span class="n">get_supported_compress_method</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="hugging-face">
+<h3>3.3 Hugging Face 访问<a class="headerlink" href="#hugging-face" title="Link to this heading">#</a></h3>
+<p>默认配置会从 Hugging Face 下载模型与数据集。若访问受限，可先从 ModelScope 下载，再使用 <code class="docutils literal notranslate"><span class="pre">--model-path</span></code> 指向本地目录。</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="id9">
+<h2>4. 教程导航<a class="headerlink" href="#id9" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>页面</p></th>
+<th class="head"><p>内容</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><a class="reference internal" href="quantization.html"><span class="std std-doc">量化</span></a></p></td>
+<td><p>PTQ 算法：INT8、SmoothQuant、FP8（含 LeptoQuant）、INT4（GPTQ / AWQ / GPTAQ）、NVFP4、KV Cache 量化、DAQ</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="low_bit.html"><span class="std std-doc">低比特训练</span></a></p></td>
+<td><p>QAT（INT4、W4A8-FP8）、QAD（Sherry / SEQ / LSQ / TWN / AbsMean / DLT）、2-bit 翻译模型训练、FP4 W4A4（FOCUS）</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="deployment/index.html"><span class="std std-doc">端侧部署</span></a></p></td>
+<td><p>部署总览与推理校验、vLLM / SGLang、llama.cpp、Strata、多机 prima.cpp、移动端、视觉 Token 压缩、检查清单</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>建议阅读顺序：<strong>总览 → 量化（先跑通 PTQ）→ 部署（确认端侧可用）→ 低比特训练（追求更高压缩率）</strong>。</p>
+</section>
+<hr class="docutils" />
+<section id="id10">
+<h2>5. 端侧相关的论文与资源<a class="headerlink" href="#id10" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>主题</p></th>
+<th class="head"><p>链接</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>AngelSlim 技术报告</p></td>
+<td><p><a class="reference external" href="https://arxiv.org/abs/2602.21233">arXiv:2602.21233</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>HY-MT1.5 技术报告</p></td>
+<td><p><a class="reference external" href="https://arxiv.org/abs/2512.24092">arXiv:2512.24092</a></p></td>
+</tr>
+<tr class="row-even"><td><p>Sherry：3:4 细粒度稀疏的 1.25-bit 三值量化（ACL 2026）</p></td>
+<td><p><a class="reference external" href="https://arxiv.org/abs/2601.07892">arXiv:2601.07892</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>FOCUS：面向 FP4 的端到端 scale 优化</p></td>
+<td><p><a class="reference external" href="https://arxiv.org/abs/2608.01847">arXiv:2608.01847</a></p></td>
+</tr>
+<tr class="row-even"><td><p>DAQ：免标定数据的 Delta-Aware 量化</p></td>
+<td><p><a class="reference external" href="https://arxiv.org/abs/2603.22324">arXiv:2603.22324</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>GPTQ</p></td>
+<td><p><a class="reference external" href="https://arxiv.org/abs/2210.17323">arXiv:2210.17323</a></p></td>
+</tr>
+<tr class="row-even"><td><p>AWQ</p></td>
+<td><p><a class="reference external" href="https://arxiv.org/abs/2306.00978">arXiv:2306.00978</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>llama.cpp</p></td>
+<td><p><a class="reference external" href="https://github.com/ggml-org/llama.cpp">github.com/ggml-org/llama.cpp</a></p></td>
+</tr>
+<tr class="row-even"><td><p>llama.cpp STQ_0 支持 PR</p></td>
+<td><p><a class="reference external" href="https://github.com/ggml-org/llama.cpp/pull/22836">PR #22836</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>prima.cpp（多机分片推理）</p></td>
+<td><p><a class="reference external" href="https://github.com/OpenCPIL/prima.cpp">github.com/OpenCPIL/prima.cpp</a></p></td>
+</tr>
+<tr class="row-even"><td><p>vLLM</p></td>
+<td><p><a class="reference external" href="https://docs.vllm.ai/">docs.vllm.ai</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>lm-evaluation-harness</p></td>
+<td><p><a class="reference external" href="https://github.com/EleutherAI/lm-evaluation-harness">github.com/EleutherAI/lm-evaluation-harness</a></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<hr class="docutils" />
+<section id="id11">
+<h2>6. 范围说明<a class="headerlink" href="#id11" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>纳入本教程</strong>：面向端侧模型的量化（PTQ）、低比特量化感知训练（QAT / QAD）、视觉 Token 压缩，以及对应的端侧推理部署。</p></li>
+<li><p><strong>未纳入主线</strong>：投机采样（Eagle3、DFly 等）、稀疏注意力、扩散模型压缩，这些主要面向服务端与训练加速，可分别参考对应的特性文档。</p></li>
+<li><p>本教程中的 GGUF 转换与推理步骤依赖 llama.cpp 等第三方引擎，其参数与支持的算法以对应引擎的版本为准。</p></li>
+</ul>
+<p>有问题可以在 <a class="reference external" href="https://github.com/Tencent/AngelSlim/issues">GitHub Issues</a> 提出，也可以加入<a class="reference download internal" download="" href="../../_downloads/ca02b6724e7a48eee04c6c1677e54473/angel_slim_wechat.png"><span class="xref download myst">微信交流群</span></a>讨论。</p>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="../../models/Hy-MT1.5/hy-mt1.5.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Hy-MT1.5 量化</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="quantization.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">端侧量化（PTQ）</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">目录</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">1. 端侧压缩流程概览</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">2. 支持的端侧相关模型</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">2.1 小参数量语言模型（适合手机与边缘设备）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">2.2 端侧多模态模型（视觉语言）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#hy-mt">2.3 Hy-MT 模型与其它端侧模型（已发布端侧权重）</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#gguf-pc">2.4 大参数量模型的端侧 GGUF 版本（PC 本地运行）</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id7">3. 环境准备</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#angelslim">3.1 安装 AngelSlim</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id8">3.2 运行入口</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#hugging-face">3.3 Hugging Face 访问</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id9">4. 教程导航</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id10">5. 端侧相关的论文与资源</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id11">6. 范围说明</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By the AngelSlim Team
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, AngelSlim Team.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

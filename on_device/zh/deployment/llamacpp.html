@@ -1,0 +1,716 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>llama.cpp 部署 &#8212; AngelSlim</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../../../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../../../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../_static/copybutton.js?v=a5fa425f"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../../_static/togglebutton.js?v=4a39c7ea"></script>
+    <script src="../../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'on_device/zh/deployment/llamacpp';</script>
+    <script src="../../../_static/custom.js"></script>
+    <link rel="icon" href="../../../_static/angelslim_icon.png"/>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+    <link rel="next" title="Strata 部署（Hy4-flash）" href="strata.html" />
+    <link rel="prev" title="部署总览与推理校验" href="index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../../_static/angelslim_logo.png" class="logo__image only-light" alt="AngelSlim - Home"/>
+    <script>document.write(`<img src="../../../_static/angelslim_logo.png" class="logo__image only-dark" alt="AngelSlim - Home"/>`);</script>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">入门指南</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../../getting_started/installation.html">安装教程</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting_started/quickstrat.html">快速开始</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">算法特性</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../../features/quantization/index.html">量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../features/speculative_decoding/index.html">投机采样</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../features/sparse_attention/index.html">稀疏注意力</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../features/token_compressor/index.html">Token 压缩</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../features/diffusion/index.html">文生图/视频/3D压缩</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../features/distill/index.html">Distillation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../features/qad/index.html">Quantization-Aware Distillation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../features/qad/mcore_qad.html">MCoreQAD Backend</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">模型支持</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../../models/hunyuan/hunyuan_quant.html">混元模型量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../models/hunyuan_ocr/hunyuan_ocr_quant.html">HunyuanOCR量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../models/deepseek/deepseek_quant.html">DeepSeek量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../models/qwen/qwen_quant.html">Qwen量化</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../models/qwenvl/qwenvl_quant.html">Qwen2.5VL量化指南</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../models/qwen3_omni/qwen3_omni_quant.html">Qwen3-Omni量化指南</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../models/Hy-MT1.5/hy-mt1.5.html">Hy-MT1.5 量化</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">端侧量化和部署</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../index.html">端侧部署教程（总览）</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quantization.html">端侧量化（PTQ）</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../low_bit.html">端侧低比特训练（QAT / QAD）</a></li>
+<li class="toctree-l1"><a class="reference internal" href="index.html">部署总览与推理校验</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">llama.cpp 部署</a></li>
+<li class="toctree-l1"><a class="reference internal" href="strata.html">Strata 部署（Hy4-flash）</a></li>
+<li class="toctree-l1"><a class="reference internal" href="prima_multi_machine.html">多机部署（prima.cpp）</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mobile.html">移动端部署</a></li>
+<li class="toctree-l1"><a class="reference internal" href="visual_token_compression.html">视觉 Token 压缩（端侧 VLM）</a></li>
+<li class="toctree-l1"><a class="reference internal" href="checklist.html">上线前检查清单</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">部署文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../../deployment/deploy.html">压缩模型部署</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">性能表现</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../../performance/quantization/benchmarks.html">量化benchmark</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../performance/speculative_decoding/benchmarks.html">投机采样Benchmark</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">设计文档</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../../design/index.html">设计文档</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/Tencent/AngelSlim/edit/main/docs/source/on_device/zh/deployment/llamacpp.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../../../_sources/on_device/zh/deployment/llamacpp.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>llama.cpp 部署</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">目录</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">1. 安装 llama.cpp</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#hy-mt2">2. 运行 HY-MT2</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#hy4-flash">3. 运行 Hy4-flash</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#gguf">4. 其它已发布的 GGUF 模型</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="llama-cpp">
+<h1>llama.cpp 部署<a class="headerlink" href="#llama-cpp" title="Link to this heading">#</a></h1>
+<p><a class="reference internal" href="index.html"><span class="std std-doc">← 部署总览</span></a> ｜ <a class="reference internal" href="../index.html"><span class="std std-doc">← 返回总览</span></a></p>
+<p>llama.cpp 使用 GGUF 格式，适用于 PC、手机与纯 CPU 设备。本页说明 llama.cpp 的安装，以及 HY-MT2 与 Hy4-flash GGUF 的运行方式。</p>
+<section id="id1">
+<h2>目录<a class="headerlink" href="#id1" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="#id2">1. 安装 llama.cpp</a></p></li>
+<li><p><a class="reference internal" href="#hy-mt2">2. 运行 HY-MT2</a></p></li>
+<li><p><a class="reference internal" href="#hy4-flash">3. 运行 Hy4-flash</a></p></li>
+<li><p><a class="reference internal" href="#gguf">4. 其它已发布的 GGUF 模型</a></p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="id2">
+<h2>1. 安装 llama.cpp<a class="headerlink" href="#id2" title="Link to this heading">#</a></h2>
+<p><strong>方式一：模型页面提供的安装脚本（macOS / Linux）</strong></p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>-LsSf<span class="w"> </span>https://llama.app/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>sh
+</pre></div>
+</div>
+<p><strong>方式二：Windows</strong></p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>winget<span class="w"> </span>install<span class="w"> </span>llama.cpp
+</pre></div>
+</div>
+<p><strong>方式三：从源码编译</strong></p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/ggml-org/llama.cpp.git
+<span class="nb">cd</span><span class="w"> </span>llama.cpp
+cmake<span class="w"> </span>-B<span class="w"> </span>build<span class="w">                  </span><span class="c1"># NVIDIA GPU 加 -DGGML_CUDA=ON；macOS 默认开启 Metal</span>
+cmake<span class="w"> </span>--build<span class="w"> </span>build<span class="w"> </span>--config<span class="w"> </span>Release<span class="w"> </span>-j
+</pre></div>
+</div>
+<blockquote>
+<div><p><strong>注意</strong>：部分 GGUF 依赖尚未合入主线的 llama.cpp 支持分支。STQ 低比特内核见 <a class="reference external" href="https://github.com/ggml-org/llama.cpp/pull/22836">PR #22836</a>，Hy4-flash 见 <a class="reference external" href="https://github.com/ggml-org/llama.cpp/pull/32517">PR #32517</a>。请按各节说明切换分支后再编译。</p>
+</div></blockquote>
+</section>
+<hr class="docutils" />
+<section id="hy-mt2">
+<h2>2. 运行 HY-MT2<a class="headerlink" href="#hy-mt2" title="Link to this heading">#</a></h2>
+<p>HY-MT2 提供标准量化与低比特量化两类 GGUF。</p>
+<p><strong>（1）标准量化（<code class="docutils literal notranslate"><span class="pre">Q4_K_M</span></code>、<code class="docutils literal notranslate"><span class="pre">Q6_K</span></code>、<code class="docutils literal notranslate"><span class="pre">Q8_0</span></code>）</strong></p>
+<p>以 <a class="reference external" href="https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF">tencent/Hy-MT2-1.8B-GGUF</a> 为例，可以直接用 Hugging Face 标签启动：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># 兼容 OpenAI 的服务（带 Web UI）</span>
+llama<span class="w"> </span>serve<span class="w"> </span>-hf<span class="w"> </span>tencent/Hy-MT2-1.8B-GGUF:Q4_K_M
+
+<span class="c1"># 终端交互</span>
+llama<span class="w"> </span>cli<span class="w"> </span>-hf<span class="w"> </span>tencent/Hy-MT2-1.8B-GGUF:Q4_K_M
+</pre></div>
+</div>
+<p>也可以使用 <code class="docutils literal notranslate"><span class="pre">ollama</span> <span class="pre">run</span> <span class="pre">hf.co/tencent/Hy-MT2-1.8B-GGUF:Q4_K_M</span></code> 或 <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">model</span> <span class="pre">run</span> <span class="pre">hf.co/tencent/Hy-MT2-1.8B-GGUF:Q4_K_M</span></code>。</p>
+<p><strong>（2）低比特量化（1.25-bit、2-bit）</strong></p>
+<p>低比特版本依赖 STQ 内核，需要先切换到 PR #22836 分支并编译（见<a class="reference internal" href="#id2">第 1 节</a>）。以 1.25-bit 版本 <a class="reference external" href="https://huggingface.co/tencent/Hy-MT2-1.8B-1.25Bit-GGUF">tencent/Hy-MT2-1.8B-1.25Bit-GGUF</a> 为例：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># 下载模型（请先在模型页确认 GGUF 文件名）</span>
+huggingface-cli<span class="w"> </span>download<span class="w"> </span>tencent/Hy-MT2-1.8B-1.25Bit-GGUF<span class="w"> </span>--local-dir<span class="w"> </span>model_zoo/Hy-MT2-1.8B-1.25Bit-GGUF
+
+<span class="c1"># 运行一次翻译（CPU）</span>
+./build/bin/llama-completion<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--model<span class="w"> </span>model_zoo/Hy-MT2-1.8B-1.25Bit-GGUF/model.gguf<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-p<span class="w"> </span><span class="s2">"Translate the following segment into Chinese, without additional explanation：Hello"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--jinja<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-ngl<span class="w"> </span><span class="m">0</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-n<span class="w"> </span><span class="m">64</span><span class="w"> </span>-st
+
+<span class="c1"># 吞吐测量</span>
+./build/bin/llama-bench<span class="w"> </span>-m<span class="w"> </span>model_zoo/Hy-MT2-1.8B-1.25Bit-GGUF/model.gguf<span class="w"> </span>-ngl<span class="w"> </span><span class="m">0</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">model.gguf</span></code> 是模型卡中的占位文件名，请替换为实际文件名。2-bit 版本（<a class="reference external" href="https://huggingface.co/tencent/Hy-MT2-1.8B-2Bit-GGUF">tencent/Hy-MT2-1.8B-2Bit-GGUF</a>）的运行方式相同，只需替换仓库名。注意该卡片引用的 STQ 支持 PR 为 #19357，与其它卡片的 #22836 不一致，请以模型卡最新说明为准。</p>
+<p><strong>参数说明</strong></p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>参数</p></th>
+<th class="head"><p>说明</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--model</span></code></p></td>
+<td><p>GGUF 文件路径</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">-p</span></code></p></td>
+<td><p>提示词。翻译提示词需写明目标语言，并要求只输出译文</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--jinja</span></code></p></td>
+<td><p>使用模型自带的 Jinja 聊天模板</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">-ngl</span> <span class="pre">0</span></code></p></td>
+<td><p>GPU 层数为 0，即全部在 CPU 上运行</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">-n</span> <span class="pre">64</span></code></p></td>
+<td><p>最多生成 64 个 Token</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">-st</span></code></p></td>
+<td><p>模型卡原样保留的参数</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>推荐采样参数</strong>（1.8B 与 7B，来自模型卡）：<code class="docutils literal notranslate"><span class="pre">temperature=0.7</span></code>、<code class="docutils literal notranslate"><span class="pre">top_p=0.6</span></code>、<code class="docutils literal notranslate"><span class="pre">top_k=20</span></code>、<code class="docutils literal notranslate"><span class="pre">repetition_penalty=1.05</span></code>、<code class="docutils literal notranslate"><span class="pre">max_tokens=4096</span></code>。</p>
+</section>
+<hr class="docutils" />
+<section id="hy4-flash">
+<h2>3. 运行 Hy4-flash<a class="headerlink" href="#hy4-flash" title="Link to this heading">#</a></h2>
+<p>Hy4-flash 的 llama.cpp 支持位于 <a class="reference external" href="https://github.com/ggml-org/llama.cpp/pull/32517">PR #32517</a>，尚未合入主线，需要切换到对应分支：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/ggml-org/llama.cpp
+<span class="nb">cd</span><span class="w"> </span>llama.cpp
+git<span class="w"> </span>fetch<span class="w"> </span>origin<span class="w"> </span>pull/32517/head:hy4-flash
+git<span class="w"> </span>checkout<span class="w"> </span>hy4-flash
+
+cmake<span class="w"> </span>-B<span class="w"> </span>build<span class="w">                  </span><span class="c1"># NVIDIA GPU 加 -DGGML_CUDA=ON；macOS 默认开启 Metal</span>
+cmake<span class="w"> </span>--build<span class="w"> </span>build<span class="w"> </span>--config<span class="w"> </span>Release<span class="w"> </span>-j
+</pre></div>
+</div>
+<p>Hy4-flash 的 GGUF 为多分片文件，请保持所有分片在同一目录，并指定第一个分片。文件列表见 <a class="reference internal" href="strata.html#hy4-flash"><span class="std std-ref">Strata 部署的文件说明</span></a>。</p>
+<p><strong>终端对话</strong>（上下文 8192）：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>./build/bin/llama-cli<span class="w"> </span>-m<span class="w"> </span>Hy4-flash-Q4_K_M-00001-of-00002.gguf<span class="w"> </span>-c<span class="w"> </span><span class="m">8192</span><span class="w"> </span>-ngl<span class="w"> </span><span class="m">99</span><span class="w"> </span>--jinja
+</pre></div>
+</div>
+<p><strong>OpenAI 兼容服务</strong>（端口 8080）：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>./build/bin/llama-server<span class="w"> </span>-m<span class="w"> </span>Hy4-flash-Q4_K_M-00001-of-00002.gguf<span class="w"> </span>-c<span class="w"> </span><span class="m">8192</span><span class="w"> </span>-ngl<span class="w"> </span><span class="m">99</span><span class="w"> </span>--jinja<span class="w"> </span>--port<span class="w"> </span><span class="m">8080</span>
+</pre></div>
+</div>
+<p><strong>图像输入</strong>（需要 <code class="docutils literal notranslate"><span class="pre">mmproj-Hy4-flash-bf16.gguf</span></code>）：</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>./build/bin/llama-mtmd-cli<span class="w"> </span>-m<span class="w"> </span>Hy4-flash-Q4_K_M-00001-of-00002.gguf<span class="w"> </span>--mmproj<span class="w"> </span>mmproj-Hy4-flash-bf16.gguf<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--image<span class="w"> </span>photo.png<span class="w"> </span>-p<span class="w"> </span><span class="s2">"Describe this image."</span><span class="w"> </span>-c<span class="w"> </span><span class="m">8192</span><span class="w"> </span>-ngl<span class="w"> </span><span class="m">99</span><span class="w"> </span>--jinja
+</pre></div>
+</div>
+<p>参数说明：<code class="docutils literal notranslate"><span class="pre">-c</span></code> 为上下文长度，<code class="docutils literal notranslate"><span class="pre">-ngl</span> <span class="pre">99</span></code> 尽可能把层放到 GPU 上，<code class="docutils literal notranslate"><span class="pre">--jinja</span></code> 使用模型聊天模板。平台专用说明见模型仓库中的 <code class="docutils literal notranslate"><span class="pre">README_MAC-Metal.md</span></code> 与 <code class="docutils literal notranslate"><span class="pre">README_SPARK-4Bit.md</span></code>。</p>
+<p>模型仓库的 <a class="reference external" href="https://huggingface.co/AngelSlim/Hy4-flash-GGUF/tree/main/patch"><code class="docutils literal notranslate"><span class="pre">patch/</span></code> 目录</a> 提供了 llama.cpp 高性能版本的两个补丁：<code class="docutils literal notranslate"><span class="pre">hy4-flash-mac-minimal.patch</span></code>（macOS）与 <code class="docutils literal notranslate"><span class="pre">hy4-flash-spark.patch</span></code>（NVIDIA Spark）。使用前请参考模型仓库中的平台说明。</p>
+</section>
+<section id="gguf">
+<h2>4. 其它已发布的 GGUF 模型<a class="headerlink" href="#gguf" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>模型</p></th>
+<th class="head"><p>格式</p></th>
+<th class="head"><p>链接</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>HY-MT2-30B-A3B-GGUF</p></td>
+<td><p>GGUF</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/tencent/Hy-MT2-30B-A3B-GGUF">tencent/Hy-MT2-30B-A3B-GGUF</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>HY-MT2-7B-GGUF</p></td>
+<td><p>GGUF</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/tencent/Hy-MT2-7B-GGUF">tencent/Hy-MT2-7B-GGUF</a></p></td>
+</tr>
+<tr class="row-even"><td><p>Hy-MT1.5-1.8B-2bit</p></td>
+<td><p>GGUF（2-bit）</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/AngelSlim/Hy-MT1.5-1.8B-2bit-GGUF">AngelSlim/Hy-MT1.5-1.8B-2bit-GGUF</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>Hy-MT3 端侧版本</p></td>
+<td><p>GGUF</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/collections/tencent/hy-mt3">tencent/hy-mt3 合集</a></p></td>
+</tr>
+<tr class="row-even"><td><p>Hy-SimulMT（translation-only）</p></td>
+<td><p>Q4_K_M、Q8_0</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/tencent/Hy-SimulMT-30B-A3B-GGUF/tree/main">tencent/Hy-SimulMT-30B-A3B-GGUF</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>Hy-SimulMT（interleave）</p></td>
+<td><p>Q4_K_M、Q8_0</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/tencent/Hy-SimulMT-30B-A3B-Interleave-GGUF/tree/main">tencent/Hy-SimulMT-30B-A3B-Interleave-GGUF</a></p></td>
+</tr>
+<tr class="row-even"><td><p>Hy4-flash</p></td>
+<td><p>多种量化 GGUF</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/AngelSlim/Hy4-flash-GGUF">AngelSlim/Hy4-flash-GGUF</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>Hy4</p></td>
+<td><p>低 bit GGUF</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/AngelSlim/Hy4-GGUF">AngelSlim/Hy4-GGUF</a></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Hy-SimulMT 的 llama.cpp 支持 PR 见 <a class="reference external" href="https://github.com/ggml-org/llama.cpp/pull/31198">PR #31198</a>。</p>
+<p><a class="reference internal" href="index.html"><span class="std std-doc">← 部署总览</span></a></p>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">部署总览与推理校验</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="strata.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Strata 部署（Hy4-flash）</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">目录</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">1. 安装 llama.cpp</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#hy-mt2">2. 运行 HY-MT2</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#hy4-flash">3. 运行 Hy4-flash</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#gguf">4. 其它已发布的 GGUF 模型</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By the AngelSlim Team
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, AngelSlim Team.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>
