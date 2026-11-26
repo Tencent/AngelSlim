@@ -158,6 +158,24 @@ models/Hy-MT1.5/hy-mt1.5
 :::
 
 
+% On-device quantization and deployment
+
+:::{toctree}
+:caption: 端侧量化和部署
+:maxdepth: 1
+
+on_device/zh/index
+on_device/zh/quantization
+on_device/zh/low_bit
+on_device/zh/deployment/index
+on_device/zh/deployment/llamacpp
+on_device/zh/deployment/strata
+on_device/zh/deployment/prima_multi_machine
+on_device/zh/deployment/mobile
+on_device/zh/deployment/visual_token_compression
+on_device/zh/deployment/checklist
+:::
+
 % Scaling up AngelSlim for production
 
 :::{toctree}

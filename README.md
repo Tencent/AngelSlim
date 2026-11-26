@@ -12,21 +12,23 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
 </h3>
 
 <p align="center">
-          ✒️ <a href="https://arxiv.org/abs/2602.21233">TechnicalReport</a>&nbsp&nbsp | &nbsp&nbsp 📖 <a href="https://angelslim.readthedocs.io/">Documentation</a>&nbsp&nbsp | &nbsp&nbsp🤗 <a href="https://huggingface.co/AngelSlim">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="https://modelscope.cn/organization/AngelSlim">ModelScope</a>
+          ✒️ <a href="https://arxiv.org/abs/2602.21233">TechnicalReport</a>&nbsp&nbsp | &nbsp&nbsp 📖 <a href="https://angelslim.readthedocs.io/">Documentation</a>&nbsp&nbsp  | &nbsp&nbsp📱 <a href="https://angelslim.readthedocs.io/zh-cn/latest/on_device/zh/index.html">Edge</a> | &nbsp&nbsp🤗 <a href="https://huggingface.co/AngelSlim">Hugging Face</a>&nbsp&nbsp 
 <br>
 </p>
 
 <p align="center">
-          💬 <a href="./docs/source/assets/angel_slim_wechat.png">WeChat</a> | &nbsp&nbsp🫨 <a href="https://discord.com/invite/dHVNeuNdFt">Discord</a>
+          🤖 <a href="https://modelscope.cn/organization/AngelSlim">ModelScope</a> | &nbsp&nbsp 💬 <a href="./docs/source/assets/angel_slim_wechat.png">WeChat</a> | &nbsp&nbsp🫨 <a href="https://discord.com/invite/dHVNeuNdFt">Discord</a>
 <br>
+
 </p>
 
 ## 📣Latest News
+
+- [26/11/25] We've released [Hy4 flash GGUF](https://huggingface.co/AngelSlim/Hy4-flash-GGUF) for on-device inference, with dedicated support for the high-performance version of Strata [(hy4-flash-hpc branch)](https://github.com/Niko1221/Strata/pull/7120), achieving 58 TPS on a PC with an Nvidia 4090 (24GB VRAM)! We also provide high-performance llama.cpp [patch](https://huggingface.co/AngelSlim/Hy4-flash-GGUF/tree/main/patch) . 🔥🔥🔥
 - [26/11/24] We have supported multiple quantization weights for [**Hy-MT3**](https://huggingface.co/collections/tencent/hy-mt3), including the cloud version as well as the on-device GGUF model.
 - [26/11/20] We've released FP8 quantized weights for **Hy4** ([Hy4-FP8](https://huggingface.co/tencent/Hy4-FP8)), along with FP8 and MXFP4 quantization toolkits and low-bit on-device GGUF models ([Hy4-GGUF](https://huggingface.co/AngelSlim/Hy4-GGUF)). 🔥🔥🔥
 - [26/11/18] We've released FP8 quantized weights for **Hy4-flash** ([Hy4-flash-FP8](https://huggingface.co/tencent/Hy4-flash-FP8)), along with the quantization toolkit and low-bit on-device GGUF models ([Hy4-flash-GGUF](https://huggingface.co/AngelSlim/Hy4-flash-GGUF)). 🔥🔥🔥
 - [26/10/26] We've released the Q4_K_M and Q8_0 quantized model for [Hy-SimulMT](https://github.com/Tencent-Hunyuan/Hy-SimulMT) on llama.cpp, supporting both the [translation-only model](https://huggingface.co/tencent/Hy-SimulMT-30B-A3B-GGUF/tree/main) and [source text and translation](https://huggingface.co/tencent/Hy-SimulMT-30B-A3B-Interleave-GGUF/tree/main)). We also propose a [PR](https://github.com/ggml-org/llama.cpp/pull/31198) to support the architecture and ASR inference!🔥🔥🔥
-
 - [26/10/26] llama.cpp support for [Hy-SimulMT]()! Enable. Using [Prima.cpp](https://github.com/OpenCPIL/prima.cpp), we ran this 214 GB model on a Laptop 4090 (32GB RAM, 16GB VRAM) + a Server with 4x A4000 (32GB RAM, 16GB VRAM each), hitting 1.02 tokens/s. See the [blog](https://opencpil.github.io/prima.cpp/blog/hunyuan4-770b-local-devices) and the deployment [guideline](docs/source/_extra/hy4_preview_gguf_guideline.md)! 🔥🔥🔥
 - [26/09/01] We've released the [hy4 preview MIX-STQ1_0 version](https://huggingface.co/AngelSlim/Hy4-preview-GGUF)! Compressed from 1.5TB to 214 GiB with only a 0.7% performance drop on SWE-bench Pro. Using [Prima.cpp](https://github.com/OpenCPIL/prima.cpp), we ran this 214 GB model on a Laptop 4090 (32GB RAM, 16GB VRAM) + a Server with 4x A4000 (32GB RAM, 16GB VRAM each), hitting 1.02 tokens/s. See the [blog](https://opencpil.github.io/prima.cpp/blog/hunyuan4-770b-local-devices) and the deployment [guideline](docs/source/_extra/hy4_preview_gguf_guideline.md)! 🔥🔥🔥
 - [26/07/29] We have open-sourced **AngelSpec**, a torch-native, disaggregated speculative-decoding **training framework** with support for a variety of draft methods, led by **DFly** and **MTP + TTT**, and released the **MTP** and **DFly** drafter weights for **Hy3-A21B** — DFly delivers up to **2.40× average end-to-end speedup** over AR, and **D-cut** adds up to **+15.7%** throughput at high concurrency. [[Paper]](https://arxiv.org/abs/2607.25852) | [[GitHub]](https://github.com/Tencent/AngelSpec) | [[Docs]](https://angelspec.readthedocs.io/) | [[Hugging Face]](https://huggingface.co/collections/AngelSlim/angelspec) 🔥🔥🔥
