@@ -76,9 +76,23 @@ def _masked_softmax_attention(
     mask exactly as upstream does.
     """
     scaling = q.shape[-1] ** -0.5
-    attn = torch.matmul(q, k.transpose(2, 3)) * scaling
-    attn = attn.masked_fill(~keep, float("-inf"))
-    probs = F.softmax(attn, dim=-1, dtype=torch.float32).to(q.dtype)
+    attn = torch.matmul(q, k.transpose(2, 3)).mul_(scaling)
+    mask = ~keep
+    if (
+        type(attn) is torch.Tensor
+        and type(mask) is torch.Tensor
+        and mask.ndim <= attn.ndim
+        and all(s == 1 or s == t for s, t in zip(reversed(mask.shape), reversed(attn.shape)))
+    ):
+        attn.masked_fill_(mask, float("-inf"))
+    else:
+        attn = attn.masked_fill(mask, float("-inf"))
+    softmax = F.softmax
+    options = {}
+    if type(attn) is torch.Tensor and attn.dtype == torch.float32 and not attn.requires_grad:
+        softmax = torch.softmax
+        options["out"] = attn
+    probs = softmax(attn, dim=-1, dtype=torch.float32, **options).to(q.dtype)
     return torch.matmul(probs, v)
 
 
@@ -274,14 +288,22 @@ def _scatter_diagonals(diag_id, stop, B, H, Lq, Lk):
     per-head chosen diagonal ids in ``stop`` (B,H,ssize)."""
     device = diag_id.device
     ssize = stop.shape[-1]
-    # one-hot over diagonal ids then gather: cheaper to compare via broadcasting.
-    # diag_id: (1,1,Lq,Lk) ; stop: (B,H,ssize)
-    keep = torch.zeros((B, H, Lq, Lk), dtype=torch.bool, device=device)
     diag_flat = diag_id.expand(B, H, Lq, Lk)
-    for s in range(ssize):
-        sel = stop[:, :, s].view(B, H, 1, 1)
-        keep |= diag_flat == sel
-    return keep
+    if ssize == 0 or diag_flat.numel() == 0:
+        return torch.zeros((B, H, Lq, Lk), dtype=torch.bool, device=device)
+    # Per-head lookup table over diagonal ids, then gather it with diag_id.
+    # diag_id: (1,1,Lq,Lk) ; stop: (B,H,ssize)
+    stop = stop.view(B, H, ssize)
+    lo = min(int(diag_id.min()), int(stop.min()))
+    hi = max(int(diag_id.max()), int(stop.max()))
+    table = torch.zeros((B, H, hi - lo + 1), dtype=torch.bool, device=device)
+    table.scatter_(-1, stop - lo, True)
+    if diag_flat.stride(0) == 0 and diag_flat.stride(1) == 0:
+        # diag_id is shared by every head: index the table's last dim once.
+        return table[:, :, diag_flat[0, 0] - lo]
+    b_idx = torch.arange(B, device=device).view(B, 1, 1, 1)
+    h_idx = torch.arange(H, device=device).view(1, H, 1, 1)
+    return table[b_idx, h_idx, diag_flat - lo]
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 # KV-cache calibration + scale search for Hy3 (standalone, no weight/MoE hooks)
-# Consumed by: tools/kvcache/run_kvcache_calibrate.py
+# Consumed by: angelslim.compressor.quant.vllm_calib.calibrate --kv-only
 #
 # Keys here match the script's argparse `dest` names. Values listed below
 # override argparse defaults; explicit command-line flags still take final

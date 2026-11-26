@@ -174,7 +174,7 @@ class MultiModalDataset(BaseDataset):
         """Process messages and append to dataset"""
 
         # max_length padding for int4 gptq, gptaq and awq
-        if "int4_" in self.quant_algo:
+        if self.quant_algo and "int4_" in self.quant_algo:
             padding = "max_length"
         else:
             padding = True
@@ -248,7 +248,7 @@ class MultiModalDataset(BaseDataset):
                         try:
                             img = Image.open(item["image"])
                             image_paths.append(img)
-                        except ValueError as e:
+                        except (ValueError, OSError) as e:
                             raise ValueError(f"Could not open image file: {item['image']}, {e}")
                     elif isinstance(item["image"], Image.Image):
                         image_paths.append(item["image"])

@@ -22,13 +22,23 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
 </p>
 
 ## 📣Latest News
+
 - [26/11/25] We've released [Hy4 flash GGUF](https://huggingface.co/AngelSlim/Hy4-flash-GGUF) for on-device inference, with dedicated support for the high-performance version of Strata [(hy4-flash-hpc branch)](https://github.com/Niko1221/Strata/pull/7120), achieving 58 TPS on a PC with an Nvidia 4090 (24GB VRAM)! 🔥🔥🔥
+- [26/11/24] We have supported multiple quantization weights for [**Hy-MT3**](https://huggingface.co/collections/tencent/hy-mt3), including the cloud version as well as the on-device GGUF model.
+- [26/11/20] We've released FP8 quantized weights for **Hy4** ([Hy4-FP8](https://huggingface.co/tencent/Hy4-FP8)), along with FP8 and MXFP4 quantization toolkits and low-bit on-device GGUF models ([Hy4-GGUF](https://huggingface.co/AngelSlim/Hy4-GGUF)). 🔥🔥🔥
+- [26/11/18] We've released FP8 quantized weights for **Hy4-flash** ([Hy4-flash-FP8](https://huggingface.co/tencent/Hy4-flash-FP8)), along with the quantization toolkit and low-bit on-device GGUF models ([Hy4-flash-GGUF](https://huggingface.co/AngelSlim/Hy4-flash-GGUF)). 🔥🔥🔥
+- [26/10/26] We've released the Q4_K_M and Q8_0 quantized model for [Hy-SimulMT](https://github.com/Tencent-Hunyuan/Hy-SimulMT) on llama.cpp, supporting both the [translation-only model](https://huggingface.co/tencent/Hy-SimulMT-30B-A3B-GGUF/tree/main) and [source text and translation](https://huggingface.co/tencent/Hy-SimulMT-30B-A3B-Interleave-GGUF/tree/main)). We also propose a [PR](https://github.com/ggml-org/llama.cpp/pull/31198) to support the architecture and ASR inference!🔥🔥🔥
+- [26/10/26] llama.cpp support for [Hy-SimulMT]()! Enable. Using [Prima.cpp](https://github.com/OpenCPIL/prima.cpp), we ran this 214 GB model on a Laptop 4090 (32GB RAM, 16GB VRAM) + a Server with 4x A4000 (32GB RAM, 16GB VRAM each), hitting 1.02 tokens/s. See the [blog](https://opencpil.github.io/prima.cpp/blog/hunyuan4-770b-local-devices) and the deployment [guideline](docs/source/_extra/hy4_preview_gguf_guideline.md)! 🔥🔥🔥
 - [26/09/01] We've released the [hy4 preview MIX-STQ1_0 version](https://huggingface.co/AngelSlim/Hy4-preview-GGUF)! Compressed from 1.5TB to 214 GiB with only a 0.7% performance drop on SWE-bench Pro. Using [Prima.cpp](https://github.com/OpenCPIL/prima.cpp), we ran this 214 GB model on a Laptop 4090 (32GB RAM, 16GB VRAM) + a Server with 4x A4000 (32GB RAM, 16GB VRAM each), hitting 1.02 tokens/s. See the [blog](https://opencpil.github.io/prima.cpp/blog/hunyuan4-770b-local-devices) and the deployment [guideline](docs/source/_extra/hy4_preview_gguf_guideline.md)! 🔥🔥🔥
 - [26/07/29] We have open-sourced **AngelSpec**, a torch-native, disaggregated speculative-decoding **training framework** with support for a variety of draft methods, led by **DFly** and **MTP + TTT**, and released the **MTP** and **DFly** drafter weights for **Hy3-A21B** — DFly delivers up to **2.40× average end-to-end speedup** over AR, and **D-cut** adds up to **+15.7%** throughput at high concurrency. [[Paper]](https://arxiv.org/abs/2607.25852) | [[GitHub]](https://github.com/Tencent/AngelSpec) | [[Docs]](https://angelspec.readthedocs.io/) | [[Hugging Face]](https://huggingface.co/collections/AngelSlim/angelspec) 🔥🔥🔥
 - [26/07/20] We now support scale-only **quantization-aware distillation on Megatron-Core** for Qwen3-MoE and Hy3, with TP/EP/CP/SP distributed training. [[Docs]](docs/source/features/qad/mcore_qad.md)
 - [26/07/06] We now support FP8-Static quantization , SmoothQuant for **Hy3** (MoE A21B).[[Docs]](https://github.com/Tencent/AngelSlim/tree/main/scripts/ptq)
 - [26/06/04] We have released **Stem**, a sparse attention algorithm that accelerates the **Prefill** stage of long-context LLMs by dynamically selecting top-k key blocks for block-sparse attention, significantly reducing latency while preserving generation quality. [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/features/sparse_attention/stem.html)
 - [26/06/01] We have released **DFlare**, a block-diffusion speculative decoding framework with layer-wise fusion that achieves up to **5.52× end-to-end speedup**. [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/dflare.html)
+
+<details>
+<summary>Previous News</summary>
+
 - [26/05/27] We have released **D-Cut**, an adaptive verification depth pruning technique for speculative decoding. [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/dcut.html)
 - [26/05/20] We support Distillation for full-precision HuggingFace models and **quantized QAT-style** models, as detailed in the [distillation documentation](https://angelslim.readthedocs.io/zh-cn/latest/features/distill/index.html). 
 - [26/05/08] We have released STQ1_0 kernel for 1.25-bit model and given a PR to llama.cpp [PR #22836](https://github.com/ggml-org/llama.cpp/pull/22836) ! If you have any questions or suggestions for STQ_0, welcome to comment under the PR !🔥🔥🔥
@@ -37,14 +47,9 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
 - [26/03/25] We have released **DAQ**, the quantization algorithm that preserves the knowledge acquired while the update of parameters is relatively small during post-training training.[[Paper]](https://arxiv.org/abs/2603.22324) | [[Docs]](docs/source/features/quantization/daq.md)
 - [26/02/09] We have released HY-1.8B-2Bit, 2bit on-device large language model,[[Huggingface]](https://huggingface.co/AngelSlim/HY-1.8B-2Bit).
 - [26/01/13] We have released v0.3. We support the training and deployment of Eagle3 for all-scale LLMs/VLMs/Audio models, as detailed in the [guidance documentation](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html). And We released **Sherry**, the hardware-efficient 1.25 bit quantization algorithm [[Paper]](https://arxiv.org/abs/2601.07892) | [[Code]](https://github.com/Tencent/AngelSlim/tree/sherry/Sherry)🔥🔥🔥
-
-<details>
-<summary>Previous News</summary>
-
-- [25/11/05] We have released v0.2. Quantization support for new models, such as `GLM-4.6`, `Qwen3-VL` and `Qwen3-Omni`, open-sources the Eagle3 speculative decoding training framework, and updates the Diffusion model quantization tools.
+- [25/11/05] We have released v0.2. Quantization support for new models, such as `-VL` and `-Omni`, open-sources the Eagle3 speculative decoding training framework, and updates the Diffusion model quantization tools.
 - [25/09/30] We have released **SpecExit**, the reasoning early-exit algorithm: [[Paper]](http://arxiv.org/abs/2509.24248) | [[Docs]](https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/spec_exit.html) | [[vLLM Code]](https://github.com/vllm-project/vllm/pull/27192)
 - [25/09/26] We have released **TEQUILA**, the ternary quantization algorithm [[Paper]](https://arxiv.org/abs/2509.23809) | [[Code]](https://github.com/Tencent/AngelSlim/tree/tequila/TernaryQuant)
-- [25/09/24] We now support the PTQ quantization of NVFP4 for the Qwen3 series models. We also opensource [Qwen3-32B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-32B_nvfp4) and [Qwen3-235B-A22B-NVFP4](https://huggingface.co/AngelSlim/Qwen3-235B-A22B_nvfp4) weights.
 - [25/09/01] We now support ​FP8 quantization​ of the [Hunyuan-MT-7B](https://huggingface.co/tencent/Hunyuan-MT-7B-fp8) translation model. And enabled ​Torch inference and Benchmark evaluation​ for Eagle3. And implemented support for ​quantization and Cache​ for [FLUX](https://github.com/Tencent/AngelSlim/tree/main/configs/flux). And support ​quantization​ for the [Seed-OSS](https://github.com/Tencent/AngelSlim/tree/main/configs/seed_oss).
 - [25/08/06] We now support quantization for `Hunyuan 0.5B/1.8B/4B/7B` and multimodal model `Qwen2.5VL 3B/7B/32B/72B`, including `FP8/INT4` algorithms, and quantization for `DeepSeek-R1/V3` and `Kimi-K2`, including `FP8-Static` and `W4A8-FP8` algorithms. We also opensource `Hunyuan 1.8B/4B/7B` series Eagle3 model weight.
 - [25/07/04] We now support quantization for `Hunyuan/Qwen2.5/Qwen3/DeepSeek-R1-Distill-Qwen` and other models, including `INT8/FP8/INT4` algorithms. We also opensource `Qwen3` series Eagle3 model weight.
@@ -55,7 +60,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
 
 - **Highly Integrated**: This toolkit integrates mainstream compression algorithms into a unified framework, offering developers one-click access with exceptional ease of use.
 - **Continuous Innovation**: Beyond integrating widely-used industry algorithms, we are continuously researching better compression algorithms, which will be gradually open-sourced in the future.
-- **Performance-Driven**: We continuously optimize end-to-end performance in model compression workflows and algorithm deployment, such as enabling quantization of models like Qwen3-235B and DeepSeek-R1 on a single GPU.
+- **Performance-Driven**: We continuously optimize end-to-end performance in model compression workflows and algorithm deployment, such as enabling quantization of models like DeepSeek-R1 on a single GPU.
 
 ## 💼Technical Overview
 
@@ -81,7 +86,6 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
           <li><a href="https://huggingface.co/collections/tencent/hunyuan-a13b">Hunyuan-MoE</a></li>
           <li><a href="https://huggingface.co/collections/AngelSlim/qwen3-quant-68652e26da31740739d154f8">Qwen3</a></a></li>
           <li><a href="https://huggingface.co/AngelSlim/DeepSeek-R1-0528_w4a8_fp8">DeepSeek-V3/R1</a></li>
-          <li><a href="https://huggingface.co/AngelSlim/Glm4_6-fp8_static">GLM-4.6</a></li>
           <li><a href="https://huggingface.co/collections/AngelSlim/qwen2-25-quant-68652d6cbdf5c0d4b1c4499a">Qwen2.5</a></li>
         </ul>
       </td>
@@ -136,6 +140,8 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
         <ul style="padding-left: 0; list-style-position: inside;">
           <li><a href="">Hunyuan-VL</a></li>
           <li><a href="https://huggingface.co/tencent/HunyuanOCR">HunyuanOCR</a></li>
+          <li><a href="https://huggingface.co/collections/Qwen/qwen38-6a7d69d63a8fa0914eb7e54c">Qwen3.8</a></li>
+          <li><a href="https://huggingface.co/collections/Qwen/qwen35-6992e3053c019221cf2d725f">Qwen3.5</a></li>
           <li><a href="https://huggingface.co/collections/Qwen/qwen3-vl">Qwen3-VL</a></li>
           <li><a href="https://huggingface.co/collections/Qwen/qwen25-vl">Qwen2.5-VL</a></li>
         </ul>
@@ -150,6 +156,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
           <li><a href="https://angelslim.readthedocs.io/zh-cn/latest/features/speculative_decoding/eagle/index.html">Eagle3</a></li>
+          <li><a href="https://github.com/fscdc/MMFlash">MMFlash</a></li>
         </ul>
       </td>
       <td>
@@ -835,10 +842,6 @@ Benchmark results for Qwen3 series models with `FP8-Static`, `FP8-Dynamic`, `INT
     <tr><td>FP8-Static</td><td>83.95</td><td>79.47</td><td>89.01</td><td>31.10</td></tr>
     <tr><td>FP8-Dynamic</td><td>84.10</td><td>79.40</td><td>89.16</td><td>32.93</td></tr>
     <tr><td>INT8-Dynamic</td><td>83.36</td><td>79.48</td><td>89.16</td><td>34.15</td></tr>
-    <tr><td rowspan="4">Qwen3-235B-A22B</td><td>BF16</td><td>89.60</td><td>86.28</td><td>85.29</td><td>27.44</td></tr>
-    <tr><td>FP8-Static</td><td>89.67</td><td>86.19</td><td>86.96</td><td>27.44</td></tr>
-    <tr><td>FP8-Dynamic</td><td>89.67</td><td>86.18</td><td>85.22</td><td>28.05</td></tr>
-    <tr><td>INT8-Dynamic</td><td>88.93</td><td>86.20</td><td>86.20</td><td>23.78</td></tr>
   </tbody>
 </table>
 
@@ -962,7 +965,7 @@ Benchmark results for Qwen3-Omni series models in BF16, FP8-Static, and FP8-Dyna
 
 #### 2.6 Other Models
 
-Other models such as GLM-4.6, Qwen2.5, and Seed-OSS have been evaluated on benchmarks like `CEVAL`, `MMLU`, and `GSM8K` using quantization strategies including `FP8-Static`, `FP8-Dynamic`, `INT4-GPTQ`, and `INT4-AWQ`.
+Other models such as Qwen2.5, and Seed-OSS have been evaluated on benchmarks like `CEVAL`, `MMLU`, and `GSM8K` using quantization strategies including `FP8-Static`, `FP8-Dynamic`, `INT4-GPTQ`, and `INT4-AWQ`.
 
 <details>
 <summary>Benchmark Experiment Details</summary>

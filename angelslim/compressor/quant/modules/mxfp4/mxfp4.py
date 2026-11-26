@@ -45,19 +45,14 @@ def _require_e8m0_dtype() -> torch.dtype:
 
 def mxfp4_cast_to_e2m1(value: torch.Tensor) -> torch.Tensor:
     """Round pre-scaled values to E2M1 using round-half-to-even."""
-    bounds = _E2M1_BOUNDS.to(device=value.device, dtype=value.dtype)
-    tie_round_up = torch.tensor(
-        [False, True, False, True, False, True, False],
-        device=value.device,
-    )
-    magnitude = value.abs()
-    ordinal = torch.searchsorted(bounds, magnitude, out_int32=True).to(torch.uint8)
-    round_up = torch.any(
-        (magnitude.unsqueeze(-1) == bounds) & tie_round_up,
-        dim=-1,
-    )
-    sign = (value < 0).to(torch.uint8) << 3
-    return (sign | (ordinal + round_up.to(torch.uint8))).to(torch.uint8)
+    code = (value < 0).view(torch.uint8).bitwise_left_shift_(3)
+    mask = torch.empty_like(code, dtype=torch.bool)
+    # Add one per bound that |value| is past; an exact tie counts only at odd-indexed bounds.
+    for index, bound in enumerate(_E2M1_BOUNDS.tolist()):
+        under, beyond = (torch.lt, torch.le) if index % 2 else (torch.le, torch.lt)
+        code.add_(under(value, bound, out=mask).logical_not_().view(torch.uint8))
+        code.add_(beyond(value, -bound, out=mask).view(torch.uint8))
+    return code
 
 
 def mxfp4_dequantize_e2m1(code: torch.Tensor, dtype: torch.dtype = torch.float32) -> torch.Tensor:

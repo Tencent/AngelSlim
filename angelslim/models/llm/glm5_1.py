@@ -38,7 +38,15 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
-from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import GlmMoeDsaNaiveMoe
+
+try:
+    from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import GlmMoeDsaNaiveMoe
+except ImportError:
+    # transformers>=5.13 renamed the fused-experts module to GlmMoeDsaExperts;
+    # the class body is unchanged (3-D gate_up_proj / down_proj, same forward).
+    from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import (
+        GlmMoeDsaExperts as GlmMoeDsaNaiveMoe,
+    )
 
 from ...compressor.quant.core import PTQSaveVllmHF
 from ...utils.utils import find_parent_layer_and_sub_name, print_info

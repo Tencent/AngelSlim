@@ -234,34 +234,35 @@ class LlamaAttention(nn.Module):
         self._init_rope()
 
     def _init_rope(self):
-        if self.config.rope_scaling is None:
-            if hasattr(self.config, "rope_theta"):
-                self.rotary_emb = LlamaRotaryEmbedding(
-                    self.head_dim,
-                    max_position_embeddings=self.max_position_embeddings,
-                    base=self.config.rope_theta,
-                )
-            else:
-                self.rotary_emb = LlamaRotaryEmbedding(
-                    self.head_dim, max_position_embeddings=self.max_position_embeddings
-                )
+        # transformers >= 5 renames the "type" key to "rope_type" and may include
+        # additional keys (e.g. rope_theta) in the same dict. Accept both spellings
+        # so a config saved by either transformers release loads here (#330).
+        rope_scaling = self.config.rope_scaling or {}
+        scaling_type = rope_scaling.get("rope_type", rope_scaling.get("type"))
+        scaling_factor = rope_scaling.get("factor", 1.0)
+        base = rope_scaling.get("rope_theta") or getattr(self.config, "rope_theta", 10000)
+        if scaling_type in (None, "default"):
+            self.rotary_emb = LlamaRotaryEmbedding(
+                self.head_dim,
+                max_position_embeddings=self.max_position_embeddings,
+                base=base,
+            )
+        elif scaling_type == "linear":
+            self.rotary_emb = LlamaLinearScalingRotaryEmbedding(
+                self.head_dim,
+                max_position_embeddings=self.max_position_embeddings,
+                base=base,
+                scaling_factor=scaling_factor,
+            )
+        elif scaling_type == "dynamic":
+            self.rotary_emb = LlamaDynamicNTKScalingRotaryEmbedding(
+                self.head_dim,
+                max_position_embeddings=self.max_position_embeddings,
+                base=base,
+                scaling_factor=scaling_factor,
+            )
         else:
-            scaling_type = self.config.rope_scaling["type"]
-            scaling_factor = self.config.rope_scaling["factor"]
-            if scaling_type == "linear":
-                self.rotary_emb = LlamaLinearScalingRotaryEmbedding(
-                    self.head_dim,
-                    max_position_embeddings=self.max_position_embeddings,
-                    scaling_factor=scaling_factor,
-                )
-            elif scaling_type == "dynamic":
-                self.rotary_emb = LlamaDynamicNTKScalingRotaryEmbedding(
-                    self.head_dim,
-                    max_position_embeddings=self.max_position_embeddings,
-                    scaling_factor=scaling_factor,
-                )
-            else:
-                raise ValueError(f"Unknown RoPE scaling type {scaling_type}")
+            raise ValueError(f"Unknown RoPE scaling type {scaling_type}")
 
     def _shape(self, tensor: torch.Tensor, seq_len: int, bsz: int):
         return (

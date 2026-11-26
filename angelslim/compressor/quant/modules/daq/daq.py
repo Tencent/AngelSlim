@@ -41,7 +41,7 @@ from .utils import (
 )
 
 # Suffixes that identify weight tensors to be quantized.
-# Imported from fp8_quant_blockwise for consistency; any weight whose name
+# Same table as ckpt_convert.export (fp8_blockwise); any weight whose name
 # ends with one of these suffixes will be quantized by DAQ.
 SUFFIX_TO_QUANT = [
     ".gate_and_up_proj.weight",

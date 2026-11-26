@@ -122,7 +122,7 @@ class AWQ:
             model_module.eval()
         layers = self.layers
         dev = get_best_device()
-        nsamples = len(dataloader)
+        nsamples = len(dataloader) * dataloader.batch_size
         self.inps = torch.zeros(
             (int(nsamples), self.seq_length, self.hidden_size),
             device=dev,

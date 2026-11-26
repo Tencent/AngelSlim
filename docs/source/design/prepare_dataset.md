@@ -47,6 +47,12 @@ jsonl格式为一行一条data，每行data为json格式。支持如下格式
 [ { "from": "human", "value": "这本著作极其出色。请用同义词替换加粗的词语，构建一个新的句子。" }, { "from": "gpt", "value": "这部作品极为杰出。" } ]
 ```
 
+## Hugging Face文本数据集
+
+`TextDataset`也支持将`data_path`设置为Hugging Face数据集标识，例如`Salesforce/wikitext,wikitext-2-raw-v1`，数据集需包含`train`分区和`text`列。文本会先拼接并按2048个token分块，`num_samples`限制的是分块后的校准样本数量；非正数表示使用所有可用块。
+
+如果全部文本不足一个块，会保留这一个短样本；否则会丢弃最后不足一个块的尾部。空文本流不产生样本。
+
 ## DATA文件测试
 ```
 from transformers import AutoModelForCausalLM, AutoTokenizer

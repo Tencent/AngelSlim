@@ -74,7 +74,7 @@ class INT8:
             model_module.eval()
         layers = self.layers
         dev = "cpu"
-        nsamples = len(dataloader)
+        nsamples = len(dataloader) * dataloader.batch_size
         print_info(f"nsamples:{nsamples}")
         self.inps = torch.zeros(
             (int(nsamples), self.seq_length, self.hidden_size),

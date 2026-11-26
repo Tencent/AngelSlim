@@ -194,20 +194,27 @@ class PTQ:
             and self.quant_model.quant_config.quant_analyse
         ):
             # scale analyse
+            # Scales are not always 0-dim: per-channel / group-wise quantization
+            # keeps one scale per channel or group, so these tensors usually hold
+            # more than one element (the int8_dynamic configs default to
+            # `weight: "per-channel"`). `if tensor > 1.5` then raises
+            # "Boolean value of Tensor with more than one value is ambiguous".
+            # torch.any() handles both shapes, and .max() keeps the message short
+            # instead of printing a whole per-channel tensor.
             for k in self.quant_model.act_scales_dict.keys():
                 act_scales_data = self.quant_model.act_scales_dict[k].data
-                if act_scales_data > 1.5:
+                if torch.any(act_scales_data > 1.5):
                     print_info(
                         f"[AngelSlim Warning] Act_scales {k}: "
-                        f"The weight is too high:{act_scales_data}. "
+                        f"The weight is too high:{act_scales_data.max().item()}. "
                         f"It is recommended to clip it to 1.5 "
                     )
             for k in self.quant_model.weight_scales_dict.keys():
                 weight_scales_data = self.quant_model.weight_scales_dict[k].data
-                if weight_scales_data > 1.5:
+                if torch.any(weight_scales_data > 1.5):
                     print_info(
                         f"[AngelSlim Warning] Weight_scales {k}: "
-                        f"The weight is too high:{weight_scales_data}. "
+                        f"The weight is too high:{weight_scales_data.max().item()}. "
                         f"It is recommended to clip it to 1.5 "
                     )
 

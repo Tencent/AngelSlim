@@ -1,0 +1,54 @@
+# Hy4-Flash FP8 128x128 W8A8: trunk linear_gate / o_proj / q_b_proj and routed experts by GPTQ,
+# the same MTP modules and DFly linear_gate / o_proj / q_b_proj / MLP by RTN. save_name supports compressed-tensors and fp8 (quant_method: fp8).
+# Run: PTQ_CONFIG=<this yaml> bash scripts/ptq/run_hy4_vlm_gptq.sh
+global:
+  save_path: /path/to/run_dir
+
+model:
+  name: hy4
+  model_path: /path/to/model
+
+dataset:
+  name: VLMRollout
+  data_path: /path/to/ptq_data.jsonl
+  max_seq_length: 16384
+  num_samples: 0
+
+compression:
+  name: PTQWeightOnly
+  calibrate:
+    backend: vllm
+    tp_size: 16
+    max_num_seqs: 4
+    distributed_executor_backend: ray
+    args:
+      max_num_batched_tokens: 32768
+      gpu_memory_utilization: 0.62
+      modules: '^language_model\.model\.layers\.(?!0\.)\d+\.(?:mlp\.experts\.|self_attn\.(?:q_b_proj|o_proj|linear_gate)$)'
+  quantization:
+    name: mixed
+    save_name: fp8  # Support: fp8, compressed-tensors
+    algorithm: gptq
+    gptq: {damp: 0.05, mode: per_column}
+    num_workers: 8
+    config_groups:
+      fp8_gptq:
+        format: fp8_block
+        block_size: [128, 128]
+        targets:
+          - 're:model\.layers\.\d+\.self_attn\.(?:linear_gate|o_proj|q_b_proj)$'
+          - 're:model\.layers\.\d+\.mlp\.experts\.(?:gate_up_proj|down_proj)$'
+      fp8_rtn:
+        format: fp8_block
+        block_size: [128, 128]
+        algorithm: rtn
+        targets:
+          - 're:model\.(?:mtp|dfly)_layers\.\d+\.self_attn\.(?:linear_gate|o_proj|q_b_proj)$'
+          - 're:model\.mtp_layers\.\d+\.mlp\.experts\.(?:gate_up_proj|down_proj)$'
+          - 're:model\.dfly_layers\.\d+\.mlp\.(?:gate_proj|up_proj|down_proj)$'
+    ignore_layers:
+      - 're:.*lm_head$'
+      - 're:.*shared_head\.head$'
+      - 're:^visual\..*'
+      - 're:^vit\..*'
+      - 're:model\.layers\.0\..*'

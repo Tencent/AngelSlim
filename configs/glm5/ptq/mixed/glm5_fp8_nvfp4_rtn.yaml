@@ -1,0 +1,50 @@
+# GLM-5 RTN: NVFP4 routed experts (MTP layer 78 excluded) + FP8 128x128 ue8m0 dense, compressed-tensors.
+# Source may be BF16 or FP8 (FP8 weights are dequantized on read).
+# Gate/up of one expert share the NVFP4 global scale (vLLM loads a single w13 scale).
+# Stage 1: python3 -m angelslim.compressor.quant.vllm_calib.calibrate -c <this>  (MoE scale_amax)
+# Stage 2: python3 tools/run.py -c <this>        (or bash scripts/ptq/run_vllm_quant_for_glm5.sh)
+global:
+  save_path: /path/to/output
+
+model:
+  name: GLM5
+  model_path: /path/to/model             # GLM-5 checkpoint (BF16 or FP8)
+
+dataset:                                 # stage 1 only
+  name: TextDataset
+  data_path: /path/to/data
+  max_seq_length: 2048
+  num_samples: 64
+
+compression:
+  name: PTQWeightOnly
+  calibrate:
+    tp_size: 16                          # e.g. 8 for one node, 16 for a two-node Ray cluster
+    max_num_seqs: 4
+    distributed_executor_backend: ray
+    stats_dir: /path/to/statistics       # shared FS when dp_size > 1 spans nodes
+    args:
+      dp_size: 1
+      enable_mtp: false
+  quantization:
+    name: mixed
+    save_name: compressed-tensors
+    algorithm: rtn
+    num_workers: 8
+    skip_unquantized_source: true        # FP8 source: modules the release kept in BF16 stay BF16
+    config_groups:
+      nvfp4_moe:
+        format: nvfp4
+        targets:
+          - 're:model\.layers\.(?!78\.)\d+\.mlp\.experts\.\d+\.(?:gate_proj|up_proj|down_proj)$'
+      fp8_dense:
+        format: fp8_block
+        block_size: [128, 128]
+        scale_fmt: ue8m0
+        targets:
+          - 're:model\.layers\.\d+\.self_attn\.(?:q_a_proj|q_b_proj|kv_a_proj_with_mqa|kv_b_proj|o_proj)$'
+          - 're:model\.layers\.\d+\.self_attn\.indexer\.(?:wk|wq_b)$'
+          - 're:model\.layers\.\d+\.mlp\.(?:shared_experts\.)?(?:gate_proj|up_proj|down_proj)$'
+          - 're:model\.layers\.\d+\.mlp\.experts\.\d+\.(?:gate_proj|up_proj|down_proj)$'
+    ignore_layers:
+      - 're:.*lm_head$'

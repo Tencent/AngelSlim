@@ -15,5 +15,7 @@ fp8_lepto
 qat
 qat_zero3
 focus_fp4
+smooth
+kvcache
 daq
 :::
