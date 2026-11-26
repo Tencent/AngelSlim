@@ -12,17 +12,17 @@
 </h3>
 
 <p align="center">
-          ✒️ <a href="https://arxiv.org/abs/2602.21233">TechnicalReport</a>&nbsp&nbsp | &nbsp&nbsp 📖 <a href="https://angelslim.readthedocs.io/">Documentation</a>&nbsp&nbsp | &nbsp&nbsp🤗 <a href="https://huggingface.co/AngelSlim">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="https://modelscope.cn/organization/AngelSlim">ModelScope</a>
+          ✒️ <a href="https://arxiv.org/abs/2602.21233">TechnicalReport</a>&nbsp&nbsp | &nbsp&nbsp 📖 <a href="https://angelslim.readthedocs.io/">Documentation</a>&nbsp&nbsp | &nbsp&nbsp📱 <a href="https://angelslim.readthedocs.io/zh-cn/latest/on_device/zh/index.html">Edge</a> | &nbsp&nbsp🤗 <a href="https://huggingface.co/AngelSlim">Hugging Face</a>
 <br>
 </p>
 
 <p align="center">
-          💬 <a href="./docs/source/assets/angel_slim_wechat.png">WeChat</a> | &nbsp&nbsp🫨 <a href="https://discord.com/invite/dHVNeuNdFt">Discord</a>
+          🤖 <a href="https://modelscope.cn/organization/AngelSlim">ModelScope</a> | &nbsp&nbsp💬 <a href="./docs/source/assets/angel_slim_wechat.png">WeChat</a> | &nbsp&nbsp🫨 <a href="https://discord.com/invite/dHVNeuNdFt">Discord</a>
 <br>
 </p>
 
 ## 📣最新进展
-- [26/11/25] 我们已经发布 Hy4 flash [gguf](https://huggingface.co/AngelSlim/Hy4-flash-GGUF)用来端侧推理, 并且特别支持了Strata 高性能版本 [(hy4-flash-hpc 分支)](https://github.com/Niko1221/Strata/pull/7120)，能够在 4090 (24GB显存) PC 上达到 58 TPS ! 🔥🔥🔥 
+- [26/11/25] 我们已经发布 Hy4 flash [gguf](https://huggingface.co/AngelSlim/Hy4-flash-GGUF)用来端侧推理, 并且特别支持了Strata 高性能版本 [(hy4-flash-hpc 分支)](https://github.com/Niko1221/Strata/pull/7120)，能够在 4090 (24GB显存) PC 上达到 58 TPS ! 同时提供了 llama.cpp 高性能版本[patch](https://huggingface.co/AngelSlim/Hy4-flash-GGUF/tree/main/patch)。🔥🔥🔥 
 - [26/11/24] 我们已支持 [**Hy-MT3**](https://huggingface.co/collections/tencent/hy-mt3) 的多种量化权重，包括云端版本以及端侧GGUF模型。🔥🔥🔥
 - [26/11/20] 我们发布了 **Hy4** 的 FP8 量化权重 ([Hy4-FP8](https://huggingface.co/tencent/Hy4-FP8)) 与 FP8、MXFP4 量化工具，以及端侧低 bit 量化 GGUF 模型 ([Hy4-GGUF](https://huggingface.co/AngelSlim/Hy4-GGUF))。🔥🔥🔥
 - [26/11/18] 我们发布了 **Hy4-flash** 的 FP8 量化权重 ([Hy4-flash-FP8](https://huggingface.co/tencent/Hy4-flash-FP8)) 与量化工具，以及端侧低 bit 量化 GGUF 模型 ([Hy4-flash-GGUF](https://huggingface.co/AngelSlim/Hy4-flash-GGUF))。🔥🔥🔥
