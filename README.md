@@ -24,6 +24,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
 
 ## 📣Latest News
 
+- [26/11/26] We have open-sourced [**AngelSpec**](https://github.com/Tencent/AngelSpec)'s training code for [**DFly2**](https://arxiv.org/abs/2611.34776), which is the speculative-decoding drafter that ships with [**Hy4**](https://huggingface.co/tencent/Hy4) and [**Hy4 flash**](https://huggingface.co/tencent/Hy4-flash), up to **4.2×** faster on long-context and agentic workloads. [[Paper]](https://arxiv.org/abs/2611.34776) | [[GitHub]](https://github.com/Tencent/AngelSpec) | [[Hugging Face]](https://huggingface.co/collections/AngelSlim/angelspec) 🔥🔥🔥
 - [26/11/25] We've released [Hy4 flash GGUF](https://huggingface.co/AngelSlim/Hy4-flash-GGUF) for on-device inference, with dedicated support for the high-performance version of Strata [(hy4-flash-hpc branch)](https://github.com/Niko1221/Strata/pull/7120), achieving 58 TPS on a PC with an Nvidia 4090 (24GB VRAM)! We also provide high-performance llama.cpp [patch](https://huggingface.co/AngelSlim/Hy4-flash-GGUF/tree/main/patch) . 🔥🔥🔥
 - [26/11/24] We have supported multiple quantization weights for [**Hy-MT3**](https://huggingface.co/collections/tencent/hy-mt3), including the cloud version as well as the on-device GGUF model.
 - [26/11/20] We've released FP8 quantized weights for **Hy4** ([Hy4-FP8](https://huggingface.co/tencent/Hy4-FP8)), along with FP8 and MXFP4 quantization toolkits and low-bit on-device GGUF models ([Hy4-GGUF](https://huggingface.co/AngelSlim/Hy4-GGUF)). 🔥🔥🔥
@@ -103,6 +104,7 @@ A more accessible, comprehensive, and efficient toolkit for large model compress
       </td>
       <td>
         <ul style="padding-left: 0; list-style-position: inside;">
+          <li><a href="https://angelspec.readthedocs.io/">DFly2</a></li>
           <li><a href="https://app.readthedocs.org/">DFly</a></li>
           <li><a href="https://app.readthedocs.org/">DFlare</a></li>
           <li><a href="https://app.readthedocs.org/">DFlash</a></li>
@@ -275,20 +277,21 @@ For more detailed installation instructions and platform-specific guidance, plea
 
 #### 2.1 Speculative Decoding
 
-AngelSlim's speculative-decoding training is powered by **[AngelSpec](https://github.com/Tencent/AngelSpec)** (git submodule under `third_party/AngelSpec/`) — a torch-native framework for **training** speculative-decoding draft models, featuring a rich set of draft architectures, target-model support, and production-scale training. It supports a variety of draft methods, led by **DFly** and **MTP + TTT**.
+AngelSlim's speculative-decoding training is powered by **[AngelSpec](https://github.com/Tencent/AngelSpec)** (git submodule under `third_party/AngelSpec/`) — a torch-native framework for **training** speculative-decoding draft models, featuring a rich set of draft architectures, target-model support, and production-scale training. It supports a variety of draft methods, led by **DFly2**, **DFly** and **MTP + TTT**.
 
 It follows a **disaggregated design**: inference engines run the frozen target model and extract multi-layer hidden states, which a [Mooncake](https://github.com/kvcache-ai/Mooncake) store streams over RDMA (no disk staging) to the FSDP2 training workers, while a controller handles batching, backpressure, and evaluation. Inference and training run on separate GPU pools and scale independently.
 
 **Capabilities:**
 
-- **Multi-backend inference** — vLLM (first-class), SGLang, and HuggingFace.
-- **Long-sequence training** — Ulysses sequence parallelism (USP) for 128k+ contexts.
-- **Document-aware sequence packing** — with cross-document attention isolation.
-- **Online evaluation** — spec-decode acceptance rate measured during training.
-- **Multi-node** — large MoE target models sharded across nodes over Mooncake RDMA.
-- **Vocabulary pruning** — shrink the draft `lm_head` to a smaller token set at train or convert time.
+- **Multi-backend inference** — vLLM, SGLang and HuggingFace.
+- **Online, offline and hybrid training** — capture hidden states once and replay them across epochs.
+- **Target-state reuse** — DFly2 drafts on the target's own MLA latents and DSA top-k picks.
+- **On-policy distillation** — a dedicated scoring engine for drafter OPD.
+- **Long-sequence training** — Ulysses sequence parallelism up to 256k, with document-aware packing.
 
-<!-- TODO: add the AngelSpec framework overview figure to docs/source/assets/speculative_decoding/ and embed here -->
+<p align="center">
+  <img alt="AngelSpec framework" src="./docs/source/assets/speculative_decoding/angelspec_framework.jpg" width=100%>
+</p>
 
 ```shell
 # Initialize the submodule (see Install section above)
@@ -298,11 +301,11 @@ cd third_party/AngelSpec
 pip install -e ".[vllm]"
 # Hidden-state transport (not pulled in by the extras; install separately)
 pip install mooncake-transfer-engine
-# Single-node quickstart (4 GPUs: 2 inference + 2 training)
-./examples/qwen3-8b-single-node/run.sh
+# Single-node quickstart (8 GPUs: 4 inference + 4 training)
+./examples/qwen3-8b-dfly/run.sh
 ```
 
-For more details, see the [technical report](https://arxiv.org/abs/2607.25852), [AngelSpec docs](https://angelspec.readthedocs.io/), [AngelSpec README](https://github.com/Tencent/AngelSpec/blob/main/README.md), and [Hugging Face weights](https://huggingface.co/collections/AngelSlim/angelspec).
+For more details, see the [AngelSpec](https://arxiv.org/abs/2607.25852) and [DFly2](https://arxiv.org/abs/2611.34776) technical reports, [AngelSpec docs](https://angelspec.readthedocs.io/), [AngelSpec README](https://github.com/Tencent/AngelSpec/blob/main/README.md), and [Hugging Face weights](https://huggingface.co/collections/AngelSlim/angelspec).
 
 #### 2.2 LLM/VLM/Audio Model Quantization
 
@@ -447,318 +450,150 @@ For more detaileds, please refer to the [Deployment Documentation](https://angel
 
 ### 1. Speculative Decoding
 
-The results below come from **[AngelSpec](https://github.com/Tencent/AngelSpec)** — a torch-native, disaggregated speculative-decoding training framework, integrated into AngelSlim as a git submodule (see §2.1), with support for a variety of draft methods, led by **DFly** and **MTP + TTT**. [[Paper]](https://arxiv.org/abs/2607.25852) | [[Docs]](https://angelspec.readthedocs.io/) | [[Hugging Face]](https://huggingface.co/collections/AngelSlim/angelspec)
+The results below come from **[AngelSpec](https://github.com/Tencent/AngelSpec)** — a torch-native, disaggregated speculative-decoding training framework, integrated into AngelSlim as a git submodule (see §2.1). [[Paper]](https://arxiv.org/abs/2611.34776) | [[Docs]](https://angelspec.readthedocs.io/) | [[Hugging Face]](https://huggingface.co/collections/AngelSlim/angelspec)
 
 **✨ Highlights**
 
-- **🏗️ Full-stack open source** — the AngelSpec training framework plus Hy3-A21B **MTP** / **DFly** drafter weights and training code, all released at once.
-- **🚀 DFly leads across the board** — on Hy3-A21B, DFly delivers the highest throughput across all concurrency levels (4–64) and all six benchmarks — **1.98–2.40×** average speedup over the AR baseline (peak **2.86×** on code / math), and **10.5–11.8%** faster than DFlash.
-- **📈 Substantially higher accepted length** — DFly reaches a mean accepted length of **4.79** — **+30%** over DFlash (3.69) and **~1.6×** over MTP (3.00) — up to **5.52** on HumanEval.
-- **⚡ D-cut squeezes high concurrency** — on live traffic of a 295B model, it adds up to **+15.7%** throughput in the high-concurrency regime at near-zero cost (mean accepted length 2.50 → 2.46).
-- **💬 MTP + TTT cracks chat** — fixes the train/inference mismatch: mean acceptance rate **52.8% → 66.4%**, mean accepted length **2.58 → 2.99**.
+- **🏗️ Full-stack open source** — the AngelSpec training framework, the DFly2 technical report, and MoE drafter weights for **Hy4 flash**, **DeepSeek-V4.1-Flash** and **GLM-5.3-Flash**, all released together.
+- **📐 Constant drafting cost** — DFly2 drafts on the target's own sparse KV cache and top-k index picks, so each draft token attends to at most ~2K keys **no matter how long the context is**, and the drafter keeps **no KV cache of its own**.
+- **📈 Best accepted length on every target** — DFly2 tops all seven long-context and agentic sets on all three targets, averaging **4.06 / 4.03 / 4.11** on the agentic suite versus **3.35 / 3.10 / 3.16** for the strongest baseline.
+- **🚀 The longer the context, the bigger the lead** — up to **3.41×** decoding and **2.17×** end-to-end speedup over autoregressive decoding, with the margin over DFlash and DSpark widening as context grows.
 
-#### 1.1 🏆 Drafter Showdown — DFly Leads the Pack
+#### 1.1 🏆 DFly2 on Long-Context and Agentic Workloads
 
-**Draft quality — mean accepted length.** Measured on **Qwen3-8B** and **Hy3-A21B** across math / code / chat (temperature = 1, no thinking); **bold** marks the best drafter per target per benchmark. **DFly** leads on average — **5.41** on Qwen3-8B and **4.79** on Hy3-A21B — and tops nearly every benchmark, well ahead of DFlash and MTP.
+<p align="center">
+  <img alt="DFly2 accepted length and speedup per dataset" src="./docs/source/assets/speculative_decoding/dfly2_long_context.png" width=100%>
+</p>
+
+**Draft quality — mean accepted length τ.** Measured on **DeepSeek-V4.1-Flash**, **GLM-5.3-Flash** and **Hy4 flash**, each cell at temperature 0 / 1 (0.9 on Hy4 flash); **bold** marks the best drafter per target per benchmark.
 
 <table>
   <thead>
     <tr>
-      <th rowspan="2">Target Model</th>
-      <th rowspan="2">Drafter</th>
-      <th colspan="2" style="text-align:center;">Math</th>
-      <th colspan="3" style="text-align:center;">Code</th>
-      <th style="text-align:center;">Chat</th>
-      <th rowspan="2">Avg.</th>
-    </tr>
-    <tr>
-      <th>Math500</th><th>GSM8K</th>
-      <th>HumanEval</th><th>MBPP</th><th>LiveCodeBench</th>
-      <th>MT-Bench</th>
+      <th>Target</th><th>Drafter</th>
+      <th style="text-align:center;">LongSpec 32K</th><th style="text-align:center;">CodeSpan 64K</th><th style="text-align:center;">LSWE 128K</th><th style="text-align:center;">ALB</th><th style="text-align:center;">MemAgent</th><th style="text-align:center;">BFCL-v3</th><th style="text-align:center;">SWE 64K</th><th style="text-align:center;">Long</th><th style="text-align:center;">Agentic</th>
     </tr>
   </thead>
   <tbody>
-    <!-- Qwen3-8B -->
     <tr>
-      <td rowspan="4">Qwen3-8B</td>
-      <td>MTP</td>
-      <td>3.53</td><td>3.56</td><td>3.33</td><td>3.22</td><td>3.25</td><td>2.57</td><td>3.24</td>
+      <td rowspan="4">DeepSeek-V4.1-Flash</td>
+      <td>DFlash</td>
+      <td>2.98 / 2.55</td><td>3.81 / 3.13</td><td>3.42 / 2.96</td><td>4.38 / 4.13</td><td>2.84 / 2.60</td><td>3.40 / 3.11</td><td>3.58 / 3.14</td><td>3.40 / 2.88</td><td>3.55 / 3.25</td>
     </tr>
     <tr>
-      <td>DFlash</td>
-      <td>4.97</td><td>5.54</td><td>4.77</td><td>4.50</td><td>4.46</td><td>3.16</td><td>4.57</td>
+      <td>DFlash†</td>
+      <td>2.74 / 2.40</td><td>3.43 / 2.86</td><td>3.15 / 2.77</td><td>3.78 / 3.62</td><td>2.80 / 2.52</td><td>3.21 / 2.98</td><td>3.19 / 2.80</td><td>3.11 / 2.68</td><td>3.24 / 2.98</td>
     </tr>
     <tr>
       <td>DSpark</td>
-      <td>5.87</td><td>6.25</td><td>5.56</td><td>5.25</td><td>5.20</td><td><b>3.77</b></td><td>5.32</td>
+      <td>2.82 / 2.48</td><td>3.58 / 2.92</td><td>3.29 / 2.98</td><td>3.87 / 3.59</td><td>2.85 / 2.65</td><td>3.33 / 3.09</td><td>3.35 / 2.99</td><td>3.23 / 2.79</td><td>3.35 / 3.08</td>
     </tr>
     <tr>
-      <td><b>DFly</b></td>
-      <td><b>6.06</b></td><td><b>6.42</b></td><td><b>5.60</b></td><td><b>5.34</b></td><td><b>5.36</b></td><td>3.67</td><td><b>5.41</b></td>
-    </tr>
-    <!-- Hy3-A21B -->
-    <tr>
-      <td rowspan="3">Hy3-A21B</td>
-      <td>MTP</td>
-      <td>3.30</td><td>3.30</td><td>3.13</td><td>3.04</td><td>2.84</td><td>2.40</td><td>3.00</td>
+      <td><b>DFly2</b></td>
+      <td><b>3.12</b> / <b>2.81</b></td><td><b>4.14</b> / <b>3.59</b></td><td><b>3.97</b> / <b>3.55</b></td><td><b>5.10</b> / <b>4.72</b></td><td><b>3.36</b> / <b>3.13</b></td><td><b>3.77</b> / <b>3.55</b></td><td><b>4.02</b> / <b>3.60</b></td><td><b>3.74</b> / <b>3.32</b></td><td><b>4.06</b> / <b>3.75</b></td>
     </tr>
     <tr>
+      <td rowspan="4">GLM-5.3-Flash</td>
       <td>DFlash</td>
-      <td>4.01</td><td>4.23</td><td>4.36</td><td>4.05</td><td>3.10</td><td>2.38</td><td>3.69</td>
+      <td>2.55 / 2.17</td><td>3.12 / 2.48</td><td>2.92 / 2.64</td><td>3.12 / 1.92</td><td>2.79 / 2.50</td><td>2.99 / 2.75</td><td>2.91 / 2.60</td><td>2.86 / 2.43</td><td>2.95 / 2.44</td>
     </tr>
     <tr>
-      <td><b>DFly</b></td>
-      <td><b>5.23</b></td><td><b>5.53</b></td><td><b>5.52</b></td><td><b>5.41</b></td><td><b>4.07</b></td><td><b>2.96</b></td><td><b>4.79</b></td>
+      <td>DFlash†</td>
+      <td>2.69 / 2.23</td><td>3.22 / 2.60</td><td>2.97 / 2.65</td><td>3.50 / 3.45</td><td>2.68 / 2.48</td><td>3.00 / 2.73</td><td>2.86 / 2.61</td><td>2.96 / 2.50</td><td>3.01 / 2.82</td>
+    </tr>
+    <tr>
+      <td>DSpark</td>
+      <td>2.75 / 2.37</td><td>3.32 / 2.77</td><td>3.08 / 2.79</td><td>3.53 / 3.73</td><td>2.74 / 2.58</td><td>3.15 / 2.91</td><td>2.98 / 2.74</td><td>3.05 / 2.64</td><td>3.10 / 2.99</td>
+    </tr>
+    <tr>
+      <td><b>DFly2</b></td>
+      <td><b>3.31</b> / <b>2.92</b></td><td><b>4.40</b> / <b>3.63</b></td><td><b>3.82</b> / <b>3.52</b></td><td><b>5.49</b> / <b>4.77</b></td><td><b>3.30</b> / <b>3.12</b></td><td><b>3.61</b> / <b>3.35</b></td><td><b>3.73</b> / <b>3.48</b></td><td><b>3.85</b> / <b>3.36</b></td><td><b>4.03</b> / <b>3.68</b></td>
+    </tr>
+    <tr>
+      <td rowspan="4">Hy4 flash</td>
+      <td>DFlash</td>
+      <td>2.59 / 2.41</td><td>1.17 / 1.10</td><td>1.12 / 1.09</td><td>1.50 / 1.36</td><td>1.08 / 1.06</td><td>3.18 / 3.20</td><td>2.26 / 1.88</td><td>1.63 / 1.53</td><td>2.00 / 1.88</td>
+    </tr>
+    <tr>
+      <td>DFlash†</td>
+      <td>2.68 / 2.50</td><td>3.47 / 3.28</td><td>3.23 / 3.06</td><td>3.32 / 3.06</td><td>2.63 / 2.47</td><td>2.90 / 2.92</td><td>3.40 / 2.94</td><td>3.13 / 2.95</td><td>3.06 / 2.85</td>
+    </tr>
+    <tr>
+      <td>DSpark</td>
+      <td>2.74 / 2.56</td><td>3.54 / 3.35</td><td>3.31 / 3.11</td><td>3.32 / 3.10</td><td>2.77 / 2.56</td><td>3.08 / 2.98</td><td>3.45 / 3.14</td><td>3.20 / 3.01</td><td>3.16 / 2.95</td>
+    </tr>
+    <tr>
+      <td><b>DFly2</b></td>
+      <td><b>2.94</b> / <b>2.75</b></td><td><b>4.12</b> / <b>4.03</b></td><td><b>3.83</b> / <b>3.60</b></td><td><b>5.41</b> / <b>5.22</b></td><td><b>3.23</b> / <b>2.95</b></td><td><b>3.69</b> / <b>3.67</b></td><td><b>4.12</b> / <b>3.70</b></td><td><b>3.63</b> / <b>3.46</b></td><td><b>4.11</b> / <b>3.88</b></td>
     </tr>
   </tbody>
 </table>
 
-**End-to-end throughput on Hy3-295B-A21B.** Output-token throughput (Tok/s) and speedup (Spd.) over the AR baseline (TP=8, temperature 1, concurrency c4–c64; each cell = 3×120s windows). **Bold** marks the best speedup per benchmark at each concurrency; `MTP-3` uses 3 speculative tokens, `DFlash-8` / `DFly-8` use block length 8. **DFly-8** wins the average at every concurrency — **1.98×–2.40×** over AR, peaking at **2.86×** on HumanEval.
+**Speedup over autoregressive decoding.** Greedy at a concurrency of one, reported as decoding / end-to-end.
 
 <table>
   <thead>
     <tr>
-      <th rowspan="2">Conc.</th>
-      <th rowspan="2">Method</th>
-      <th colspan="2" style="text-align:center;">GSM8K</th>
-      <th colspan="2" style="text-align:center;">Math500</th>
-      <th colspan="2" style="text-align:center;">HumanEval</th>
-      <th colspan="2" style="text-align:center;">MBPP</th>
-      <th colspan="2" style="text-align:center;">LiveCodeBench</th>
-      <th colspan="2" style="text-align:center;">MT-Bench</th>
-      <th colspan="2" style="text-align:center;">Avg.</th>
-    </tr>
-    <tr>
-      <th>Tok/s</th><th>Spd.</th>
-      <th>Tok/s</th><th>Spd.</th>
-      <th>Tok/s</th><th>Spd.</th>
-      <th>Tok/s</th><th>Spd.</th>
-      <th>Tok/s</th><th>Spd.</th>
-      <th>Tok/s</th><th>Spd.</th>
-      <th>Tok/s</th><th>Spd.</th>
+      <th>Target</th><th>Drafter</th>
+      <th style="text-align:center;">LongSpec 32K</th><th style="text-align:center;">CodeSpan 64K</th><th style="text-align:center;">LSWE 128K</th><th style="text-align:center;">ALB</th><th style="text-align:center;">MemAgent</th><th style="text-align:center;">BFCL-v3</th><th style="text-align:center;">SWE 64K</th><th style="text-align:center;">Long</th><th style="text-align:center;">Agentic</th>
     </tr>
   </thead>
   <tbody>
-    <!-- c4 -->
     <tr>
-      <td rowspan="4">c4</td>
-      <td>AR</td>
-      <td>287.9</td><td>1.00×</td>
-      <td>293.9</td><td>1.00×</td>
-      <td>279.7</td><td>1.00×</td>
-      <td>294.4</td><td>1.00×</td>
-      <td>284.5</td><td>1.00×</td>
-      <td>290.0</td><td>1.00×</td>
-      <td>288.4</td><td>1.00×</td>
+      <td rowspan="4">DeepSeek-V4.1-Flash</td>
+      <td>DFlash</td>
+      <td><b>2.46×</b> / 1.75×</td><td>3.05× / 1.67×</td><td>2.59× / 1.16×</td><td>3.46× / 0.69×</td><td>2.22× / 0.63×</td><td>2.67× / 0.78×</td><td>2.79× / 1.49×</td><td>2.70× / 1.52×</td><td>2.78× / 0.90×</td>
     </tr>
     <tr>
-      <td>MTP-3</td>
-      <td>495.5</td><td>1.72×</td>
-      <td>517.0</td><td>1.76×</td>
-      <td>473.6</td><td>1.69×</td>
-      <td>476.7</td><td>1.62×</td>
-      <td>414.0</td><td>1.46×</td>
-      <td>384.5</td><td><b>1.33×</b></td>
-      <td>460.2</td><td>1.60×</td>
+      <td>DFlash†</td>
+      <td>2.32× / 1.70×</td><td>2.70× / 1.55×</td><td>2.52× / 1.13×</td><td>3.09× / 0.83×</td><td>2.25× / 0.69×</td><td>2.63× / 0.84×</td><td>2.55× / 1.47×</td><td>2.51× / 1.46×</td><td>2.63× / 0.96×</td>
     </tr>
     <tr>
-      <td>DFlash-8</td>
-      <td>569.5</td><td>1.98×</td>
-      <td>587.9</td><td>2.00×</td>
-      <td>588.1</td><td>2.10×</td>
-      <td>575.7</td><td>1.96×</td>
-      <td>408.4</td><td>1.44×</td>
-      <td>371.6</td><td>1.28×</td>
-      <td>516.9</td><td>1.79×</td>
+      <td>DSpark</td>
+      <td>2.28× / 1.99×</td><td>2.63× / 2.06×</td><td>2.49× / 1.68×</td><td>2.95× / 1.21×</td><td>2.37× / <b>1.27×</b></td><td>2.58× / <b>1.37×</b></td><td>2.54× / 1.89×</td><td>2.47× / 1.91×</td><td>2.61× / 1.44×</td>
     </tr>
     <tr>
-      <td><b>DFly-8</b></td>
-      <td>635.4</td><td><b>2.21×</b></td>
-      <td>643.9</td><td><b>2.19×</b></td>
-      <td>647.2</td><td><b>2.31×</b></td>
-      <td>661.5</td><td><b>2.25×</b></td>
-      <td>455.2</td><td><b>1.60×</b></td>
-      <td>384.0</td><td>1.32×</td>
-      <td>571.2</td><td><b>1.98×</b></td>
-    </tr>
-    <!-- c8 -->
-    <tr>
-      <td rowspan="4">c8</td>
-      <td>AR</td>
-      <td>426.3</td><td>1.00×</td>
-      <td>435.7</td><td>1.00×</td>
-      <td>400.3</td><td>1.00×</td>
-      <td>433.7</td><td>1.00×</td>
-      <td>413.4</td><td>1.00×</td>
-      <td>421.8</td><td>1.00×</td>
-      <td>421.8</td><td>1.00×</td>
+      <td><b>DFly2</b></td>
+      <td>2.44× / <b>2.10×</b></td><td><b>3.23×</b> / <b>2.37×</b></td><td><b>2.94×</b> / <b>1.86×</b></td><td><b>3.82×</b> / <b>1.25×</b></td><td><b>2.60×</b> / 1.24×</td><td><b>2.97×</b> / 1.36×</td><td><b>3.00×</b> / <b>2.13×</b></td><td><b>2.87×</b> / <b>2.11×</b></td><td><b>3.10×</b> / <b>1.50×</b></td>
     </tr>
     <tr>
-      <td>MTP-3</td>
-      <td>756.9</td><td>1.78×</td>
-      <td>791.5</td><td>1.82×</td>
-      <td>717.4</td><td>1.79×</td>
-      <td>729.1</td><td>1.68×</td>
-      <td>620.8</td><td>1.50×</td>
-      <td>590.1</td><td><b>1.40×</b></td>
-      <td>701.0</td><td>1.66×</td>
+      <td rowspan="4">GLM-5.3-Flash</td>
+      <td>DFlash</td>
+      <td>1.70× / 1.47×</td><td>2.03× / 1.46×</td><td>1.89× / 1.28×</td><td>2.15× / 1.09×</td><td>1.83× / <b>1.01×</b></td><td>2.02× / 1.16×</td><td>1.88× / 1.36×</td><td>1.87× / 1.40×</td><td>1.97× / 1.15×</td>
     </tr>
     <tr>
-      <td>DFlash-8</td>
-      <td>857.0</td><td>2.01×</td>
-      <td>860.1</td><td>1.97×</td>
-      <td>866.2</td><td>2.16×</td>
-      <td>866.2</td><td>2.00×</td>
-      <td>609.1</td><td>1.47×</td>
-      <td>545.5</td><td>1.29×</td>
-      <td>767.4</td><td>1.82×</td>
+      <td>DFlash†</td>
+      <td>1.86× / 1.56×</td><td>2.12× / 1.48×</td><td>2.04× / 1.28×</td><td>2.45× / 1.07×</td><td>1.92× / 0.97×</td><td>2.08× / 1.09×</td><td>1.99× / 1.50×</td><td>2.00× / 1.44×</td><td>2.11× / 1.16×</td>
     </tr>
     <tr>
-      <td><b>DFly-8</b></td>
-      <td>964.8</td><td><b>2.26×</b></td>
-      <td>959.5</td><td><b>2.20×</b></td>
-      <td>974.1</td><td><b>2.43×</b></td>
-      <td>1001.5</td><td><b>2.31×</b></td>
-      <td>641.3</td><td><b>1.55×</b></td>
-      <td>565.8</td><td>1.34×</td>
-      <td>851.2</td><td><b>2.02×</b></td>
-    </tr>
-    <!-- c16 -->
-    <tr>
-      <td rowspan="4">c16</td>
-      <td>AR</td>
-      <td>650.7</td><td>1.00×</td>
-      <td>670.6</td><td>1.00×</td>
-      <td>594.8</td><td>1.00×</td>
-      <td>667.9</td><td>1.00×</td>
-      <td>617.2</td><td>1.00×</td>
-      <td>628.1</td><td>1.00×</td>
-      <td>638.2</td><td>1.00×</td>
+      <td>DSpark</td>
+      <td>1.84× / 1.53×</td><td>2.24× / 1.58×</td><td>2.12× / 1.38×</td><td>2.48× / 1.08×</td><td>1.90× / 0.97×</td><td>2.17× / 1.13×</td><td>2.02× / 1.49×</td><td>2.07× / 1.49×</td><td>2.14× / 1.17×</td>
     </tr>
     <tr>
-      <td>MTP-3</td>
-      <td>1146.6</td><td>1.76×</td>
-      <td>1174.0</td><td>1.75×</td>
-      <td>1076.1</td><td>1.81×</td>
-      <td>1103.3</td><td>1.65×</td>
-      <td>893.5</td><td>1.45×</td>
-      <td>876.6</td><td>1.40×</td>
-      <td>1045.0</td><td>1.64×</td>
+      <td><b>DFly2</b></td>
+      <td><b>2.14×</b> / <b>1.75×</b></td><td><b>2.82×</b> / <b>1.79×</b></td><td><b>2.40×</b> / <b>1.39×</b></td><td><b>3.57×</b> / <b>1.10×</b></td><td><b>2.20×</b> / 0.98×</td><td><b>2.34×</b> / <b>1.17×</b></td><td><b>2.35×</b> / <b>1.62×</b></td><td><b>2.45×</b> / <b>1.64×</b></td><td><b>2.61×</b> / <b>1.22×</b></td>
     </tr>
     <tr>
-      <td>DFlash-8</td>
-      <td>1446.1</td><td>2.22×</td>
-      <td>1430.4</td><td>2.13×</td>
-      <td>1433.3</td><td>2.41×</td>
-      <td>1440.4</td><td>2.16×</td>
-      <td>970.5</td><td>1.57×</td>
-      <td>901.0</td><td>1.43×</td>
-      <td>1270.3</td><td>1.99×</td>
+      <td rowspan="4">Hy4 flash</td>
+      <td>DFlash</td>
+      <td>2.15× / 1.93×</td><td>0.96× / 0.96×</td><td>0.90× / 1.00×</td><td>1.23× / 1.06×</td><td>0.87× / 0.97×</td><td>2.64× / 1.87×</td><td>1.87× / 1.46×</td><td>1.34× / 1.30×</td><td>1.65× / 1.34×</td>
     </tr>
     <tr>
-      <td><b>DFly-8</b></td>
-      <td>1623.8</td><td><b>2.50×</b></td>
-      <td>1607.5</td><td><b>2.40×</b></td>
-      <td>1595.4</td><td><b>2.68×</b></td>
-      <td>1677.8</td><td><b>2.51×</b></td>
-      <td>1046.7</td><td><b>1.70×</b></td>
-      <td>961.5</td><td><b>1.53×</b></td>
-      <td>1418.8</td><td><b>2.22×</b></td>
-    </tr>
-    <!-- c32 -->
-    <tr>
-      <td rowspan="4">c32</td>
-      <td>AR</td>
-      <td>918.6</td><td>1.00×</td>
-      <td>1000.8</td><td>1.00×</td>
-      <td>850.8</td><td>1.00×</td>
-      <td>1018.7</td><td>1.00×</td>
-      <td>893.2</td><td>1.00×</td>
-      <td>921.1</td><td>1.00×</td>
-      <td>933.9</td><td>1.00×</td>
+      <td>DFlash†</td>
+      <td>2.28× / 2.03×</td><td>2.96× / 2.26×</td><td>2.75× / 1.60×</td><td>2.81× / 1.26×</td><td>2.18× / 1.29×</td><td>2.46× / 1.82×</td><td>2.90× / 1.80×</td><td>2.66× / 1.96×</td><td>2.59× / 1.54×</td>
     </tr>
     <tr>
-      <td>MTP-3</td>
-      <td>1923.8</td><td>2.09×</td>
-      <td>1989.8</td><td>1.99×</td>
-      <td>1780.7</td><td>2.09×</td>
-      <td>1863.6</td><td>1.83×</td>
-      <td>1394.2</td><td>1.56×</td>
-      <td>1469.4</td><td>1.60×</td>
-      <td>1736.9</td><td>1.86×</td>
+      <td>DSpark</td>
+      <td>2.32× / 2.06×</td><td>3.00× / 2.28×</td><td>2.79× / 1.60×</td><td>2.80× / 1.26×</td><td>2.23× / 1.27×</td><td>2.59× / 1.85×</td><td>2.92× / 1.81×</td><td>2.70× / 1.98×</td><td>2.63× / 1.55×</td>
     </tr>
     <tr>
-      <td>DFlash-8</td>
-      <td>2261.8</td><td>2.46×</td>
-      <td>2334.3</td><td>2.33×</td>
-      <td>2170.6</td><td>2.55×</td>
-      <td>2339.3</td><td>2.30×</td>
-      <td>1489.9</td><td>1.67×</td>
-      <td>1453.4</td><td>1.58×</td>
-      <td>2008.2</td><td>2.15×</td>
-    </tr>
-    <tr>
-      <td><b>DFly-8</b></td>
-      <td>2527.4</td><td><b>2.75×</b></td>
-      <td>2608.9</td><td><b>2.61×</b></td>
-      <td>2429.1</td><td><b>2.86×</b></td>
-      <td>2741.3</td><td><b>2.69×</b></td>
-      <td>1602.6</td><td><b>1.79×</b></td>
-      <td>1549.4</td><td><b>1.68×</b></td>
-      <td>2243.1</td><td><b>2.40×</b></td>
-    </tr>
-    <!-- c64 -->
-    <tr>
-      <td rowspan="4">c64</td>
-      <td>AR</td>
-      <td>1156.9</td><td>1.00×</td>
-      <td>1381.3</td><td>1.00×</td>
-      <td>1197.6</td><td>1.00×</td>
-      <td>1513.9</td><td>1.00×</td>
-      <td>1229.6</td><td>1.00×</td>
-      <td>1306.9</td><td>1.00×</td>
-      <td>1297.7</td><td>1.00×</td>
-    </tr>
-    <tr>
-      <td>MTP-3</td>
-      <td>2932.0</td><td><b>2.53×</b></td>
-      <td>3170.0</td><td>2.29×</td>
-      <td>2639.6</td><td>2.20×</td>
-      <td>3011.3</td><td>1.99×</td>
-      <td>2050.4</td><td>1.67×</td>
-      <td>2350.0</td><td><b>1.80×</b></td>
-      <td>2692.2</td><td>2.08×</td>
-    </tr>
-    <tr>
-      <td>DFlash-8</td>
-      <td>2523.4</td><td>2.18×</td>
-      <td>2947.1</td><td>2.13×</td>
-      <td>2655.2</td><td>2.22×</td>
-      <td>2671.8</td><td>1.76×</td>
-      <td>2015.8</td><td>1.64×</td>
-      <td>1815.8</td><td>1.39×</td>
-      <td>2438.2</td><td>1.89×</td>
-    </tr>
-    <tr>
-      <td><b>DFly-8</b></td>
-      <td>2827.8</td><td>2.44×</td>
-      <td>3301.8</td><td><b>2.39×</b></td>
-      <td>2965.0</td><td><b>2.48×</b></td>
-      <td>3130.9</td><td><b>2.07×</b></td>
-      <td>2195.0</td><td><b>1.79×</b></td>
-      <td>1936.6</td><td>1.48×</td>
-      <td>2726.2</td><td><b>2.11×</b></td>
+      <td><b>DFly2</b></td>
+      <td><b>2.47×</b> / <b>2.17×</b></td><td><b>3.48×</b> / <b>2.51×</b></td><td><b>3.22×</b> / <b>1.68×</b></td><td><b>4.55×</b> / <b>1.35×</b></td><td><b>2.54×</b> / <b>1.31×</b></td><td><b>3.08×</b> / <b>2.04×</b></td><td><b>3.46×</b> / <b>1.96×</b></td><td><b>3.06×</b> / <b>2.12×</b></td><td><b>3.41×</b> / <b>1.67×</b></td>
     </tr>
   </tbody>
 </table>
 
-#### 1.2 ⚡ D-cut — Breaking the Concurrency Ceiling
-
-When concurrency climbs, target verification becomes the bottleneck and rejected draft suffixes clog the batch. **D-cut** treats verification as a shared batch budget — ranking each request's verification depth by expected gain / cost, deepening drafts when the system is idle and trimming them when it's slammed. The payoff lands exactly where DFly plateaus: past concurrency 48, D-cut keeps turning load into throughput, up to **+15.7%** over DFly at near-zero quality cost (accepted length 2.50 → 2.46).
-
-<p align="center">
-  <img alt="D-cut on Hy3-295B-A21B live traffic" src="./docs/source/assets/speculative_decoding/dcut_live_traffic.jpg" width=100%>
-</p>
+Long and Agentic average the three long-context and four agentic sets; the best result per target is in bold. DFlash† reads only a window of the context at decode but still builds a full cache at prefill.
 
 ### 2. Quantization
 
