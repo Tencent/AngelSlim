@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
+
 import torch
 
 from ...modules.gptq.ckpt_gptq import gptq_sweep
@@ -20,6 +22,31 @@ __all__ = ["INT4Group"]
 
 QMIN, QMAX = -8.0, 7.0
 PACK = 8  # int4 codes per int32 word
+
+
+def _search_block_scale(blocks, alphas, clamp_effective):
+    """Select BF16 group scales by QDQ SSE."""
+    base = blocks.abs().amax(dim=-1).clamp(min=1e-12) / QMAX
+    candidates = torch.as_tensor(sorted(set(alphas)), dtype=torch.float32, device=blocks.device)
+    view = [-1] + [1] * base.dim()
+    chunk = max(1, min(candidates.numel(), 32_000_000 // max(1, blocks.numel())))
+    best_err = best_scale = None
+    for start in range(0, candidates.numel(), chunk):
+        scales = (base.unsqueeze(0) * candidates[start : start + chunk].reshape(view)).bfloat16()
+        eff = scales.float().clamp(min=1e-12) if clamp_effective else scales.float()
+        eff = eff.unsqueeze(-1)
+        codes = torch.round(blocks.unsqueeze(0) / eff).clamp(QMIN, QMAX)
+        errors = ((codes * eff - blocks.unsqueeze(0)) ** 2).sum(dim=-1)
+        error, index = errors.min(dim=0)
+        scale = scales.gather(0, index.unsqueeze(0)).squeeze(0)
+        if best_err is None:
+            best_err, best_scale = error, scale
+        else:
+            # Ties keep the lowest alpha.
+            better = error < best_err
+            best_err = torch.where(better, error, best_err)
+            best_scale = torch.where(better, scale, best_scale)
+    return best_scale
 
 
 def _pack_int32(codes):
@@ -32,8 +59,7 @@ def _pack_int32(codes):
 
 
 class INT4Group:
-    """Symmetric INT4 weights, one bf16 scale (amax / 7) per ``group_size`` inputs; activations
-    either unquantized (W4A16) or dynamic per-token FP8 (``act: fp8``, W4A8)."""
+    """INT4/BF16 group scales with optional alpha search; W4A16 or per-token W4A8."""
 
     name = "int4_group"
     cs_format = "pack-quantized"
@@ -66,8 +92,8 @@ class INT4Group:
         return True
 
     def _check(self, weight, alphas):
-        if alphas:
-            raise ValueError("int4_group does not support alpha_list")
+        if alphas and any(not math.isfinite(a) or a <= 0 for a in alphas):
+            raise ValueError("int4_group alpha_list must contain positive finite values")
         if weight.shape[-1] % self.group:
             raise ValueError(f"input dim {weight.shape[-1]} is not a multiple of {self.group}")
 
@@ -79,7 +105,7 @@ class INT4Group:
     def rtn(self, weight, gscale=None, alphas=None):
         self._check(weight, alphas)
         blocks = weight.float().reshape(*weight.shape[:-1], -1, self.group)
-        scale = self._scale(blocks)
+        scale = _search_block_scale(blocks, alphas, False) if alphas else self._scale(blocks)
         codes = torch.round(blocks / scale.float().unsqueeze(-1)).clamp(QMIN, QMAX)
         return _pack_int32(codes.reshape(weight.shape)), scale.contiguous()
 
@@ -87,7 +113,7 @@ class INT4Group:
         self._check(weight, alphas)
 
         def group_scale(block):
-            scale = self._scale(block)
+            scale = _search_block_scale(block, alphas, True) if alphas else self._scale(block)
             return scale, scale.float().clamp(min=1e-12).unsqueeze(-1)
 
         def quantize(w, eff):

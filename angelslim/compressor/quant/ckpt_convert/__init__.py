@@ -13,10 +13,11 @@
 # limitations under the License.
 
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from ....utils.config_parser import default_run_dirs
 
@@ -36,7 +37,7 @@ class ConvertSpec:
     config_groups: dict
     model_name: str = ""  # YAML model.name; selects the legacy fp8_blockwise suffix table
     ignore: List[str] = field(default_factory=list)
-    algorithm: str = "rtn"
+    algorithm: Union[str, List[str]] = "rtn"
     gptq: dict = field(default_factory=dict)
     save_name: str = "compressed-tensors"  # a key of export.SAVE_FORMATS
     split_experts: bool = True
@@ -45,12 +46,101 @@ class ConvertSpec:
     mtp_file: Optional[str] = None
     num_workers: int = 8
     skip_unquantized_source: bool = False  # FP8 source: keep its BF16 modules unquantized
+    smooth_plan: Optional[str] = None
+    smooth_modules: Optional[Union[str, List[str]]] = None
 
     @property
     def legacy(self):
         from .export import get_save_format
 
         return get_save_format(self.save_name).legacy
+
+
+def smooth_options(quant, options=None, model_name=""):
+    """Algorithm chains enable Smooth; legacy enabled/profile remains supported."""
+    from .convert import build_groups
+
+    groups = (
+        build_groups(quant.get("config_groups"), quant.get("algorithm", "rtn"), quant.get("gptq"))
+        if quant.get("name") == "mixed"
+        else []
+    )
+    chained = any(g.smooth for g in groups)
+    options = dict(options or {})
+    if chained and options.get("enabled") is False:
+        raise ValueError("algorithm includes smooth but smooth.enabled is false")
+    if not options.get("enabled", chained):
+        return None
+    from ...transform.smooth.struct import resolve_model_name
+
+    options["model_name"] = resolve_model_name(model_name, profile=options.pop("profile", None))
+    if chained:
+        options.update(
+            config_groups=quant["config_groups"],
+            algorithm=quant.get("algorithm", "rtn"),
+            gptq=quant.get("gptq"),
+            ignore=quant.get("ignore_layers", []),
+        )
+    return options
+
+
+def smoothing_options(config):
+    calib = config.compression_config.calibrate
+    quant = config.compression_config.quantization
+    return smooth_options(
+        vars(quant) if quant else {},
+        (calib.args or {}).get("smooth") if calib else None,
+        config.model_config.name,
+    )
+
+
+def hessian_modules(spec):
+    """Collect only GPTQ targets, with the collector's fused/runtime names."""
+    from ..modules.gptq.hessian_store import _FUSED
+    from .convert import Layout, Router, build_groups, ckpt_keys, module_name
+
+    router = Router(build_groups(spec.config_groups, spec.algorithm, spec.gptq), spec.ignore)
+    layout, names = Layout(spec.model_path), set()
+    for key in ckpt_keys(spec.model_path):
+        name = module_name(key)
+        group = router.route(name)
+        if group is None or group.algorithm != "gptq":
+            continue
+        runtime = layout.runtime_name(name)
+        parent, _, leaf = runtime.rpartition(".")
+        for candidate in {runtime, parent + "." + _FUSED.get(leaf, leaf)}:
+            candidate = re.sub(r"\.experts\.\d+\.", ".experts.", candidate)
+            names.add(re.escape(candidate))
+            if ".mtp_layers." in name:
+                names.add(
+                    re.escape(re.sub(r"^(model\.layers\.\d+\.)", r"\1mtp_block.", candidate))
+                )
+    return r"^(?:language_model\.)?(?:" + "|".join(sorted(names)) + r")$" if names else r"(?!)"
+
+
+def run_smoothing(config, config_path):
+    options = smoothing_options(config)
+    if not options:
+        return
+    repo = os.path.abspath(os.path.join(os.path.dirname(__file__), *[".."] * 4))
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join([repo, os.environ.get("PYTHONPATH", "")])}
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "angelslim.compressor.transform.smooth.vllm.collect",
+            "--model-name",
+            options["model_name"],
+            "-c",
+            config_path,
+            "--model-path",
+            config.model_config.model_path,
+            "--output-dir",
+            config.global_config.save_path,
+        ],
+        check=True,
+        env=env,
+    )
 
 
 def fp8_blockwise_spec(model_path, save_path, block_size=(128, 128), num_workers=8, ignore=(),
@@ -100,7 +190,8 @@ def spec_from_config(config):
     from .export import get_save_format
 
     save = get_save_format(quant.save_name)
-    save.check(build_groups(quant.config_groups))
+    save.check(build_groups(quant.config_groups, quant.algorithm, quant.gptq, save.legacy))
+    smooth = smoothing_options(config)
     spec = ConvertSpec(
         model_path=model_path,
         save_path=save_path,
@@ -117,6 +208,12 @@ def spec_from_config(config):
         mtp_file=quant.mtp_file,
         num_workers=quant.num_workers,
         skip_unquantized_source=quant.skip_unquantized_source,
+        smooth_plan=(
+            os.path.join(config.global_config.save_path, "smooth", "plan", "smooth_plan.json")
+            if smooth
+            else None
+        ),
+        smooth_modules=smooth.get("modules") if smooth else None,
     )
     return spec
 
@@ -140,16 +237,21 @@ def run_calibration(config, config_path):
         outputs.append(os.path.join(stats_dir, "mtp_moe_expert_stats.json"))
     if all(os.path.isfile(p) for p in outputs):
         print(f"calib stage: reusing {', '.join(outputs)}")
+        run_smoothing(config, config_path)
         return
     if not config.dataset_config or not config.dataset_config.data_path:
         raise ValueError("calib stage needs dataset.data_path")
     module = "hessian_collect" if hessian_dir else "calibrate"
     cmd = [sys.executable, "-m", f"angelslim.compressor.quant.vllm_calib.{module}",
-           "-c", config_path, "--model-path", config.model_config.model_path,
+           "-c", config_path, "--model-path",
+           (calib.args or {}).get("model_path") or config.model_config.model_path,
            "--image-embeds-dir", embeds]  # fmt: skip
     # Passed explicitly: the subprocess re-reads the YAML and would otherwise miss dirs
     # derived from a --save-path given on the command line.
     if hessian_dir:
+        smooth = smoothing_options(config)
+        if smooth and "config_groups" in smooth and not (calib.args or {}).get("modules"):
+            cmd += ["--modules", hessian_modules(spec_from_config(config))]
         cmd += ["--hessian-dir", hessian_dir,
                 "--moe-stats-out", os.path.join(stats_dir, "moe_expert_stats.json")]  # fmt: skip
         if (calib.args or {}).get("enable_mtp"):
@@ -164,6 +266,7 @@ def run_calibration(config, config_path):
     missing = [p for p in outputs if not os.path.isfile(p)]
     if missing:
         raise RuntimeError(f"calibration finished without {missing}")
+    run_smoothing(config, config_path)
 
 
 def convert_checkpoint(spec, stage="all", node_rank=0, num_nodes=1, skip_existing=False):

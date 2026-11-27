@@ -72,6 +72,7 @@ def parse_args(argv=None, overrides=None):
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("-c", "--config", help="flat YAML whose keys are option names")
     p.add_argument("--model-path")
+    p.add_argument("--hf-overrides", type=json.loads, help="Runtime HF config overrides (JSON)")
     p.add_argument("--data-path", dest="ptq_data_path")
     p.add_argument("--dataset", help="angelslim DataLoaderFactory type, e.g. TextDataset")
     p.add_argument("--image-dir", help="VLM images (default: <data dir>/images)")
@@ -203,7 +204,7 @@ def main(argv=None, overrides=None):
 
     from . import image_embeds, worker_bootstrap
 
-    hf_config = load_hf_config(args.model_path)
+    hf_config = load_hf_config(args.model_path, args.hf_overrides)
     tokenizer = AutoTokenizer.from_pretrained(args.model_path, trust_remote_code=True)
     prompts, max_images = build_inputs(args, tokenizer, hf_config)
     if not prompts:
@@ -234,6 +235,8 @@ def main(argv=None, overrides=None):
             mm_encoder_attn_backend="TORCH_SDPA",
             **image_embeds.engine_kwargs(),
         )
+    if args.hf_overrides:
+        kwargs["hf_overrides"] = args.hf_overrides
     llm = LLM(**kwargs)
 
     rpc = llm.llm_engine.collective_rpc

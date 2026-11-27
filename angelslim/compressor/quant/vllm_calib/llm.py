@@ -48,12 +48,13 @@ def patch_hpc_version():
     platform.python_version = lambda: version().rstrip("+")
 
 
-def hf_config(model_path):
+def hf_config(model_path, hf_overrides=None):
     """HF config via vLLM, whose registry knows model types (e.g. ``hy_v4_vl``) that the
     installed transformers may not."""
     from vllm.transformers_utils.config import get_config
 
-    return get_config(model_path, trust_remote_code=True)
+    kwargs = {"hf_overrides_kw": hf_overrides} if hf_overrides else {}
+    return get_config(model_path, trust_remote_code=True, **kwargs)
 
 
 def attention_backend(model_path, override=None):
@@ -129,6 +130,8 @@ def parse_with_yaml(parser, defaults, argv=None, overrides=None, required=()):
     for key, value in defaults.items():
         if getattr(args, key) is None:
             setattr(args, key, value)
+    if getattr(args, "hf_overrides", None) is not None and not isinstance(args.hf_overrides, dict):
+        parser.error("hf_overrides must be a mapping")
     missing = [k for k in required if not getattr(args, k)]
     if missing:
         parser.error("missing: " + ", ".join(missing))

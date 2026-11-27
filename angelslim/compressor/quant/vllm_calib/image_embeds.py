@@ -198,7 +198,7 @@ def collect_image_names(data_path):
 _VLLM_CONFIG_CTX = None
 
 
-def build_vision_tower(model_path, device):
+def build_vision_tower(model_path, device, hf_overrides=None):
     """Standalone ``HYV4VisionTransformer`` on one device, with the engine's SDPA backend."""
     for k, v in (
         ("EP_SUPPRESS_NCCL_CHECK", "1"),
@@ -250,7 +250,7 @@ def build_vision_tower(model_path, device):
     )
     ps.initialize_model_parallel(tensor_model_parallel_size=1)
 
-    cfg = hf_config(model_path)
+    cfg = hf_config(model_path, hf_overrides)
     visual = _hv.HYV4VisionTransformer(cfg.vision_config, quant_config=None, prefix="visual")
     visual = visual.to(torch.bfloat16).to(device).eval()
     # The engine keeps the position embedding in fp32.
@@ -280,7 +280,7 @@ def build_vision_tower(model_path, device):
     return visual
 
 
-def precompute(model_path, data_path, out_dir, image_dir=None, device="cuda:0"):
+def precompute(model_path, data_path, out_dir, image_dir=None, device="cuda:0", hf_overrides=None):
     """Run the tower one image at a time and write ``image_embeds.safetensors`` + manifest."""
     from PIL import Image
     from safetensors.torch import save_file
@@ -292,14 +292,21 @@ def precompute(model_path, data_path, out_dir, image_dir=None, device="cuda:0"):
 
     # Text-only data still writes an (empty) cache, so the engine's lookup stays armed.
     if names:
-        visual = build_vision_tower(model_path, device)
+        visual = build_vision_tower(model_path, device, hf_overrides)
+        processor_kwargs = {}
+        if hf_overrides:
+            from .llm import hf_config
+
+            processor_kwargs["config"] = hf_config(model_path, hf_overrides)
         if _hy_v4_vision() is not None:
             # The processor the engine builds; transformers has no HYV4VL mapping on this build.
             from vllm.transformers_utils.processors.hy_v4 import HYV4VLProcessor
 
-            proc = HYV4VLProcessor.from_pretrained(model_path)
+            proc = HYV4VLProcessor.from_pretrained(model_path, **processor_kwargs)
         else:
-            proc = AutoProcessor.from_pretrained(model_path, trust_remote_code=True, use_fast=True)
+            proc = AutoProcessor.from_pretrained(
+                model_path, trust_remote_code=True, use_fast=True, **processor_kwargs
+            )
     tensors, manifest, n_fail = {}, {}, 0
     for i, name in enumerate(names, 1):
         try:
@@ -340,6 +347,7 @@ def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("-c", "--config", help="flat or nested AngelSlim YAML")
     p.add_argument("--model-path")
+    p.add_argument("--hf-overrides", type=json.loads, help="Runtime HF config overrides (JSON)")
     p.add_argument("--data-path", dest="ptq_data_path")
     p.add_argument("--image-embeds-dir", help="output directory")
     p.add_argument("--image-dir", help="default: <data dir>/images")
@@ -352,7 +360,9 @@ def main(argv=None):
     if not args.force and os.path.isfile(os.path.join(out, "image_embeds.safetensors")):
         print(f"reusing {out} (--force to recompute)")
         return 0
-    precompute(args.model_path, args.ptq_data_path, out, args.image_dir, args.device)
+    precompute(
+        args.model_path, args.ptq_data_path, out, args.image_dir, args.device, args.hf_overrides
+    )
     return 0
 
 
